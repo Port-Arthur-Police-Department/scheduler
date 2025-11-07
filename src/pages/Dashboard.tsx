@@ -1,7 +1,6 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // Combined import
 import { User } from "@supabase/supabase-js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,7 @@ import { useNotificationsSubscription } from "@/hooks/useNotificationsSubscripti
 import { VacancyAlerts } from "@/components/vacancy/VacancyAlerts";
 import { parseISO, format } from "date-fns";
 import MobileNavigation from "@/components/MobileNavigation";
-import { useLocation, useNavigate } from "react-router-dom";
+// REMOVE THIS DUPLICATE LINE: import { useLocation, useNavigate } from "react-router-dom";
 
 // Import the schedule data fetching function from DailyScheduleView
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";

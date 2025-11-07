@@ -22,19 +22,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Debug build process
+      - name: Clean install (skip scripts)
         run: |
-          echo "=== Checking project structure ==="
-          ls -la
-          echo ""
-          echo "=== Checking if src/main.tsx exists ==="
-          ls -la src/main.tsx || echo "main.tsx not found!"
-          echo ""
-          echo "=== Building with verbose output ==="
-          npm run build 2>&1 | head -50
+          rm -rf node_modules package-lock.json
+          npm install --ignore-scripts
 
       - name: Build site
         run: npm run build
@@ -42,16 +33,18 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Check build output
+      - name: Verify build output
         run: |
-          echo "=== What did the build create? ==="
+          echo "=== Build verification ==="
           find dist/ -type f
           echo ""
-          echo "=== index.html content ==="
-          cat dist/index.html
-          echo ""
-          echo "=== File sizes ==="
-          ls -la dist/
+          if [ -d "dist/assets" ]; then
+            echo "✅ Assets folder found!"
+            ls -la dist/assets/
+          else
+            echo "❌ No assets folder - checking index.html"
+            cat dist/index.html
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

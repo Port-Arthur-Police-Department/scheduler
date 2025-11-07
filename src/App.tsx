@@ -2,30 +2,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom"; // Changed import
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient();
-
-// Component to handle GitHub Pages redirect
-const GitHubPagesRedirect = () => {
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    // Check if we have a stored redirect path from 404.html
-    const redirectPath = sessionStorage.getItem('redirectPath');
-    if (redirectPath) {
-      sessionStorage.removeItem('redirectPath');
-      // Navigate to the stored path
-      navigate(redirectPath.replace('/scheduler', ''));
-    }
-  }, [navigate]);
-  
-  return null;
-};
 
 const App = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -44,8 +27,8 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter basename="/scheduler">
-          <GitHubPagesRedirect />
+        {/* Remove basename and use HashRouter instead */}
+        <HashRouter>
           <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -63,7 +46,7 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
-        </BrowserRouter>
+        </HashRouter>
       </TooltipProvider>
     </QueryClientProvider>
   );

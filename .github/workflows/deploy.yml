@@ -31,24 +31,12 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Debug the build
+      - name: Ensure proper deployment structure
         run: |
-          echo "=== What's in the dist folder? ==="
-          find dist/ -type f | head -20
-          echo ""
-          echo "=== index.html content ==="
-          cat dist/index.html
-          echo ""
-          echo "=== Is main.tsx referenced? ==="
-          if grep -q "main.tsx" dist/index.html; then
-            echo "❌ PROBLEM: index.html references main.tsx"
-            echo "This means Vite didn't process the file correctly"
-          else
-            echo "✅ Good: No main.tsx reference found"
-          fi
-          echo ""
-          echo "=== JavaScript files ==="
-          find dist/ -name "*.js" | head -10
+          echo "=== Current structure ==="
+          find . -name "index.html" | head -10
+          echo "=== Copy public files to dist ==="
+          cp -r public/* dist/ 2>/dev/null || echo "No public files to copy"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

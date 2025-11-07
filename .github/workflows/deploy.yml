@@ -17,15 +17,31 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Verify project structure
+        run: |
+          echo "=== Critical: Where is index.html? ==="
+          find . -name "index.html" -not -path "./node_modules/*" -not -path "./dist/*"
+          echo ""
+          echo "=== Should be in root, NOT in public/ ==="
+          if [ -f "index.html" ]; then
+            echo "✅ index.html is in ROOT (correct)"
+          else
+            echo "❌ index.html is NOT in root"
+          fi
+          if [ -f "public/index.html" ]; then
+            echo "❌ PROBLEM: index.html is in public/ (WRONG!)"
+            echo "This will cause Vite to skip processing"
+          else
+            echo "✅ No index.html in public/ (correct)"
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Clean install (skip scripts)
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install --ignore-scripts
+      - name: Install dependencies
+        run: npm install --ignore-scripts
 
       - name: Build site
         run: npm run build
@@ -33,17 +49,17 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Verify build output
+      - name: Verify Vite processed the HTML
         run: |
-          echo "=== Build verification ==="
-          find dist/ -type f
-          echo ""
-          if [ -d "dist/assets" ]; then
-            echo "✅ Assets folder found!"
-            ls -la dist/assets/
+          echo "=== Built index.html should reference .js files ==="
+          if grep -q "main.tsx" dist/index.html; then
+            echo "❌ FAILED: Vite did not process index.html"
+            echo "index.html is probably in the wrong location"
+            exit 1
           else
-            echo "❌ No assets folder - checking index.html"
-            cat dist/index.html
+            echo "✅ SUCCESS: Vite processed index.html correctly"
+            echo "It now references compiled JS files:"
+            grep -E 'src="[^"]*"' dist/index.html
           fi
 
       - name: Deploy to GitHub Pages

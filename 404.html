@@ -5,16 +5,16 @@
     <title>Redirecting...</title>
     <script>
       // GitHub Pages SPA fallback
-      const pathSegments = window.location.pathname.split('/');
-      const schedulerIndex = pathSegments.indexOf('scheduler');
+      const path = window.location.pathname;
+      const segments = path.split('/').filter(segment => segment);
       
-      if (schedulerIndex === -1) {
-        // Not in scheduler path, redirect to base
-        window.location.href = '/scheduler/';
+      // If we're in the scheduler subpath
+      if (segments[0] === 'scheduler') {
+        // Store the current path and redirect to index.html
+        sessionStorage.setItem('redirectPath', path);
+        window.location.href = '/scheduler/index.html';
       } else {
-        // Already in scheduler path, use client-side routing
-        const afterScheduler = pathSegments.slice(schedulerIndex + 1).join('/');
-        sessionStorage.setItem('github_404_redirect', afterScheduler);
+        // Not in scheduler path, redirect to base
         window.location.href = '/scheduler/';
       }
     </script>

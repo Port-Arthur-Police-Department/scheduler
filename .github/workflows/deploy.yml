@@ -31,12 +31,23 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Ensure proper deployment structure
+      - name: Verify ALL built files are present
         run: |
-          echo "=== Current structure ==="
-          find . -name "index.html" | head -10
-          echo "=== Copy public files to dist ==="
-          cp -r public/* dist/ 2>/dev/null || echo "No public files to copy"
+          echo "=== Complete dist folder contents ==="
+          find dist/ -type f | sort
+          echo ""
+          echo "=== Checking for assets folder ==="
+          if [ -d "dist/assets" ]; then
+            echo "✅ Assets folder exists"
+            echo "=== Assets folder contents ==="
+            ls -la dist/assets/
+          else
+            echo "❌ ERROR: No assets folder found!"
+            exit 1
+          fi
+          echo ""
+          echo "=== index.html references ==="
+          grep -o 'src="[^"]*"' dist/index.html || echo "No src attributes found"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -44,3 +55,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           force_orphan: true
+          # Add these to ensure all files are included
+          allow_empty_commit: true

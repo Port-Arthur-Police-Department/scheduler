@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
   base: "/scheduler/",
   
@@ -12,7 +11,6 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    // Remove lovable-tagger completely for now
   ],
   resolve: {
     alias: {
@@ -24,5 +22,10 @@ export default defineConfig({
     assetsDir: "assets",
     sourcemap: false,
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html')
+      }
+    }
   }
 });

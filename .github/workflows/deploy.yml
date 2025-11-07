@@ -31,8 +31,16 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Debug build output
+        run: |
+          echo "=== Build output structure ==="
+          find dist/ -type f -name "*.js" -o -name "*.html" | head -20
+          echo "=== index.html content ==="
+          cat dist/index.html | head -10
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          force_orphan: true

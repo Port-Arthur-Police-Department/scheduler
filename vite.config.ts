@@ -3,15 +3,12 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 export default defineConfig({
-  base: "/scheduler/",
-  
+  base: "/scheduler/", // Keep this for asset paths
   server: {
     host: "::",
     port: 8080,
   },
-  plugins: [
-    react(),
-  ],
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -22,10 +19,5 @@ export default defineConfig({
     assetsDir: "assets",
     sourcemap: false,
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html')
-      }
-    }
   }
 });

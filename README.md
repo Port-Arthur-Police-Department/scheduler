@@ -72,20 +72,6 @@ To connect a domain, navigate to Project > Settings > Domains and click Connect 
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
 
-## 10/9/2025 next step:
-Need ability to add an officer to another shift.  To add someone to a shift on the Daily Schedule that is not part of their recurring schedule.  Also need ability to change the time type for the Officers and Supervisors list as: Regular or Overtime, with default being Regular.
-
-For Staff Profiles, I want Service Credit listed.
-
-Need a way to view an individuals upcoming scheduled shifts.  When request PTO and approved, need to remove from scheduled shift and place at bottom of daily view for those shifts to reflect the PTO used.  The bottom of the daily view needs to load all schedueld PTO for that day for that shift.
-
-For Daily Views: Assigned position "other" want excluded from minimum staff count.  This will be used for training/schools, light duty, etc.  Maybe separate "other" from the rest of the list at the bottom? Currently have "Other (PTO), make a section before this that is "Special Assignment" and change Other (PTO) to just PTO.  
-
-
-
-"Work Schedule" is recurring schedule.  Add new work schedule refers to creating a new recurring schedule.  Still need ability to add officer to daily view from accepting a vacancy alert and manually from a supvervisor profile on the daily view schedule.
-
-Daily View shift selector is not loading until you change the date.  Need shift selector to reload page after it is changed.
 
 Had to use edge function in supabase to create new profiles:
 
@@ -378,8 +364,6 @@ Deputy Chief or Chief → admin role
 
 This ensures that both new profiles (created via the Edge Function) and existing profiles (edited via this dialog) maintain the proper role hierarchy based on rank.
 
-## Current problems
-The "end this schedule" button does not delete the future schedules.  I have to go into supabase and manually delete the recurring schedule to build a new one in the app.
 
 ## files function:
 

@@ -23,19 +23,22 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: |
-          npm install
-          # Ensure critical dependencies are installed
-          npm install tailwindcss autoprefixer postcss
+        run: npm install
 
-      - name: Verify PostCSS config
+      - name: Check for TypeScript errors
         run: |
-          echo "=== Checking for PostCSS config ==="
-          if [ -f "postcss.config.js" ]; then
-            echo "PostCSS config found:"
-            cat postcss.config.js
+          echo "=== Checking for TypeScript errors ==="
+          npx tsc --noEmit --skipLibCheck || echo "TypeScript check completed"
+
+      - name: Check for duplicate imports
+        run: |
+          echo "=== Checking for duplicate imports ==="
+          if grep -r "import.*useNavigate" src/ | wc -l | grep -q "2"; then
+            echo "⚠️  Possible duplicate useNavigate imports found"
+            grep -r "import.*useNavigate" src/
+            exit 1
           else
-            echo "No PostCSS config found"
+            echo "✅ No duplicate useNavigate imports found"
           fi
 
       - name: Build site

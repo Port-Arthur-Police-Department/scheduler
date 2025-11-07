@@ -6,7 +6,7 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   // The 'base' option is added here
-  base: "/scheduler", // 👈 Added code
+  base: "/scheduler/", // 👈 Added code
 
   server: {
     host: "::",

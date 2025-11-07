@@ -33,12 +33,15 @@ const App = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard isMobile={isMobile} />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} />} />
-              <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} />} />
-              <Route path="/vacancies" element={<Dashboard isMobile={isMobile} />} />
-              <Route path="/staff" element={<Dashboard isMobile={isMobile} />} />
-              <Route path="/time-off" element={<Dashboard isMobile={isMobile} />} />
-              <Route path="/pto" element={<Dashboard isMobile={isMobile} />} />
+              
+              {/* Tab-specific routes that all render the Dashboard with different active tabs */}
+              <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} initialTab="daily" />} />
+              <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} initialTab="schedule" />} />
+              <Route path="/vacancies" element={<Dashboard isMobile={isMobile} initialTab="vacancies" />} />
+              <Route path="/staff" element={<Dashboard isMobile={isMobile} initialTab="staff" />} />
+              <Route path="/time-off" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
+              <Route path="/pto" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
+              
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

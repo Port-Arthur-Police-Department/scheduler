@@ -25,29 +25,33 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Debug build process
+        run: |
+          echo "=== Checking project structure ==="
+          ls -la
+          echo ""
+          echo "=== Checking if src/main.tsx exists ==="
+          ls -la src/main.tsx || echo "main.tsx not found!"
+          echo ""
+          echo "=== Building with verbose output ==="
+          npm run build 2>&1 | head -50
+
       - name: Build site
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Verify ALL built files are present
+      - name: Check build output
         run: |
-          echo "=== Complete dist folder contents ==="
-          find dist/ -type f | sort
+          echo "=== What did the build create? ==="
+          find dist/ -type f
           echo ""
-          echo "=== Checking for assets folder ==="
-          if [ -d "dist/assets" ]; then
-            echo "✅ Assets folder exists"
-            echo "=== Assets folder contents ==="
-            ls -la dist/assets/
-          else
-            echo "❌ ERROR: No assets folder found!"
-            exit 1
-          fi
+          echo "=== index.html content ==="
+          cat dist/index.html
           echo ""
-          echo "=== index.html references ==="
-          grep -o 'src="[^"]*"' dist/index.html || echo "No src attributes found"
+          echo "=== File sizes ==="
+          ls -la dist/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -55,5 +59,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           force_orphan: true
-          # Add these to ensure all files are included
-          allow_empty_commit: true

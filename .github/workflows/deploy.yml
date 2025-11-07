@@ -33,12 +33,22 @@ jobs:
 
       - name: Debug build output
         run: |
-          echo "=== Build output structure ==="
-          find dist/ -type f -name "*.html" -o -name "*.js" | head -20
+          echo "=== Complete dist folder contents ==="
+          find dist/ -type f | sort
+          echo ""
           echo "=== index.html content ==="
           cat dist/index.html
-          echo "=== Checking for TypeScript files in dist ==="
-          find dist/ -name "*.tsx" -o -name "*.ts" | head -10
+          echo ""
+          echo "=== Checking for main.tsx references ==="
+          if grep -q "main.tsx" dist/index.html; then
+            echo "❌ PROBLEM: index.html still references main.tsx"
+            echo "This means Vite isn't replacing the script tag properly"
+          else
+            echo "✅ Good: index.html does NOT reference main.tsx"
+          fi
+          echo ""
+          echo "=== JavaScript files in dist ==="
+          find dist/ -name "*.js" | head -10
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

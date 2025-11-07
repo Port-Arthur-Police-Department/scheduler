@@ -23,20 +23,40 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          # Install only the critical dependencies if others fail
+          npm install react react-dom react-router-dom @tanstack/react-query
 
       - name: Build site
-        run: npm run build
+        run: |
+          echo "=== Building application ==="
+          npm run build
+          echo "=== Build completed successfully ==="
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Debug build output
+      - name: Verify build output
         run: |
-          echo "=== Build output structure ==="
-          find dist/ -type f -name "*.js" -o -name "*.html" | head -20
-          echo "=== index.html content ==="
-          cat dist/index.html | head -10
+          echo "=== Build verification ==="
+          if [ -f "dist/index.html" ]; then
+            echo "✅ index.html exists"
+            echo "=== First few lines of index.html ==="
+            head -n 10 dist/index.html
+          else
+            echo "❌ index.html missing"
+            exit 1
+          fi
+          
+          if find dist/ -name "*.js" | grep -q .; then
+            echo "✅ JavaScript files found"
+            echo "=== JS files ==="
+            find dist/ -name "*.js" | head -5
+          else
+            echo "❌ No JavaScript files found"
+            exit 1
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

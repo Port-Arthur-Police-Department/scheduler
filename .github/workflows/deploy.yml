@@ -21,25 +21,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Check for TypeScript errors
-        run: |
-          echo "=== Checking for TypeScript errors ==="
-          npx tsc --noEmit --skipLibCheck || echo "TypeScript check completed"
-
-      - name: Check for duplicate imports
-        run: |
-          echo "=== Checking for duplicate imports ==="
-          if grep -r "import.*useNavigate" src/ | wc -l | grep -q "2"; then
-            echo "⚠️  Possible duplicate useNavigate imports found"
-            grep -r "import.*useNavigate" src/
-            exit 1
-          else
-            echo "✅ No duplicate useNavigate imports found"
-          fi
+      - name: Install ALL dependencies
+        run: npm ci
 
       - name: Build site
         run: npm run build

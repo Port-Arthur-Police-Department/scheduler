@@ -1,14 +1,25 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <script>
-      const segmentCount = window.location.pathname.split('/').length - 1;
-      sessionStorage.setItem('github_404_redirect', segmentCount);
-    </script>
-    <meta http-equiv="refresh" content="0; url=/scheduler">
+    <meta charset="utf-8">
     <title>Redirecting...</title>
+    <script>
+      // GitHub Pages SPA fallback
+      const pathSegments = window.location.pathname.split('/');
+      const schedulerIndex = pathSegments.indexOf('scheduler');
+      
+      if (schedulerIndex === -1) {
+        // Not in scheduler path, redirect to base
+        window.location.href = '/scheduler/';
+      } else {
+        // Already in scheduler path, use client-side routing
+        const afterScheduler = pathSegments.slice(schedulerIndex + 1).join('/');
+        sessionStorage.setItem('github_404_redirect', afterScheduler);
+        window.location.href = '/scheduler/';
+      }
+    </script>
   </head>
   <body>
-    <p>Redirecting to home page...</p>
+    <p>Redirecting to application...</p>
   </body>
 </html>

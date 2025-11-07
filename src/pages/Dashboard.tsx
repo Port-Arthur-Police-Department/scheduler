@@ -22,21 +22,58 @@ import { useNotificationsSubscription } from "@/hooks/useNotificationsSubscripti
 import { VacancyAlerts } from "@/components/vacancy/VacancyAlerts";
 import { parseISO, format } from "date-fns";
 import MobileNavigation from "@/components/MobileNavigation";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // Import the schedule data fetching function from DailyScheduleView
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";
 
-const Dashboard = () => {
+// Update the Dashboard props interface
+interface DashboardProps {
+  isMobile: boolean;
+  initialTab?: string; // Add this line
+}
+
+const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [manualRefresh, setManualRefresh] = useState(0);
-  const [activeTab, setActiveTab] = useState("daily");
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [activeTab, setActiveTab] = useState(initialTab);
   const { primaryRole, isAdminOrSupervisor, loading: roleLoading } = useUserRole(user?.id);
+
+  // Sync active tab with current route
+  useEffect(() => {
+    const path = location.pathname.replace("/scheduler/", "");
+    if (path === "daily-schedule") setActiveTab("daily");
+    else if (path === "weekly-schedule") setActiveTab("schedule");
+    else if (path === "vacancies") setActiveTab("vacancies");
+    else if (path === "staff") setActiveTab("staff");
+    else if (path === "time-off" || path === "pto") setActiveTab("requests");
+    else if (path === "dashboard") setActiveTab("daily");
+  }, [location]);
+
+  // Update the handleTabChange function to navigate to the correct route
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    
+    // Map internal tab names to route paths
+    const routeMap: { [key: string]: string } = {
+      daily: "/daily-schedule",
+      schedule: "/weekly-schedule", 
+      vacancies: "/vacancies",
+      staff: "/staff",
+      requests: "/time-off"
+    };
+    
+    const route = routeMap[tab] || "/dashboard";
+    navigate(route);
+  };
+
+  // Rest of your existing Dashboard component remains the same...
+  // [Keep all your existing code from the useState declarations onward]
 
   // Mobile detection
   useEffect(() => {

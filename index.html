@@ -13,6 +13,17 @@
     <meta property="og:description" content="Shift scheduling system for Port Arthur Police Department" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="data:image/png;base64,place-holder" />
+        <!-- Add this to handle GitHub Pages routing -->
+    <script>
+      // Handle GitHub Pages 404 redirect
+      (function() {
+        const redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect != location.href) {
+          history.replaceState(null, null, redirect);
+        }
+      })();
+    </script>
 
 
   </head>

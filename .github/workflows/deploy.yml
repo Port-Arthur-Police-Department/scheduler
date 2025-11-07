@@ -17,21 +17,26 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Verify file structure
-        run: |
-          echo "=== Checking if pages exist ==="
-          ls -la src/pages/ || echo "src/pages/ directory not found"
-          find src/pages/ -name "*.tsx" -o -name "*.ts" | head -10
-          echo "=== Checking App.tsx imports ==="
-          grep "from.*pages" src/App.tsx || echo "No page imports found in App.tsx"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          # Ensure critical dependencies are installed
+          npm install tailwindcss autoprefixer postcss
+
+      - name: Verify PostCSS config
+        run: |
+          echo "=== Checking for PostCSS config ==="
+          if [ -f "postcss.config.js" ]; then
+            echo "PostCSS config found:"
+            cat postcss.config.js
+          else
+            echo "No PostCSS config found"
+          fi
 
       - name: Build site
         run: npm run build

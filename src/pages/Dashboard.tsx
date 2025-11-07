@@ -565,8 +565,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
           </Card>
         )}
 
-        {/* Desktop Navigation */}
-//Daily Schedule is retitled Riding List, Weekly Schedule is retitled The Book
+        {/* Desktop Navigation  Daily Schedule is retitled Riding List, Weekly Schedule is retitled The Book */}
+ 
         
         {!isMobile && (
           isAdminOrSupervisor ? (

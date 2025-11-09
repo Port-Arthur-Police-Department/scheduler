@@ -2,8 +2,12 @@ const CACHE_NAME = 'papd-scheduler-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/src/main.tsx',
-  '/src/App.tsx',
+  // Remove these - they won't exist in production build
+  // '/src/main.tsx',
+  // '/src/App.tsx',
+  // Add your actual built assets instead
+  '/assets/index-[hash].js',
+  '/assets/index-[hash].css',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png'

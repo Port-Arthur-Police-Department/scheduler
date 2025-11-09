@@ -9,24 +9,13 @@ export default defineConfig({
    VitePWA({
   registerType: 'autoUpdate',
   workbox: {
-    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-    navigateFallback: '/scheduler/index.html', // Explicit path for GitHub Pages
-    navigateFallbackDenylist: [/^\/api/, /^\/_/, /^\/auth/], // Don't fallback for these
-    runtimeCaching: [
-      {
-        urlPattern: /^https:\/\/api\/.*/i,
-        handler: 'NetworkFirst',
-        options: {
-          cacheName: 'api-cache',
-          expiration: {
-            maxEntries: 10,
-            maxAgeSeconds: 60 * 60 * 24
-          }
-        }
-      }
-    ]
+    globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+    navigateFallback: null,
+    cleanupOutdatedCaches: true,
+    skipWaiting: true,
+    clientsClaim: true
   },
-      manifest: {
+  manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',
         description: 'Shift scheduling system for Port Arthur Police Department',

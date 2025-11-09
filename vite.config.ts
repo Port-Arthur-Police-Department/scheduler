@@ -26,19 +26,6 @@ export default defineConfig({
       }
     ]
   },
-          {
-            urlPattern: /^https:\/\/fonts\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'font-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          }
-        ]
-      },
       manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',

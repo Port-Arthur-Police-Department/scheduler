@@ -28,6 +28,18 @@ const App = () => {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
+  // Add this to your main.tsx or App.tsx to clear old service workers
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => registration.unregister());
+  });
+  caches.keys().then(cacheNames => {
+    cacheNames.forEach(cacheName => {
+      caches.delete(cacheName);
+    });
+  });
+}
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

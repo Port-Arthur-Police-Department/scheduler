@@ -6,23 +6,26 @@ import path from 'path'
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        navigateFallback: null, // Disable navigate fallback for HashRouter
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
-              }
-            }
-          },
+   VitePWA({
+  registerType: 'autoUpdate',
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+    navigateFallback: '/scheduler/index.html', // Explicit path for GitHub Pages
+    navigateFallbackDenylist: [/^\/api/, /^\/_/, /^\/auth/], // Don't fallback for these
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/api\/.*/i,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'api-cache',
+          expiration: {
+            maxEntries: 10,
+            maxAgeSeconds: 60 * 60 * 24
+          }
+        }
+      }
+    ]
+  },
           {
             urlPattern: /^https:\/\/fonts\/.*/i,
             handler: 'CacheFirst',

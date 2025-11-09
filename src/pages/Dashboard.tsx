@@ -71,17 +71,6 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     navigate(route);
   };
 
-
-  // Mobile detection
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    
-    window.addEventListener('resize', checkScreenSize);
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
-
   // Debug logging
   useEffect(() => {
     console.log("🔄 Dashboard Debug:", {
@@ -89,7 +78,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       profile: profile?.id,
       primaryRole,
       isAdminOrSupervisor,
-      roleLoading
+      roleLoading,
+      isMobile
     });
   }, [user, profile, primaryRole, isAdminOrSupervisor, roleLoading]);
 

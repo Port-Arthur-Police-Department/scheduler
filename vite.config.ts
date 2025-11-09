@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // Change to 'prompt' for better installation control
+      registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
@@ -21,10 +21,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24
-              }
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 }
             }
           }
         ]
@@ -35,7 +32,7 @@ export default defineConfig({
         description: 'Shift scheduling system for Port Arthur Police Department',
         theme_color: '#2563eb',
         background_color: '#ffffff',
-        display: 'standalone', // This is crucial for app-like experience
+        display: 'standalone',
         orientation: 'portrait',
         scope: '/scheduler/',
         start_url: '/scheduler/',
@@ -43,13 +40,13 @@ export default defineConfig({
         categories: ['productivity', 'business'],
         icons: [
           {
-            src: 'icons/icon-192x192.png',
+            src: 'icons/android-chrome-192x192.png', // file from generated package
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: 'icons/icon-512x512.png',
+            src: 'icons/android-chrome-512x512.png', // file from generated package
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
@@ -60,13 +57,11 @@ export default defineConfig({
         enabled: true,
         type: 'module'
       },
-      includeAssets: ['icons/*.png', 'favicon.ico']
+      includeAssets: ['icons/*.png', 'icons/*.ico', 'icons/*.svg']
     })
   ],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: { '@': path.resolve(__dirname, './src') }
   },
   base: '/scheduler/',
   build: {

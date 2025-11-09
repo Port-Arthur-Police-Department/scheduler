@@ -1,4 +1,3 @@
-// vite.config.ts - Updated configuration
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -9,48 +8,29 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        navigateFallback: '/index.html',
+        navigateFallback: null, // Disable navigate fallback for HashRouter
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\..*/i,
+            urlPattern: /^https:\/\/api\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              networkTimeoutSeconds: 10,
               expiration: {
-                maxEntries: 50,
+                maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 // 24 hours
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
               }
             }
           },
           {
-            urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
+            urlPattern: /^https:\/\/fonts\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-cache',
+              cacheName: 'font-cache',
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
               }
             }
           }
@@ -63,7 +43,7 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
         lang: 'en-US',
@@ -84,8 +64,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true,
-        type: 'module'
+        enabled: true
       }
     })
   ],

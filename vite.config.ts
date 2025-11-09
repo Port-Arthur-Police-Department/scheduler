@@ -1,3 +1,4 @@
+// vite.config.ts - Updated configuration
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -8,28 +9,48 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        navigateFallback: '/index.html',
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\/.*/i,
+            urlPattern: /^https:\/\/api\..*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
+              networkTimeoutSeconds: 10,
               expiration: {
-                maxEntries: 10,
+                maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 // 24 hours
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
               }
             }
           },
           {
-            urlPattern: /^https:\/\/fonts\/.*/i,
+            urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'font-cache',
+              cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
               }
             }
           }
@@ -42,7 +63,7 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        orientation: 'portrait',
         scope: '/',
         start_url: '/',
         lang: 'en-US',
@@ -60,24 +81,11 @@ export default defineConfig({
             type: 'image/png',
             purpose: 'any maskable'
           }
-        ],
-        screenshots: [
-          {
-            src: '/screenshots/desktop.png',
-            sizes: '1280x720',
-            type: 'image/png',
-            form_factor: 'wide'
-          },
-          {
-            src: '/screenshots/mobile.png',
-            sizes: '390x844',
-            type: 'image/png',
-            form_factor: 'narrow'
-          }
         ]
       },
       devOptions: {
-        enabled: true
+        enabled: true,
+        type: 'module'
       }
     })
   ],

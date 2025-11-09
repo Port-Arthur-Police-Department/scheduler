@@ -19,6 +19,12 @@ const App = () => {
     };
     
     window.addEventListener('resize', checkScreenSize);
+    
+    // Check if we're running as a PWA (installed to home screen)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('Running as PWA');
+    }
+    
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
@@ -27,7 +33,7 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
             <Routes>
               <Route path="/" element={<Dashboard isMobile={isMobile} />} />

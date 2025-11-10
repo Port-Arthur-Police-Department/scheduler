@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCreateVacancyAlert } from "@/hooks/useCreateVacancyAlert";
 import { useUnderstaffedDetection } from "@/hooks/useUnderstaffedDetection";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings"; // Add this import
 
 interface VacancyManagementProps {
   isOfficerView?: boolean;
@@ -35,6 +36,10 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
   const [showCustomMessageDialog, setShowCustomMessageDialog] = useState(false);
   const [selectedShiftForCustomMessage, setSelectedShiftForCustomMessage] = useState<any>(null);
   const [detectionCustomMessage, setDetectionCustomMessage] = useState("");
+
+  // Add website settings query
+  const { data: websiteSettings } = useWebsiteSettings();
+  const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
   // Add real-time subscription for vacancy alerts
   useEffect(() => {
@@ -688,7 +693,7 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
     }
   };
 
-  // If this is officer view, hide all create alert functionality
+   // If this is officer view, hide all create alert functionality
   if (isOfficerView) {
     return (
       <div className="space-y-6">
@@ -801,134 +806,137 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Officer Responses
-          </CardTitle>
-          <CardDescription>Review and manage officer responses to vacancy alerts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!responses || responses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No responses yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {responses.map((response) => {
-                const alert = response.vacancy_alerts;
-                const shiftName = alert?.shift_types?.name || "Unknown Shift";
-                const date = alert?.date ? format(new Date(alert.date), "MMM d, yyyy") : "Unknown Date";
+      {/* Only show Officer Responses card if notifications are enabled */}
+      {notificationsEnabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Officer Responses
+            </CardTitle>
+            <CardDescription>Review and manage officer responses to vacancy alerts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!responses || responses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No responses yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {responses.map((response) => {
+                  const alert = response.vacancy_alerts;
+                  const shiftName = alert?.shift_types?.name || "Unknown Shift";
+                  const date = alert?.date ? format(new Date(alert.date), "MMM d, yyyy") : "Unknown Date";
 
-                return (
-                  <div key={response.id} className="p-4 border rounded-lg space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <p className="font-medium">
-                            {response.profiles?.full_name} (#{response.profiles?.badge_number})
-                          </p>
-                          <Badge 
-                            variant={getStatusVariant(response.status)}
-                            className="flex items-center gap-1 capitalize"
-                          >
-                            {getStatusIcon(response.status)}
-                            {getStatusDisplay(response.status)}
-                          </Badge>
-                        </div>
-                        
-                        <p className="text-sm text-muted-foreground">
-                          {shiftName} - {date}
-                        </p>
-                        
-                        {response.approved_by && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {response.status === "accepted" ? "Approved" : "Denied"} on{" "}
-                            {format(new Date(response.approved_at), "MMM d, yyyy 'at' h:mm a")}
-                          </p>
-                        )}
-
-                        {response.rejection_reason && (
-                          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                            <p className="text-sm text-red-800">
-                              <strong>Reason:</strong> {response.rejection_reason}
+                  return (
+                    <div key={response.id} className="p-4 border rounded-lg space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="font-medium">
+                              {response.profiles?.full_name} (#{response.profiles?.badge_number})
                             </p>
+                            <Badge 
+                              variant={getStatusVariant(response.status)}
+                              className="flex items-center gap-1 capitalize"
+                            >
+                              {getStatusIcon(response.status)}
+                              {getStatusDisplay(response.status)}
+                            </Badge>
+                          </div>
+                          
+                          <p className="text-sm text-muted-foreground">
+                            {shiftName} - {date}
+                          </p>
+                          
+                          {response.approved_by && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {response.status === "accepted" ? "Approved" : "Denied"} on{" "}
+                              {format(new Date(response.approved_at), "MMM d, yyyy 'at' h:mm a")}
+                            </p>
+                          )}
+
+                          {response.rejection_reason && (
+                            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                              <p className="text-sm text-red-800">
+                                <strong>Reason:</strong> {response.rejection_reason}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {response.status === "interested" && (
+                          <div className="flex flex-col gap-2 ml-4">
+                            <Button
+                              size="sm"
+                              onClick={() => updateResponseMutation.mutate({ 
+                                responseId: response.id, 
+                                status: "approved" 
+                              })}
+                              disabled={updateResponseMutation.isPending}
+                              className="flex items-center gap-1"
+                            >
+                              <Check className="h-3 w-3" />
+                              Approve
+                            </Button>
+                            
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={updateResponseMutation.isPending}
+                                  className="flex items-center gap-1"
+                                >
+                                  <X className="h-3 w-3" />
+                                  Deny
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Deny Response</DialogTitle>
+                                  <DialogDescription>
+                                    Provide a reason for denying this shift request from {response.profiles?.full_name}.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                
+                                <div className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Label htmlFor="rejection-reason">Reason for Denial</Label>
+                                    <textarea
+                                      id="rejection-reason"
+                                      placeholder="Enter reason for denial (optional but recommended)"
+                                      className="w-full min-h-[80px] p-2 border rounded-md text-sm resize-y"
+                                      maxLength={500}
+                                    />
+                                  </div>
+                                  
+                                  <Button
+                                    onClick={() => {
+                                      const textarea = document.getElementById('rejection-reason') as HTMLTextAreaElement;
+                                      updateResponseMutation.mutate({ 
+                                        responseId: response.id, 
+                                        status: "denied",
+                                        rejectionReason: textarea.value
+                                      });
+                                    }}
+                                    disabled={updateResponseMutation.isPending}
+                                    variant="destructive"
+                                  >
+                                    {updateResponseMutation.isPending ? "Denying..." : "Confirm Denial"}
+                                  </Button>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           </div>
                         )}
                       </div>
-
-                      {response.status === "interested" && (
-                        <div className="flex flex-col gap-2 ml-4">
-                          <Button
-                            size="sm"
-                            onClick={() => updateResponseMutation.mutate({ 
-                              responseId: response.id, 
-                              status: "approved" 
-                            })}
-                            disabled={updateResponseMutation.isPending}
-                            className="flex items-center gap-1"
-                          >
-                            <Check className="h-3 w-3" />
-                            Approve
-                          </Button>
-                          
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={updateResponseMutation.isPending}
-                                className="flex items-center gap-1"
-                              >
-                                <X className="h-3 w-3" />
-                                Deny
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Deny Response</DialogTitle>
-                                <DialogDescription>
-                                  Provide a reason for denying this shift request from {response.profiles?.full_name}.
-                                </DialogDescription>
-                              </DialogHeader>
-                              
-                              <div className="space-y-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="rejection-reason">Reason for Denial</Label>
-                                  <textarea
-                                    id="rejection-reason"
-                                    placeholder="Enter reason for denial (optional but recommended)"
-                                    className="w-full min-h-[80px] p-2 border rounded-md text-sm resize-y"
-                                    maxLength={500}
-                                  />
-                                </div>
-                                
-                                <Button
-                                  onClick={() => {
-                                    const textarea = document.getElementById('rejection-reason') as HTMLTextAreaElement;
-                                    updateResponseMutation.mutate({ 
-                                      responseId: response.id, 
-                                      status: "denied",
-                                      rejectionReason: textarea.value
-                                    });
-                                  }}
-                                  disabled={updateResponseMutation.isPending}
-                                  variant="destructive"
-                                >
-                                  {updateResponseMutation.isPending ? "Denying..." : "Confirm Denial"}
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -951,14 +959,17 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
                 <RefreshCw className={`h-4 w-4 mr-2 ${understaffedLoading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleCreateAllAlerts}
-                disabled={createAlertMutation.isPending || !understaffedShifts?.length}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create All Alerts
-              </Button>
+              {/* Only show Create All Alerts button if notifications are enabled */}
+              {notificationsEnabled && (
+                <Button
+                  variant="outline"
+                  onClick={handleCreateAllAlerts}
+                  disabled={createAlertMutation.isPending || !understaffedShifts?.length}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create All Alerts
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -1055,192 +1066,29 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        {!alertExists ? (
-                          <Button
-                            size="sm"
-                            onClick={() => handleCreateAlertFromDetection(shift)}
-                            disabled={createAlertMutation.isPending}
-                          >
-                            Create Alert
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => handleSendAlert(shift)}
-                            disabled={sendAlertMutation.isPending}
-                          >
-                            <Mail className="h-3 w-3 mr-1" />
-                            Send Alert
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Manual Vacancy Alert Creation</CardTitle>
-              <CardDescription>Manually create vacancy alerts for specific shifts</CardDescription>
-            </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Manual Alert
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create Vacancy Alert</DialogTitle>
-                  <DialogDescription>
-                    Create an alert to request volunteers for an understaffed shift
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !selectedDate && "text-muted-foreground"
+                      {/* Only show Create Alert/Send Alert buttons if notifications are enabled */}
+                      {notificationsEnabled && (
+                        <div className="flex flex-col gap-2">
+                          {!alertExists ? (
+                            <Button
+                              size="sm"
+                              onClick={() => handleCreateAlertFromDetection(shift)}
+                              disabled={createAlertMutation.isPending}
+                            >
+                              Create Alert
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSendAlert(shift)}
+                              disabled={sendAlertMutation.isPending}
+                            >
+                              <Mail className="h-3 w-3 mr-1" />
+                              Send Alert
+                            </Button>
                           )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={selectedDate}
-                          onSelect={setSelectedDate}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Shift Type</Label>
-                    <Select value={selectedShift} onValueChange={setSelectedShift}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select shift" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {shiftTypes?.map((shift) => (
-                          <SelectItem key={shift.id} value={shift.id}>
-                            {shift.name} ({shift.start_time} - {shift.end_time})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Minimum Required Officers</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={minimumRequired}
-                      onChange={(e) => setMinimumRequired(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="custom-message">Custom Message (Optional)</Label>
-                    <textarea
-                      id="custom-message"
-                      placeholder="Add a custom message for this vacancy alert (e.g., 'Urgent coverage needed for special event')"
-                      value={customMessage}
-                      onChange={(e) => setCustomMessage(e.target.value)}
-                      className="w-full min-h-[80px] p-2 border rounded-md text-sm resize-y"
-                      maxLength={500}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {customMessage.length}/500 characters
-                    </p>
-                  </div>
-
-                  <Button
-                    className="w-full"
-                    onClick={handleCreateManualAlert}
-                    disabled={createAlertMutation.isPending}
-                  >
-                    {createAlertMutation.isPending ? "Creating..." : "Create Alert"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {alertsLoading ? (
-            <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground">Loading alerts...</p>
-            </div>
-          ) : !alerts || alerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No vacancy alerts created yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {alerts.map((alert) => {
-                const shiftName = alert.shift_types?.name || `Shift ID: ${alert.shift_type_id}`;
-                const shiftTime = alert.shift_types 
-                  ? `${alert.shift_types.start_time} - ${alert.shift_types.end_time}`
-                  : "Time not available";
-
-                return (
-                  <div key={alert.id} className="p-4 border rounded-lg space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <p className="font-medium">{shiftName}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(alert.date), "EEEE, MMM d, yyyy")} • {shiftTime}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Staffing: {alert.current_staffing} / {alert.minimum_required}
-                        </p>
-                        {alert.custom_message && (
-                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                            <p className="text-sm text-blue-800">{alert.custom_message}</p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2 ml-4">
-                        <span
-                          className={cn(
-                            "text-xs px-2 py-1 rounded",
-                            alert.status === "open"
-                              ? "bg-green-500/10 text-green-700"
-                              : "bg-gray-500/10 text-gray-700"
-                          )}
-                        >
-                          {alert.status}
-                        </span>
-                        {alert.status === "open" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => closeAlertMutation.mutate(alert.id)}
-                          >
-                            Close Alert
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1250,6 +1098,176 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
         </CardContent>
       </Card>
 
+      {/* Only show Manual Vacancy Alert Creation card if notifications are enabled */}
+      {notificationsEnabled && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Manual Vacancy Alert Creation</CardTitle>
+                <CardDescription>Manually create vacancy alerts for specific shifts</CardDescription>
+              </div>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Manual Alert
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Vacancy Alert</DialogTitle>
+                    <DialogDescription>
+                      Create an alert to request volunteers for an understaffed shift
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !selectedDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Shift Type</Label>
+                      <Select value={selectedShift} onValueChange={setSelectedShift}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select shift" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {shiftTypes?.map((shift) => (
+                            <SelectItem key={shift.id} value={shift.id}>
+                              {shift.name} ({shift.start_time} - {shift.end_time})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Minimum Required Officers</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={minimumRequired}
+                        onChange={(e) => setMinimumRequired(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+                      <textarea
+                        id="custom-message"
+                        placeholder="Add a custom message for this vacancy alert (e.g., 'Urgent coverage needed for special event')"
+                        value={customMessage}
+                        onChange={(e) => setCustomMessage(e.target.value)}
+                        className="w-full min-h-[80px] p-2 border rounded-md text-sm resize-y"
+                        maxLength={500}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {customMessage.length}/500 characters
+                      </p>
+                    </div>
+
+                    <Button
+                      className="w-full"
+                      onClick={handleCreateManualAlert}
+                      disabled={createAlertMutation.isPending}
+                    >
+                      {createAlertMutation.isPending ? "Creating..." : "Create Alert"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {alertsLoading ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">Loading alerts...</p>
+              </div>
+            ) : !alerts || alerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No vacancy alerts created yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {alerts.map((alert) => {
+                  const shiftName = alert.shift_types?.name || `Shift ID: ${alert.shift_type_id}`;
+                  const shiftTime = alert.shift_types 
+                    ? `${alert.shift_types.start_time} - ${alert.shift_types.end_time}`
+                    : "Time not available";
+
+                  return (
+                    <div key={alert.id} className="p-4 border rounded-lg space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="font-medium">{shiftName}</p>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(alert.date), "EEEE, MMM d, yyyy")} • {shiftTime}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Staffing: {alert.current_staffing} / {alert.minimum_required}
+                          </p>
+                          {alert.custom_message && (
+                            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                              <p className="text-sm text-blue-800">{alert.custom_message}</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 ml-4">
+                          <span
+                            className={cn(
+                              "text-xs px-2 py-1 rounded",
+                              alert.status === "open"
+                                ? "bg-green-500/10 text-green-700"
+                                : "bg-gray-500/10 text-gray-700"
+                            )}
+                          >
+                            {alert.status}
+                          </span>
+                          {alert.status === "open" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => closeAlertMutation.mutate(alert.id)}
+                            >
+                              Close Alert
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Rest of your dialogs remain the same */}
       <Dialog open={showCustomMessageDialog} onOpenChange={setShowCustomMessageDialog}>
         <DialogContent>
           <DialogHeader>

@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Clock, Plus, Minus, Award, CalendarClock, Settings } from "lucide-react";
+import { Clock, Plus, Minus, Award, CalendarClock, Settings, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const PTOManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState<string>("");
@@ -21,6 +23,9 @@ export const PTOManagement = () => {
   const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<{ id: string; hours: string } | null>(null);
   const queryClient = useQueryClient();
+
+  // Add website settings hook
+  const { data: settings } = useWebsiteSettings();
 
   const { data: officers } = useQuery({
     queryKey: ["officers-pto"],
@@ -55,6 +60,10 @@ export const PTOManagement = () => {
 
   const updatePTOMutation = useMutation({
     mutationFn: async () => {
+      if (!settings?.show_pto_balances) {
+        throw new Error("PTO balances are currently disabled in website settings");
+      }
+
       if (!selectedOfficer || !hours || isNaN(Number(hours))) {
         throw new Error("Please fill in all fields with valid numbers");
       }
@@ -109,6 +118,10 @@ export const PTOManagement = () => {
 
   const accrueAllSickTimeMutation = useMutation({
     mutationFn: async () => {
+      if (!settings?.show_pto_balances) {
+        throw new Error("PTO balances are currently disabled in website settings");
+      }
+
       const { error } = await supabase.rpc("accrue_sick_time");
       if (error) throw error;
     },
@@ -123,6 +136,10 @@ export const PTOManagement = () => {
 
   const accrueAnnualPTOMutation = useMutation({
     mutationFn: async () => {
+      if (!settings?.show_pto_balances) {
+        throw new Error("PTO balances are currently disabled in website settings");
+      }
+
       const { error } = await supabase.rpc("accrue_annual_pto");
       if (error) throw error;
     },
@@ -173,10 +190,19 @@ export const PTOManagement = () => {
               <Settings className="h-4 w-4 mr-2" />
               Accrual Rules
             </Button>
-            <Button onClick={() => accrueAllSickTimeMutation.mutate()} variant="outline" size="sm">
+            <Button 
+              onClick={() => accrueAllSickTimeMutation.mutate()} 
+              variant="outline" 
+              size="sm"
+              disabled={!settings?.show_pto_balances}
+            >
               Accrue Sick Time (All)
             </Button>
-            <Button onClick={() => setDialogOpen(true)} size="sm">
+            <Button 
+              onClick={() => setDialogOpen(true)} 
+              size="sm"
+              disabled={!settings?.show_pto_balances}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Adjust PTO
             </Button>
@@ -184,6 +210,16 @@ export const PTOManagement = () => {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Warning Alert when PTO is disabled */}
+        {!settings?.show_pto_balances && (
+          <Alert className="mb-4 bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">
+              PTO balances are currently disabled in website settings. PTO management features are unavailable.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="space-y-4">
           {officers?.map((officer) => (
             <div key={officer.id} className="p-4 border rounded-lg">
@@ -193,23 +229,33 @@ export const PTOManagement = () => {
                   <p className="text-sm text-muted-foreground">Badge #{officer.badge_number}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Vacation</p>
-                  <p className="text-lg font-semibold">{officer.vacation_hours || 0}h</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Sick</p>
-                  <p className="text-lg font-semibold">{officer.sick_hours || 0}h</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Comp</p>
-                  <p className="text-lg font-semibold">{officer.comp_hours || 0}h</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Holiday</p>
-                  <p className="text-lg font-semibold">{officer.holiday_hours || 0}h</p>
-                </div>
+              <div className={`grid gap-4 ${settings?.show_pto_balances ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-2'}`}>
+                {settings?.show_pto_balances ? (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Vacation</p>
+                      <p className="text-lg font-semibold">{officer.vacation_hours || 0}h</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Sick</p>
+                      <p className="text-lg font-semibold">{officer.sick_hours || 0}h</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Comp</p>
+                      <p className="text-lg font-semibold">{officer.comp_hours || 0}h</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Holiday</p>
+                      <p className="text-lg font-semibold">{officer.holiday_hours || 0}h</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">PTO Status</p>
+                    <p className="text-lg font-semibold text-muted-foreground">Indefinite</p>
+                    <p className="text-xs text-muted-foreground">PTO balances are currently disabled</p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Award className="h-3 w-3" />
@@ -242,80 +288,89 @@ export const PTOManagement = () => {
             <DialogDescription>Add or subtract PTO hours for an officer</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Officer</Label>
-              <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select officer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {officers?.map((officer) => (
-                    <SelectItem key={officer.id} value={officer.id}>
-                      {officer.full_name} (#{officer.badge_number})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>PTO Type</Label>
-              <Select value={ptoType} onValueChange={setPtoType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vacation">Vacation</SelectItem>
-                  <SelectItem value="sick">Sick</SelectItem>
-                  <SelectItem value="comp">Comp Time</SelectItem>
-                  <SelectItem value="holiday">Holiday</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Operation</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={operation === "add" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setOperation("add")}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-                <Button
-                  variant={operation === "subtract" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setOperation("subtract")}
-                >
-                  <Minus className="h-4 w-4 mr-2" />
-                  Subtract
-                </Button>
+          {!settings?.show_pto_balances ? (
+            <Alert className="bg-amber-50 border-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                PTO balances are currently disabled in website settings. You cannot adjust PTO balances at this time.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Officer</Label>
+                <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select officer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {officers?.map((officer) => (
+                      <SelectItem key={officer.id} value={officer.id}>
+                        {officer.full_name} (#{officer.badge_number})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Hours</Label>
-              <Input
-                type="number"
-                placeholder="Enter hours"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                min="0"
-                step="0.5"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label>PTO Type</Label>
+                <Select value={ptoType} onValueChange={setPtoType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vacation">Vacation</SelectItem>
+                    <SelectItem value="sick">Sick</SelectItem>
+                    <SelectItem value="comp">Comp Time</SelectItem>
+                    <SelectItem value="holiday">Holiday</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <Button
-              className="w-full"
-              onClick={() => updatePTOMutation.mutate()}
-              disabled={updatePTOMutation.isPending}
-            >
-              {updatePTOMutation.isPending ? "Updating..." : "Update PTO Balance"}
-            </Button>
-          </div>
+              <div className="space-y-2">
+                <Label>Operation</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={operation === "add" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setOperation("add")}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add
+                  </Button>
+                  <Button
+                    variant={operation === "subtract" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setOperation("subtract")}
+                  >
+                    <Minus className="h-4 w-4 mr-2" />
+                    Subtract
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Hours</Label>
+                <Input
+                  type="number"
+                  placeholder="Enter hours"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  min="0"
+                  step="0.5"
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={() => updatePTOMutation.mutate()}
+                disabled={updatePTOMutation.isPending}
+              >
+                {updatePTOMutation.isPending ? "Updating..." : "Update PTO Balance"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -331,94 +386,103 @@ export const PTOManagement = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Holiday Hours</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Same amount for all officers regardless of service credit
-                </p>
-                {holidayRule && (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      value={editingRule?.id === holidayRule.id ? editingRule.hours : holidayRule.hours_to_accrue}
-                      onChange={(e) => setEditingRule({ id: holidayRule.id, hours: e.target.value })}
-                      className="w-32"
-                      step="1"
-                    />
-                    <span className="text-sm">hours/year</span>
-                    {editingRule?.id === holidayRule.id && (
-                      <Button
-                        size="sm"
-                        onClick={() => updateAccrualRuleMutation.mutate({ 
-                          id: holidayRule.id, 
-                          hours: Number(editingRule.hours) 
-                        })}
-                        disabled={updateAccrualRuleMutation.isPending}
-                      >
-                        Save
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
+          {!settings?.show_pto_balances ? (
+            <Alert className="bg-amber-50 border-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                PTO balances are currently disabled in website settings. Accrual rules cannot be modified at this time.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Holiday Hours</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Same amount for all officers regardless of service credit
+                  </p>
+                  {holidayRule && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={editingRule?.id === holidayRule.id ? editingRule.hours : holidayRule.hours_to_accrue}
+                        onChange={(e) => setEditingRule({ id: holidayRule.id, hours: e.target.value })}
+                        className="w-32"
+                        step="1"
+                      />
+                      <span className="text-sm">hours/year</span>
+                      {editingRule?.id === holidayRule.id && (
+                        <Button
+                          size="sm"
+                          onClick={() => updateAccrualRuleMutation.mutate({ 
+                            id: holidayRule.id, 
+                            hours: Number(editingRule.hours) 
+                          })}
+                          disabled={updateAccrualRuleMutation.isPending}
+                        >
+                          Save
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <h3 className="font-semibold mb-2">Vacation Hours by Service Credit</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Based on years of service credit
-                </p>
-                <div className="space-y-3">
-                  {vacationRules.map((rule) => {
-                    const tierLabel = rule.service_credit_max 
-                      ? `${rule.service_credit_min}-${Math.floor(rule.service_credit_max)} years`
-                      : `${rule.service_credit_min}+ years`;
-                    
-                    return (
-                      <div key={rule.id} className="flex items-center gap-2 p-3 border rounded-lg">
-                        <span className="text-sm font-medium w-32">{tierLabel}</span>
-                        <Input
-                          type="number"
-                          value={editingRule?.id === rule.id ? editingRule.hours : rule.hours_to_accrue}
-                          onChange={(e) => setEditingRule({ id: rule.id, hours: e.target.value })}
-                          className="w-32"
-                          step="1"
-                        />
-                        <span className="text-sm">hours/year</span>
-                        {editingRule?.id === rule.id && (
-                          <Button
-                            size="sm"
-                            onClick={() => updateAccrualRuleMutation.mutate({ 
-                              id: rule.id, 
-                              hours: Number(editingRule.hours) 
-                            })}
-                            disabled={updateAccrualRuleMutation.isPending}
-                          >
-                            Save
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div>
+                  <h3 className="font-semibold mb-2">Vacation Hours by Service Credit</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Based on years of service credit
+                  </p>
+                  <div className="space-y-3">
+                    {vacationRules.map((rule) => {
+                      const tierLabel = rule.service_credit_max 
+                        ? `${rule.service_credit_min}-${Math.floor(rule.service_credit_max)} years`
+                        : `${rule.service_credit_min}+ years`;
+                      
+                      return (
+                        <div key={rule.id} className="flex items-center gap-2 p-3 border rounded-lg">
+                          <span className="text-sm font-medium w-32">{tierLabel}</span>
+                          <Input
+                            type="number"
+                            value={editingRule?.id === rule.id ? editingRule.hours : rule.hours_to_accrue}
+                            onChange={(e) => setEditingRule({ id: rule.id, hours: e.target.value })}
+                            className="w-32"
+                            step="1"
+                          />
+                          <span className="text-sm">hours/year</span>
+                          {editingRule?.id === rule.id && (
+                            <Button
+                              size="sm"
+                              onClick={() => updateAccrualRuleMutation.mutate({ 
+                                id: rule.id, 
+                                hours: Number(editingRule.hours) 
+                              })}
+                              disabled={updateAccrualRuleMutation.isPending}
+                            >
+                              Save
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="pt-4 border-t">
-              <Button
-                className="w-full"
-                onClick={() => accrueAnnualPTOMutation.mutate()}
-                disabled={accrueAnnualPTOMutation.isPending}
-              >
-                <CalendarClock className="h-4 w-4 mr-2" />
-                {accrueAnnualPTOMutation.isPending ? "Processing..." : "Run Annual PTO Accrual Now"}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                This will add PTO to all officers based on the rules above
-              </p>
+              <div className="pt-4 border-t">
+                <Button
+                  className="w-full"
+                  onClick={() => accrueAnnualPTOMutation.mutate()}
+                  disabled={accrueAnnualPTOMutation.isPending}
+                >
+                  <CalendarClock className="h-4 w-4 mr-2" />
+                  {accrueAnnualPTOMutation.isPending ? "Processing..." : "Run Annual PTO Accrual Now"}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  This will add PTO to all officers based on the rules above
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>

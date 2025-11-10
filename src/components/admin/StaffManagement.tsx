@@ -9,12 +9,16 @@ import { Users, Clock, Edit2, Calendar, Award, Plus, Search } from "lucide-react
 import { OfficerProfileDialog } from "./OfficerProfileDialog";
 import { OfficerScheduleManager } from "./OfficerScheduleManager";
 import { format } from "date-fns";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
 export const StaffManagement = () => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);
   const [managingSchedule, setManagingSchedule] = useState<any>(null);
   const [creatingNewOfficer, setCreatingNewOfficer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Add website settings hook
+  const { data: settings } = useWebsiteSettings();
 
   const { data: officers, isLoading } = useQuery({
     queryKey: ["all-officers"],
@@ -157,45 +161,66 @@ export const StaffManagement = () => {
                       {officer.rank && (
                         <p className="text-sm font-medium text-primary">Rank: {officer.rank}</p>
                       )}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Vacation:</span>
-                          <span className="font-medium">{officer.vacation_hours || 0}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Sick:</span>
-                          <span className="font-medium">{officer.sick_hours || 0}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Comp:</span>
-                          <span className="font-medium">{officer.comp_hours || 0}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Holiday:</span>
-                          <span className="font-medium">{officer.holiday_hours || 0}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Award className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Service Credit:</span>
-                          <div className="space-y-0.5">
-                            <span className="font-medium">{officer.service_credit?.toFixed(1) || 0} yrs</span>
-                            {officer.hire_date && (
-                              <p className="text-xs text-muted-foreground">
-                                Since {format(new Date(officer.hire_date), "MMM yyyy")}
-                              </p>
-                            )}
-                            {officer.service_credit_override !== null && (
-                              <p className="text-xs text-amber-600 dark:text-amber-500">
-                                (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
-                              </p>
-                            )}
+                      
+                      {/* PTO Balances Section - Conditionally Rendered */}
+                      {settings?.show_pto_balances && settings?.pto_balances_visible ? (
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Vacation:</span>
+                            <span className="font-medium">{officer.vacation_hours || 0}h</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Sick:</span>
+                            <span className="font-medium">{officer.sick_hours || 0}h</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Comp:</span>
+                            <span className="font-medium">{officer.comp_hours || 0}h</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Holiday:</span>
+                            <span className="font-medium">{officer.holiday_hours || 0}h</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Award className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Service Credit:</span>
+                            <div className="space-y-0.5">
+                              <span className="font-medium">{officer.service_credit?.toFixed(1) || 0} yrs</span>
+                              {officer.hire_date && (
+                                <p className="text-xs text-muted-foreground">
+                                  Since {format(new Date(officer.hire_date), "MMM yyyy")}
+                                </p>
+                              )}
+                              {officer.service_credit_override !== null && (
+                                <p className="text-xs text-amber-600 dark:text-amber-500">
+                                  (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        // Show when PTO balances are disabled
+                        <div className="mt-2 text-sm">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Award className="h-3 w-3" />
+                            <span>Service Credit:</span>
+                            <span className="font-medium">{officer.service_credit?.toFixed(1) || 0} yrs</span>
+                            {officer.hire_date && (
+                              <span className="text-xs">
+                                (Since {format(new Date(officer.hire_date), "MMM yyyy")})
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground italic">
+                            PTO balances are currently managed as indefinite
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-col gap-1">

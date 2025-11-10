@@ -41,7 +41,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [manualRefresh, setManualRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState(initialTab);
-  const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
+  const { primaryRole, isAdminOrSupervisor, isAdmin, isSupervisor, loading: roleLoading } = useUserRole(user?.id);
   const queryClient = useQueryClient();
 
   // Sync active tab with current route - simplified for HashRouter

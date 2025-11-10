@@ -570,7 +570,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
           </Card>
         )}
 
-
+ {/* Desktop Navigation - Admin */}
 {!isMobile && isAdmin ? (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">

@@ -575,7 +575,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
 {!isMobile && (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     {isAdmin ? (
-      // Admin tabs - All tabs including Settings
+      // Admin tabs - All tabs including Settings (6 columns)
       <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">
         <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
           <Calendar className="h-4 w-4 md:mr-2" />
@@ -608,8 +608,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
           <span className="md:hidden">Settings</span>
         </TabsTrigger>
       </TabsList>
-    ) : isSupervisor ? (
-      // Supervisor tabs - All tabs except Settings
+    ) : isAdminOrSupervisor ? (
+      // Supervisor tabs - All tabs except Settings (5 columns)
       <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-5 gap-1">
         <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
           <Calendar className="h-4 w-4 md:mr-2" />
@@ -638,7 +638,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         </TabsTrigger>
       </TabsList>
     ) : (
-      // Officer tabs - Only Daily Schedule and Weekly tabs
+      // Officer tabs - Only Daily and Weekly tabs (2 columns)
       <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-2 gap-1">
         <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
           <Calendar className="h-4 w-4 md:mr-2" />

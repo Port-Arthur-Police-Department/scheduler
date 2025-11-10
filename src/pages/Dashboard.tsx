@@ -571,11 +571,9 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
           </Card>
         )}
 
-       {/* Desktop Navigation - Admin */}
-// In your Dashboard.tsx, update the useUserRole hook usage
+
 const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
 
-// Then update the admin tabs condition to use isAdmin instead of isAdminOrSupervisor
 {!isMobile && isAdmin ? (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">

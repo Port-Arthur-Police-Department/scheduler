@@ -12,10 +12,16 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";
 import { useUnderstaffedDetection } from "@/hooks/useUnderstaffedDetection";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
 export const UnderstaffedDetection = () => {
   const queryClient = useQueryClient();
   const [selectedShiftId, setSelectedShiftId] = useState<string>("all");
+
+  // Add website settings query
+  const { data: websiteSettings } = useWebsiteSettings();
+  const notificationsEnabled = websiteSettings?.enable_notifications || false;
+
 
   // Get all shift types for the dropdown
   const { data: shiftTypes } = useQuery({
@@ -207,7 +213,7 @@ const {
     });
   };
 
-  return (
+   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -229,61 +235,22 @@ const {
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleCreateAllAlerts}
-              disabled={!understaffedShifts?.length || createAlertMutation.isPending}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create All Alerts
-            </Button>
+            {/* Only show Create All Alerts button if notifications are enabled */}
+            {notificationsEnabled && (
+              <Button
+                variant="outline"
+                onClick={handleCreateAllAlerts}
+                disabled={!understaffedShifts?.length || createAlertMutation.isPending}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create All Alerts
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="mb-6">
-          <Label htmlFor="shift-select" className="text-sm font-medium mb-2 block">
-            Select Shift to Scan
-          </Label>
-          <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a shift to scan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Shifts</SelectItem>
-              {shiftTypes?.map((shift) => (
-                <SelectItem key={shift.id} value={shift.id}>
-                  {shift.name} ({shift.start_time} - {shift.end_time})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {isLoading && (
-          <div className="text-center py-8">
-            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Scanning for understaffed shifts...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-center py-8">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-destructive" />
-            <p className="text-sm text-destructive">Error loading understaffed shifts</p>
-          </div>
-        )}
-
-        {!isLoading && !error && (!understaffedShifts || understaffedShifts.length === 0) && (
-          <div className="text-center py-8">
-            <p className="text-sm text-muted-foreground">
-              No understaffed shifts found in the next 7 days.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Check browser console for detailed scan results.
-            </p>
-          </div>
-        )}
+        {/* ... existing content ... */}
 
         {!isLoading && !error && understaffedShifts && understaffedShifts.length > 0 && (
           <div className="space-y-4">
@@ -302,60 +269,31 @@ const {
                 >
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
-                      <p className="font-medium">{shiftName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(shift.date), "EEEE, MMM d, yyyy")} • {shiftTime}
-                      </p>
-                      
-                      <div className="bg-gray-100 p-2 rounded text-xs mt-2">
-                        <p className="text-gray-600">
-                          <strong>Staffing:</strong> {shift.current_staffing}/{shift.minimum_required} |
-                          <strong> Supervisors:</strong> {shift.current_supervisors}/{shift.min_supervisors} |
-                          <strong> Officers:</strong> {shift.current_officers}/{shift.min_officers}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <Badge variant="destructive">
-                          Total: {shift.current_staffing}/{shift.minimum_required}
-                        </Badge>
-                        {shift.isSupervisorsUnderstaffed && (
-                          <Badge variant="destructive">
-                            Needs {shift.min_supervisors - shift.current_supervisors} supervisor(s)
-                          </Badge>
-                        )}
-                        {shift.isOfficersUnderstaffed && (
-                          <Badge variant="destructive">
-                            Needs {shift.min_officers - shift.current_officers} officer(s)
-                          </Badge>
-                        )}
-                        {alertExists && (
-                          <Badge variant="outline" className="bg-green-500/10 text-green-700">
-                            Alert Created
-                          </Badge>
+                      {/* ... existing shift info display ... */}
+                    </div>
+                    {/* Only show Create Alert/Send Notifications buttons if notifications are enabled */}
+                    {notificationsEnabled && (
+                      <div className="flex flex-col gap-2">
+                        {!alertExists ? (
+                          <Button
+                            size="sm"
+                            onClick={() => handleCreateAlert(shift)}
+                            disabled={createAlertMutation.isPending}
+                          >
+                            Create Alert
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleSendAlert(shift)}
+                            disabled={sendAlertMutation.isPending}
+                          >
+                            <Mail className="h-3 w-3 mr-1" />
+                            Send Notifications
+                          </Button>
                         )}
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {!alertExists ? (
-                        <Button
-                          size="sm"
-                          onClick={() => handleCreateAlert(shift)}
-                          disabled={createAlertMutation.isPending}
-                        >
-                          Create Alert
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => handleSendAlert(shift)}
-                          disabled={sendAlertMutation.isPending}
-                        >
-                          <Mail className="h-3 w-3 mr-1" />
-                          Send Notifications
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               );

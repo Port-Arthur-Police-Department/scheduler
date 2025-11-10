@@ -11,7 +11,17 @@ export const useWebsiteSettings = () => {
         .select('*')
         .single();
       
-      if (error) throw error;
+      if (error) {
+        // If no settings exist yet, return default values
+        if (error.code === 'PGRST116') {
+          return {
+            enable_notifications: false,
+            show_pto_balances: false,
+            pto_balances_visible: false
+          };
+        }
+        throw error;
+      }
       return data;
     }
   });

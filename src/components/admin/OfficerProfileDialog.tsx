@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Award, KeyRound } from "lucide-react";
+import { CalendarIcon, Award, KeyRound, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
 interface OfficerProfileDialogProps {
   officer: {
@@ -35,6 +36,9 @@ interface OfficerProfileDialogProps {
 export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerProfileDialogProps) => {
   const queryClient = useQueryClient();
   const isEditing = officer !== null;
+  
+  // Add website settings hook
+  const { data: settings } = useWebsiteSettings();
   
   // Initialize state with defaults or existing officer data
   const [hireDate, setHireDate] = useState<Date | undefined>(
@@ -97,22 +101,29 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     mutationFn: async (data: typeof formData) => {
       if (!officer?.id) throw new Error("No officer ID provided");
       
-      // Update profile first
+      // Prepare profile data
+      const profileData: any = {
+        full_name: data.full_name,
+        email: data.email,
+        phone: data.phone || null,
+        badge_number: data.badge_number || null,
+        rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
+        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
+        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+      };
+
+      // Only include PTO balances if they are enabled in settings
+      if (settings?.show_pto_balances) {
+        profileData.vacation_hours = Number(data.vacation_hours) || 0;
+        profileData.sick_hours = Number(data.sick_hours) || 0;
+        profileData.comp_hours = Number(data.comp_hours) || 0;
+        profileData.holiday_hours = Number(data.holiday_hours) || 0;
+      }
+
+      // Update profile
       const { error } = await supabase
         .from("profiles")
-        .update({
-          full_name: data.full_name,
-          email: data.email,
-          phone: data.phone || null,
-          badge_number: data.badge_number || null,
-          rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
-          hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-          service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-          vacation_hours: Number(data.vacation_hours) || 0,
-          sick_hours: Number(data.sick_hours) || 0,
-          comp_hours: Number(data.comp_hours) || 0,
-          holiday_hours: Number(data.holiday_hours) || 0,
-        })
+        .update(profileData)
         .eq("id", officer.id);
 
       if (error) throw error;
@@ -150,24 +161,31 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
 
   const createProfileMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      // Prepare profile data
+      const profileData: any = {
+        email: data.email,
+        full_name: data.full_name,
+        phone: data.phone,
+        badge_number: data.badge_number,
+        rank: data.rank,
+        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
+        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+      };
+
+      // Only include PTO balances if they are enabled in settings
+      if (settings?.show_pto_balances) {
+        profileData.vacation_hours = Number(data.vacation_hours) || 0;
+        profileData.sick_hours = Number(data.sick_hours) || 0;
+        profileData.comp_hours = Number(data.comp_hours) || 0;
+        profileData.holiday_hours = Number(data.holiday_hours) || 0;
+      }
+
       const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: data.email,
-          full_name: data.full_name,
-          phone: data.phone,
-          badge_number: data.badge_number,
-          rank: data.rank,
-          hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-          service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-          vacation_hours: Number(data.vacation_hours) || 0,
-          sick_hours: Number(data.sick_hours) || 0,
-          comp_hours: Number(data.comp_hours) || 0,
-          holiday_hours: Number(data.holiday_hours) || 0,
-        }),
+        body: JSON.stringify(profileData),
       })
 
       const result = await response.json()
@@ -425,55 +443,72 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
             </div>
           )}
 
-          <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-            <h3 className="font-semibold text-sm">PTO Balances</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="vacation_hours">Vacation Hours</Label>
-                <Input
-                  id="vacation_hours"
-                  type="number"
-                  value={formData.vacation_hours}
-                  onChange={(e) => setFormData({ ...formData, vacation_hours: e.target.value })}
-                  step="0.5"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sick_hours">Sick Hours</Label>
-                <Input
-                  id="sick_hours"
-                  type="number"
-                  value={formData.sick_hours}
-                  onChange={(e) => setFormData({ ...formData, sick_hours: e.target.value })}
-                  step="0.5"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="comp_hours">Comp Hours</Label>
-                <Input
-                  id="comp_hours"
-                  type="number"
-                  value={formData.comp_hours}
-                  onChange={(e) => setFormData({ ...formData, comp_hours: e.target.value })}
-                  step="0.5"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="holiday_hours">Holiday Hours</Label>
-                <Input
-                  id="holiday_hours"
-                  type="number"
-                  value={formData.holiday_hours}
-                  onChange={(e) => setFormData({ ...formData, holiday_hours: e.target.value })}
-                  step="0.5"
-                  min="0"
-                />
+          {/* PTO Balances Section - Conditionally Rendered */}
+          {settings?.show_pto_balances ? (
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                PTO Balances
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="vacation_hours">Vacation Hours</Label>
+                  <Input
+                    id="vacation_hours"
+                    type="number"
+                    value={formData.vacation_hours}
+                    onChange={(e) => setFormData({ ...formData, vacation_hours: e.target.value })}
+                    step="0.5"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sick_hours">Sick Hours</Label>
+                  <Input
+                    id="sick_hours"
+                    type="number"
+                    value={formData.sick_hours}
+                    onChange={(e) => setFormData({ ...formData, sick_hours: e.target.value })}
+                    step="0.5"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="comp_hours">Comp Hours</Label>
+                  <Input
+                    id="comp_hours"
+                    type="number"
+                    value={formData.comp_hours}
+                    onChange={(e) => setFormData({ ...formData, comp_hours: e.target.value })}
+                    step="0.5"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="holiday_hours">Holiday Hours</Label>
+                  <Input
+                    id="holiday_hours"
+                    type="number"
+                    value={formData.holiday_hours}
+                    onChange={(e) => setFormData({ ...formData, holiday_hours: e.target.value })}
+                    step="0.5"
+                    min="0"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            // Show message when PTO balances are disabled
+            <div className="p-4 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">PTO Management</p>
+                  <p className="text-xs">PTO balances are currently managed as indefinite</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

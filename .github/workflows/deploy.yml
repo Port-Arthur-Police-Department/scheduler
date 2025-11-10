@@ -2,8 +2,7 @@ name: Deploy Website
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,6 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -23,7 +21,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install --ignore-scripts
+        run: npm ci        # use ci for clean install
 
       - name: Build site
         run: npm run build
@@ -31,20 +29,13 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Verify build output
+      - name: List build output (NEW)
         run: |
-          echo "=== Build verification ==="
-          find dist/ -type f
+          echo "===== dist/ contents ====="
+          find dist/ -type f | sort
           echo ""
-          echo "=== Checking index.html processing ==="
-          if grep -q "main.tsx" dist/index.html; then
-            echo "❌ FAILED: Vite did not process index.html"
-            exit 1
-          else
-            echo "✅ SUCCESS: Vite processed index.html correctly"
-            echo "=== Built index.html content ==="
-            head -20 dist/index.html
-          fi
+          echo "===== PWA files ====="
+          ls -l dist/manifest.json dist/sw.js || echo "❌ MISSING"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

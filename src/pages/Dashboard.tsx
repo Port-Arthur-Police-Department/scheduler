@@ -669,6 +669,7 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
           activeTab={activeTab} 
           onTabChange={handleTabChange}
           isAdminOrSupervisor={isAdminOrSupervisor}
+          isAdmin={isAdmin} // Add this prop
         />
       )}
     </div>

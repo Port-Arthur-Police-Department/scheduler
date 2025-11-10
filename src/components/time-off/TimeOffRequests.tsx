@@ -8,8 +8,8 @@ import { Calendar, Plus, Clock } from "lucide-react";
 import { TimeOffRequestDialog } from "./TimeOffRequestDialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { useWebsiteSettings } from "@/hooks/useWebsiteSettings"; // Add this import
-import { Alert, AlertDescription } from "@/components/ui/alert"; // Add this import
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TimeOffRequestsProps {
   userId: string;
@@ -19,11 +19,64 @@ interface TimeOffRequestsProps {
 export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequestsProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const queryClient = useQueryClient();
-  
+
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
 
-  // ... rest of your existing code remains the same until the return statement ...
+  const { data: requests, isLoading } = useQuery({
+    queryKey: ["time-off-requests", userId, isAdminOrSupervisor],
+    queryFn: async () => {
+      let query = supabase
+        .from("time_off_requests")
+        .select(`
+          *,
+          profiles!time_off_requests_officer_id_fkey(full_name, badge_number)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (!isAdminOrSupervisor) {
+        query = query.eq("officer_id", userId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const updateRequestMutation = useMutation({
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const { error } = await supabase
+        .from("time_off_requests")
+        .update({
+          status,
+          review_notes: notes,
+          reviewed_by: userId,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      toast.success("Request updated successfully");
+    },
+    onError: (error) => {
+      toast.error("Failed to update request: " + error.message);
+    },
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "approved":
+        return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
+      case "denied":
+        return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
+      default:
+        return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
+    }
+  };
 
   return (
     <Card>
@@ -56,8 +109,75 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
           </Alert>
         )}
       </CardHeader>
-      
-      {/* ... rest of your existing CardContent remains the same ... */}
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : !requests || requests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No time off requests found.</p>
+        ) : (
+          <div className="space-y-4">
+            {requests.map((request) => (
+              <div key={request.id} className="p-4 border rounded-lg space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    {isAdminOrSupervisor && (
+                      <p className="font-medium">
+                        {request.profiles?.full_name} (#{request.profiles?.badge_number})
+                      </p>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(request.start_date), "MMM d, yyyy")} -{" "}
+                      {format(new Date(request.end_date), "MMM d, yyyy")}
+                    </p>
+                     <p className="text-xs text-muted-foreground">
+                      <span className="font-medium capitalize">{request.pto_type || 'vacation'}</span>
+                      {request.hours_used > 0 && ` • ${request.hours_used} hours`}
+                    </p>
+                    {request.reason && (
+                      <p className="text-sm mt-2">{request.reason}</p>
+                    )}
+                    {request.review_notes && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        <span className="font-medium">Review notes:</span> {request.review_notes}
+                      </p>
+                    )}
+                  </div>
+                  <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
+                </div>
+
+                {isAdminOrSupervisor && request.status === "pending" && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        updateRequestMutation.mutate({ id: request.id, status: "approved" })
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        updateRequestMutation.mutate({ id: request.id, status: "denied" })
+                      }
+                    >
+                      Deny
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <TimeOffRequestDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        userId={userId}
+      />
     </Card>
   );
 };

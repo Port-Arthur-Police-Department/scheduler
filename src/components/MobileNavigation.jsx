@@ -1,6 +1,6 @@
 import React from 'react';
 
-const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin, isSupervisor }) => {
+const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin }) => {
   // Define tabs based on user role
   const adminTabs = [
     { id: 'daily', label: 'Daily', icon: '📅' },
@@ -24,8 +24,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
     { id: 'schedule', label: 'Weekly', icon: '📋' }
   ];
 
-  // Use isAdmin and isSupervisor to determine tabs
-  const tabs = isAdmin ? adminTabs : (isSupervisor ? supervisorTabs : officerTabs);
+  // Use isAdmin and isAdminOrSupervisor to determine tabs
+  const tabs = isAdmin ? adminTabs : (isAdminOrSupervisor ? supervisorTabs : officerTabs);
 
   return (
     <div className="mobile-bottom-nav">

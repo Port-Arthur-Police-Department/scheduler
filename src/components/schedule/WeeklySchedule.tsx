@@ -1407,24 +1407,18 @@ const WeeklySchedule = ({
             </CardTitle>
             <div className="flex items-center gap-3">
               {isAdminOrSupervisor && (
-                <>
-                  <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue placeholder="Select Shift" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {shiftTypes?.map((shift) => (
-                        <SelectItem key={shift.id} value={shift.id}>
-                          {shift.name} ({shift.start_time} - {shift.end_time})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={() => setDialogOpen(true)} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Schedule
-                  </Button>
-                </>
+                <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Select Shift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shiftTypes?.map((shift) => (
+                      <SelectItem key={shift.id} value={shift.id}>
+                        {shift.name} ({shift.start_time} - {shift.end_time})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
                 <Download className="h-4 w-4 mr-2" />

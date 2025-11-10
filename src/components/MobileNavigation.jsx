@@ -9,7 +9,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor }) => {
     { id: 'officers', label: 'Officers', icon: '👥' },
     { id: 'vacancies', label: 'Vacancies', icon: '⚠️' },
     { id: 'staff', label: 'Staff', icon: '👤' },
-    { id: 'requests', label: 'Time Off', icon: '⏰' }
+    { id: 'requests', label: 'Time Off', icon: '⏰' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' }
   ];
 
   const officerTabs = [

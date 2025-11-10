@@ -33,6 +33,7 @@ const App = () => {
               <Route path="/staff" element={<Dashboard isMobile={isMobile} initialTab="staff" />} />
               <Route path="/time-off" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
               <Route path="/pto" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
+              <Route path="/settings" element={<Dashboard isMobile={isMobile} initialTab="settings" />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

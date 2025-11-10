@@ -26,6 +26,7 @@ export default defineConfig({
           }
         ]
       },
+      manifestFilename: 'manifest.json',   // <-- add this
       manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',

@@ -21,7 +21,9 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install        # not npm ci
+        run: |
+          npm install --save-dev patch-package
+          npm install
 
       - name: Build site
         run: npm run build

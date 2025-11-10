@@ -1,5 +1,4 @@
-
- import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
@@ -572,10 +571,10 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         )}
 
 
-// Make sure this line is at the top with your other hook calls (around line 30-40):
+
 const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
 
-// Then later in the JSX, around line 575-580, you should have clean code like:
+
 {!isMobile && isAdmin ? (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">
@@ -616,7 +615,6 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
     </TabsContent>
   </Tabs>
 ) : (
-  // Supervisor tabs without Settings
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-5 gap-1">
       <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">

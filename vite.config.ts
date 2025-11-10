@@ -10,7 +10,7 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        globPatterns: [],          // let Vite decide → no “empty glob” warning
         navigateFallback: null,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
@@ -40,23 +40,20 @@ export default defineConfig({
         categories: ['productivity', 'business'],
         icons: [
           {
-            src: 'icons/android-chrome-192x192.png', // file from generated package
+            src: 'icons/android-chrome-192x192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: 'icons/android-chrome-512x512.png', // file from generated package
+            src: 'icons/android-chrome-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
           }
         ]
       },
-      devOptions: {
-        enabled: true,
-        type: 'module'
-      },
+      devOptions: { enabled: true, type: 'module' },
       includeAssets: ['icons/*.png', 'icons/*.ico', 'icons/*.svg']
     })
   ],

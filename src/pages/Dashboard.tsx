@@ -572,11 +572,14 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         )}
 
 
+// Make sure this line is at the top with your other hook calls (around line 30-40):
 const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
 
+// Then later in the JSX, around line 575-580, you should have clean code like:
 {!isMobile && isAdmin ? (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">
+      {/* Admin tabs with Settings */}
       <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
         <Calendar className="h-4 w-4 md:mr-2" />
         <span className="hidden md:inline">Riding List</span>  
@@ -602,11 +605,6 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
         <span className="hidden md:inline">Staff</span>
         <span className="md:hidden">Staff</span>
       </TabsTrigger>
-      <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-        <Clock className="h-4 w-4 md:mr-2" />
-        <span className="hidden md:inline">Time Off</span>
-        <span className="md:hidden">Time Off</span>
-      </TabsTrigger>
       <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
         <Settings className="h-4 w-4 md:mr-2" />
         <span className="hidden md:inline">Settings</span>
@@ -618,7 +616,7 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
     </TabsContent>
   </Tabs>
 ) : (
-  // Supervisor and Officer tabs (without Settings)
+  // Supervisor tabs without Settings
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-5 gap-1">
       <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
@@ -634,7 +632,7 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
       <TabsTrigger value="officers" className="flex-shrink-0 whitespace-nowrap">
         <Users className="h-4 w-4 md:mr-2" />
         <span className="hidden md:inline">Officers</span>
-        <span className="md-hiden">Officers</span>
+        <span className="md:hidden">Officers</span>
       </TabsTrigger>
       <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
         <AlertTriangle className="h-4 w-4 md:mr-2" />
@@ -652,7 +650,6 @@ const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useU
     </TabsContent>
   </Tabs>
 )}
-
         {/* Mobile Content */}
         {isMobile && (
           <div className="space-y-6">

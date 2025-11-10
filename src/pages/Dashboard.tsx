@@ -42,7 +42,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [manualRefresh, setManualRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState(initialTab);
-  const { primaryRole, isAdminOrSupervisor, loading: roleLoading } = useUserRole(user?.id);
+  const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
   const queryClient = useQueryClient();
 
   // Sync active tab with current route - simplified for HashRouter
@@ -572,7 +572,11 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         )}
 
        {/* Desktop Navigation - Admin */}
-{!isMobile && isAdminOrSupervisor && (
+// In your Dashboard.tsx, update the useUserRole hook usage
+const { primaryRole, isAdminOrSupervisor, isAdmin, loading: roleLoading } = useUserRole(user?.id);
+
+// Then update the admin tabs condition to use isAdmin instead of isAdminOrSupervisor
+{!isMobile && isAdmin ? (
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
     <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">
       <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
@@ -600,6 +604,11 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         <span className="hidden md:inline">Staff</span>
         <span className="md:hidden">Staff</span>
       </TabsTrigger>
+      <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+        <Clock className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">Time Off</span>
+        <span className="md:hidden">Time Off</span>
+      </TabsTrigger>
       <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
         <Settings className="h-4 w-4 md:mr-2" />
         <span className="hidden md:inline">Settings</span>
@@ -610,26 +619,34 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       {renderTabContent()}
     </TabsContent>
   </Tabs>
-)}
-
-{/* Desktop Navigation - Officer */}
-{!isMobile && !isAdminOrSupervisor && (
+) : (
+  // Supervisor and Officer tabs (without Settings)
   <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-    <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-3 gap-1">
+    <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-5 gap-1">
       <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
         <Calendar className="h-4 w-4 md:mr-2" />
-        <span className="hidden md:inline">Daily Schedule</span>
-        <span className="md:hidden">Daily</span>
+        <span className="hidden md:inline">Riding List</span>  
+        <span className="md:hidden">Daily</span>        
       </TabsTrigger>
       <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
         <Calendar className="h-4 w-4 md:mr-2" />
-        <span className="hidden md:inline">Weekly Schedule</span>
+        <span className="hidden md:inline">The Book</span>
         <span className="md:hidden">Weekly</span>
+      </TabsTrigger>
+      <TabsTrigger value="officers" className="flex-shrink-0 whitespace-nowrap">
+        <Users className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">Officers</span>
+        <span className="md-hiden">Officers</span>
       </TabsTrigger>
       <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
         <AlertTriangle className="h-4 w-4 md:mr-2" />
-        <span className="hidden md:inline">Vacancy Alerts</span>
-        <span className="md:hidden">Alerts</span>
+        <span className="hidden md:inline">Vacancies</span>
+        <span className="md:hidden">Vacancies</span>
+      </TabsTrigger>
+      <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
+        <Users className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">Staff</span>
+        <span className="md:hidden">Staff</span>
       </TabsTrigger>
     </TabsList>
     <TabsContent value={activeTab} className="space-y-6">

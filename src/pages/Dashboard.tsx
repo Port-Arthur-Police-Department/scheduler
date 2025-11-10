@@ -41,12 +41,19 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [manualRefresh, setManualRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState(initialTab);
-  const { primaryRole, isAdminOrSupervisor, isAdmin, isSupervisor, loading: roleLoading } = useUserRole(user?.id);
+  const hash = location.hash.replace('#', '');
+  const { 
+    primaryRole, 
+    isAdminOrSupervisor, 
+    isAdmin, 
+    isSupervisor = false,  // ← Add default value
+    loading: roleLoading 
+  } = useUserRole(user?.id);
   const queryClient = useQueryClient();
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {
-    const hash = location.hash.replace('#', '');
+
     if (hash.startsWith('/daily-schedule')) setActiveTab('daily');
     else if (hash.startsWith('/weekly-schedule')) setActiveTab('schedule');
     else if (hash.startsWith('/vacancies')) setActiveTab('vacancies');

@@ -36,7 +36,7 @@ export const useUserRole = (userId: string | undefined) => {
 
   const hasRole = (role: UserRole) => roles.includes(role);
   const isAdmin = hasRole("admin");
-  const isSupervisor = hasRole("supervisor");
+  const isSupervisor = hasRole("supervisor");  // Make sure this line exists
   const isAdminOrSupervisor = isAdmin || isSupervisor;
   const primaryRole = roles[0] || "officer";
 
@@ -44,7 +44,7 @@ export const useUserRole = (userId: string | undefined) => {
     roles,
     hasRole,
     isAdmin,
-    isSupervisor,
+    isSupervisor,  // Make sure this is in the return object
     isAdminOrSupervisor,
     primaryRole,
     loading,

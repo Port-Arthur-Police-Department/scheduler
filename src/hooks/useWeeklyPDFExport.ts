@@ -258,7 +258,6 @@ export const useWeeklyPDFExport = () => {
           if (yPosition > pdf.internal.pageSize.getHeight() - 15) {
             pdf.addPage();
             yPosition = 20;
-            // Redraw header for new page if needed
           }
 
           xPosition = 15;
@@ -291,6 +290,7 @@ export const useWeeklyPDFExport = () => {
             const dayOfficer = officer.weeklySchedule[day.dateStr];
             let text = "";
             let color: [number, number, number] = [0, 0, 0];
+            let fillColor: [number, number, number] | null = null;
 
             if (dayOfficer) {
               if (dayOfficer.shiftInfo?.isOff) {
@@ -309,13 +309,21 @@ export const useWeeklyPDFExport = () => {
                 }
                 color = [0, 100, 0];
               } else {
-                text = "DD"; // Changed from "SCHED" to "DD" for Designated Day Off
-                color = [0, 0, 150];
+                // Black out the square for Designated Day Off instead of showing "DD"
+                fillColor = [0, 0, 0]; // Black fill
+                color = [255, 255, 255]; // White text (won't be visible against black)
               }
             }
 
-            pdf.setTextColor(...color);
-            pdf.text(text, xPosition + 2, yPosition + 4);
+            // Fill the cell with black if it's a Designated Day Off
+            if (fillColor) {
+              pdf.setFillColor(...fillColor);
+              pdf.rect(xPosition, yPosition, dayColWidth, 6, "F");
+            } else {
+              pdf.setTextColor(...color);
+              pdf.text(text, xPosition + 2, yPosition + 4);
+            }
+            
             xPosition += dayColWidth;
             pdf.line(xPosition, yPosition, xPosition, yPosition + 6); // day dividers
           });

@@ -183,56 +183,62 @@ const WeeklySchedule = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-  // Handle PDF export - OPTIMIZED VERSION
-  const handleExportPDF = async () => {
-    if (!dateRange?.from || !dateRange?.to) {
-      toast.error("Please select a date range");
-      return;
+ // In your WeeklySchedule.tsx, update the handleExportPDF function:
+
+const handleExportPDF = async () => {
+  if (!dateRange?.from || !dateRange?.to) {
+    toast.error("Please select a date range");
+    return;
+  }
+
+  if (!selectedShiftId) {
+    toast.error("Please select a shift");
+    return;
+  }
+
+  try {
+    toast.info("Generating PDF export...");
+    
+    // Dynamically import the PDF export hook
+    const { useWeeklyPDFExport } = await import("@/hooks/useWeeklyPDFExport");
+    const { exportWeeklyPDF } = useWeeklyPDFExport();
+    
+    // Fetch data for the selected date range
+    const startDate = dateRange.from;
+    const endDate = dateRange.to;
+    
+    const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
+      format(date, "yyyy-MM-dd")
+    );
+
+    // Fetch schedule data for the date range
+    const scheduleData = await fetchScheduleDataForRange(startDate, endDate, dates);
+    
+    const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
+    
+    // Determine view type based on date range
+    const daysDifference = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const viewType = daysDifference <= 31 ? "weekly" : "monthly";
+    
+    const result = await exportWeeklyPDF({
+      startDate,
+      endDate,
+      shiftName,
+      scheduleData: scheduleData.dailySchedules || [],
+      viewType // Add this parameter
+    });
+
+    if (result.success) {
+      toast.success("PDF exported successfully");
+      setExportDialogOpen(false);
+    } else {
+      toast.error("Failed to export PDF");
     }
-
-    if (!selectedShiftId) {
-      toast.error("Please select a shift");
-      return;
-    }
-
-    try {
-      toast.info("Generating PDF export...");
-      
-      // Dynamically import the PDF export hook to avoid loading it on initial page load
-      const { useWeeklyPDFExport } = await import("@/hooks/useWeeklyPDFExport");
-      const { exportWeeklyPDF } = useWeeklyPDFExport();
-      
-      // Fetch data for the selected date range
-      const startDate = dateRange.from;
-      const endDate = dateRange.to;
-      
-      const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
-        format(date, "yyyy-MM-dd")
-      );
-
-      // Fetch schedule data for the date range
-      const scheduleData = await fetchScheduleDataForRange(startDate, endDate, dates);
-      
-      const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
-      
-      const result = await exportWeeklyPDF({
-        startDate,
-        endDate,
-        shiftName,
-        scheduleData: scheduleData.dailySchedules || []
-      });
-
-      if (result.success) {
-        toast.success("PDF exported successfully");
-        setExportDialogOpen(false);
-      } else {
-        toast.error("Failed to export PDF");
-      }
-    } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Error generating PDF export");
-    }
-  };
+  } catch (error) {
+    console.error("Export error:", error);
+    toast.error("Error generating PDF export");
+  }
+};
 
   // Function to fetch schedule data for a date range - FIXED VERSION
   const fetchScheduleDataForRange = async (startDate: Date, endDate: Date, dates: string[]) => {

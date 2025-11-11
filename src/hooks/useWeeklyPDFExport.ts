@@ -1,6 +1,6 @@
 // src/hooks/useWeeklyPDFExport.ts
 import { format, startOfWeek, addDays, addWeeks, parseISO, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
-import { getLastName, categorizeAndSortOfficers, calculateStaffingCounts } from "@/utils/scheduleUtils";
+import { getLastName } from "@/utils/scheduleUtils";
 import { RANK_ORDER } from "@/constants/positions";
 
 interface ExportOptions {
@@ -32,9 +32,7 @@ export const useWeeklyPDFExport = () => {
     try {
       // ✅ Lazy-load jsPDF so it doesn't slow page load
       const { default: jsPDF } = await import("jspdf");
-      // ✅ Load autoTable for better table formatting
-      await import("jspdf-autotable");
-
+      
       const pdf = new jsPDF("landscape", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -63,16 +61,16 @@ export const useWeeklyPDFExport = () => {
       yPosition += 15;
 
       if (viewType === "weekly") {
-        await renderWeeklyView(pdf, startDate, endDate, shiftName, scheduleData);
+        renderWeeklyView(pdf, startDate, endDate, shiftName, scheduleData);
       } else {
-        await renderMonthlyView(pdf, startDate, endDate, shiftName, scheduleData);
+        renderMonthlyView(pdf, startDate, endDate, shiftName, scheduleData);
       }
 
       // ===== Footer =====
       pdf.setFontSize(8);
       pdf.setTextColor(100, 100, 100);
       pdf.text(
-        `Generated on ${format(new Date(), "MMM d, yyyy 'at' h:mm a')}`,
+        `Generated on ${format(new Date(), "MMM d, yyyy 'at' h:mm a")}`,
         pageWidth / 2,
         pageHeight - 10,
         { align: "center" }
@@ -92,7 +90,7 @@ export const useWeeklyPDFExport = () => {
   };
 
   // Helper function to render weekly view similar to your Excel-style table
-  const renderWeeklyView = async (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
+  const renderWeeklyView = (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
     const pageWidth = pdf.internal.pageSize.getWidth();
     let yPosition = 40;
 
@@ -132,11 +130,10 @@ export const useWeeklyPDFExport = () => {
         };
       });
 
-      // Prepare officer data for the week (similar to your WeeklySchedule component)
+      // Prepare officer data for the week
       const allOfficers = new Map<string, OfficerWeeklyData>();
-      const recurringSchedulesByOfficer = new Map();
 
-      // Process recurring schedules
+      // Process schedule data for the week
       scheduleData?.forEach((daySchedule: any) => {
         const scheduleDate = parseISO(daySchedule.date);
         if (scheduleDate >= week.start && scheduleDate <= week.end) {
@@ -348,7 +345,7 @@ export const useWeeklyPDFExport = () => {
   };
 
   // Helper function to render monthly view
-  const renderMonthlyView = async (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
+  const renderMonthlyView = (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
     const pageWidth = pdf.internal.pageSize.getWidth();
     let yPosition = 40;
 

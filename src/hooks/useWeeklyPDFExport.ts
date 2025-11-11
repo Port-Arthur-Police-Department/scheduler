@@ -73,7 +73,7 @@ export const useWeeklyPDFExport = () => {
     }
 
     if (officer.shiftInfo?.isOff) {
-      return { text: "OFF", color: [255, 255, 255], fillColor: [100, 100, 100] }; // White text on gray background
+      return { text: "OFF", color: [100, 100, 100], fillColor: null };
     }
 
     if (officer.shiftInfo?.hasPTO) {
@@ -100,8 +100,9 @@ export const useWeeklyPDFExport = () => {
       }
     }
 
-    // If officer exists but has no position and is not off/PTO, leave it empty (no blacking out)
-    return { text: "", color: [0, 0, 0], fillColor: null };
+    // If officer exists but has no position and is not off/PTO, it's a Designated Day Off
+    // This mirrors the logic where empty cells in your app represent DD
+    return { text: "", color: [0, 0, 0], fillColor: [0, 0, 0] }; // Black out for DD
   };
 
   // Helper function to render weekly view matching your Weekly tab layout
@@ -313,24 +314,19 @@ export const useWeeklyPDFExport = () => {
         pdf.text(nameText, xPosition + 2, yPosition + 3.5);
         xPosition += colWidths[1];
 
-        // Daily assignments for SUPERVISORS
+        // Daily assignments for SUPERVISORS - USING THE SAME LOGIC AS YOUR APP
         weekDays.forEach((day) => {
           const dayOfficer = officer.weeklySchedule[day.dateStr];
           const cellContent = getCellContent(dayOfficer);
 
-          // Apply cell styling
+          // Fill the cell with black if it's a Designated Day Off
           if (cellContent.fillColor) {
-            // For OFF days - gray background with white text
             pdf.setFillColor(...cellContent.fillColor);
             pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-            pdf.setTextColor(...cellContent.color);
-            pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-          } else if (cellContent.text) {
-            // For other assignments - just text
+          } else {
             pdf.setTextColor(...cellContent.color);
             pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           }
-          // If no text and no fill color, leave the cell empty
           
           xPosition += dayColWidth;
         });
@@ -390,24 +386,19 @@ export const useWeeklyPDFExport = () => {
         pdf.text(getLastName(officer.officerName), xPosition + 2, yPosition + 3.5);
         xPosition += colWidths[1];
 
-        // Daily assignments for regular officers
+        // Daily assignments for regular officers - USING THE SAME LOGIC AS YOUR APP
         weekDays.forEach((day) => {
           const dayOfficer = officer.weeklySchedule[day.dateStr];
           const cellContent = getCellContent(dayOfficer);
 
-          // Apply cell styling
+          // Fill the cell with black if it's a Designated Day Off
           if (cellContent.fillColor) {
-            // For OFF days - gray background with white text
             pdf.setFillColor(...cellContent.fillColor);
             pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-            pdf.setTextColor(...cellContent.color);
-            pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-          } else if (cellContent.text) {
-            // For other assignments - just text
+          } else {
             pdf.setTextColor(...cellContent.color);
             pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           }
-          // If no text and no fill color, leave the cell empty
           
           xPosition += dayColWidth;
         });
@@ -468,24 +459,19 @@ export const useWeeklyPDFExport = () => {
           pdf.text(getLastName(officer.officerName) + " (PPO)", xPosition + 2, yPosition + 3.5);
           xPosition += colWidths[1];
 
-          // Daily assignments for PPOs
+          // Daily assignments for PPOs - USING THE SAME LOGIC AS YOUR APP
           weekDays.forEach((day) => {
             const dayOfficer = officer.weeklySchedule[day.dateStr];
             const cellContent = getCellContent(dayOfficer);
 
-            // Apply cell styling
+            // Fill the cell with black if it's a Designated Day Off
             if (cellContent.fillColor) {
-              // For OFF days - gray background with white text
               pdf.setFillColor(...cellContent.fillColor);
               pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-              pdf.setTextColor(...cellContent.color);
-              pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-            } else if (cellContent.text) {
-              // For other assignments - just text
+            } else {
               pdf.setTextColor(...cellContent.color);
               pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
             }
-            // If no text and no fill color, leave the cell empty
             
             xPosition += dayColWidth;
           });

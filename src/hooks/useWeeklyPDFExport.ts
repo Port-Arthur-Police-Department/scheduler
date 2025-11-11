@@ -73,17 +73,11 @@ export const useWeeklyPDFExport = () => {
     }
 
     if (officer.shiftInfo?.isOff) {
-      return { text: "", color: [0, 0, 0], fillColor: [100, 100, 100] }; // Gray fill, no text
+      return { text: "OFF", color: [255, 255, 255], fillColor: [100, 100, 100] }; // White text on gray background
     }
 
     if (officer.shiftInfo?.hasPTO) {
-      // Show PTO type with green text and green background
-      const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
-      let displayText = ptoType;
-      if (displayText.length > 6) {
-        displayText = displayText.substring(0, 6);
-      }
-      return { text: displayText, color: [255, 255, 255], fillColor: [0, 128, 0] }; // White text on green background
+      return { text: "PTO", color: [220, 38, 38], fillColor: null };
     }
 
     if (officer.shiftInfo?.position) {
@@ -94,12 +88,7 @@ export const useWeeklyPDFExport = () => {
       );
 
       if (isSpecialAssignment) {
-        const position = officer.shiftInfo.position;
-        let displayText = position;
-        if (displayText.length > 8) {
-          displayText = displayText.substring(0, 8);
-        }
-        return { text: displayText, color: [0, 0, 0], fillColor: [128, 0, 128] }; // Black text on purple background
+        return { text: "OTHER", color: [150, 75, 0], fillColor: null }; // Brown color for special assignments
       }
 
       // Regular position assignment
@@ -111,7 +100,7 @@ export const useWeeklyPDFExport = () => {
       }
     }
 
-    // If officer exists but has no position and is not off/PTO, leave it empty
+    // If officer exists but has no position and is not off/PTO, leave it empty (no blacking out)
     return { text: "", color: [0, 0, 0], fillColor: null };
   };
 
@@ -331,14 +320,13 @@ export const useWeeklyPDFExport = () => {
 
           // Apply cell styling
           if (cellContent.fillColor) {
+            // For OFF days - gray background with white text
             pdf.setFillColor(...cellContent.fillColor);
             pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-            if (cellContent.text) {
-              pdf.setTextColor(...cellContent.color);
-              pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-            }
+            pdf.setTextColor(...cellContent.color);
+            pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           } else if (cellContent.text) {
-            // For positions without background fill
+            // For other assignments - just text
             pdf.setTextColor(...cellContent.color);
             pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           }
@@ -409,14 +397,13 @@ export const useWeeklyPDFExport = () => {
 
           // Apply cell styling
           if (cellContent.fillColor) {
+            // For OFF days - gray background with white text
             pdf.setFillColor(...cellContent.fillColor);
             pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-            if (cellContent.text) {
-              pdf.setTextColor(...cellContent.color);
-              pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-            }
+            pdf.setTextColor(...cellContent.color);
+            pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           } else if (cellContent.text) {
-            // For positions without background fill
+            // For other assignments - just text
             pdf.setTextColor(...cellContent.color);
             pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
           }
@@ -488,14 +475,13 @@ export const useWeeklyPDFExport = () => {
 
             // Apply cell styling
             if (cellContent.fillColor) {
+              // For OFF days - gray background with white text
               pdf.setFillColor(...cellContent.fillColor);
               pdf.rect(xPosition, yPosition, dayColWidth, 5, "F");
-              if (cellContent.text) {
-                pdf.setTextColor(...cellContent.color);
-                pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
-              }
+              pdf.setTextColor(...cellContent.color);
+              pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
             } else if (cellContent.text) {
-              // For positions without background fill
+              // For other assignments - just text
               pdf.setTextColor(...cellContent.color);
               pdf.text(cellContent.text, xPosition + 2, yPosition + 3.5);
             }

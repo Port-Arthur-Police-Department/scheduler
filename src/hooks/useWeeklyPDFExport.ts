@@ -208,34 +208,49 @@ export const useWeeklyPDFExport = () => {
       // Calculate column widths
       const colWidths = [20, 30]; // Badge and Name columns
       const dayColWidth = (pageWidth - 60 - colWidths[0] - colWidths[1]) / 7;
+      const tableWidth = pageWidth - 30;
 
-      // Draw table headers
+      // Draw main table border
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.1);
+
+      // Draw table headers with grid
       let xPosition = 15;
       
       // Header background
       pdf.setFillColor(41, 128, 185);
-      pdf.rect(xPosition, yPosition, pageWidth - 30, 8, "F");
+      pdf.rect(xPosition, yPosition, tableWidth, 8, "F");
       
       // Header text
       pdf.setFontSize(8);
       pdf.setTextColor(255, 255, 255);
 
+      // Draw vertical grid lines for header
+      pdf.line(xPosition, yPosition, xPosition, yPosition + 8); // left border
+      
       // Static headers
       pdf.text("BADGE", xPosition + 2, yPosition + 5);
       xPosition += colWidths[0];
+      pdf.line(xPosition, yPosition, xPosition, yPosition + 8); // badge/name divider
+      
       pdf.text("NAME", xPosition + 2, yPosition + 5);
       xPosition += colWidths[1];
+      pdf.line(xPosition, yPosition, xPosition, yPosition + 8); // name/days divider
 
-      // Day headers
+      // Day headers with grid
       weekDays.forEach((day) => {
         pdf.text(day.dayName, xPosition + 2, yPosition + 3);
         pdf.text(day.formattedDate, xPosition + 2, yPosition + 6);
         xPosition += dayColWidth;
+        pdf.line(xPosition, yPosition, xPosition, yPosition + 8); // day dividers
       });
 
+      // Draw header bottom border
+      pdf.line(15, yPosition + 8, 15 + tableWidth, yPosition + 8);
+      
       yPosition += 8;
 
-      // Function to render officer rows
+      // Function to render officer rows with grid
       const renderOfficerRows = (officers: OfficerWeeklyData[], isPPO: boolean = false) => {
         pdf.setFontSize(7);
         
@@ -243,14 +258,22 @@ export const useWeeklyPDFExport = () => {
           if (yPosition > pdf.internal.pageSize.getHeight() - 15) {
             pdf.addPage();
             yPosition = 20;
+            // Redraw header for new page if needed
           }
 
           xPosition = 15;
+          
+          // Draw row background and borders
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(xPosition, yPosition, tableWidth, 6, "F");
+          pdf.line(xPosition, yPosition, xPosition + tableWidth, yPosition); // top border
+          pdf.line(xPosition, yPosition + 6, xPosition + tableWidth, yPosition + 6); // bottom border
           
           // Badge number
           pdf.setTextColor(0, 0, 0);
           pdf.text(officer.badgeNumber?.toString() || "", xPosition + 2, yPosition + 4);
           xPosition += colWidths[0];
+          pdf.line(xPosition, yPosition, xPosition, yPosition + 6); // badge/name divider
           
           // Name with rank/PPO indicator
           let nameText = getLastName(officer.officerName);
@@ -261,8 +284,9 @@ export const useWeeklyPDFExport = () => {
           }
           pdf.text(nameText, xPosition + 2, yPosition + 4);
           xPosition += colWidths[1];
+          pdf.line(xPosition, yPosition, xPosition, yPosition + 6); // name/days divider
 
-          // Daily assignments
+          // Daily assignments with grid
           weekDays.forEach((day) => {
             const dayOfficer = officer.weeklySchedule[day.dateStr];
             let text = "";
@@ -285,7 +309,7 @@ export const useWeeklyPDFExport = () => {
                 }
                 color = [0, 100, 0];
               } else {
-                text = "SCHED";
+                text = "DD"; // Changed from "SCHED" to "DD" for Designated Day Off
                 color = [0, 0, 150];
               }
             }
@@ -293,6 +317,7 @@ export const useWeeklyPDFExport = () => {
             pdf.setTextColor(...color);
             pdf.text(text, xPosition + 2, yPosition + 4);
             xPosition += dayColWidth;
+            pdf.line(xPosition, yPosition, xPosition, yPosition + 6); // day dividers
           });
 
           yPosition += 6;
@@ -301,9 +326,12 @@ export const useWeeklyPDFExport = () => {
 
       // Render supervisors section
       if (supervisors.length > 0) {
-        // Supervisor header
+        // Supervisor header with grid
         pdf.setFillColor(240, 240, 240);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
+        pdf.rect(15, yPosition, tableWidth, 6, "F");
+        pdf.setDrawColor(0, 0, 0);
+        pdf.rect(15, yPosition, tableWidth, 6); // border around supervisor header
+        
         pdf.setFontSize(8);
         pdf.setTextColor(0, 0, 0);
         pdf.text("SUPERVISORS", 17, yPosition + 4);
@@ -315,9 +343,12 @@ export const useWeeklyPDFExport = () => {
 
       // Render regular officers section
       if (regularOfficers.length > 0) {
-        // Officers header
+        // Officers header with grid
         pdf.setFillColor(240, 240, 240);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
+        pdf.rect(15, yPosition, tableWidth, 6, "F");
+        pdf.setDrawColor(0, 0, 0);
+        pdf.rect(15, yPosition, tableWidth, 6); // border around officers header
+        
         pdf.setFontSize(8);
         pdf.setTextColor(0, 0, 0);
         pdf.text("OFFICERS", 17, yPosition + 4);
@@ -329,9 +360,12 @@ export const useWeeklyPDFExport = () => {
 
       // Render PPOs section
       if (ppos.length > 0) {
-        // PPOs header
+        // PPOs header with grid
         pdf.setFillColor(200, 220, 255);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
+        pdf.rect(15, yPosition, tableWidth, 6, "F");
+        pdf.setDrawColor(0, 0, 0);
+        pdf.rect(15, yPosition, tableWidth, 6); // border around PPOs header
+        
         pdf.setFontSize(8);
         pdf.setTextColor(0, 0, 0);
         pdf.text("PPOs", 17, yPosition + 4);
@@ -340,11 +374,14 @@ export const useWeeklyPDFExport = () => {
         renderOfficerRows(ppos, true);
       }
 
+      // Draw final right border
+      pdf.line(15 + tableWidth, 40, 15 + tableWidth, yPosition);
+
       yPosition += 15;
     }
   };
 
-  // Helper function to render monthly view
+  // Helper function to render monthly view with grid
   const renderMonthlyView = (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
     const pageWidth = pdf.internal.pageSize.getWidth();
     let yPosition = 40;
@@ -386,14 +423,20 @@ export const useWeeklyPDFExport = () => {
     );
     yPosition += 10;
 
-    // Day headers
+    // Day headers with grid
     const dayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dayColWidth = (pageWidth - 40) / 7;
+    const calendarWidth = dayColWidth * 7;
     let xPosition = 20;
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(255, 255, 255);
+    
+    // Draw calendar grid border
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.rect(xPosition, yPosition, calendarWidth, 6); // header border
     
     dayHeaders.forEach(day => {
       pdf.setFillColor(41, 128, 185);
@@ -404,7 +447,7 @@ export const useWeeklyPDFExport = () => {
 
     yPosition += 6;
 
-    // Render calendar weeks
+    // Render calendar weeks with grid
     pdf.setFontSize(7);
     
     for (const week of weeks) {
@@ -416,7 +459,10 @@ export const useWeeklyPDFExport = () => {
       const rowHeight = 25;
       xPosition = 20;
 
-      // Draw day cells
+      // Draw week row border
+      pdf.rect(xPosition, yPosition, calendarWidth, rowHeight);
+
+      // Draw day cells with grid
       week.forEach(day => {
         const dateStr = format(day, "yyyy-MM-dd");
         const isCurrentMonth = isSameMonth(day, currentMonth);
@@ -432,6 +478,7 @@ export const useWeeklyPDFExport = () => {
         }
         
         pdf.rect(xPosition, yPosition, dayColWidth, rowHeight, "F");
+        pdf.rect(xPosition, yPosition, dayColWidth, rowHeight); // cell border
         
         // Day number
         pdf.setTextColor(isCurrentMonth ? 0 : 150);

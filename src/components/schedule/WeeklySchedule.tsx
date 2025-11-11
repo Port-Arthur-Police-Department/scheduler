@@ -183,7 +183,7 @@ const WeeklySchedule = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
- // In your WeeklySchedule.tsx, update the handleExportPDF function:
+// In your WeeklySchedule.tsx, update the handleExportPDF function:
 
 const handleExportPDF = async () => {
   if (!dateRange?.from || !dateRange?.to) {
@@ -216,16 +216,13 @@ const handleExportPDF = async () => {
     
     const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
     
-    // Determine view type based on date range
-    const daysDifference = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const viewType = daysDifference <= 31 ? "weekly" : "monthly";
-    
+    // Use the current active view type for export
     const result = await exportWeeklyPDF({
       startDate,
       endDate,
       shiftName,
       scheduleData: scheduleData.dailySchedules || [],
-      viewType // Add this parameter
+      viewType: activeView // Use the current active view (weekly/monthly)
     });
 
     if (result.success) {

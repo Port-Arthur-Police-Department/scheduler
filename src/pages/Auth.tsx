@@ -179,7 +179,7 @@ const Auth = () => {
                   <p className="text-muted-foreground">Operations</p>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="font-semibold text-green-700">70+</p>
+                  <p className="font-semibold text-green-700">129+</p>
                   <p className="text-muted-foreground">Officers</p>
                 </div>
                 <div className="text-center p-3 bg-purple-50 rounded-lg">

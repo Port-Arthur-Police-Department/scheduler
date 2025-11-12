@@ -21,6 +21,7 @@ import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
+import { useMonthlyPDFExport } from "@/hooks/useMonthlyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { 
   getLastName, 

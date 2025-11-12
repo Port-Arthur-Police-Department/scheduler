@@ -21,7 +21,6 @@ import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
-import { useMonthlyPDFExport } from "@/hooks/useMonthlyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { 
   getLastName, 
@@ -184,7 +183,8 @@ const WeeklySchedule = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-// In your WeeklySchedule.tsx, update the handleExportPDF function:
+// UPDATED handleExportPDF function for WeeklySchedule.tsx
+// Replace your existing handleExportPDF function with this:
 
 const handleExportPDF = async () => {
   if (!dateRange?.from || !dateRange?.to) {
@@ -200,11 +200,6 @@ const handleExportPDF = async () => {
   try {
     toast.info("Generating PDF export...");
     
-    // Dynamically import the PDF export hook
-    const { useWeeklyPDFExport } = await import("@/hooks/useWeeklyPDFExport");
-    const { exportWeeklyPDF } = useWeeklyPDFExport();
-    
-    // Fetch data for the selected date range
     const startDate = dateRange.from;
     const endDate = dateRange.to;
     
@@ -213,30 +208,58 @@ const handleExportPDF = async () => {
     );
 
     // Fetch schedule data for the date range
-    const scheduleData = await fetchScheduleDataForRange(startDate, endDate, dates);
+    const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
     
     const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
     
-    // Use the current active view type for export
-    const result = await exportWeeklyPDF({
-      startDate,
-      endDate,
-      shiftName,
-      scheduleData: scheduleData.dailySchedules || [],
-      viewType: activeView // Use the current active view (weekly/monthly)
-    });
+    // Use the appropriate export hook based on active view
+    if (activeView === "weekly") {
+      // Dynamically import the weekly PDF export hook
+      const { useWeeklyPDFExport } = await import("@/hooks/useWeeklyPDFExport");
+      const { exportWeeklyPDF } = useWeeklyPDFExport();
+      
+      const result = await exportWeeklyPDF({
+        startDate,
+        endDate,
+        shiftName,
+        scheduleData: scheduleDataResponse.dailySchedules || [],
+        viewType: "weekly",
+        minimumStaffing: schedules?.minimumStaffing, // Pass minimum staffing
+        selectedShiftId
+      });
 
-    if (result.success) {
-      toast.success("PDF exported successfully");
-      setExportDialogOpen(false);
+      if (result.success) {
+        toast.success("Weekly PDF exported successfully");
+        setExportDialogOpen(false);
+      } else {
+        toast.error("Failed to export weekly PDF");
+      }
     } else {
-      toast.error("Failed to export PDF");
+      // Monthly view - use the monthly export hook
+      const { useMonthlyPDFExport } = await import("@/hooks/useMonthlyPDFExport");
+      const { exportMonthlyPDF } = useMonthlyPDFExport();
+      
+      const result = await exportMonthlyPDF({
+        month: startDate, // For monthly, we use the start of the range as the month
+        shiftName,
+        scheduleData: scheduleDataResponse.dailySchedules || [],
+        minimumStaffing: schedules?.minimumStaffing,
+        selectedShiftId
+      });
+
+      if (result.success) {
+        toast.success("Monthly PDF exported successfully");
+        setExportDialogOpen(false);
+      } else {
+        toast.error("Failed to export monthly PDF");
+      }
     }
   } catch (error) {
     console.error("Export error:", error);
     toast.error("Error generating PDF export");
   }
 };
+
 
   // Function to fetch schedule data for a date range - FIXED VERSION
   const fetchScheduleDataForRange = async (startDate: Date, endDate: Date, dates: string[]) => {

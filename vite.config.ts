@@ -10,22 +10,23 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: [],          // let Vite decide → no “empty glob” warning
-        navigateFallback: null,
+        globDirectory: 'dist',
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        navigateFallback: '/ai-assist-ide/index.html', // ✅ ensures correct fallback
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 }
-            }
-          }
-        ]
-      },
+      urlPattern: /^https:\/\/api\/.*/i,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'api-cache',
+        expiration: { maxEntries: 10, maxAgeSeconds: 86400 }
+      }
+    }
+  ]
+},
       manifestFilename: 'manifest.json',   // <-- add this
       manifest: {
         name: 'Port Arthur PD Scheduler',

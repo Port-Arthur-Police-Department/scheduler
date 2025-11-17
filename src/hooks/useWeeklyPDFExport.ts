@@ -1,4 +1,4 @@
-// src/hooks/useWeeklyPDFExport.ts - CORRECTED VERSION
+// src/hooks/useWeeklyPDFExport.ts - FIXED MULTI-WEEK EXPORT
 import { format, startOfWeek, addDays, addWeeks, parseISO, isSameDay } from "date-fns";
 import { getLastName } from "@/utils/scheduleUtils";
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
@@ -34,7 +34,8 @@ export const useWeeklyPDFExport = () => {
     try {
       const { default: jsPDF } = await import("jspdf");
       
-      const pdf = new jsPDF("landscape", "mm", "a4");
+      // PORTRAIT MODE
+      const pdf = new jsPDF("portrait", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
@@ -68,6 +69,18 @@ export const useWeeklyPDFExport = () => {
            (position && !PREDEFINED_POSITIONS.includes(position));
   };
 
+  // Helper function to simplify position text - ONLY REMOVE "DISTRICT"
+  const simplifyPosition = (position: string): string => {
+    if (!position) return "";
+    
+    // Only remove the word "District" but keep all numbers/slashes
+    if (position.toLowerCase().startsWith('district')) {
+      return position.replace(/district\s*/i, '');
+    }
+    
+    return position;
+  };
+
   // CORRECTED cell display logic - FIXED OFF DAY BACKGROUND
   const getCellDisplay = (officer: any) => {
     if (!officer) {
@@ -84,16 +97,18 @@ export const useWeeklyPDFExport = () => {
       } else {
         // Partial PTO - show position with indicator
         const position = officer.shiftInfo.position || "";
-        const displayText = position ? position + "*" : "PTO*";
+        const simplifiedPosition = simplifyPosition(position);
+        const displayText = simplifiedPosition ? simplifiedPosition + "*" : "PTO*";
         return { text: displayText, color: [0, 100, 0], fillColor: [255, 255, 224] }; // Light yellow
       }
     } else if (officer.shiftInfo?.position) {
       const position = officer.shiftInfo.position;
+      const simplifiedPosition = simplifyPosition(position);
       const isSpecial = isSpecialAssignment(position);
-      // More space for position names now
-      let displayText = position;
-      if (position.length > 12) {
-        displayText = position.substring(0, 12);
+      // Use simplified position text
+      let displayText = simplifiedPosition;
+      if (simplifiedPosition.length > 8) {
+        displayText = simplifiedPosition.substring(0, 8);
       }
       return { 
         text: displayText, 
@@ -120,7 +135,7 @@ export const useWeeklyPDFExport = () => {
     return rankPriority < RANK_ORDER.Officer;
   };
 
-  // Full page weekly view - NO COUNTS IN DATE HEADERS
+  // FIXED: Weekly view that handles multiple weeks in date range
   const renderWeeklyView = (
     pdf: any, 
     startDate: Date, 
@@ -133,254 +148,293 @@ export const useWeeklyPDFExport = () => {
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
 
-    // Start at the very top of the page
-    let yPosition = 5;
+    // Build weeks array for the entire date range
+    const weeks = [];
+    let currentWeekStart = startOfWeek(startDate, { weekStartsOn: 0 });
+    
+    while (currentWeekStart <= endDate) {
+      const weekEnd = addDays(currentWeekStart, 6);
+      weeks.push({ 
+        start: currentWeekStart, 
+        end: weekEnd > endDate ? endDate : weekEnd // Don't exceed the selected end date
+      });
+      currentWeekStart = addWeeks(currentWeekStart, 1);
+    }
 
-    const weekDays = Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(startDate, i);
-      return {
-        date,
-        dateStr: format(date, "yyyy-MM-dd"),
-        dayName: format(date, "EEE").toUpperCase(),
-        formattedDate: format(date, "MMM d"),
-        dayOfWeek: date.getDay(),
-        isToday: isSameDay(date, new Date())
-      };
-    });
+    // Render each week
+    for (const [weekIndex, week] of weeks.entries()) {
+      if (weekIndex > 0) {
+        pdf.addPage();
+      }
 
-    // Prepare officer data
-    const allOfficers = new Map<string, OfficerWeeklyData>();
+      let yPosition = 10;
 
-    scheduleData?.forEach((daySchedule: any) => {
-      const scheduleDate = parseISO(daySchedule.date);
-      daySchedule.officers.forEach((officer: any) => {
-        if (!allOfficers.has(officer.officerId)) {
-          allOfficers.set(officer.officerId, {
-            officerId: officer.officerId,
-            officerName: officer.officerName,
-            badgeNumber: officer.badgeNumber,
-            rank: officer.rank,
-            service_credit: officer.service_credit,
-            weeklySchedule: {},
-            recurringDays: new Set()
+      // ONLY DATE RANGE HEADER for this specific week
+      pdf.setFontSize(14);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(41, 128, 185);
+      pdf.text(
+        `${format(week.start, "MMM d, yyyy")} - ${format(week.end, "MMM d, yyyy")}`,
+        pageWidth / 2,
+        yPosition,
+        { align: "center" }
+      );
+      yPosition += 8;
+
+      const weekDays = Array.from({ length: 7 }, (_, i) => {
+        const date = addDays(week.start, i);
+        // Don't show days beyond the selected end date
+        if (date > endDate) {
+          return null;
+        }
+        return {
+          date,
+          dateStr: format(date, "yyyy-MM-dd"),
+          dayName: format(date, "EEE").toUpperCase(),
+          formattedDate: format(date, "MMM d"),
+          dayOfWeek: date.getDay(),
+          isToday: isSameDay(date, new Date())
+        };
+      }).filter(day => day !== null); // Remove null days
+
+      // Prepare officer data FOR THIS WEEK ONLY
+      const allOfficers = new Map<string, OfficerWeeklyData>();
+
+      scheduleData?.forEach((daySchedule: any) => {
+        const scheduleDate = parseISO(daySchedule.date);
+        // Only include days within this week and the selected date range
+        if (scheduleDate >= week.start && scheduleDate <= week.end) {
+          daySchedule.officers.forEach((officer: any) => {
+            if (!allOfficers.has(officer.officerId)) {
+              allOfficers.set(officer.officerId, {
+                officerId: officer.officerId,
+                officerName: officer.officerName,
+                badgeNumber: officer.badgeNumber,
+                rank: officer.rank,
+                service_credit: officer.service_credit,
+                weeklySchedule: {},
+                recurringDays: new Set()
+              });
+            }
+            allOfficers.get(officer.officerId)!.weeklySchedule[daySchedule.date] = officer;
           });
         }
-        allOfficers.get(officer.officerId)!.weeklySchedule[daySchedule.date] = officer;
-      });
-    });
-
-    // Categorize officers
-    const supervisors = Array.from(allOfficers.values())
-      .filter(o => isSupervisorByRank(o))
-      .sort((a, b) => {
-        const aPriority = getRankPriority(a.rank || '');
-        const bPriority = getRankPriority(b.rank || '');
-        if (aPriority !== bPriority) return aPriority - bPriority;
-        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
       });
 
-    const allOfficersList = Array.from(allOfficers.values())
-      .filter(o => !isSupervisorByRank(o));
+      // Categorize officers - INCLUDING PPO
+      const supervisors = Array.from(allOfficers.values())
+        .filter(o => isSupervisorByRank(o))
+        .sort((a, b) => {
+          const aPriority = getRankPriority(a.rank || '');
+          const bPriority = getRankPriority(b.rank || '');
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-    const ppos = allOfficersList
-      .filter(o => o.rank?.toLowerCase() === 'probationary')
-      .sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-      });
+      const allOfficersList = Array.from(allOfficers.values())
+        .filter(o => !isSupervisorByRank(o));
 
-    const regularOfficers = allOfficersList
-      .filter(o => o.rank?.toLowerCase() !== 'probationary')
-      .sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-      });
+      // ADD PPO SECTION BACK
+      const ppos = allOfficersList
+        .filter(o => o.rank?.toLowerCase() === 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-    // FULL PAGE COLUMN WIDTHS - using almost the entire page width
-    const margin = 5; // Small margin on each side
-    const availableWidth = pageWidth - (margin * 2);
-    const badgeWidth = 20; // Larger for better readability
-    const nameWidth = 35;  // Larger for full names if needed
-    const dayColWidth = (availableWidth - badgeWidth - nameWidth) / 7;
-    const tableWidth = availableWidth;
+      const regularOfficers = allOfficersList
+        .filter(o => o.rank?.toLowerCase() !== 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-    // Start at left margin
-    const startX = margin;
+      // LARGER COLUMN WIDTHS - MAXIMIZE TABLE SIZE
+      const margin = 5; // Minimal margin
+      const availableWidth = pageWidth - (margin * 2);
+      const badgeWidth = 15; // Reasonable badge column
+      const nameWidth = 30;  // Large name column
+      const dayColWidth = (availableWidth - badgeWidth - nameWidth) / 7; // Balance day columns
+      const tableWidth = availableWidth;
 
-    // Main table header - full width
-    pdf.setFillColor(41, 128, 185);
-    pdf.rect(startX, yPosition, tableWidth, 10, "F");
-    
-    pdf.setFontSize(10);
-    pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(255, 255, 255);
+      // Start at left margin (table takes full width)
+      const startX = margin;
 
-    let xPosition = startX;
-    
-    // Headers
-    pdf.text("Empl#", xPosition + 5, yPosition + 7);
-    xPosition += badgeWidth;
-    pdf.text("NAME", xPosition + 5, yPosition + 7);
-    xPosition += nameWidth;
-
-    // Day headers - SIMPLIFIED: Only day name and date, NO staffing counts
-    weekDays.forEach((day) => {
-      // Day name and date only - larger and centered
-      pdf.setFontSize(9);
-      pdf.text(day.dayName, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
-      pdf.setFontSize(8);
-      pdf.text(day.formattedDate, xPosition + dayColWidth / 2, yPosition + 7, { align: "center" });
+      // Main table header - LARGER
+      pdf.setFillColor(41, 128, 185);
+      pdf.rect(startX, yPosition, tableWidth, 10, "F"); // Larger header
       
-      xPosition += dayColWidth;
-    });
-
-    yPosition += 10;
-
-    // Function to render count row - larger
-    const renderCountRow = (label: string, bgColor: number[], countType: 'supervisor' | 'officer' | 'ppo') => {
-      xPosition = startX;
-      
-      pdf.setFillColor(...bgColor);
-      pdf.rect(xPosition, yPosition, tableWidth, 8, "F"); // Increased height
-      
-      pdf.setFontSize(9); // Larger font
+      pdf.setFontSize(10); // Good readable size
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(255, 255, 255);
+
+      let xPosition = startX;
       
-      // Skip badge column
+      // Headers
+      pdf.text("Empl#", xPosition + 5, yPosition + 7);
       xPosition += badgeWidth;
-      
-      // Label
-      pdf.text(label, xPosition + 5, yPosition + 5); // Better positioning
+      pdf.text("NAME", xPosition + 5, yPosition + 7);
       xPosition += nameWidth;
 
-      // Count for each day - but we'll keep this for the count rows only (not in date headers)
+      // Day headers - GOOD READABLE SIZES
       weekDays.forEach((day) => {
-        const daySchedule = scheduleData?.find(s => s.date === day.dateStr);
-        const minStaffingForDay = minimumStaffing?.get(day.dayOfWeek)?.get(selectedShiftId || '');
+        // Day name and date only
+        pdf.setFontSize(9);
+        pdf.text(day.dayName, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+        pdf.setFontSize(8);
+        pdf.text(day.formattedDate, xPosition + dayColWidth / 2, yPosition + 7, { align: "center" });
         
-        let count = 0;
-        let minimum = 0;
-
-        if (countType === 'supervisor') {
-          minimum = minStaffingForDay?.minimumSupervisors || 1;
-          count = daySchedule?.officers?.filter((officer: any) => {
-            const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
-            const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-            const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-            const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-            return isSupervisor && isScheduled;
-          }).length || 0;
-        } else if (countType === 'officer') {
-          minimum = minStaffingForDay?.minimumOfficers || 0;
-          count = daySchedule?.officers?.filter((officer: any) => {
-            const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
-            const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-            const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-            const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-            const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-            return isOfficer && isNotPPO && isScheduled;
-          }).length || 0;
-        } else if (countType === 'ppo') {
-          count = daySchedule?.officers?.filter((officer: any) => {
-            const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
-            const isPPO = officer.rank?.toLowerCase() === 'probationary';
-            const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-            const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-            const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-            return isOfficer && isPPO && isScheduled;
-          }).length || 0;
-        }
-
-        const displayText = countType === 'ppo' ? count.toString() : `${count}/${minimum}`;
-        pdf.text(displayText, xPosition + dayColWidth / 2, yPosition + 5, { align: "center" });
         xPosition += dayColWidth;
       });
 
-      yPosition += 8; // Increased from 6
-    };
+      yPosition += 10;
 
-    // Function to render officer rows - larger row height
-    const renderOfficerRows = (officers: OfficerWeeklyData[], isPPO: boolean = false) => {
-      pdf.setFontSize(8); // Good readable size
-      pdf.setFont("helvetica", "normal");
-      
-      for (const officer of officers) {
-        // Check if we need to add a page (with higher threshold for single page)
-        if (yPosition > pageHeight - 15) {
-          // For single page, we'll just stop and hope it fits
-          break;
-        }
-
+      // Function to render count row - LARGER
+      const renderCountRow = (label: string, bgColor: number[], countType: 'supervisor' | 'officer' | 'ppo') => {
         xPosition = startX;
         
-        // Row background - white for the entire row
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(xPosition, yPosition, tableWidth, 7, "F");
+        pdf.setFillColor(...bgColor);
+        pdf.rect(xPosition, yPosition, tableWidth, 8, "F"); // Larger height
         
-        // Badge number
+        pdf.setFontSize(9); // Good readable size
+        pdf.setFont("helvetica", "bold");
         pdf.setTextColor(0, 0, 0);
-        pdf.text(officer.badgeNumber?.toString() || "", xPosition + 5, yPosition + 4.5);
+        
+        // Skip badge column
         xPosition += badgeWidth;
         
-        // Name - last name only with rank indicator if needed
-        let lastName = getLastName(officer.officerName);
-        if (isPPO) {
-          lastName += " (PPO)";
-        }
-        pdf.text(lastName, xPosition + 5, yPosition + 4.5);
+        // Label
+        pdf.text(label, xPosition + 5, yPosition + 5);
         xPosition += nameWidth;
 
-        // Daily assignments - FIXED: Proper background colors for all cells
+        // Count for each day
         weekDays.forEach((day) => {
-          const dayOfficer = officer.weeklySchedule[day.dateStr];
-          const cellDisplay = getCellDisplay(dayOfficer);
+          const daySchedule = scheduleData?.find(s => s.date === day.dateStr);
+          const minStaffingForDay = minimumStaffing?.get(day.dayOfWeek)?.get(selectedShiftId || '');
+          
+          let count = 0;
+          let minimum = 0;
 
-          // ALWAYS set the cell background color from cellDisplay.fillColor
-          pdf.setFillColor(...cellDisplay.fillColor);
-          pdf.rect(xPosition, yPosition, dayColWidth, 7, "F");
-          
-          // Cell border - always draw border
-          pdf.setDrawColor(200, 200, 200);
-          pdf.rect(xPosition, yPosition, dayColWidth, 7, "S");
-          
-          // Cell text
-          if (cellDisplay.text) {
-            pdf.setTextColor(...cellDisplay.color);
-            
-            // Center the text in the cell
-            pdf.text(cellDisplay.text, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+          if (countType === 'supervisor') {
+            minimum = minStaffingForDay?.minimumSupervisors || 1;
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              return isSupervisor && isScheduled;
+            }).length || 0;
+          } else if (countType === 'officer') {
+            minimum = minStaffingForDay?.minimumOfficers || 0;
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              return isOfficer && isNotPPO && isScheduled;
+            }).length || 0;
+          } else if (countType === 'ppo') {
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const isPPO = officer.rank?.toLowerCase() === 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              return isOfficer && isPPO && isScheduled;
+            }).length || 0;
           }
-          
+
+          const displayText = countType === 'ppo' ? count.toString() : `${count}/${minimum}`;
+          pdf.text(displayText, xPosition + dayColWidth / 2, yPosition + 5, { align: "center" });
           xPosition += dayColWidth;
         });
 
-        yPosition += 7; // Increased from 6
+        yPosition += 8;
+      };
+
+      // Function to render officer rows - LARGER
+      const renderOfficerRows = (officers: OfficerWeeklyData[], isPPO: boolean = false) => {
+        pdf.setFontSize(8); // Good readable size
+        pdf.setFont("helvetica", "normal");
+        
+        for (const officer of officers) {
+          // Check if we need to add a page
+          if (yPosition > pageHeight - 15) {
+            pdf.addPage();
+            yPosition = 10; // Reset for new page
+          }
+
+          xPosition = startX;
+          
+          // Row background - white for the entire row
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(xPosition, yPosition, tableWidth, 7, "F"); // Larger height
+          
+          // Badge number
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(officer.badgeNumber?.toString() || "", xPosition + 5, yPosition + 4.5);
+          xPosition += badgeWidth;
+          
+          // Name - last name only with PPO indicator if needed
+          let lastName = getLastName(officer.officerName);
+          if (isPPO) {
+            lastName += " (PPO)";
+          }
+          pdf.text(lastName, xPosition + 5, yPosition + 4.5);
+          xPosition += nameWidth;
+
+          // Daily assignments - LARGER CELLS
+          weekDays.forEach((day) => {
+            const dayOfficer = officer.weeklySchedule[day.dateStr];
+            const cellDisplay = getCellDisplay(dayOfficer);
+
+            // ALWAYS set the cell background color from cellDisplay.fillColor
+            pdf.setFillColor(...cellDisplay.fillColor);
+            pdf.rect(xPosition, yPosition, dayColWidth, 7, "F"); // Larger height
+            
+            // Cell border - always draw border
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(xPosition, yPosition, dayColWidth, 7, "S"); // Larger height
+            
+            // Cell text
+            if (cellDisplay.text) {
+              pdf.setTextColor(...cellDisplay.color);
+              
+              // Center the text in the cell
+              pdf.text(cellDisplay.text, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+            }
+            
+            xPosition += dayColWidth;
+          });
+
+          yPosition += 7;
+        }
+      };
+
+      // Render Supervisors section
+      if (supervisors.length > 0) {
+        renderCountRow("SUPERVISORS", [240, 240, 240], 'supervisor');
+        renderOfficerRows(supervisors);
+        yPosition += 3;
       }
-    };
 
-    // Render Supervisors section
-    if (supervisors.length > 0) {
-      renderCountRow("SUPERVISORS", [240, 240, 240], 'supervisor');
-      renderOfficerRows(supervisors);
-      yPosition += 3;
-    }
+      // Render Officers section with count row
+      if (regularOfficers.length > 0) {
+        renderCountRow("OFFICERS", [240, 240, 240], 'officer');
+        renderOfficerRows(regularOfficers);
+        yPosition += 3;
+      }
 
-    // Render Officers section with count row
-    if (regularOfficers.length > 0) {
-      renderCountRow("OFFICERS", [240, 240, 240], 'officer');
-      renderOfficerRows(regularOfficers);
-      yPosition += 3;
-    }
-
-    // Render PPOs section with count row
-    if (ppos.length > 0) {
-      renderCountRow("PPO", [230, 240, 255], 'ppo');
-      renderOfficerRows(ppos, true);
+      // RENDER PPO SECTION WITH COUNT ROW
+      if (ppos.length > 0) {
+        renderCountRow("PPO", [230, 240, 255], 'ppo');
+        renderOfficerRows(ppos, true);
+      }
     }
   };
 

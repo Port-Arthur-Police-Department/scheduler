@@ -1,4 +1,4 @@
-// hooks/useColorSettings.ts
+// hooks/useColorSettings.ts - UPDATED WITH BETTER ERROR HANDLING
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,34 +29,66 @@ const DEFAULT_COLORS = {
 };
 
 export const useColorSettings = () => {
-  const { data: settings } = useQuery({
+  const { data: settings, isLoading, error } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
+      console.log('Fetching color settings...');
+      
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
         .single();
 
-      if (error && error.code === 'PGRST116') {
+      if (error) {
+        console.log('Error in useColorSettings:', error);
+        
+        // If no record exists, return defaults
+        if (error.code === 'PGRST116') {
+          console.log('No settings record found, using defaults');
+          return { color_settings: DEFAULT_COLORS };
+        }
+        
+        // For other errors, still return defaults but log the error
+        console.error('Error fetching color settings:', error);
         return { color_settings: DEFAULT_COLORS };
       }
-      if (error) throw error;
+
+      console.log('Settings loaded:', data);
       
-      return data || { color_settings: DEFAULT_COLORS };
+      // Ensure color_settings exists and merge with defaults
+      const colorSettings = data?.color_settings ? { ...DEFAULT_COLORS, ...data.color_settings } : DEFAULT_COLORS;
+      
+      return { ...data, color_settings: colorSettings };
     },
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const colors = settings?.color_settings || DEFAULT_COLORS;
 
   // Helper function to convert RGB string to array
   const getColorArray = (rgbString: string): [number, number, number] => {
-    const parts = rgbString.split(',').map(part => parseInt(part.trim()));
-    return [parts[0], parts[1], parts[2]] as [number, number, number];
+    try {
+      const parts = rgbString.split(',').map(part => parseInt(part.trim()));
+      if (parts.length === 3 && parts.every(part => !isNaN(part))) {
+        return [parts[0], parts[1], parts[2]] as [number, number, number];
+      }
+      // Fallback to white if invalid
+      console.warn('Invalid RGB string:', rgbString, 'falling back to white');
+      return [255, 255, 255];
+    } catch (error) {
+      console.error('Error parsing RGB string:', rgbString, error);
+      return [255, 255, 255]; // Fallback to white
+    }
   };
+
+  console.log('Current colors:', colors);
 
   return {
     colors,
     getColorArray,
+    isLoading,
+    error,
     
     // PDF Colors
     pdf: {

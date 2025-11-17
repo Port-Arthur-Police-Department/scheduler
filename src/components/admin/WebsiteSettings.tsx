@@ -1,4 +1,4 @@
-// components/settings/WebsiteSettings.tsx - UPDATED WITH COLOR CUSTOMIZATION
+// components/settings/WebsiteSettings.tsx - UPDATED WITH SCHEMA FIXES
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -9,92 +9,132 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
-import { ColorPicker } from "@/components/ui/color-picker"; // You'll need to create this component
 
 // Default color scheme
 const DEFAULT_COLORS = {
   // PDF Export Colors
-  pdf_supervisor_pto_bg: "255,255,200", // Light yellow
-  pdf_supervisor_pto_border: "255,220,100", // Golden yellow
-  pdf_supervisor_pto_text: "139,69,19", // Brown
+  pdf_supervisor_pto_bg: "255,255,200",
+  pdf_supervisor_pto_border: "255,220,100", 
+  pdf_supervisor_pto_text: "139,69,19",
   
-  pdf_officer_pto_bg: "240,255,240", // Light green
-  pdf_officer_pto_border: "144,238,144", // Green
-  pdf_officer_pto_text: "0,100,0", // Dark green
+  pdf_officer_pto_bg: "240,255,240",
+  pdf_officer_pto_border: "144,238,144",
+  pdf_officer_pto_text: "0,100,0",
   
-  pdf_sick_time_bg: "255,200,200", // Light red
-  pdf_sick_time_border: "255,100,100", // Red
-  pdf_sick_time_text: "139,0,0", // Dark red
+  pdf_sick_time_bg: "255,200,200",
+  pdf_sick_time_border: "255,100,100",
+  pdf_sick_time_text: "139,0,0",
   
-  pdf_off_day_bg: "220,220,220", // Gray
-  pdf_off_day_text: "100,100,100", // Dark gray
+  pdf_off_day_bg: "220,220,220",
+  pdf_off_day_text: "100,100,100",
   
   // Weekly Schedule Colors
-  weekly_supervisor_bg: "240,249,255", // Light blue
-  weekly_supervisor_text: "0,75,150", // Dark blue
+  weekly_supervisor_bg: "240,249,255",
+  weekly_supervisor_text: "0,75,150",
   
-  weekly_officer_bg: "240,255,240", // Light green
-  weekly_officer_text: "0,100,0", // Dark green
+  weekly_officer_bg: "240,255,240", 
+  weekly_officer_text: "0,100,0",
   
-  weekly_ppo_bg: "255,250,240", // Light orange
-  weekly_ppo_text: "150,75,0", // Dark orange
+  weekly_ppo_bg: "255,250,240",
+  weekly_ppo_text: "150,75,0",
   
-  weekly_pto_bg: "144,238,144", // Light green
-  weekly_pto_text: "0,100,0", // Dark green
+  weekly_pto_bg: "144,238,144",
+  weekly_pto_text: "0,100,0",
   
-  weekly_sick_bg: "255,200,200", // Light red
-  weekly_sick_text: "139,0,0", // Dark red
+  weekly_sick_bg: "255,200,200",
+  weekly_sick_text: "139,0,0",
   
-  weekly_off_bg: "240,240,240", // Light gray
-  weekly_off_text: "100,100,100", // Dark gray
+  weekly_off_bg: "240,240,240",
+  weekly_off_text: "100,100,100",
 };
 
 export const WebsiteSettings = () => {
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
 
-  // Fetch current settings
+  // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
+      console.log('Fetching website settings...');
+      
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
         .single();
 
       if (error) {
-        // If no settings exist yet, return default values
+        console.log('Error fetching settings:', error);
+        
+        // If no settings exist yet, create default record
         if (error.code === 'PGRST116') {
-          return {
-            enable_notifications: false,
-            show_pto_balances: false,
-            pto_balances_visible: false,
-            color_settings: DEFAULT_COLORS
-          };
+          console.log('No settings found, creating default...');
+          const { data: newSettings, error: createError } = await supabase
+            .from('website_settings')
+            .insert({
+              enable_notifications: false,
+              show_pto_balances: false,
+              pto_balances_visible: false,
+              color_settings: DEFAULT_COLORS
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            console.error('Error creating default settings:', createError);
+            throw createError;
+          }
+          
+          console.log('Default settings created:', newSettings);
+          return newSettings;
         }
         throw error;
       }
+
+      console.log('Settings fetched successfully:', data);
+      
+      // Ensure color_settings exists and has all required properties
+      if (!data.color_settings) {
+        console.log('No color_settings found, using defaults');
+        data.color_settings = DEFAULT_COLORS;
+      } else {
+        // Merge with defaults to ensure all properties exist
+        data.color_settings = { ...DEFAULT_COLORS, ...data.color_settings };
+      }
+      
       return data;
     },
+    retry: 1,
   });
 
   // Update color settings when settings load
   useEffect(() => {
     if (settings?.color_settings) {
+      console.log('Setting color settings:', settings.color_settings);
       setColorSettings(settings.color_settings);
     }
   }, [settings]);
 
-  // Update settings mutation
+  // Update settings mutation with better error handling
   const updateSettingsMutation = useMutation({
     mutationFn: async (newSettings: any) => {
+      console.log('Updating settings:', newSettings);
+      
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert(newSettings)
+        .upsert({
+          ...newSettings,
+          updated_at: new Date().toISOString(),
+        })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating settings:', error);
+        throw error;
+      }
+      
+      console.log('Settings updated successfully:', data);
       return data;
     },
     onSuccess: () => {
@@ -112,28 +152,48 @@ export const WebsiteSettings = () => {
       id: settings?.id,
       [key]: value,
       color_settings: colorSettings,
-      updated_at: new Date().toISOString(),
     });
   };
 
+  // Helper function to convert hex to RGB string
+  const hexToRgbString = (hex: string): string => {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Parse hex values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    return `${r},${g},${b}`;
+  };
+
+  // Helper function to convert RGB string to hex
+  const rgbStringToHex = (rgb: string): string => {
+    const parts = rgb.split(',').map(part => parseInt(part.trim()));
+    return `#${parts[0].toString(16).padStart(2, '0')}${parts[1].toString(16).padStart(2, '0')}${parts[2].toString(16).padStart(2, '0')}`;
+  };
+
   const handleColorChange = (key: string, value: string) => {
-    const newColors = { ...colorSettings, [key]: value };
+    const rgbValue = hexToRgbString(value);
+    const newColors = { ...colorSettings, [key]: rgbValue };
     setColorSettings(newColors);
+    
+    console.log('Color changed:', { key, value, rgbValue });
     
     // Auto-save color changes
     updateSettingsMutation.mutate({
       id: settings?.id,
       color_settings: newColors,
-      updated_at: new Date().toISOString(),
     });
   };
 
   const resetToDefaults = () => {
+    console.log('Resetting to default colors');
     setColorSettings(DEFAULT_COLORS);
     updateSettingsMutation.mutate({
       id: settings?.id,
       color_settings: DEFAULT_COLORS,
-      updated_at: new Date().toISOString(),
     });
   };
 
@@ -237,68 +297,68 @@ export const WebsiteSettings = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Supervisor PTO */}
               <div className="space-y-2">
-                <Label>Supervisor PTO</Label>
+                <Label>Supervisor PTO Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.pdf_supervisor_pto_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('pdf_supervisor_pto_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '255,255,200')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.pdf_supervisor_pto_bg)}
+                    onChange={(e) => handleColorChange('pdf_supervisor_pto_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.pdf_supervisor_pto_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_supervisor_pto_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_supervisor_pto_bg)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Officer PTO */}
               <div className="space-y-2">
-                <Label>Officer PTO</Label>
+                <Label>Officer PTO Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.pdf_officer_pto_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('pdf_officer_pto_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '240,255,240')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.pdf_officer_pto_bg)}
+                    onChange={(e) => handleColorChange('pdf_officer_pto_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.pdf_officer_pto_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_officer_pto_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_officer_pto_bg)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Sick Time */}
               <div className="space-y-2">
-                <Label>Sick Time</Label>
+                <Label>Sick Time Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.pdf_sick_time_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('pdf_sick_time_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '255,200,200')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.pdf_sick_time_bg)}
+                    onChange={(e) => handleColorChange('pdf_sick_time_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.pdf_sick_time_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_time_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_time_bg)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Off Days */}
               <div className="space-y-2">
-                <Label>Off Days</Label>
+                <Label>Off Days Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.pdf_off_day_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('pdf_off_day_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '220,220,220')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.pdf_off_day_bg)}
+                    onChange={(e) => handleColorChange('pdf_off_day_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.pdf_off_day_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_off_day_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_off_day_bg)}</div>
                   </div>
                 </div>
               </div>
@@ -312,51 +372,68 @@ export const WebsiteSettings = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Supervisor */}
               <div className="space-y-2">
-                <Label>Supervisor Rows</Label>
+                <Label>Supervisor Rows Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.weekly_supervisor_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('weekly_supervisor_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '240,249,255')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.weekly_supervisor_bg)}
+                    onChange={(e) => handleColorChange('weekly_supervisor_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.weekly_supervisor_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.weekly_supervisor_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.weekly_supervisor_bg)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Officer */}
               <div className="space-y-2">
-                <Label>Officer Rows</Label>
+                <Label>Officer Rows Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.weekly_officer_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('weekly_officer_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '240,255,240')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.weekly_officer_bg)}
+                    onChange={(e) => handleColorChange('weekly_officer_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.weekly_officer_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.weekly_officer_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.weekly_officer_bg)}</div>
                   </div>
                 </div>
               </div>
 
               {/* PPO */}
               <div className="space-y-2">
-                <Label>PPO Rows</Label>
+                <Label>PPO Rows Background</Label>
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={`#${colorSettings.weekly_ppo_bg.split(',').map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={(e) => handleColorChange('weekly_ppo_bg', e.target.value.replace('#', '').match(/.{2}/g)?.map(hex => parseInt(hex, 16)).join(',') || '255,250,240')}
-                    className="w-12 h-10"
+                    value={rgbStringToHex(colorSettings.weekly_ppo_bg)}
+                    onChange={(e) => handleColorChange('weekly_ppo_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Background</div>
-                    <div className="text-sm">{colorSettings.weekly_ppo_bg}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.weekly_ppo_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.weekly_ppo_bg)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* PTO */}
+              <div className="space-y-2">
+                <Label>PTO Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.weekly_pto_bg)}
+                    onChange={(e) => handleColorChange('weekly_pto_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.weekly_pto_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.weekly_pto_bg)}</div>
                   </div>
                 </div>
               </div>

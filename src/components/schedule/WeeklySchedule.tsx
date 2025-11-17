@@ -42,7 +42,7 @@ interface ExportOptions {
   scheduleData: any[];
 }
 
-const { weekly: weeklyColors } = useColorSettings();
+
 
 const WeeklySchedule = ({ 
   userRole = 'officer', 
@@ -50,6 +50,8 @@ const WeeklySchedule = ({
 }: WeeklyScheduleProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const { weekly: weeklyColors } = useColorSettings();
   
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());

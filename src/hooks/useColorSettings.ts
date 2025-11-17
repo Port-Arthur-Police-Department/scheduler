@@ -14,6 +14,8 @@ const DEFAULT_COLORS = {
   pdf_sick_time_text: "139,0,0",
   pdf_off_day_bg: "220,220,220",
   pdf_off_day_text: "100,100,100",
+	pdf_partial_pto_supervisor_bg: "255,255,200", // Light yellow for supervisor partial PTO
+  pdf_partial_pto_officer_bg: "255,255,224", // Light yellow for officer partial PTO
   weekly_supervisor_bg: "240,249,255",
   weekly_supervisor_text: "0,75,150",
   weekly_officer_bg: "240,255,240",
@@ -91,26 +93,30 @@ export const useColorSettings = () => {
     error,
     
     // PDF Colors
-    pdf: {
-      supervisorPTO: {
-        bg: getColorArray(colors.pdf_supervisor_pto_bg),
-        border: getColorArray(colors.pdf_supervisor_pto_border),
-        text: getColorArray(colors.pdf_supervisor_pto_text),
-      },
-      officerPTO: {
-        bg: getColorArray(colors.pdf_officer_pto_bg),
-        border: getColorArray(colors.pdf_officer_pto_border),
-        text: getColorArray(colors.pdf_officer_pto_text),
-      },
-      sickTime: {
-        bg: getColorArray(colors.pdf_sick_time_bg),
-        border: getColorArray(colors.pdf_sick_time_border),
-        text: getColorArray(colors.pdf_sick_time_text),
-      },
-      offDay: {
-        bg: getColorArray(colors.pdf_off_day_bg),
-        text: getColorArray(colors.pdf_off_day_text),
-      }
+  pdf: {
+    supervisorPTO: {
+      bg: getColorArray(colors.pdf_supervisor_pto_bg),
+      border: getColorArray(colors.pdf_supervisor_pto_border),
+      text: getColorArray(colors.pdf_supervisor_pto_text),
+    },
+    officerPTO: {
+      bg: getColorArray(colors.pdf_officer_pto_bg),
+      border: getColorArray(colors.pdf_officer_pto_border),
+      text: getColorArray(colors.pdf_officer_pto_text),
+    },
+    sickTime: {
+      bg: getColorArray(colors.pdf_sick_time_bg),
+      border: getColorArray(colors.pdf_sick_time_border),
+      text: getColorArray(colors.pdf_sick_time_text),
+    },
+    offDay: {
+      bg: getColorArray(colors.pdf_off_day_bg),
+      text: getColorArray(colors.pdf_off_day_text),
+    },
+    partialPTO: {
+      supervisorBg: getColorArray(colors.pdf_partial_pto_supervisor_bg),
+      officerBg: getColorArray(colors.pdf_partial_pto_officer_bg),
+    }
     },
     
     // Weekly Schedule Colors

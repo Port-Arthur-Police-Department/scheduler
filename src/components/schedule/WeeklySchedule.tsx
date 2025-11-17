@@ -51,7 +51,7 @@ const WeeklySchedule = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { weekly: weeklyColors } = useColorSettings();
+	const { weekly: weeklyColors } = useColorSettings();
   
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());

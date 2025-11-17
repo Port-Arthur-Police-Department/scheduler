@@ -1,4 +1,4 @@
-// components/settings/WebsiteSettings.tsx - UPDATED WITH SCHEMA FIXES
+// components/settings/WebsiteSettings.tsx - FIXED VERSION
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
 
-// Default color scheme
+// Default color scheme - COMPLETE WITH ALL COLORS
 const DEFAULT_COLORS = {
   // PDF Export Colors
   pdf_supervisor_pto_bg: "255,255,200",
@@ -27,6 +27,10 @@ const DEFAULT_COLORS = {
   
   pdf_off_day_bg: "220,220,220",
   pdf_off_day_text: "100,100,100",
+  
+  // Partial PTO Colors
+  pdf_partial_pto_supervisor_bg: "255,255,200",
+  pdf_partial_pto_officer_bg: "255,255,224",
   
   // Weekly Schedule Colors
   weekly_supervisor_bg: "240,249,255",
@@ -160,18 +164,53 @@ export const WebsiteSettings = () => {
     // Remove # if present
     hex = hex.replace('#', '');
     
-    // Parse hex values
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    // Validate hex length
+    if (hex.length !== 6) {
+      console.warn('Invalid hex length:', hex, 'using default white');
+      return '255,255,255';
+    }
     
-    return `${r},${g},${b}`;
+    try {
+      // Parse hex values
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      
+      // Validate parsed values
+      if (isNaN(r) || isNaN(g) || isNaN(b)) {
+        console.warn('Invalid hex values:', hex, 'using default white');
+        return '255,255,255';
+      }
+      
+      return `${r},${g},${b}`;
+    } catch (error) {
+      console.error('Error converting hex to RGB:', error, 'hex:', hex);
+      return '255,255,255';
+    }
   };
 
   // Helper function to convert RGB string to hex
-  const rgbStringToHex = (rgb: string): string => {
-    const parts = rgb.split(',').map(part => parseInt(part.trim()));
-    return `#${parts[0].toString(16).padStart(2, '0')}${parts[1].toString(16).padStart(2, '0')}${parts[2].toString(16).padStart(2, '0')}`;
+  const rgbStringToHex = (rgb: string | undefined): string => {
+    // If rgb is undefined, return default black
+    if (!rgb) {
+      console.warn('RGB string is undefined, returning default black');
+      return '#000000';
+    }
+    
+    try {
+      const parts = rgb.split(',').map(part => parseInt(part.trim()));
+      
+      // Validate that we have exactly 3 parts and they're all numbers
+      if (parts.length !== 3 || parts.some(isNaN)) {
+        console.warn('Invalid RGB string:', rgb, 'returning default black');
+        return '#000000';
+      }
+      
+      return `#${parts[0].toString(16).padStart(2, '0')}${parts[1].toString(16).padStart(2, '0')}${parts[2].toString(16).padStart(2, '0')}`;
+    } catch (error) {
+      console.error('Error converting RGB to hex:', error, 'rgb:', rgb);
+      return '#000000';
+    }
   };
 
   const handleColorChange = (key: string, value: string) => {
@@ -359,6 +398,40 @@ export const WebsiteSettings = () => {
                   <div className="flex-1">
                     <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_off_day_bg}</div>
                     <div className="text-sm">{rgbStringToHex(colorSettings.pdf_off_day_bg)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supervisor Partial PTO */}
+              <div className="space-y-2">
+                <Label>Supervisor Partial PTO Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_partial_pto_supervisor_bg)}
+                    onChange={(e) => handleColorChange('pdf_partial_pto_supervisor_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_partial_pto_supervisor_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_partial_pto_supervisor_bg)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Officer Partial PTO */}
+              <div className="space-y-2">
+                <Label>Officer Partial PTO Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_partial_pto_officer_bg)}
+                    onChange={(e) => handleColorChange('pdf_partial_pto_officer_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_partial_pto_officer_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_partial_pto_officer_bg)}</div>
                   </div>
                 </div>
               </div>

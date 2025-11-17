@@ -203,9 +203,7 @@ export const useMonthlyPDFExport = () => {
           const yPos = startY + (currentRow * cellHeight);
 
           // Cell background - different colors for current month vs padding
-          if (isToday) {
-            pdf.setFillColor(255, 251, 230); // Light yellow for today
-          } else if (isCurrentMonthDay && isInSelectedRange) {
+          if (isCurrentMonthDay && isInSelectedRange) {
             pdf.setFillColor(255, 255, 255);
           } else if (isCurrentMonthDay) {
             pdf.setFillColor(245, 245, 245); // Light gray for current month but outside selected range

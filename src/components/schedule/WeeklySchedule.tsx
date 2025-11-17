@@ -1149,76 +1149,96 @@ const handleExportPDF = async () => {
 
           {/* PPO SECTION */}
           {ppos.length > 0 && (
-            <div className="border-t-2 border-blue-200">
-              {/* PPO COUNT ROW */}
-              <div className="grid grid-cols-9 border-b bg-blue-50">
-                <div className="p-2 border-r"></div>
-                <div className="p-2 border-r text-sm font-medium">PPO</div>
-                {weekDays.map(({ dateStr }) => {
-                  const daySchedule = schedules?.dailySchedules?.find(s => s.date === dateStr);
-                  
-                  // Count PPOs, excluding only full-day PTO
-                  const ppoCount = daySchedule?.officers?.filter(officer => {
-                    const isOfficer = !isSupervisorByRank(officer);
-                    const isPPO = officer.rank?.toLowerCase() === 'probationary';
-                    // Only exclude if they have full-day PTO
-                    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
-                    return isOfficer && isPPO && isScheduled;
-                  }).length || 0;
-                  
-                  return (
-                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
-                      {ppoCount}
-                    </div>
-                  );
-                })}
-              </div>
+  <div className="border-t-2 border-blue-200">
+    {/* PPO COUNT ROW */}
+    <div 
+      className="grid grid-cols-9 border-b"
+      style={{
+        backgroundColor: weeklyColors.ppo.bg,
+        color: weeklyColors.ppo.text
+      }}
+    >
+      <div className="p-2 border-r"></div>
+      <div className="p-2 border-r text-sm font-medium">PPO</div>
+      {weekDays.map(({ dateStr }) => {
+        const daySchedule = schedules?.dailySchedules?.find(s => s.date === dateStr);
+        
+        // Count PPOs, excluding only full-day PTO
+        const ppoCount = daySchedule?.officers?.filter(officer => {
+          const isOfficer = !isSupervisorByRank(officer);
+          const isPPO = officer.rank?.toLowerCase() === 'probationary';
+          // Only exclude if they have full-day PTO
+          const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+          const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+          return isOfficer && isPPO && isScheduled;
+        }).length || 0;
+        
+        return (
+          <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+            {ppoCount}
+          </div>
+        );
+      })}
+    </div>
 
-              {/* PPO OFFICERS */}
-              {ppos.map((officer) => (
-                <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-blue-50/30">
-                  <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-                  <div className="p-2 border-r font-medium flex items-center gap-2">
-                    {getLastName(officer.officerName)}
-                    <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300 text-xs">
-                      PPO
-                    </Badge>
-                  </div>
-                  {weekDays.map(({ dateStr }) => {
-                    const dayOfficer = officer.weeklySchedule[dateStr];
-                    
-                    // Extract partner information from position for PPOs
-                    let partnerInfo = null;
-                    if (dayOfficer?.shiftInfo?.position) {
-                      const partnerMatch = dayOfficer.shiftInfo.position.match(/Partner with\s+(.+)/i);
-                      if (partnerMatch) {
-                        partnerInfo = partnerMatch[1];
-                      }
-                    }
-                    
-                    return (
-                      <ScheduleCell
-                        key={dateStr}
-                        officer={dayOfficer}
-                        dateStr={dateStr}
-                        officerId={officer.officerId}
-                        officerName={officer.officerName}
-                        isAdminOrSupervisor={isAdminOrSupervisor}
-                        onAssignPTO={handleAssignPTO}
-                        onRemovePTO={handleRemovePTO}
-                        onEditAssignment={handleEditAssignment}
-                        onRemoveOfficer={removeOfficerMutation.mutate}
-                        isUpdating={removeOfficerMutation.isPending}
-                        isPPO={true}
-                        partnerInfo={partnerInfo}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
+    {/* PPO OFFICERS */}
+    {ppos.map((officer) => (
+      <div 
+        key={officer.officerId} 
+        className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+        style={{
+          backgroundColor: weeklyColors.ppo.bg,
+          color: weeklyColors.ppo.text
+        }}
+      >
+        <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+        <div className="p-2 border-r font-medium flex items-center gap-2">
+          {getLastName(officer.officerName)}
+          <Badge 
+            variant="outline" 
+            className="text-xs border-blue-300"
+            style={{
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              color: weeklyColors.ppo.text
+            }}
+          >
+            PPO
+          </Badge>
+        </div>
+        {weekDays.map(({ dateStr }) => {
+          const dayOfficer = officer.weeklySchedule[dateStr];
+          
+          // Extract partner information from position for PPOs
+          let partnerInfo = null;
+          if (dayOfficer?.shiftInfo?.position) {
+            const partnerMatch = dayOfficer.shiftInfo.position.match(/Partner with\s+(.+)/i);
+            if (partnerMatch) {
+              partnerInfo = partnerMatch[1];
+            }
+          }
+          
+          return (
+            <ScheduleCell
+              key={dateStr}
+              officer={dayOfficer}
+              dateStr={dateStr}
+              officerId={officer.officerId}
+              officerName={officer.officerName}
+              isAdminOrSupervisor={isAdminOrSupervisor}
+              onAssignPTO={handleAssignPTO}
+              onRemovePTO={handleRemovePTO}
+              onEditAssignment={handleEditAssignment}
+              onRemoveOfficer={removeOfficerMutation.mutate}
+              isUpdating={removeOfficerMutation.isPending}
+              isPPO={true}
+              partnerInfo={partnerInfo}
+            />
+          );
+        })}
+      </div>
+    ))}
+  </div>
+)}
         </div>
         </div>
       </div>

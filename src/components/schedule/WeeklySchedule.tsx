@@ -1118,26 +1118,33 @@ const handleExportPDF = async () => {
           {/* REGULAR OFFICERS SECTION */}
           <div>
             {regularOfficers.map((officer) => (
-              <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30">
-                <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-                <div className="p-2 border-r font-medium">{getLastName(officer.officerName)}</div>
-                {weekDays.map(({ dateStr }) => (
-                  <ScheduleCell
-                    key={dateStr}
-                    officer={officer.weeklySchedule[dateStr]}
-                    dateStr={dateStr}
-                    officerId={officer.officerId}
-                    officerName={officer.officerName}
-                    isAdminOrSupervisor={isAdminOrSupervisor}
-                    onAssignPTO={handleAssignPTO}
-                    onRemovePTO={handleRemovePTO}
-                    onEditAssignment={handleEditAssignment}
-                    onRemoveOfficer={removeOfficerMutation.mutate}
-                    isUpdating={removeOfficerMutation.isPending}
-                  />
-                ))}
-              </div>
-            ))}
+  <div 
+    key={officer.officerId} 
+    className="grid grid-cols-9 border-b hover:bg-muted/30"
+    style={{
+      backgroundColor: weeklyColors.officer.bg,
+      color: weeklyColors.officer.text
+    }}
+  >
+    <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+    <div className="p-2 border-r font-medium">{getLastName(officer.officerName)}</div>
+    {weekDays.map(({ dateStr }) => (
+      <ScheduleCell
+        key={dateStr}
+        officer={officer.weeklySchedule[dateStr]}
+        dateStr={dateStr}
+        officerId={officer.officerId}
+        officerName={officer.officerName}
+        isAdminOrSupervisor={isAdminOrSupervisor}
+        onAssignPTO={handleAssignPTO}
+        onRemovePTO={handleRemovePTO}
+        onEditAssignment={handleEditAssignment}
+        onRemoveOfficer={removeOfficerMutation.mutate}
+        isUpdating={removeOfficerMutation.isPending}
+      />
+    ))}
+  </div>
+))}
           </div>
 
           {/* PPO SECTION */}

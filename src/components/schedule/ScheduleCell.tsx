@@ -1,4 +1,4 @@
-// src/components/schedule/ScheduleCell.tsx
+// src/components/schedule/ScheduleCell.tsx - UPDATED WITH BETTER ERROR HANDLING
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Clock } from "lucide-react";
@@ -20,6 +20,15 @@ interface ScheduleCellProps {
   partnerInfo?: string;
 }
 
+// Default fallback colors
+const FALLBACK_COLORS = {
+  supervisor: { bg: 'rgb(240, 249, 255)', text: 'rgb(0, 75, 150)' },
+  officer: { bg: 'rgb(240, 255, 240)', text: 'rgb(0, 100, 0)' },
+  ppo: { bg: 'rgb(255, 250, 240)', text: 'rgb(150, 75, 0)' },
+  pto: { bg: 'rgb(144, 238, 144)', text: 'rgb(0, 100, 0)' },
+  off: { bg: 'rgb(240, 240, 240)', text: 'rgb(100, 100, 100)' },
+};
+
 export const ScheduleCell = ({
   officer,
   dateStr,
@@ -34,7 +43,14 @@ export const ScheduleCell = ({
   isPPO = false,
   partnerInfo = null
 }: ScheduleCellProps) => {
-  const { weekly: weeklyColors } = useColorSettings();
+  // Use color settings with error boundary
+  let weeklyColors = FALLBACK_COLORS;
+  try {
+    const colorSettings = useColorSettings();
+    weeklyColors = colorSettings.weekly;
+  } catch (error) {
+    console.warn('Color settings not available, using fallback colors');
+  }
 
   // Check if this officer has any schedule data for this date
   const hasSchedule = !!officer;
@@ -48,7 +64,7 @@ export const ScheduleCell = ({
   const isRegularDay = officer?.isRegularRecurringDay;
   const isExtraShift = isException && !isOff && !hasPTO && !isRegularDay;
 
-  // Special Assignment detection (same as DailyScheduleView)
+  // Special Assignment detection
   const isSpecialAssignment = position && (
     position.toLowerCase().includes('other') ||
     (position && !PREDEFINED_POSITIONS.includes(position))
@@ -70,11 +86,11 @@ export const ScheduleCell = ({
     } else if (isFullDayPTO) {
       return weeklyColors.pto.bg;
     } else if (isPartialPTO) {
-      return weeklyColors.pto.bg; // Use PTO color for partial PTO as well
+      return weeklyColors.pto.bg;
     } else if (isPPO) {
       return weeklyColors.ppo.bg;
     }
-    return 'bg-white'; // Default white background
+    return 'bg-white';
   };
 
   // Get text color based on officer status using color settings
@@ -86,18 +102,16 @@ export const ScheduleCell = ({
     } else if (isPPO) {
       return weeklyColors.ppo.text;
     }
-    return 'text-foreground'; // Default text color
+    return 'text-foreground';
   };
 
-  // If no officer data at all, this is an unscheduled day (use off color)
+  // If no officer data at all, this is an unscheduled day
   if (!hasSchedule) {
     return (
       <div 
         className="p-2 border-r min-h-10 relative"
         style={{ backgroundColor: weeklyColors.off.bg }}
-      >
-        {/* Use off color for unscheduled days */}
-      </div>
+      />
     );
   }
 

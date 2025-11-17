@@ -1,7 +1,7 @@
-// src/hooks/useWeeklyPDFExport.ts
-import { format, startOfWeek, addDays, addWeeks, parseISO, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+// src/hooks/useWeeklyPDFExport.ts - UPDATED VERSION
+import { format, startOfWeek, addDays, addWeeks, parseISO, isSameDay } from "date-fns";
 import { getLastName } from "@/utils/scheduleUtils";
-import { RANK_ORDER } from "@/constants/positions";
+import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
 
 interface ExportOptions {
   startDate: Date;
@@ -9,6 +9,8 @@ interface ExportOptions {
   shiftName: string;
   scheduleData: any[];
   viewType: "weekly" | "monthly";
+  minimumStaffing?: Map<number, Map<string, { minimumOfficers: number; minimumSupervisors: number }>>;
+  selectedShiftId?: string;
 }
 
 interface OfficerWeeklyData {
@@ -27,52 +29,30 @@ export const useWeeklyPDFExport = () => {
     endDate,
     shiftName,
     scheduleData,
-    viewType = "weekly"
+    viewType = "weekly",
+    minimumStaffing,
+    selectedShiftId
   }: ExportOptions) => {
     try {
-      // ✅ Lazy-load jsPDF so it doesn't slow page load
       const { default: jsPDF } = await import("jspdf");
       
       const pdf = new jsPDF("landscape", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      let yPosition = 20;
-
-      // ===== Header =====
-      pdf.setFontSize(16);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(41, 128, 185);
-      
-      const title = viewType === "weekly" 
-        ? `WEEKLY SCHEDULE - ${shiftName.toUpperCase()}`
-        : `MONTHLY SCHEDULE - ${shiftName.toUpperCase()}`;
-      
-      pdf.text(title, pageWidth / 2, yPosition, { align: "center" });
-
-      yPosition += 8;
-      pdf.setFontSize(10);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(
-        `Period: ${format(startDate, "MMM d, yyyy")} - ${format(endDate, "MMM d, yyyy")}`,
-        pageWidth / 2,
-        yPosition,
-        { align: "center" }
-      );
-      yPosition += 15;
 
       if (viewType === "weekly") {
-        renderWeeklyView(pdf, startDate, endDate, shiftName, scheduleData);
+        renderWeeklyView(pdf, startDate, endDate, shiftName, scheduleData, minimumStaffing, selectedShiftId);
       } else {
         renderMonthlyView(pdf, startDate, endDate, shiftName, scheduleData);
       }
 
-      // ===== Footer =====
-      pdf.setFontSize(8);
+      // Footer
+      pdf.setFontSize(6);
       pdf.setTextColor(100, 100, 100);
       pdf.text(
         `Generated on ${format(new Date(), "MMM d, yyyy 'at' h:mm a")}`,
         pageWidth / 2,
-        pageHeight - 10,
+        pageHeight - 5,
         { align: "center" }
       );
 
@@ -89,12 +69,93 @@ export const useWeeklyPDFExport = () => {
     }
   };
 
-  // Helper function to render weekly view similar to your Excel-style table
-  const renderWeeklyView = (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    let yPosition = 40;
+  // Helper function to check if position is a special assignment
+  const isSpecialAssignment = (position: string) => {
+    if (!position) return false;
+    return position.toLowerCase().includes('other') ||
+           (position && !PREDEFINED_POSITIONS.includes(position));
+  };
 
-    // ===== Build weeks =====
+  // Helper function to determine cell content and styling
+  const getCellContent = (officer: any) => {
+    if (!officer) {
+      return { text: "", color: [0, 0, 0], fillColor: null, textStyle: "normal" };
+    }
+
+    // Full-day PTO - green background
+    if (officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift) {
+      const ptoType = officer.shiftInfo.ptoData.ptoType || "PTO";
+      return { 
+        text: ptoType, 
+        color: [0, 100, 0], 
+        fillColor: [144, 238, 144], // Light green
+        textStyle: "bold"
+      };
+    }
+
+    // Partial PTO - position with asterisk
+    if (officer.shiftInfo?.hasPTO && !officer.shiftInfo?.ptoData?.isFullShift) {
+      const position = officer.shiftInfo.position || "";
+      const displayText = position + "*";
+      return { 
+        text: displayText, 
+        color: [0, 100, 0], 
+        fillColor: [255, 255, 224], // Light yellow
+        textStyle: "bold"
+      };
+    }
+
+    // Day off
+    if (officer.shiftInfo?.isOff) {
+      return { text: "OFF", color: [100, 100, 100], fillColor: [220, 220, 220], textStyle: "normal" };
+    }
+
+    // Has position
+    if (officer.shiftInfo?.position) {
+      const position = officer.shiftInfo.position;
+      const isSpecial = isSpecialAssignment(position);
+      
+      return { 
+        text: position, 
+        color: isSpecial ? [139, 69, 19] : [0, 0, 0], // Brown for special, black for regular
+        fillColor: isSpecial ? [255, 248, 220] : null, // Light wheat for special
+        textStyle: "normal"
+      };
+    }
+
+    // Designated day off (no assignment)
+    return { text: "", color: [0, 0, 0], fillColor: null, textStyle: "normal" };
+  };
+
+  // Helper function to get rank priority
+  const getRankPriority = (rank: string) => {
+    if (!rank) return 99;
+    const rankKey = Object.keys(RANK_ORDER).find(
+      key => key.toLowerCase() === rank.toLowerCase()
+    );
+    return rankKey ? RANK_ORDER[rankKey as keyof typeof RANK_ORDER] : 99;
+  };
+
+  // Helper function to check if officer is supervisor by rank
+  const isSupervisorByRank = (officer: OfficerWeeklyData) => {
+    const rankPriority = getRankPriority(officer.rank || '');
+    return rankPriority < RANK_ORDER.Officer;
+  };
+
+  // Helper function to render weekly view matching the exact table structure
+  const renderWeeklyView = (
+    pdf: any, 
+    startDate: Date, 
+    endDate: Date, 
+    shiftName: string, 
+    scheduleData: any[],
+    minimumStaffing?: Map<number, Map<string, { minimumOfficers: number; minimumSupervisors: number }>>,
+    selectedShiftId?: string
+  ) => {
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // Build weeks
     const weeks = [];
     let currentWeekStart = startOfWeek(startDate, { weekStartsOn: 0 });
     while (currentWeekStart <= endDate) {
@@ -102,22 +163,29 @@ export const useWeeklyPDFExport = () => {
       currentWeekStart = addWeeks(currentWeekStart, 1);
     }
 
-    for (const week of weeks) {
-      if (yPosition > pdf.internal.pageSize.getHeight() - 100) {
+    for (const [weekIndex, week] of weeks.entries()) {
+      if (weekIndex > 0) {
         pdf.addPage();
-        yPosition = 20;
       }
 
-      // Week header
-      pdf.setFontSize(12);
+      let yPosition = 10;
+
+      // Header
+      pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(0, 0, 0);
-      pdf.text(
-        `Week of ${format(week.start, "MMM d")} - ${format(week.end, "MMM d, yyyy")}`,
-        15,
-        yPosition
-      );
+      pdf.setTextColor(41, 128, 185);
+      pdf.text(`${shiftName.toUpperCase()} - WEEKLY SCHEDULE`, pageWidth / 2, yPosition, { align: "center" });
+
       yPosition += 8;
+      pdf.setFontSize(12);
+      pdf.setTextColor(60, 60, 60);
+      pdf.text(
+        `${format(week.start, "MMM d, yyyy")} - ${format(week.end, "MMM d, yyyy")}`,
+        pageWidth / 2,
+        yPosition,
+        { align: "center" }
+      );
+      yPosition += 12;
 
       const weekDays = Array.from({ length: 7 }, (_, i) => {
         const date = addDays(week.start, i);
@@ -126,14 +194,14 @@ export const useWeeklyPDFExport = () => {
           dateStr: format(date, "yyyy-MM-dd"),
           dayName: format(date, "EEE").toUpperCase(),
           formattedDate: format(date, "MMM d"),
-          dayOfWeek: date.getDay()
+          dayOfWeek: date.getDay(),
+          isToday: isSameDay(date, new Date())
         };
       });
 
-      // Prepare officer data for the week
+      // Prepare officer data
       const allOfficers = new Map<string, OfficerWeeklyData>();
 
-      // Process schedule data for the week
       scheduleData?.forEach((daySchedule: any) => {
         const scheduleDate = parseISO(daySchedule.date);
         if (scheduleDate >= week.start && scheduleDate <= week.end) {
@@ -154,29 +222,13 @@ export const useWeeklyPDFExport = () => {
         }
       });
 
-      // Categorize officers similar to your WeeklySchedule component
-      const getRankPriority = (rank: string) => {
-        if (!rank) return 99;
-        const rankKey = Object.keys(RANK_ORDER).find(
-          key => key.toLowerCase() === rank.toLowerCase()
-        );
-        return rankKey ? RANK_ORDER[rankKey as keyof typeof RANK_ORDER] : 99;
-      };
-
-      const isSupervisorByRank = (officer: OfficerWeeklyData) => {
-        const rankPriority = getRankPriority(officer.rank || '');
-        return rankPriority < RANK_ORDER.Officer;
-      };
-
       // Categorize officers
       const supervisors = Array.from(allOfficers.values())
         .filter(o => isSupervisorByRank(o))
         .sort((a, b) => {
           const aPriority = getRankPriority(a.rank || '');
           const bPriority = getRankPriority(b.rank || '');
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
+          if (aPriority !== bPriority) return aPriority - bPriority;
           return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
         });
 
@@ -188,9 +240,7 @@ export const useWeeklyPDFExport = () => {
         .sort((a, b) => {
           const aCredit = a.service_credit || 0;
           const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) {
-            return bCredit - aCredit;
-          }
+          if (bCredit !== aCredit) return bCredit - aCredit;
           return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
         });
 
@@ -199,99 +249,200 @@ export const useWeeklyPDFExport = () => {
         .sort((a, b) => {
           const aCredit = a.service_credit || 0;
           const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) {
-            return bCredit - aCredit;
-          }
+          if (bCredit !== aCredit) return bCredit - aCredit;
           return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
         });
 
-      // Calculate column widths
-      const colWidths = [20, 30]; // Badge and Name columns
-      const dayColWidth = (pageWidth - 60 - colWidths[0] - colWidths[1]) / 7;
+      // Column widths - matching the table structure
+      const badgeWidth = 15;
+      const nameWidth = 25;
+      const dayColWidth = 25;
+      const tableWidth = badgeWidth + nameWidth + (dayColWidth * 7);
 
-      // Draw table headers
-      let xPosition = 15;
-      
-      // Header background
+      // Calculate starting x position to center the table
+      const startX = (pageWidth - tableWidth) / 2;
+
+      // Main table header
       pdf.setFillColor(41, 128, 185);
-      pdf.rect(xPosition, yPosition, pageWidth - 30, 8, "F");
+      pdf.rect(startX, yPosition, tableWidth, 10, "F");
       
-      // Header text
-      pdf.setFontSize(8);
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
       pdf.setTextColor(255, 255, 255);
 
-      // Static headers
-      pdf.text("BADGE", xPosition + 2, yPosition + 5);
-      xPosition += colWidths[0];
-      pdf.text("NAME", xPosition + 2, yPosition + 5);
-      xPosition += colWidths[1];
+      let xPosition = startX;
+      
+      // Headers
+      pdf.text("Empl#", xPosition + 3, yPosition + 6);
+      xPosition += badgeWidth;
+      pdf.text("NAME", xPosition + 3, yPosition + 6);
+      xPosition += nameWidth;
 
-      // Day headers
+      // Day headers with staffing counts
       weekDays.forEach((day) => {
-        pdf.text(day.dayName, xPosition + 2, yPosition + 3);
-        pdf.text(day.formattedDate, xPosition + 2, yPosition + 6);
+        const daySchedule = scheduleData?.find(s => s.date === day.dateStr);
+        
+        // Get minimum staffing
+        const minStaffingForDay = minimumStaffing?.get(day.dayOfWeek)?.get(selectedShiftId || '');
+        const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
+        const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+        
+        // Calculate actual counts
+        const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
+          const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+          const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+          const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+          const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+          return isSupervisor && isScheduled;
+        }).length || 0;
+
+        const officerCount = daySchedule?.officers?.filter((officer: any) => {
+          const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+          const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+          const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+          const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+          const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+          return isOfficer && isNotPPO && isScheduled;
+        }).length || 0;
+
+        // Day name and date
+        pdf.text(day.dayName, xPosition + dayColWidth / 2, yPosition + 3, { align: "center" });
+        pdf.setFontSize(7);
+        pdf.text(day.formattedDate, xPosition + dayColWidth / 2, yPosition + 5, { align: "center" });
+        
+        // Staffing counts - matching your image format
+        pdf.text(`${supervisorCount}/${minimumSupervisors}up`, xPosition + dayColWidth / 2, yPosition + 7, { align: "center" });
+        pdf.text(`${officerCount}/${minimumOfficers}Ofc`, xPosition + dayColWidth / 2, yPosition + 8.5, { align: "center" });
+        
+        pdf.setFontSize(9);
         xPosition += dayColWidth;
       });
 
-      yPosition += 8;
+      yPosition += 10;
+
+      // Function to render count row
+      const renderCountRow = (label: string, bgColor: number[], countType: 'supervisor' | 'officer' | 'ppo') => {
+        xPosition = startX;
+        
+        pdf.setFillColor(...bgColor);
+        pdf.rect(xPosition, yPosition, tableWidth, 6, "F");
+        
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 0, 0);
+        
+        // Skip badge column
+        xPosition += badgeWidth;
+        
+        // Label
+        pdf.text(label, xPosition + 3, yPosition + 4);
+        xPosition += nameWidth;
+
+        // Count for each day
+        weekDays.forEach((day) => {
+          const daySchedule = scheduleData?.find(s => s.date === day.dateStr);
+          const minStaffingForDay = minimumStaffing?.get(day.dayOfWeek)?.get(selectedShiftId || '');
+          
+          let count = 0;
+          let minimum = 0;
+
+          if (countType === 'supervisor') {
+            minimum = minStaffingForDay?.minimumSupervisors || 1;
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              return isSupervisor && isScheduled;
+            }).length || 0;
+          } else if (countType === 'officer') {
+            minimum = minStaffingForDay?.minimumOfficers || 0;
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+              return isOfficer && isNotPPO && isScheduled;
+            }).length || 0;
+          } else if (countType === 'ppo') {
+            count = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+              const isPPO = officer.rank?.toLowerCase() === 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+              return isOfficer && isPPO && isScheduled;
+            }).length || 0;
+          }
+
+          const displayText = countType === 'ppo' ? count.toString() : `${count}/${minimum}`;
+          pdf.text(displayText, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+          xPosition += dayColWidth;
+        });
+
+        yPosition += 6;
+      };
 
       // Function to render officer rows
       const renderOfficerRows = (officers: OfficerWeeklyData[], isPPO: boolean = false) => {
-        pdf.setFontSize(7);
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
         
         for (const officer of officers) {
-          if (yPosition > pdf.internal.pageSize.getHeight() - 15) {
+          if (yPosition > pageHeight - 20) {
             pdf.addPage();
-            yPosition = 20;
+            yPosition = 10;
           }
 
-          xPosition = 15;
+          xPosition = startX;
+          
+          // Row background
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(xPosition, yPosition, tableWidth, 6, "FD");
           
           // Badge number
           pdf.setTextColor(0, 0, 0);
-          pdf.text(officer.badgeNumber?.toString() || "", xPosition + 2, yPosition + 4);
-          xPosition += colWidths[0];
+          pdf.text(officer.badgeNumber?.toString() || "", xPosition + 3, yPosition + 4);
+          xPosition += badgeWidth;
           
-          // Name with rank/PPO indicator
-          let nameText = getLastName(officer.officerName);
-          if (isPPO) {
-            nameText += " (PPO)";
-          } else if (officer.rank && isSupervisorByRank(officer)) {
-            nameText += ` (${officer.rank})`;
-          }
-          pdf.text(nameText, xPosition + 2, yPosition + 4);
-          xPosition += colWidths[1];
+          // Name - last name only
+          const lastName = getLastName(officer.officerName);
+          pdf.text(lastName, xPosition + 3, yPosition + 4);
+          xPosition += nameWidth;
 
           // Daily assignments
           weekDays.forEach((day) => {
             const dayOfficer = officer.weeklySchedule[day.dateStr];
-            let text = "";
-            let color: [number, number, number] = [0, 0, 0];
+            const cellContent = getCellContent(dayOfficer);
 
-            if (dayOfficer) {
-              if (dayOfficer.shiftInfo?.isOff) {
-                text = "OFF";
-                color = [100, 100, 100];
-              } else if (dayOfficer.shiftInfo?.hasPTO) {
-                text = "PTO";
-                color = [220, 38, 38];
-              } else if (dayOfficer.shiftInfo?.position) {
-                // Shorten position for PDF
-                const position = dayOfficer.shiftInfo.position;
-                if (position.length > 8) {
-                  text = position.substring(0, 8);
-                } else {
-                  text = position;
-                }
-                color = [0, 100, 0];
-              } else {
-                text = "SCHED";
-                color = [0, 0, 150];
+            // Cell background
+            if (cellContent.fillColor) {
+              pdf.setFillColor(...cellContent.fillColor);
+              pdf.rect(xPosition, yPosition, dayColWidth, 6, "F");
+            }
+            
+            // Cell border
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(xPosition, yPosition, dayColWidth, 6, "S");
+            
+            // Cell text
+            if (cellContent.text) {
+              pdf.setTextColor(...cellContent.color);
+              if (cellContent.textStyle === "bold") {
+                pdf.setFont("helvetica", "bold");
+              }
+              
+              // Truncate long text
+              const displayText = cellContent.text.length > 10 
+                ? cellContent.text.substring(0, 10) 
+                : cellContent.text;
+              
+              pdf.text(displayText, xPosition + dayColWidth / 2, yPosition + 3.5, { align: "center" });
+              
+              if (cellContent.textStyle === "bold") {
+                pdf.setFont("helvetica", "normal");
               }
             }
-
-            pdf.setTextColor(...color);
-            pdf.text(text, xPosition + 2, yPosition + 4);
+            
             xPosition += dayColWidth;
           });
 
@@ -299,179 +450,60 @@ export const useWeeklyPDFExport = () => {
         }
       };
 
-      // Render supervisors section
+      // Render Supervisors section
       if (supervisors.length > 0) {
-        // Supervisor header
-        pdf.setFillColor(240, 240, 240);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
-        pdf.setFontSize(8);
-        pdf.setTextColor(0, 0, 0);
-        pdf.text("SUPERVISORS", 17, yPosition + 4);
-        yPosition += 6;
-        
+        renderCountRow("SUPERVISORS", [240, 240, 240], 'supervisor');
         renderOfficerRows(supervisors);
         yPosition += 2;
       }
 
-      // Render regular officers section
+      // Render Officers section with count row
       if (regularOfficers.length > 0) {
-        // Officers header
-        pdf.setFillColor(240, 240, 240);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
-        pdf.setFontSize(8);
-        pdf.setTextColor(0, 0, 0);
-        pdf.text("OFFICERS", 17, yPosition + 4);
-        yPosition += 6;
-        
+        renderCountRow("OFFICERS", [240, 240, 240], 'officer');
         renderOfficerRows(regularOfficers);
         yPosition += 2;
       }
 
-      // Render PPOs section
+      // Render PPOs section with count row
       if (ppos.length > 0) {
-        // PPOs header
-        pdf.setFillColor(200, 220, 255);
-        pdf.rect(15, yPosition, pageWidth - 30, 6, "F");
-        pdf.setFontSize(8);
-        pdf.setTextColor(0, 0, 0);
-        pdf.text("PPOs", 17, yPosition + 4);
-        yPosition += 6;
-        
+        renderCountRow("PPO", [230, 240, 255], 'ppo');
         renderOfficerRows(ppos, true);
       }
-
-      yPosition += 15;
     }
   };
 
-  // Helper function to render monthly view
-  const renderMonthlyView = (pdf: any, startDate: Date, endDate: Date, shiftName: string, scheduleData: any[]) => {
+  // Basic monthly view (you can enhance this later)
+  const renderMonthlyView = (
+    pdf: any,
+    startDate: Date,
+    endDate: Date,
+    shiftName: string,
+    scheduleData: any[]
+  ) => {
     const pageWidth = pdf.internal.pageSize.getWidth();
-    let yPosition = 40;
-
-    // Group by month
-    const currentMonth = startOfMonth(startDate);
-    const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
     
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    
-    const startDay = monthStart.getDay();
-    const endDay = monthEnd.getDay();
-    
-    const previousMonthDays = Array.from({ length: startDay }, (_, i) => 
-      addDays(monthStart, -startDay + i)
-    );
-    
-    const nextMonthDays = Array.from({ length: 6 - endDay }, (_, i) => 
-      addDays(monthEnd, i + 1)
-    );
-
-    const allCalendarDays = [...previousMonthDays, ...monthDays, ...nextMonthDays];
-    const weeks: Date[][] = [];
-    
-    for (let i = 0; i < allCalendarDays.length; i += 7) {
-      weeks.push(allCalendarDays.slice(i, i + 7));
-    }
-
-    // Month header
-    pdf.setFontSize(14);
+    pdf.setFontSize(16);
     pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(41, 128, 185);
+    pdf.text(`${shiftName.toUpperCase()} - MONTHLY SCHEDULE`, pageWidth / 2, 20, { align: "center" });
+
+    pdf.setFontSize(12);
+    pdf.setTextColor(60, 60, 60);
     pdf.text(
-      `Monthly Schedule - ${format(currentMonth, "MMMM yyyy")}`,
+      `${format(startDate, "MMM d, yyyy")} - ${format(endDate, "MMM d, yyyy")}`,
       pageWidth / 2,
-      yPosition,
+      30,
       { align: "center" }
     );
-    yPosition += 10;
 
-    // Day headers
-    const dayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const dayColWidth = (pageWidth - 40) / 7;
-    let xPosition = 20;
-
-    pdf.setFontSize(9);
-    pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(255, 255, 255);
-    
-    dayHeaders.forEach(day => {
-      pdf.setFillColor(41, 128, 185);
-      pdf.rect(xPosition, yPosition, dayColWidth, 6, "F");
-      pdf.text(day, xPosition + (dayColWidth / 2), yPosition + 4, { align: "center" });
-      xPosition += dayColWidth;
-    });
-
-    yPosition += 6;
-
-    // Render calendar weeks
-    pdf.setFontSize(7);
-    
-    for (const week of weeks) {
-      if (yPosition > pdf.internal.pageSize.getHeight() - 50) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-
-      const rowHeight = 25;
-      xPosition = 20;
-
-      // Draw day cells
-      week.forEach(day => {
-        const dateStr = format(day, "yyyy-MM-dd");
-        const isCurrentMonth = isSameMonth(day, currentMonth);
-        const isToday = format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
-        
-        // Cell background
-        if (isToday) {
-          pdf.setFillColor(255, 235, 156); // Light yellow for today
-        } else if (!isCurrentMonth) {
-          pdf.setFillColor(240, 240, 240); // Light gray for other months
-        } else {
-          pdf.setFillColor(255, 255, 255);
-        }
-        
-        pdf.rect(xPosition, yPosition, dayColWidth, rowHeight, "F");
-        
-        // Day number
-        pdf.setTextColor(isCurrentMonth ? 0 : 150);
-        pdf.setFont("helvetica", isToday ? "bold" : "normal");
-        pdf.text(
-          format(day, "d"), 
-          xPosition + 2, 
-          yPosition + 3
-        );
-
-        // Get schedule for this day
-        const daySchedule = scheduleData.find((s: any) => s.date === dateStr);
-        if (daySchedule && isCurrentMonth) {
-          const ptoOfficers = daySchedule.officers?.filter((officer: any) => 
-            officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift
-          ) || [];
-
-          let textY = yPosition + 8;
-          
-          // Show PTO count
-          if (ptoOfficers.length > 0) {
-            pdf.setTextColor(220, 38, 38);
-            pdf.text(`${ptoOfficers.length} PTO`, xPosition + 2, textY);
-            textY += 4;
-          }
-
-          // Show staffing info
-          if (daySchedule.staffing) {
-            pdf.setTextColor(0, 100, 0);
-            pdf.text(`S:${daySchedule.staffing.supervisors}`, xPosition + 2, textY);
-            textY += 4;
-            pdf.text(`O:${daySchedule.staffing.officers}`, xPosition + 2, textY);
-          }
-        }
-
-        xPosition += dayColWidth;
-      });
-
-      yPosition += rowHeight;
-    }
+    pdf.setFontSize(10);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(
+      "Monthly view export - For detailed view, use Weekly export",
+      pageWidth / 2,
+      45,
+      { align: "center" }
+    );
   };
 
   return { exportWeeklyPDF };

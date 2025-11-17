@@ -22,6 +22,7 @@ import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
+import { useColorSettings } from "@/hooks/useColorSettings";
 import { 
   getLastName, 
   categorizeAndSortOfficers,
@@ -40,6 +41,8 @@ interface ExportOptions {
   shiftName: string;
   scheduleData: any[];
 }
+
+const { weekly: weeklyColors } = useColorSettings();
 
 const WeeklySchedule = ({ 
   userRole = 'officer', 
@@ -1052,29 +1055,36 @@ const handleExportPDF = async () => {
           </div>
 
           {supervisors.map((officer) => (
-            <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30">
-              <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-              <div className="p-2 border-r font-medium">
-                {getLastName(officer.officerName)}
-                <div className="text-xs text-muted-foreground">{officer.rank || 'Officer'}</div>
-              </div>
-              {weekDays.map(({ dateStr }) => (
-                <ScheduleCell
-                  key={dateStr}
-                  officer={officer.weeklySchedule[dateStr]}
-                  dateStr={dateStr}
-                  officerId={officer.officerId}
-                  officerName={officer.officerName}
-                  isAdminOrSupervisor={isAdminOrSupervisor}
-                  onAssignPTO={handleAssignPTO}
-                  onRemovePTO={handleRemovePTO}
-                  onEditAssignment={handleEditAssignment}
-                  onRemoveOfficer={removeOfficerMutation.mutate}
-                  isUpdating={removeOfficerMutation.isPending}
-                />
-              ))}
-            </div>
-          ))}
+  <div 
+    key={officer.officerId} 
+    className="grid grid-cols-9 border-b hover:bg-muted/30"
+    style={{
+      backgroundColor: weeklyColors.supervisor.bg,
+      color: weeklyColors.supervisor.text
+    }}
+  >
+    <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+    <div className="p-2 border-r font-medium">
+      {getLastName(officer.officerName)}
+      <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
+    </div>
+    {weekDays.map(({ dateStr }) => (
+      <ScheduleCell
+        key={dateStr}
+        officer={officer.weeklySchedule[dateStr]}
+        dateStr={dateStr}
+        officerId={officer.officerId}
+        officerName={officer.officerName}
+        isAdminOrSupervisor={isAdminOrSupervisor}
+        onAssignPTO={handleAssignPTO}
+        onRemovePTO={handleRemovePTO}
+        onEditAssignment={handleEditAssignment}
+        onRemoveOfficer={removeOfficerMutation.mutate}
+        isUpdating={removeOfficerMutation.isPending}
+      />
+    ))}
+  </div>
+))}
 
           {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS) */}
           <div className="grid grid-cols-9 border-b bg-muted/30">

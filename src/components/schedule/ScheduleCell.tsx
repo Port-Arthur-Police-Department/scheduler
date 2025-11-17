@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Clock } from "lucide-react";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { useColorSettings } from "@/hooks/useColorSettings";
 
 interface ScheduleCellProps {
   officer: any;
@@ -33,6 +34,8 @@ export const ScheduleCell = ({
   isPPO = false,
   partnerInfo = null
 }: ScheduleCellProps) => {
+  const { weekly: weeklyColors } = useColorSettings();
+
   // Check if this officer has any schedule data for this date
   const hasSchedule = !!officer;
   const isOff = officer?.shiftInfo?.isOff;
@@ -60,47 +63,81 @@ export const ScheduleCell = ({
     ? `Partner with ${partnerInfo}`
     : position;
 
-  // If no officer data at all, this is an unscheduled day (dark gray)
+  // Get background color based on officer status using color settings
+  const getBackgroundColor = () => {
+    if (isOff) {
+      return weeklyColors.off.bg;
+    } else if (isFullDayPTO) {
+      return weeklyColors.pto.bg;
+    } else if (isPartialPTO) {
+      return weeklyColors.pto.bg; // Use PTO color for partial PTO as well
+    } else if (isPPO) {
+      return weeklyColors.ppo.bg;
+    }
+    return 'bg-white'; // Default white background
+  };
+
+  // Get text color based on officer status using color settings
+  const getTextColor = () => {
+    if (isOff) {
+      return weeklyColors.off.text;
+    } else if (hasPTO) {
+      return weeklyColors.pto.text;
+    } else if (isPPO) {
+      return weeklyColors.ppo.text;
+    }
+    return 'text-foreground'; // Default text color
+  };
+
+  // If no officer data at all, this is an unscheduled day (use off color)
   if (!hasSchedule) {
     return (
-      <div className="p-2 border-r bg-gray-300 dark:bg-gray-600 min-h-10 relative">
-        {/* Dark gray for unscheduled days */}
+      <div 
+        className="p-2 border-r min-h-10 relative"
+        style={{ backgroundColor: weeklyColors.off.bg }}
+      >
+        {/* Use off color for unscheduled days */}
       </div>
     );
   }
 
   return (
-    <div className={`
-      p-2 border-r min-h-10 relative group
-      ${isOff ? 'bg-muted/50' : ''}
-      ${isFullDayPTO ? 'bg-green-50 border-green-200' : ''}
-      ${isPartialPTO ? 'bg-white' : ''}
-      ${!isOff && !hasPTO ? 'bg-white' : ''}
-      ${isPPO ? 'bg-blue-50/30' : ''}
-    `}>
+    <div 
+      className={`
+        p-2 border-r min-h-10 relative group
+        ${isExtraShift ? 'border-orange-300' : ''}
+      `}
+      style={{ 
+        backgroundColor: getBackgroundColor(),
+        color: getTextColor()
+      }}
+    >
       {isOff ? (
-        <div className="text-center text-muted-foreground font-medium">DD</div>
+        <div className="text-center font-medium">DD</div>
       ) : hasPTO ? (
         <div className="text-center">
           {/* PTO Badge */}
-          <Badge className={`text-xs ${
-            isFullDayPTO 
-              ? 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200' 
-              : 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200'
-          }`}>
+          <Badge 
+            className="text-xs border-green-200"
+            style={{
+              backgroundColor: weeklyColors.pto.bg,
+              color: weeklyColors.pto.text,
+              borderColor: weeklyColors.pto.text
+            }}
+          >
             {ptoData?.ptoType || 'PTO'}
           </Badge>
           
           {/* Show position for partial PTO */}
           {isPartialPTO && displayPosition && (
-            <div className="text-xs text-muted-foreground mt-1 truncate">
+            <div className="text-xs mt-1 truncate opacity-90">
               {displayPosition}
             </div>
           )}
           
           {/* Show "Partial Day" indicator for partial PTO */}
           {isPartialPTO && (
-            <div className="text-xs text-green-600 font-medium mt-1">
+            <div className="text-xs font-medium mt-1 opacity-90">
               Partial Day
             </div>
           )}
@@ -109,13 +146,27 @@ export const ScheduleCell = ({
         <div className="text-center">
           {/* Show "Extra Shift" for true extra days */}
           {isExtraShift && (
-            <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200 mb-1">
+            <Badge 
+              variant="outline" 
+              className="text-xs mb-1 border-orange-300"
+              style={{
+                backgroundColor: 'rgb(255, 247, 237)',
+                color: 'rgb(194, 65, 12)'
+              }}
+            >
               Extra Shift
             </Badge>
           )}
           {/* Show "Special Assignment" badge only for actual special assignments */}
           {isSpecialAssignment && !isExtraShift && (
-            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 mb-1">
+            <Badge 
+              variant="outline" 
+              className="text-xs mb-1 border-purple-300"
+              style={{
+                backgroundColor: 'rgb(250, 245, 255)',
+                color: 'rgb(126, 34, 206)'
+              }}
+            >
               Special
             </Badge>
           )}

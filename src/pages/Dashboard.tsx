@@ -752,12 +752,12 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
               <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-2 gap-1">
                 <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
                   <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Daily Schedule</span>
+                  <span className="hidden md:inline">Riding List</span>
                   <span className="md:hidden">Daily</span>
                 </TabsTrigger>
                 <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
                   <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Weekly Schedule</span>
+                  <span className="hidden md:inline">The Book</span>
                   <span className="md:hidden">Weekly</span>
                 </TabsTrigger>
               </TabsList>

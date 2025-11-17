@@ -1,4 +1,4 @@
-// src/hooks/useMonthlyPDFExport.ts - SICK TIME IN RED
+// src/hooks/useMonthlyPDFExport.ts - UPDATED WITH CUSTOMIZABLE COLORS
 import { 
   format, 
   startOfMonth, 
@@ -13,6 +13,7 @@ import {
 } from "date-fns";
 import { getLastName } from "@/utils/scheduleUtils";
 import { RANK_ORDER } from "@/constants/positions";
+import { useColorSettings } from "@/hooks/useColorSettings";
 
 interface MonthlyExportOptions {
   startDate: Date | string;
@@ -22,6 +23,8 @@ interface MonthlyExportOptions {
 }
 
 export const useMonthlyPDFExport = () => {
+  const { pdf: pdfColors } = useColorSettings();
+
   const exportMonthlyPDF = async ({
     startDate,
     endDate,
@@ -79,16 +82,16 @@ export const useMonthlyPDFExport = () => {
         return rankPriority < RANK_ORDER.Officer;
       };
 
-      // Helper function to determine PTO color
+      // Helper function to determine PTO color using customizable colors
       const getPTOColor = (ptoType: string, isSupervisor: boolean) => {
         const ptoTypeLower = ptoType?.toLowerCase() || '';
         
         // SICK TIME - RED for both supervisors and officers
         if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
           return {
-            backgroundColor: [255, 200, 200], // Light red
-            borderColor: [255, 100, 100],     // Red border
-            textColor: [139, 0, 0]            // Dark red text
+            backgroundColor: pdfColors.sickTime.bg,
+            borderColor: pdfColors.sickTime.border,
+            textColor: pdfColors.sickTime.text
           };
         }
         
@@ -96,16 +99,16 @@ export const useMonthlyPDFExport = () => {
         if (isSupervisor) {
           // YELLOW for supervisor PTO
           return {
-            backgroundColor: [255, 255, 200], // Light yellow
-            borderColor: [255, 220, 100],     // Golden yellow border
-            textColor: [139, 69, 19]          // Brown text for supervisors
+            backgroundColor: pdfColors.supervisorPTO.bg,
+            borderColor: pdfColors.supervisorPTO.border,
+            textColor: pdfColors.supervisorPTO.text
           };
         } else {
           // GREEN for officer PTO
           return {
-            backgroundColor: [240, 255, 240], // Light green
-            borderColor: [144, 238, 144],     // Green border
-            textColor: [0, 100, 0]            // Dark green text
+            backgroundColor: pdfColors.officerPTO.bg,
+            borderColor: pdfColors.officerPTO.border,
+            textColor: pdfColors.officerPTO.text
           };
         }
       };
@@ -251,7 +254,7 @@ export const useMonthlyPDFExport = () => {
               pdf.text(`PTO: ${ptoOfficers.length}`, xPos + cellWidth - 11, badgeY + 3, { align: "center" });
             }
 
-            // PTO officers list by NAME with color coding
+            // PTO officers list by NAME with customizable color coding
             let listY = yPos + 15;
             pdf.setFontSize(6);
             pdf.setFont("helvetica", "normal");
@@ -264,7 +267,7 @@ export const useMonthlyPDFExport = () => {
               const isSupervisor = isSupervisorByRank(officer);
               const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
               
-              // GET COLOR BASED ON PTO TYPE AND RANK
+              // GET COLOR BASED ON PTO TYPE AND RANK using customizable colors
               const colors = getPTOColor(ptoType, isSupervisor);
               
               // Background for each PTO entry
@@ -325,23 +328,23 @@ export const useMonthlyPDFExport = () => {
         { align: "center" }
       );
 
-      // Updated legend on last page
+      // Updated legend on last page using customizable colors
       pdf.setFontSize(7);
       pdf.setTextColor(0, 0, 0);
       let legendY = pageHeight - 10;
       
       // Sick time color in legend
-      pdf.setFillColor(255, 200, 200);
+      pdf.setFillColor(...pdfColors.sickTime.bg);
       pdf.rect(10, legendY - 2, 5, 3, "F");
       pdf.text("Sick Time", 17, legendY);
       
       // Supervisor PTO color in legend
-      pdf.setFillColor(255, 255, 200);
+      pdf.setFillColor(...pdfColors.supervisorPTO.bg);
       pdf.rect(35, legendY - 2, 5, 3, "F");
       pdf.text("Supervisor PTO", 42, legendY);
       
       // Officer PTO color in legend
-      pdf.setFillColor(240, 255, 240);
+      pdf.setFillColor(...pdfColors.officerPTO.bg);
       pdf.rect(65, legendY - 2, 5, 3, "F");
       pdf.text("Officer PTO", 72, legendY);
 

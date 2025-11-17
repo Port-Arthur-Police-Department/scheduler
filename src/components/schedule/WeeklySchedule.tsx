@@ -184,8 +184,7 @@ const WeeklySchedule = ({
   };
 
 // UPDATED handleExportPDF function for WeeklySchedule.tsx
-// Replace your existing handleExportPDF function with this:
-
+// REPLACE your handleExportPDF function with this:
 const handleExportPDF = async () => {
   if (!dateRange?.from || !dateRange?.to) {
     toast.error("Please select a date range");
@@ -223,8 +222,7 @@ const handleExportPDF = async () => {
         endDate,
         shiftName,
         scheduleData: scheduleDataResponse.dailySchedules || [],
-        viewType: "weekly",
-        minimumStaffing: schedules?.minimumStaffing, // Pass minimum staffing
+        minimumStaffing: schedules?.minimumStaffing,
         selectedShiftId
       });
 
@@ -235,16 +233,15 @@ const handleExportPDF = async () => {
         toast.error("Failed to export weekly PDF");
       }
     } else {
-      // Monthly view - use the monthly export hook
+      // Monthly view - use the monthly export hook with the CORRECT parameters
       const { useMonthlyPDFExport } = await import("@/hooks/useMonthlyPDFExport");
       const { exportMonthlyPDF } = useMonthlyPDFExport();
       
       const result = await exportMonthlyPDF({
-        month: startDate, // For monthly, we use the start of the range as the month
+        startDate, // Pass startDate
+        endDate,   // Pass endDate
         shiftName,
-        scheduleData: scheduleDataResponse.dailySchedules || [],
-        minimumStaffing: schedules?.minimumStaffing,
-        selectedShiftId
+        scheduleData: scheduleDataResponse.dailySchedules || []
       });
 
       if (result.success) {

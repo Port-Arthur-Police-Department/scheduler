@@ -1333,10 +1333,17 @@ const handleExportPDF = async () => {
                       </Badge>
                     )}
                     {ptoOfficers.length > 0 && (
-                      <Badge variant="outline" className="text-xs h-4 bg-green-50 text-green-800 border-green-200">
-                        {ptoOfficers.length} PTO
-                      </Badge>
-                    )}
+  <Badge 
+    variant="outline" 
+    className="text-xs h-4 border-green-200"
+    style={{
+      backgroundColor: weeklyColors.pto.bg,
+      color: weeklyColors.pto.text
+    }}
+  >
+    {ptoOfficers.length} PTO
+  </Badge>
+)}
                     {isCurrentMonthDay && !isUnderstaffed && (
                       <div className="flex flex-col gap-1">
                         <Badge variant="outline" className="text-xs h-4">

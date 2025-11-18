@@ -92,7 +92,7 @@ const WeeklySchedule = ({
     queryKey
   } = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
 
-  const { exportWeeklyPDF } = useWeeklyPDFExport();
+ 
   const { colors } = useColorSettings();
 
   // Get shift types

@@ -92,31 +92,42 @@ export const useColorSettings = () => {
     isLoading,
     error,
     
-    // PDF Colors
-  pdf: {
-    supervisorPTO: {
-      bg: getColorArray(colors.pdf_supervisor_pto_bg),
-      border: getColorArray(colors.pdf_supervisor_pto_border),
-      text: getColorArray(colors.pdf_supervisor_pto_text),
-    },
-    officerPTO: {
-      bg: getColorArray(colors.pdf_officer_pto_bg),
-      border: getColorArray(colors.pdf_officer_pto_border),
-      text: getColorArray(colors.pdf_officer_pto_text),
-    },
-    sickTime: {
-      bg: getColorArray(colors.pdf_sick_time_bg),
-      border: getColorArray(colors.pdf_sick_time_border),
-      text: getColorArray(colors.pdf_sick_time_text),
-    },
-    offDay: {
-      bg: getColorArray(colors.pdf_off_day_bg),
-      text: getColorArray(colors.pdf_off_day_text),
-    },
-    partialPTO: {
-      supervisorBg: getColorArray(colors.pdf_partial_pto_supervisor_bg),
-      officerBg: getColorArray(colors.pdf_partial_pto_officer_bg),
-    }
+   // PDF Colors
+    pdf: {
+      supervisorPTO: {
+        bg: getColorArray(colors.pdf_supervisor_pto_bg),
+        border: getColorArray(colors.pdf_supervisor_pto_border),
+        text: getColorArray(colors.pdf_supervisor_pto_text),
+      },
+      officerPTO: {
+        bg: getColorArray(colors.pdf_officer_pto_bg),
+        border: getColorArray(colors.pdf_officer_pto_border),
+        text: getColorArray(colors.pdf_officer_pto_text),
+      },
+      vacation: {
+        bg: getColorArray(colors.pdf_vacation_bg),
+        border: getColorArray(colors.pdf_vacation_border),
+        text: getColorArray(colors.pdf_vacation_text),
+      },
+      sick: {
+        bg: getColorArray(colors.pdf_sick_bg),
+        border: getColorArray(colors.pdf_sick_border),
+        text: getColorArray(colors.pdf_sick_text),
+      },
+      holiday: {
+        bg: getColorArray(colors.pdf_holiday_bg),
+        border: getColorArray(colors.pdf_holiday_border),
+        text: getColorArray(colors.pdf_holiday_text),
+      },
+      comp: {
+        bg: getColorArray(colors.pdf_comp_bg),
+        border: getColorArray(colors.pdf_comp_border),
+        text: getColorArray(colors.pdf_comp_text),
+      },
+      offDay: {
+        bg: getColorArray(colors.pdf_off_day_bg),
+        text: getColorArray(colors.pdf_off_day_text),
+      }
     },
     
     // Weekly Schedule Colors
@@ -133,13 +144,26 @@ export const useColorSettings = () => {
         bg: `rgb(${colors.weekly_ppo_bg})`,
         text: `rgb(${colors.weekly_ppo_text})`,
       },
-      pto: {
-        bg: `rgb(${colors.weekly_pto_bg})`,
-        text: `rgb(${colors.weekly_pto_text})`,
+      // NEW: Weekly PTO type colors
+      vacation: {
+        bg: `rgb(${colors.weekly_vacation_bg})`,
+        text: `rgb(${colors.weekly_vacation_text})`,
       },
       sick: {
         bg: `rgb(${colors.weekly_sick_bg})`,
         text: `rgb(${colors.weekly_sick_text})`,
+      },
+      holiday: {
+        bg: `rgb(${colors.weekly_holiday_bg})`,
+        text: `rgb(${colors.weekly_holiday_text})`,
+      },
+      comp: {
+        bg: `rgb(${colors.weekly_comp_bg})`,
+        text: `rgb(${colors.weekly_comp_text})`,
+      },
+      pto: {
+        bg: `rgb(${colors.weekly_pto_bg})`,
+        text: `rgb(${colors.weekly_pto_text})`,
       },
       off: {
         bg: `rgb(${colors.weekly_off_bg})`,

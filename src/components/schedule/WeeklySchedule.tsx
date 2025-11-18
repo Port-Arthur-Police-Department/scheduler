@@ -50,8 +50,9 @@ const WeeklySchedule = ({
 }: WeeklyScheduleProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-	const { weekly: weeklyColors } = useColorSettings();
+  
+  // ✅ CORRECT - Move useColorSettings to component level
+  const { colors } = useColorSettings();
   
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -68,8 +69,9 @@ const WeeklySchedule = ({
   
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>({
     from: startOfWeek(new Date(), { weekStartsOn: 0 }),
-    to: addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), 4) // Default 4 weeks
+    to: addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), 4)
   });
+
 
   // Use consolidated mutations hook
   const {
@@ -189,79 +191,75 @@ const WeeklySchedule = ({
   };
 
 // In WeeklySchedule.tsx - update the handleExportPDF function
-const handleExportPDF = async () => {
-  if (!dateRange?.from || !dateRange?.to) {
-    toast.error("Please select a date range");
-    return;
-  }
-
-  if (!selectedShiftId) {
-    toast.error("Please select a shift");
-    return;
-  }
-
-  try {
-    toast.info("Generating PDF export...");
-    
-    const startDate = dateRange.from;
-    const endDate = dateRange.to;
-    
-    const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
-      format(date, "yyyy-MM-dd")
-    );
-
-    // Fetch schedule data for the date range
-    const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
-    
-    const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
-
-    // Get color settings from your settings
-    const { colors } = useColorSettings();
-    
-    if (activeView === "weekly") {
-      // Use the standalone weekly PDF export
-      const { exportWeeklyPDF } = await import("@/utils/pdfExportUtils");
-      
-      const result = await exportWeeklyPDF({
-        startDate,
-        endDate,
-        shiftName,
-        scheduleData: scheduleDataResponse.dailySchedules || [],
-        minimumStaffing: schedules?.minimumStaffing,
-        selectedShiftId,
-        colorSettings: colors // Pass color settings here
-      });
-
-      if (result.success) {
-        toast.success("Weekly PDF exported successfully");
-        setExportDialogOpen(false);
-      } else {
-        toast.error("Failed to export weekly PDF");
-      }
-    } else {
-      // Use the standalone monthly PDF export
-      const { exportMonthlyPDF } = await import("@/utils/pdfExportUtils");
-      
-      const result = await exportMonthlyPDF({
-        startDate,
-        endDate,
-        shiftName,
-        scheduleData: scheduleDataResponse.dailySchedules || [],
-        colorSettings: colors // Pass color settings here
-      });
-
-      if (result.success) {
-        toast.success("Monthly PDF exported successfully");
-        setExportDialogOpen(false);
-      } else {
-        toast.error("Failed to export monthly PDF");
-      }
+  const handleExportPDF = async () => {
+    if (!dateRange?.from || !dateRange?.to) {
+      toast.error("Please select a date range");
+      return;
     }
-  } catch (error) {
-    console.error("Export error:", error);
-    toast.error("Error generating PDF export");
-  }
-};
+
+    if (!selectedShiftId) {
+      toast.error("Please select a shift");
+      return;
+    }
+
+    try {
+      toast.info("Generating PDF export...");
+      
+      const startDate = dateRange.from;
+      const endDate = dateRange.to;
+      
+      const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
+        format(date, "yyyy-MM-dd")
+      );
+
+      // Fetch schedule data for the date range
+      const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
+      
+      const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
+
+      // ✅ CORRECT - colors is now available from component level
+      if (activeView === "weekly") {
+        const { exportWeeklyPDF } = await import("@/utils/pdfExportUtils");
+        
+        const result = await exportWeeklyPDF({
+          startDate,
+          endDate,
+          shiftName,
+          scheduleData: scheduleDataResponse.dailySchedules || [],
+          minimumStaffing: schedules?.minimumStaffing,
+          selectedShiftId,
+          colorSettings: colors // Use colors from component level
+        });
+
+        if (result.success) {
+          toast.success("Weekly PDF exported successfully");
+          setExportDialogOpen(false);
+        } else {
+          toast.error("Failed to export weekly PDF");
+        }
+      } else {
+        const { exportMonthlyPDF } = await import("@/utils/pdfExportUtils");
+        
+        const result = await exportMonthlyPDF({
+          startDate,
+          endDate,
+          shiftName,
+          scheduleData: scheduleDataResponse.dailySchedules || [],
+          colorSettings: colors // Use colors from component level
+        });
+
+        if (result.success) {
+          toast.success("Monthly PDF exported successfully");
+          setExportDialogOpen(false);
+        } else {
+          toast.error("Failed to export monthly PDF");
+        }
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Error generating PDF export");
+    }
+  };
 
 
   // Function to fetch schedule data for a date range - FIXED VERSION

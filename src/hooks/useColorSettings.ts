@@ -1,31 +1,63 @@
-// hooks/useColorSettings.ts - UPDATED WITH BETTER ERROR HANDLING
+// src/hooks/useColorSettings.ts - UPDATED WITH PTO TYPE COLORS
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_COLORS = {
+  // PDF Export Colors
   pdf_supervisor_pto_bg: "255,255,200",
-  pdf_supervisor_pto_border: "255,220,100",
+  pdf_supervisor_pto_border: "255,220,100", 
   pdf_supervisor_pto_text: "139,69,19",
+  
   pdf_officer_pto_bg: "240,255,240",
   pdf_officer_pto_border: "144,238,144",
   pdf_officer_pto_text: "0,100,0",
-  pdf_sick_time_bg: "255,200,200",
-  pdf_sick_time_border: "255,100,100",
-  pdf_sick_time_text: "139,0,0",
+  
+  // NEW: Different PTO type colors
+  pdf_vacation_bg: "173,216,230",
+  pdf_vacation_border: "100,149,237",
+  pdf_vacation_text: "0,0,139",
+  
+  pdf_sick_bg: "255,200,200",
+  pdf_sick_border: "255,100,100",
+  pdf_sick_text: "139,0,0",
+  
+  pdf_holiday_bg: "255,218,185",
+  pdf_holiday_border: "255,165,0",
+  pdf_holiday_text: "165,42,42",
+  
+  pdf_comp_bg: "221,160,221",
+  pdf_comp_border: "186,85,211",
+  pdf_comp_text: "128,0,128",
+  
   pdf_off_day_bg: "220,220,220",
   pdf_off_day_text: "100,100,100",
-	pdf_partial_pto_supervisor_bg: "255,255,200", // Light yellow for supervisor partial PTO
-  pdf_partial_pto_officer_bg: "255,255,224", // Light yellow for officer partial PTO
+  
+  // Weekly Schedule Colors
   weekly_supervisor_bg: "240,249,255",
   weekly_supervisor_text: "0,75,150",
-  weekly_officer_bg: "240,255,240",
+  
+  weekly_officer_bg: "240,255,240", 
   weekly_officer_text: "0,100,0",
+  
   weekly_ppo_bg: "255,250,240",
   weekly_ppo_text: "150,75,0",
-  weekly_pto_bg: "144,238,144",
-  weekly_pto_text: "0,100,0",
+  
+  // NEW: Weekly PTO type colors
+  weekly_vacation_bg: "173,216,230",
+  weekly_vacation_text: "0,0,139",
+  
   weekly_sick_bg: "255,200,200",
   weekly_sick_text: "139,0,0",
+  
+  weekly_holiday_bg: "255,218,185",
+  weekly_holiday_text: "165,42,42",
+  
+  weekly_comp_bg: "221,160,221",
+  weekly_comp_text: "128,0,128",
+  
+  weekly_pto_bg: "144,238,144",
+  weekly_pto_text: "0,100,0",
+  
   weekly_off_bg: "240,240,240",
   weekly_off_text: "100,100,100",
 };
@@ -34,57 +66,42 @@ export const useColorSettings = () => {
   const { data: settings, isLoading, error } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
-      console.log('Fetching color settings...');
-      
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
         .single();
 
       if (error) {
-        console.log('Error in useColorSettings:', error);
-        
-        // If no record exists, return defaults
         if (error.code === 'PGRST116') {
-          console.log('No settings record found, using defaults');
           return { color_settings: DEFAULT_COLORS };
         }
-        
-        // For other errors, still return defaults but log the error
         console.error('Error fetching color settings:', error);
         return { color_settings: DEFAULT_COLORS };
       }
 
-      console.log('Settings loaded:', data);
-      
-      // Ensure color_settings exists and merge with defaults
       const colorSettings = data?.color_settings ? { ...DEFAULT_COLORS, ...data.color_settings } : DEFAULT_COLORS;
       
       return { ...data, color_settings: colorSettings };
     },
     retry: 1,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
   const colors = settings?.color_settings || DEFAULT_COLORS;
 
-  // Helper function to convert RGB string to array
   const getColorArray = (rgbString: string): [number, number, number] => {
     try {
       const parts = rgbString.split(',').map(part => parseInt(part.trim()));
       if (parts.length === 3 && parts.every(part => !isNaN(part))) {
         return [parts[0], parts[1], parts[2]] as [number, number, number];
       }
-      // Fallback to white if invalid
-      console.warn('Invalid RGB string:', rgbString, 'falling back to white');
       return [255, 255, 255];
     } catch (error) {
-      console.error('Error parsing RGB string:', rgbString, error);
-      return [255, 255, 255]; // Fallback to white
+      return [255, 255, 255];
     }
   };
-
-  console.log('Current colors:', colors);
 
   return {
     colors,
@@ -92,7 +109,7 @@ export const useColorSettings = () => {
     isLoading,
     error,
     
-   // PDF Colors
+    // PDF Colors
     pdf: {
       supervisorPTO: {
         bg: getColorArray(colors.pdf_supervisor_pto_bg),
@@ -144,7 +161,6 @@ export const useColorSettings = () => {
         bg: `rgb(${colors.weekly_ppo_bg})`,
         text: `rgb(${colors.weekly_ppo_text})`,
       },
-      // NEW: Weekly PTO type colors
       vacation: {
         bg: `rgb(${colors.weekly_vacation_bg})`,
         text: `rgb(${colors.weekly_vacation_text})`,

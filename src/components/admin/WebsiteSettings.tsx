@@ -532,6 +532,82 @@ export const WebsiteSettings = () => {
             </div>
           </div>
 
+          // Add these new color inputs to your WebsiteSettings.tsx
+{/* PTO Type Colors */}
+<div className="space-y-4">
+  <h4 className="font-semibold">PTO Type Colors</h4>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* Vacation */}
+    <div className="space-y-2">
+      <Label>Vacation Background</Label>
+      <div className="flex gap-2">
+        <Input
+          type="color"
+          value={rgbStringToHex(colorSettings.pdf_vacation_bg)}
+          onChange={(e) => handleColorChange('pdf_vacation_bg', e.target.value)}
+          className="w-12 h-10 p-1"
+        />
+        <div className="flex-1">
+          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_vacation_bg}</div>
+          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_vacation_bg)}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Sick */}
+    <div className="space-y-2">
+      <Label>Sick Time Background</Label>
+      <div className="flex gap-2">
+        <Input
+          type="color"
+          value={rgbStringToHex(colorSettings.pdf_sick_bg)}
+          onChange={(e) => handleColorChange('pdf_sick_bg', e.target.value)}
+          className="w-12 h-10 p-1"
+        />
+        <div className="flex-1">
+          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_bg}</div>
+          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_bg)}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Holiday */}
+    <div className="space-y-2">
+      <Label>Holiday Background</Label>
+      <div className="flex gap-2">
+        <Input
+          type="color"
+          value={rgbStringToHex(colorSettings.pdf_holiday_bg)}
+          onChange={(e) => handleColorChange('pdf_holiday_bg', e.target.value)}
+          className="w-12 h-10 p-1"
+        />
+        <div className="flex-1">
+          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_holiday_bg}</div>
+          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_holiday_bg)}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Comp Time */}
+    <div className="space-y-2">
+      <Label>Comp Time Background</Label>
+      <div className="flex gap-2">
+        <Input
+          type="color"
+          value={rgbStringToHex(colorSettings.pdf_comp_bg)}
+          onChange={(e) => handleColorChange('pdf_comp_bg', e.target.value)}
+          className="w-12 h-10 p-1"
+        />
+        <div className="flex-1">
+          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_comp_bg}</div>
+          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_comp_bg)}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
           {/* Reset Button */}
           <div className="flex justify-end pt-4 border-t">
             <Button variant="outline" onClick={resetToDefaults} disabled={updateSettingsMutation.isPending}>

@@ -1288,28 +1288,25 @@ const renderMonthlyView = () => {
           const daySchedule = schedules?.dailySchedules?.find(s => s.date === dateStr);
           const isCurrentMonthDay = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
-            
-            // Get minimum staffing from database
-            const minStaffingForDay = schedules?.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-            const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
-            const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
-            
-            // Get ONLY Holiday and Vacation PTO officers for display
-            const ptoOfficers = daySchedule?.officers?.filter((officer: any) => 
-            officer.shiftInfo?.hasPTO && 
-            officer.shiftInfo?.ptoData?.isFullShift &&
-            (officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('holiday') ||
-             officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('vacation'))
-              ) || [];
+          
+          // Get minimum staffing from database
+          const minStaffingForDay = schedules?.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+          const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
+          const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+          
+          // Get ALL PTO officers for display (web view shows all PTO types)
+          const ptoOfficers = daySchedule?.officers?.filter((officer: any) => 
+            officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift
+          ) || [];
 
-            // Calculate staffing counts for the badges (but don't show all officers)
-            const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
-              ? calculateStaffingCounts(daySchedule.categorizedOfficers || { supervisors: [], officers: [], ppos: [] })
-              : { supervisorCount: 0, officerCount: 0 };
+          // Calculate staffing counts for the badges (but don't show all officers)
+          const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
+            ? calculateStaffingCounts(daySchedule.categorizedOfficers || { supervisors: [], officers: [], ppos: [] })
+            : { supervisorCount: 0, officerCount: 0 };
 
-            const isOfficersUnderstaffed = isCurrentMonthDay && (officerCount < minimumOfficers);
-            const isSupervisorsUnderstaffed = isCurrentMonthDay && (supervisorCount < minimumSupervisors);
-            const isUnderstaffed = isCurrentMonthDay && (isOfficersUnderstaffed || isSupervisorsUnderstaffed);
+          const isOfficersUnderstaffed = isCurrentMonthDay && (officerCount < minimumOfficers);
+          const isSupervisorsUnderstaffed = isCurrentMonthDay && (supervisorCount < minimumSupervisors);
+          const isUnderstaffed = isCurrentMonthDay && (isOfficersUnderstaffed || isSupervisorsUnderstaffed);
 
           return (
             <div
@@ -1321,58 +1318,58 @@ const renderMonthlyView = () => {
                 hover:bg-accent/50 transition-colors
                 ${isUnderstaffed ? 'bg-red-50 border-red-200' : ''}
               `}
-              >
-                <div className="flex justify-between items-start mb-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`
-                      h-6 w-6 p-0 text-xs font-medium hover:bg-primary hover:text-primary-foreground
-                      ${isToday ? 'bg-primary text-primary-foreground' : ''}
-                      ${!isCurrentMonthDay ? 'text-muted-foreground' : ''}
-                    `}
-                    onClick={() => navigateToDailySchedule(dateStr)}
-                    title={`View daily schedule for ${format(day, "MMM d, yyyy")}`}
-                  >
-                    {format(day, "d")}
-                  </Button>
-                  
-                  <div className="flex flex-col gap-1">
-                    {isUnderstaffed && (
-                      <Badge variant="destructive" className="text-xs h-4">
-                        Understaffed
-                      </Badge>
-                    )}
-                    {ptoOfficers.length > 0 && (
-                      <Badge 
-                    variant="outline" 
-                    className="text-xs h-4 border-green-200"
-                    style={{
-                    backgroundColor: weeklyColors.pto.bg,
-                    color: weeklyColors.pto.text
+            >
+              <div className="flex justify-between items-start mb-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`
+                    h-6 w-6 p-0 text-xs font-medium hover:bg-primary hover:text-primary-foreground
+                    ${isToday ? 'bg-primary text-primary-foreground' : ''}
+                    ${!isCurrentMonthDay ? 'text-muted-foreground' : ''}
+                  `}
+                  onClick={() => navigateToDailySchedule(dateStr)}
+                  title={`View daily schedule for ${format(day, "MMM d, yyyy")}`}
+                >
+                  {format(day, "d")}
+                </Button>
+                
+                <div className="flex flex-col gap-1">
+                  {isUnderstaffed && (
+                    <Badge variant="destructive" className="text-xs h-4">
+                      Understaffed
+                    </Badge>
+                  )}
+                  {ptoOfficers.length > 0 && (
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs h-4 border-green-200"
+                      style={{
+                        backgroundColor: weeklyColors.pto.bg,
+                        color: weeklyColors.pto.text
                       }}
                     >
-                    H/V: {ptoOfficers.length}
+                      PTO: {ptoOfficers.length}
                     </Badge>
-                      )}
-                    {isCurrentMonthDay && !isUnderstaffed && (
-                      <div className="flex flex-col gap-1">
-                        <Badge variant="outline" className="text-xs h-4">
-                          {supervisorCount}/{minimumSupervisors} Sup
-                        </Badge>
-                        <Badge variant="outline" className="text-xs h-4">
-                          {officerCount}/{minimumOfficers} Ofc
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+                  )}
+                  {isCurrentMonthDay && !isUnderstaffed && (
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className="text-xs h-4">
+                        {supervisorCount}/{minimumSupervisors} Sup
+                      </Badge>
+                      <Badge variant="outline" className="text-xs h-4">
+                        {officerCount}/{minimumOfficers} Ofc
+                      </Badge>
+                    </div>
+                  )}
                 </div>
-                
-                <div className="space-y-1 flex-1 overflow-y-auto">
-                  {ptoOfficers.length > 0 ? (
-                    <div className="space-y-1">
-                      {/* Only show full-day PTO officers - all in green to match weekly view */}
-                      {ptoOfficers.map((officer: any) => {
+              </div>
+              
+              <div className="space-y-1 flex-1 overflow-y-auto">
+                {ptoOfficers.length > 0 ? (
+                  <div className="space-y-1">
+                    {/* Show ALL PTO officers with correct colors */}
+                    {ptoOfficers.map((officer: any) => {
                       const isSupervisor = officer.rank?.toLowerCase().includes('lieutenant') || 
                                          officer.rank?.toLowerCase().includes('sergeant') ||
                                          officer.rank?.toLowerCase().includes('sgt') ||
@@ -1380,14 +1377,60 @@ const renderMonthlyView = () => {
                                          officer.rank?.toLowerCase().includes('chief');
                       const isPPO = officer.rank?.toLowerCase() === 'probationary';
                       const rankAbbreviation = getRankAbbreviation(officer.rank);
+                      const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
+                      
+                      // Get the correct color based on PTO type
+                      const getPTOColor = (ptoType: string) => {
+                        const ptoTypeLower = ptoType?.toLowerCase() || '';
+                        
+                        if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
+                          return {
+                            bg: weeklyColors.vacation?.bg || 'rgb(173, 216, 230)',
+                            text: weeklyColors.vacation?.text || 'rgb(0, 0, 139)',
+                            border: weeklyColors.vacation?.border || 'rgb(100, 149, 237)'
+                          };
+                        } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
+                          return {
+                            bg: weeklyColors.holiday?.bg || 'rgb(255, 218, 185)',
+                            text: weeklyColors.holiday?.text || 'rgb(165, 42, 42)',
+                            border: weeklyColors.holiday?.border || 'rgb(255, 165, 0)'
+                          };
+                        } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
+                          return {
+                            bg: weeklyColors.sick?.bg || 'rgb(255, 200, 200)',
+                            text: weeklyColors.sick?.text || 'rgb(139, 0, 0)',
+                            border: weeklyColors.sick?.border || 'rgb(255, 100, 100)'
+                          };
+                        } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
+                          return {
+                            bg: weeklyColors.comp?.bg || 'rgb(221, 160, 221)',
+                            text: weeklyColors.comp?.text || 'rgb(128, 0, 128)',
+                            border: weeklyColors.comp?.border || 'rgb(186, 85, 211)'
+                          };
+                        } else {
+                          // Default PTO color for other types
+                          return {
+                            bg: weeklyColors.pto?.bg || 'rgb(144, 238, 144)',
+                            text: weeklyColors.pto?.text || 'rgb(0, 100, 0)',
+                            border: weeklyColors.pto?.border || 'rgb(0, 100, 0)'
+                          };
+                        }
+                      };
+
+                      const ptoColors = getPTOColor(ptoType);
                       
                       return (
                         <div 
                           key={officer.officerId} 
-                          className="text-xs p-1 rounded border flex items-center justify-between bg-green-50 border-green-200"
+                          className="text-xs p-1 rounded border flex items-center justify-between"
+                          style={{
+                            backgroundColor: ptoColors.bg,
+                            borderColor: ptoColors.border,
+                            color: ptoColors.text
+                          }}
                         >
                           <div className="flex items-center gap-1">
-                            <div className={`font-medium truncate ${!isCurrentMonthDay ? 'text-muted-foreground' : ''}`}>
+                            <div className={`font-medium truncate ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
                               {getLastName(officer.officerName)}
                             </div>
                             {isSupervisor && (
@@ -1401,8 +1444,8 @@ const renderMonthlyView = () => {
                               </Badge>
                             )}
                           </div>
-                          <div className={`text-[10px] ${!isCurrentMonthDay ? 'text-green-500' : 'text-green-600'}`}>
-                            {officer.shiftInfo?.ptoData?.ptoType || 'PTO'}
+                          <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
+                            {ptoType}
                           </div>
                         </div>
                       );
@@ -1414,30 +1457,30 @@ const renderMonthlyView = () => {
                   </div>
                 )}
               </div>
-                
-                {isUnderstaffed && (
-                  <div className="mt-1 text-[10px] space-y-0.5 text-red-600">
-                    {isSupervisorsUnderstaffed && (
-                      <div>Sup: {supervisorCount}/{minimumSupervisors}</div>
-                    )}
-                    {isOfficersUnderstaffed && (
-                      <div>Ofc: {officerCount}/{minimumOfficers}</div>
-                    )}
-                  </div>
-                )}
-                
-                {!isCurrentMonthDay && (
-                  <div className="text-[8px] text-muted-foreground text-center mt-1">
-                    {format(day, "MMM")}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              
+              {isUnderstaffed && (
+                <div className="mt-1 text-[10px] space-y-0.5 text-red-600">
+                  {isSupervisorsUnderstaffed && (
+                    <div>Sup: {supervisorCount}/{minimumSupervisors}</div>
+                  )}
+                  {isOfficersUnderstaffed && (
+                    <div>Ofc: {officerCount}/{minimumOfficers}</div>
+                  )}
+                </div>
+              )}
+              
+              {!isCurrentMonthDay && (
+                <div className="text-[8px] text-muted-foreground text-center mt-1">
+                  {format(day, "MMM")}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const weekEnd = addDays(currentWeekStart, 6);
   const isCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 0 }).getTime() === currentWeekStart.getTime();

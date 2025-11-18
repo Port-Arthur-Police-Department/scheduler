@@ -1448,21 +1448,14 @@ const renderMonthlyView = () => {
         <div className={`font-medium truncate ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
           {getLastName(officer.officerName)}
         </div>
+        {/* KEEP ONLY SUPERVISOR BADGES - REMOVE Ofc AND PPO BADGES */}
         {isSupervisor && (
           <Badge variant="outline" className={`h-3 text-[8px] px-1 ${rankBadgeClass}`}>
             {rankAbbreviation}
           </Badge>
         )}
-        {isOfficer && (
-          <Badge variant="outline" className="h-3 text-[8px] px-1 bg-blue-100 text-blue-800 border-blue-300">
-            Ofc
-          </Badge>
-        )}
-        {isPPO && (
-          <Badge variant="outline" className="h-3 text-[8px] px-1 bg-orange-100 text-orange-800 border-orange-300">
-            PPO
-          </Badge>
-        )}
+        {/* REMOVED Ofc BADGE */}
+        {/* REMOVED PPO BADGE */}
       </div>
       <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
         {ptoType}

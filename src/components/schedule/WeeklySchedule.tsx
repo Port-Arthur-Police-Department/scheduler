@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
+import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { 
@@ -62,6 +63,8 @@ const WeeklySchedule = ({
 }: WeeklyScheduleProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // const { exportWeeklyPDF } = useWeeklyPDFExport();
   
   const { weekly: weeklyColors } = useColorSettings();
   

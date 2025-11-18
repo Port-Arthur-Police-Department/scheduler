@@ -1368,88 +1368,108 @@ const renderMonthlyView = () => {
               <div className="space-y-1 flex-1 overflow-y-auto">
                 {ptoOfficers.length > 0 ? (
                   <div className="space-y-1">
-                    {/* Show ALL PTO officers with correct colors */}
-                    {ptoOfficers.map((officer: any) => {
-                      const isSupervisor = officer.rank?.toLowerCase().includes('lieutenant') || 
-                                         officer.rank?.toLowerCase().includes('sergeant') ||
-                                         officer.rank?.toLowerCase().includes('sgt') ||
-                                         officer.rank?.toLowerCase().includes('lt') ||
-                                         officer.rank?.toLowerCase().includes('chief');
-                      const isPPO = officer.rank?.toLowerCase() === 'probationary';
-                      const rankAbbreviation = getRankAbbreviation(officer.rank);
-                      const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
-                      
-                      // Get the correct color based on PTO type
-                      const getPTOColor = (ptoType: string) => {
-                        const ptoTypeLower = ptoType?.toLowerCase() || '';
-                        
-                        if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
-                          return {
-                            bg: weeklyColors.vacation?.bg || 'rgb(173, 216, 230)',
-                            text: weeklyColors.vacation?.text || 'rgb(0, 0, 139)',
-                            border: weeklyColors.vacation?.border || 'rgb(100, 149, 237)'
-                          };
-                        } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
-                          return {
-                            bg: weeklyColors.holiday?.bg || 'rgb(255, 218, 185)',
-                            text: weeklyColors.holiday?.text || 'rgb(165, 42, 42)',
-                            border: weeklyColors.holiday?.border || 'rgb(255, 165, 0)'
-                          };
-                        } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
-                          return {
-                            bg: weeklyColors.sick?.bg || 'rgb(255, 200, 200)',
-                            text: weeklyColors.sick?.text || 'rgb(139, 0, 0)',
-                            border: weeklyColors.sick?.border || 'rgb(255, 100, 100)'
-                          };
-                        } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
-                          return {
-                            bg: weeklyColors.comp?.bg || 'rgb(221, 160, 221)',
-                            text: weeklyColors.comp?.text || 'rgb(128, 0, 128)',
-                            border: weeklyColors.comp?.border || 'rgb(186, 85, 211)'
-                          };
-                        } else {
-                          // Default PTO color for other types
-                          return {
-                            bg: weeklyColors.pto?.bg || 'rgb(144, 238, 144)',
-                            text: weeklyColors.pto?.text || 'rgb(0, 100, 0)',
-                            border: weeklyColors.pto?.border || 'rgb(0, 100, 0)'
-                          };
-                        }
-                      };
 
-                      const ptoColors = getPTOColor(ptoType);
-                      
-                      return (
-                        <div 
-                          key={officer.officerId} 
-                          className="text-xs p-1 rounded border flex items-center justify-between"
-                          style={{
-                            backgroundColor: ptoColors.bg,
-                            borderColor: ptoColors.border,
-                            color: ptoColors.text
-                          }}
-                        >
-                          <div className="flex items-center gap-1">
-                            <div className={`font-medium truncate ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
-                              {getLastName(officer.officerName)}
-                            </div>
-                            {isSupervisor && (
-                              <Badge variant="outline" className="h-3 text-[8px] px-1 bg-yellow-100 text-yellow-800 border-yellow-300">
-                                {rankAbbreviation}
-                              </Badge>
-                            )}
-                            {isPPO && (
-                              <Badge variant="outline" className="h-3 text-[8px] px-1 bg-blue-100 text-blue-800 border-blue-300">
-                                PPO
-                              </Badge>
-                            )}
-                          </div>
-                          <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
-                            {ptoType}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    
+                    {/* Show ALL PTO officers with correct colors */}
+{ptoOfficers.map((officer: any) => {
+  const isSupervisor = officer.rank?.toLowerCase().includes('lieutenant') || 
+                       officer.rank?.toLowerCase().includes('sergeant') ||
+                       officer.rank?.toLowerCase().includes('sgt') ||
+                       officer.rank?.toLowerCase().includes('lt') ||
+                       officer.rank?.toLowerCase().includes('chief');
+  const isPPO = officer.rank?.toLowerCase() === 'probationary';
+  const isOfficer = !isSupervisor && !isPPO; // Regular officers
+  const rankAbbreviation = getRankAbbreviation(officer.rank);
+  const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
+  
+  // Get the correct color based on PTO type
+  const getPTOColor = (ptoType: string) => {
+    const ptoTypeLower = ptoType?.toLowerCase() || '';
+    
+    if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
+      return {
+        bg: weeklyColors.vacation?.bg || 'rgb(173, 216, 230)',
+        text: weeklyColors.vacation?.text || 'rgb(0, 0, 139)',
+        border: weeklyColors.vacation?.border || 'rgb(100, 149, 237)'
+      };
+    } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
+      return {
+        bg: weeklyColors.holiday?.bg || 'rgb(255, 218, 185)',
+        text: weeklyColors.holiday?.text || 'rgb(165, 42, 42)',
+        border: weeklyColors.holiday?.border || 'rgb(255, 165, 0)'
+      };
+    } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
+      return {
+        bg: weeklyColors.sick?.bg || 'rgb(255, 200, 200)',
+        text: weeklyColors.sick?.text || 'rgb(139, 0, 0)',
+        border: weeklyColors.sick?.border || 'rgb(255, 100, 100)'
+      };
+    } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
+      return {
+        bg: weeklyColors.comp?.bg || 'rgb(221, 160, 221)',
+        text: weeklyColors.comp?.text || 'rgb(128, 0, 128)',
+        border: weeklyColors.comp?.border || 'rgb(186, 85, 211)'
+      };
+    } else {
+      // Default PTO color for other types
+      return {
+        bg: weeklyColors.pto?.bg || 'rgb(144, 238, 144)',
+        text: weeklyColors.pto?.text || 'rgb(0, 100, 0)',
+        border: weeklyColors.pto?.border || 'rgb(0, 100, 0)'
+      };
+    }
+  };
+
+  // Get badge color based on rank
+  const getRankBadgeColor = (rankAbbr: string) => {
+    if (rankAbbr === 'Sgt') {
+      // Silver for Sergeants
+      return "bg-gray-100 text-gray-800 border-gray-300";
+    } else {
+      // Yellow for Chiefs, Deputy Chiefs, and Lieutenants
+      return "bg-yellow-100 text-yellow-800 border-yellow-300";
+    }
+  };
+
+  const ptoColors = getPTOColor(ptoType);
+  const rankBadgeClass = getRankBadgeColor(rankAbbreviation);
+  
+  return (
+    <div 
+      key={officer.officerId} 
+      className="text-xs p-1 rounded border flex items-center justify-between"
+      style={{
+        backgroundColor: ptoColors.bg,
+        borderColor: ptoColors.border,
+        color: ptoColors.text
+      }}
+    >
+      <div className="flex items-center gap-1">
+        <div className={`font-medium truncate ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
+          {getLastName(officer.officerName)}
+        </div>
+        {isSupervisor && (
+          <Badge variant="outline" className={`h-3 text-[8px] px-1 ${rankBadgeClass}`}>
+            {rankAbbreviation}
+          </Badge>
+        )}
+        {isOfficer && (
+          <Badge variant="outline" className="h-3 text-[8px] px-1 bg-blue-100 text-blue-800 border-blue-300">
+            Ofc
+          </Badge>
+        )}
+        {isPPO && (
+          <Badge variant="outline" className="h-3 text-[8px] px-1 bg-orange-100 text-orange-800 border-orange-300">
+            PPO
+          </Badge>
+        )}
+      </div>
+      <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
+        {ptoType}
+      </div>
+    </div>
+  );
+})}
                   </div>
                 ) : (
                   <div className={`text-xs text-center py-2 ${!isCurrentMonthDay ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>

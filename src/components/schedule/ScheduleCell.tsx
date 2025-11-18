@@ -1,4 +1,4 @@
-// src/components/schedule/ScheduleCell.tsx - UPDATED WITH PTO TYPE COLORS AND SUPERVISOR BADGES
+// src/components/schedule/ScheduleCell.tsx - REMOVED SUPERVISOR BADGE
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Clock } from "lucide-react";
@@ -82,16 +82,6 @@ export const ScheduleCell = ({
   const displayPosition = isPPO && partnerInfo 
     ? `Partner with ${partnerInfo}`
     : position;
-
-  // Helper function to check if officer is supervisor
-  const isSupervisor = officer?.rank && (
-    officer.rank.toLowerCase().includes('sergeant') ||
-    officer.rank.toLowerCase().includes('lieutenant') ||
-    officer.rank.toLowerCase().includes('captain') ||
-    officer.rank.toLowerCase().includes('chief') ||
-    officer.rank.toLowerCase().includes('sgt') ||
-    officer.rank.toLowerCase().includes('lt')
-  );
 
   // Helper function to get PTO color based on type
   const getPTOColor = (ptoType: string) => {
@@ -177,27 +167,17 @@ export const ScheduleCell = ({
         <div className="text-center font-medium">DD</div>
       ) : hasPTO ? (
         <div className="text-center">
-          {/* PTO Badge with supervisor indicator */}
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <Badge 
-              className="text-xs"
-              style={{
-                backgroundColor: getPTOColor(ptoData?.ptoType).bg,
-                color: getPTOColor(ptoData?.ptoType).text,
-                borderColor: getPTOColor(ptoData?.ptoType).text
-              }}
-            >
-              {ptoData?.ptoType || 'PTO'}
-            </Badge>
-            {isSupervisor && (
-              <Badge 
-                variant="outline" 
-                className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300"
-              >
-                SUP
-              </Badge>
-            )}
-          </div>
+          {/* PTO Badge - NO SUPERVISOR BADGE IN WEEKLY VIEW */}
+          <Badge 
+            className="text-xs mb-1"
+            style={{
+              backgroundColor: getPTOColor(ptoData?.ptoType).bg,
+              color: getPTOColor(ptoData?.ptoType).text,
+              borderColor: getPTOColor(ptoData?.ptoType).text
+            }}
+          >
+            {ptoData?.ptoType || 'PTO'}
+          </Badge>
           
           {/* Show position for partial PTO */}
           {isPartialPTO && displayPosition && (

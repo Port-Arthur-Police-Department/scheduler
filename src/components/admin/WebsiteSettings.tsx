@@ -43,11 +43,11 @@ const DEFAULT_COLORS = {
   pdf_off_day_text: "100,100,100",
   
   // Weekly Schedule Colors - SYNC WITH PDF COLORS
-  weekly_supervisor_bg: "240,249,255",
-  weekly_supervisor_text: "0,75,150",
+  weekly_supervisor_bg: "255,255,255",
+  weekly_supervisor_text: "0,0,0",
   
-  weekly_officer_bg: "240,255,240", 
-  weekly_officer_text: "0,100,0",
+  weekly_officer_bg: "255,255,255", 
+  weekly_officer_text: "0,0,0",
   
   weekly_ppo_bg: "255,250,240",
   weekly_ppo_text: "150,75,0",

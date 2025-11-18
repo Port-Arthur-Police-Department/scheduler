@@ -1294,10 +1294,13 @@ const renderMonthlyView = () => {
             const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
             const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
             
-            // Get ONLY full-day PTO officers for display
+            // Get ONLY Holiday and Vacation PTO officers for display
             const ptoOfficers = daySchedule?.officers?.filter((officer: any) => 
-              officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift
-            ) || [];
+            officer.shiftInfo?.hasPTO && 
+            officer.shiftInfo?.ptoData?.isFullShift &&
+            (officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('holiday') ||
+             officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('vacation'))
+              ) || [];
 
             // Calculate staffing counts for the badges (but don't show all officers)
             const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
@@ -1341,17 +1344,17 @@ const renderMonthlyView = () => {
                       </Badge>
                     )}
                     {ptoOfficers.length > 0 && (
-  <Badge 
-    variant="outline" 
-    className="text-xs h-4 border-green-200"
-    style={{
-      backgroundColor: weeklyColors.pto.bg,
-      color: weeklyColors.pto.text
-    }}
-  >
-    {ptoOfficers.length} PTO
-  </Badge>
-)}
+                      <Badge 
+                    variant="outline" 
+                    className="text-xs h-4 border-green-200"
+                    style={{
+                    backgroundColor: weeklyColors.pto.bg,
+                    color: weeklyColors.pto.text
+                      }}
+                    >
+                    H/V: {ptoOfficers.length}
+                    </Badge>
+                      )}
                     {isCurrentMonthDay && !isUnderstaffed && (
                       <div className="flex flex-col gap-1">
                         <Badge variant="outline" className="text-xs h-4">

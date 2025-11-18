@@ -196,8 +196,304 @@ const getRankAbbreviation = (rank: string): string => {
 };
 
 export const exportWeeklyPDF = async (options: WeeklyExportOptions) => {
-  // ... existing weekly PDF export code remains the same ...
-  // (Your existing weekly PDF export implementation)
+  const { startDate, endDate, shiftName, scheduleData, minimumStaffing, selectedShiftId, colorSettings } = options;
+  
+  try {
+    const { default: jsPDF } = await import("jspdf");
+    const pdfColors = processColorSettings(colorSettings);
+
+    const pdf = new jsPDF("portrait", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // CORRECTED cell display logic
+    const getCellDisplay = (officer: any) => {
+      if (!officer) {
+        return { 
+          text: "", 
+          color: pdfColors.offDay.text, 
+          fillColor: pdfColors.offDay.bg 
+        };
+      }
+
+      if (officer.shiftInfo?.isOff) {
+        return { 
+          text: "OFF", 
+          color: [100, 100, 100], 
+          fillColor: pdfColors.offDay.bg 
+        };
+      } else if (officer.shiftInfo?.hasPTO) {
+        if (officer.shiftInfo?.ptoData?.isFullShift) {
+          const ptoType = officer.shiftInfo.ptoData.ptoType || "PTO";
+          const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+          const ptoColors = isSupervisor ? pdfColors.supervisorPTO : pdfColors.officerPTO;
+          const isSickTime = ptoType.toLowerCase().includes('sick');
+          const finalColors = isSickTime ? pdfColors.sickTime : ptoColors;
+          
+          return { 
+            text: ptoType, 
+            color: finalColors.text, 
+            fillColor: finalColors.bg 
+          };
+        } else {
+          const position = officer.shiftInfo.position || "";
+          const simplifiedPosition = simplifyPosition(position);
+          const displayText = simplifiedPosition ? simplifiedPosition + "*" : "PTO*";
+          const partialBg = [255, 255, 224];
+          
+          return { 
+            text: displayText, 
+            color: [0, 100, 0], 
+            fillColor: partialBg 
+          };
+        }
+      } else if (officer.shiftInfo?.position) {
+        const position = officer.shiftInfo.position;
+        const simplifiedPosition = simplifyPosition(position);
+        const isSpecial = isSpecialAssignment(position);
+        let displayText = simplifiedPosition;
+        if (simplifiedPosition.length > 8) {
+          displayText = simplifiedPosition.substring(0, 8);
+        }
+        return { 
+          text: displayText, 
+          color: isSpecial ? [139, 69, 19] : [0, 100, 0], 
+          fillColor: isSpecial ? [255, 248, 220] : [255, 255, 255]
+        };
+      } else {
+        return { 
+          text: " ", 
+          color: [0, 0, 150], 
+          fillColor: [255, 255, 255]
+        };
+      }
+    };
+
+    // Build weeks array for the entire date range
+    const weeks = [];
+    let currentWeekStart = startOfWeek(startDate, { weekStartsOn: 0 });
+    
+    while (currentWeekStart <= endDate) {
+      const weekEnd = addDays(currentWeekStart, 6);
+      weeks.push({ 
+        start: currentWeekStart, 
+        end: weekEnd > endDate ? endDate : weekEnd
+      });
+      currentWeekStart = addWeeks(currentWeekStart, 1);
+    }
+
+    // Render each week
+    for (const [weekIndex, week] of weeks.entries()) {
+      if (weekIndex > 0) {
+        pdf.addPage();
+      }
+
+      let yPosition = 10;
+
+      // Header
+      pdf.setFontSize(14);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(41, 128, 185);
+      pdf.text(
+        `${format(week.start, "MMM d, yyyy")} - ${format(week.end, "MMM d, yyyy")}`,
+        pageWidth / 2,
+        yPosition,
+        { align: "center" }
+      );
+      yPosition += 8;
+
+      const weekDays = Array.from({ length: 7 }, (_, i) => {
+        const date = addDays(week.start, i);
+        if (date > endDate) {
+          return null;
+        }
+        return {
+          date,
+          dateStr: format(date, "yyyy-MM-dd"),
+          dayName: format(date, "EEE").toUpperCase(),
+          formattedDate: format(date, "MMM d"),
+          dayOfWeek: date.getDay(),
+          isToday: isSameDay(date, new Date())
+        };
+      }).filter(day => day !== null);
+
+      // Prepare officer data FOR THIS WEEK ONLY
+      const allOfficers = new Map<string, OfficerWeeklyData>();
+
+      scheduleData?.forEach((daySchedule: any) => {
+        const scheduleDate = parseISO(daySchedule.date);
+        if (scheduleDate >= week.start && scheduleDate <= week.end) {
+          daySchedule.officers.forEach((officer: any) => {
+            if (!allOfficers.has(officer.officerId)) {
+              allOfficers.set(officer.officerId, {
+                officerId: officer.officerId,
+                officerName: officer.officerName,
+                badgeNumber: officer.badgeNumber,
+                rank: officer.rank,
+                service_credit: officer.service_credit,
+                weeklySchedule: {},
+                recurringDays: new Set()
+              });
+            }
+            const existingOfficer = allOfficers.get(officer.officerId);
+            if (existingOfficer) {
+              existingOfficer.weeklySchedule[daySchedule.date] = officer;
+            }
+          });
+        }
+      });
+
+      // Categorize officers
+      const supervisors = Array.from(allOfficers.values())
+        .filter(o => isSupervisorByRank(o))
+        .sort((a, b) => {
+          const aPriority = getRankPriority(a.rank || '');
+          const bPriority = getRankPriority(b.rank || '');
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
+
+      const allOfficersList = Array.from(allOfficers.values())
+        .filter(o => !isSupervisorByRank(o));
+
+      const ppos = allOfficersList
+        .filter(o => o.rank?.toLowerCase() === 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
+
+      const regularOfficers = allOfficersList
+        .filter(o => o.rank?.toLowerCase() !== 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
+
+      // Table setup
+      const margin = 5;
+      const availableWidth = pageWidth - (margin * 2);
+      const badgeWidth = 15;
+      const nameWidth = 30;
+      const dayColWidth = (availableWidth - badgeWidth - nameWidth) / 7;
+      const tableWidth = availableWidth;
+      const startX = margin;
+
+      // Main table header
+      pdf.setFillColor(41, 128, 185);
+      pdf.rect(startX, yPosition, tableWidth, 10, "F");
+      
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+
+      let xPosition = startX;
+      
+      // Headers
+      pdf.text("Empl#", xPosition + 5, yPosition + 7);
+      xPosition += badgeWidth;
+      pdf.text("NAME", xPosition + 5, yPosition + 7);
+      xPosition += nameWidth;
+
+      // Day headers
+      weekDays.forEach((day) => {
+        pdf.setFontSize(9);
+        pdf.text(day.dayName, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+        pdf.setFontSize(8);
+        pdf.text(day.formattedDate, xPosition + dayColWidth / 2, yPosition + 7, { align: "center" });
+        xPosition += dayColWidth;
+      });
+
+      yPosition += 10;
+
+      // Function to render officer rows
+      const renderOfficerRows = (officers: OfficerWeeklyData[], isPPO: boolean = false) => {
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
+        
+        for (const officer of officers) {
+          if (yPosition > pageHeight - 15) {
+            pdf.addPage();
+            yPosition = 10;
+          }
+
+          xPosition = startX;
+          
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(xPosition, yPosition, tableWidth, 7, "F");
+          
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(officer.badgeNumber?.toString() || "", xPosition + 5, yPosition + 4.5);
+          xPosition += badgeWidth;
+          
+          let lastName = getLastName(officer.officerName);
+          if (isPPO) {
+            lastName += " (PPO)";
+          }
+          pdf.text(lastName, xPosition + 5, yPosition + 4.5);
+          xPosition += nameWidth;
+
+          // Daily assignments
+          weekDays.forEach((day) => {
+            const dayOfficer = officer.weeklySchedule[day.dateStr];
+            const cellDisplay = getCellDisplay(dayOfficer);
+
+            pdf.setFillColor(...cellDisplay.fillColor);
+            pdf.rect(xPosition, yPosition, dayColWidth, 7, "F");
+            
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(xPosition, yPosition, dayColWidth, 7, "S");
+            
+            if (cellDisplay.text) {
+              pdf.setTextColor(...cellDisplay.color);
+              pdf.text(cellDisplay.text, xPosition + dayColWidth / 2, yPosition + 4, { align: "center" });
+            }
+            
+            xPosition += dayColWidth;
+          });
+
+          yPosition += 7;
+        }
+      };
+
+      // Render sections
+      if (supervisors.length > 0) {
+        renderOfficerRows(supervisors);
+        yPosition += 3;
+      }
+
+      if (regularOfficers.length > 0) {
+        renderOfficerRows(regularOfficers);
+        yPosition += 3;
+      }
+
+      if (ppos.length > 0) {
+        renderOfficerRows(ppos, true);
+      }
+    }
+
+    // Footer
+    pdf.setFontSize(6);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(
+      `Generated on ${format(new Date(), "MMM d, yyyy 'at' h:mm a")}`,
+      pageWidth / 2,
+      pageHeight - 5,
+      { align: "center" }
+    );
+
+    const filename = `Weekly_Schedule_${shiftName.replace(/\s+/g, "_")}_${format(startDate, "yyyy-MM-dd")}_to_${format(endDate, "yyyy-MM-dd")}.pdf`;
+    pdf.save(filename);
+
+    return { success: true };
+  } catch (error) {
+    console.error("PDF export error:", error);
+    return { success: false, error };
+  }
 };
 
 export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
@@ -267,13 +563,13 @@ export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
       const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
       const allCalendarDays = [...previousMonthDays, ...monthDays, ...nextMonthDays];
 
-      // Header
+      // Header - UPDATED TEXT
       let yPosition = 10;
       pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(41, 128, 185);
       pdf.text(
-        `${shiftName.toUpperCase()} - ${format(month, "MMMM yyyy").toUpperCase()} - PTO SCHEDULE`,
+        `${shiftName.toUpperCase()} - ${format(month, "MMMM yyyy").toUpperCase()} - HOLIDAY/VACATION SCHEDULE`,
         pageWidth / 2,
         yPosition,
         { align: "center" }
@@ -365,22 +661,25 @@ export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
         if (isCurrentMonthDay && isInSelectedRange) {
           const daySchedule = scheduleData?.find(s => s.date === dateStr);
           
-          // Get PTO officers for this day
+          // Get ONLY Holiday and Vacation PTO officers for this day - UPDATED FILTER
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => 
-            officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift
+            officer.shiftInfo?.hasPTO && 
+            officer.shiftInfo?.ptoData?.isFullShift &&
+            (officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('holiday') ||
+             officer.shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('vacation'))
           ) || [];
 
-          // Show PTO badge if there are any PTO officers
+          // Show PTO badge if there are any Holiday/Vacation PTO officers - UPDATED TEXT
           if (ptoOfficers.length > 0) {
             let badgeY = yPos + 10;
             pdf.setFontSize(7);
             pdf.setFont("helvetica", "bold");
             
-            // PTO badge
+            // PTO badge - UPDATED TEXT
             pdf.setFillColor(144, 238, 144);
             pdf.roundedRect(xPos + cellWidth - 20, badgeY, 18, 4, 1, 1, "F");
             pdf.setTextColor(0, 100, 0);
-            pdf.text(`PTO: ${ptoOfficers.length}`, xPos + cellWidth - 11, badgeY + 3, { align: "center" });
+            pdf.text(`H/V: ${ptoOfficers.length}`, xPos + cellWidth - 11, badgeY + 3, { align: "center" });
           }
 
           // PTO officers list by NAME with customizable color coding and rank badges
@@ -464,46 +763,25 @@ export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
       { align: "center" }
     );
 
-    // Enhanced Legend on last page with all PTO types
+    // UPDATED Legend on last page with only Holiday/Vacation PTO types
     pdf.setFontSize(7);
     pdf.setTextColor(0, 0, 0);
     let legendY = pageHeight - 15;
     let legendX = 10;
-    
-    // Sick time color in legend
-    pdf.setFillColor(...pdfColors.sick.bg);
-    pdf.rect(legendX, legendY - 2, 5, 3, "F");
-    pdf.text("Sick", legendX + 7, legendY);
-    legendX += 20;
     
     // Vacation color in legend
     pdf.setFillColor(...pdfColors.vacation.bg);
     pdf.rect(legendX, legendY - 2, 5, 3, "F");
     pdf.text("Vacation", legendX + 7, legendY);
     legendX += 25;
-    
+
     // Holiday color in legend
     pdf.setFillColor(...pdfColors.holiday.bg);
     pdf.rect(legendX, legendY - 2, 5, 3, "F");
     pdf.text("Holiday", legendX + 7, legendY);
     legendX += 25;
-    
-    // Comp time color in legend
-    pdf.setFillColor(...pdfColors.comp.bg);
-    pdf.rect(legendX, legendY - 2, 5, 3, "F");
-    pdf.text("Comp", legendX + 7, legendY);
-    legendX += 20;
-    
-    // Supervisor PTO color in legend
-    pdf.setFillColor(...pdfColors.supervisorPTO.bg);
-    pdf.rect(legendX, legendY - 2, 5, 3, "F");
-    pdf.text("Sup PTO", legendX + 7, legendY);
-    legendX += 25;
-    
-    // Officer PTO color in legend
-    pdf.setFillColor(...pdfColors.officerPTO.bg);
-    pdf.rect(legendX, legendY - 2, 5, 3, "F");
-    pdf.text("Ofc PTO", legendX + 7, legendY);
+
+    // Removed other PTO types from legend
 
     const filename = `Monthly_PTO_Schedule_${shiftName.replace(/\s+/g, "_")}_${format(actualStartDate, "yyyy-MM")}_to_${format(actualEndDate, "yyyy-MM")}.pdf`;
     pdf.save(filename);

@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
 
 // Default color scheme - COMPLETE WITH ALL COLORS
+// Update your DEFAULT_COLORS in WebsiteSettings.tsx
 const DEFAULT_COLORS = {
   // PDF Export Colors
   pdf_supervisor_pto_bg: "255,255,200",
@@ -21,18 +22,27 @@ const DEFAULT_COLORS = {
   pdf_officer_pto_border: "144,238,144",
   pdf_officer_pto_text: "0,100,0",
   
-  pdf_sick_time_bg: "255,200,200",
-  pdf_sick_time_border: "255,100,100",
-  pdf_sick_time_text: "139,0,0",
+  // NEW: Different PTO type colors
+  pdf_vacation_bg: "173,216,230", // Light blue
+  pdf_vacation_border: "100,149,237",
+  pdf_vacation_text: "0,0,139",
+  
+  pdf_sick_bg: "255,200,200", // Light red
+  pdf_sick_border: "255,100,100",
+  pdf_sick_text: "139,0,0",
+  
+  pdf_holiday_bg: "255,218,185", // Light orange
+  pdf_holiday_border: "255,165,0",
+  pdf_holiday_text: "165,42,42",
+  
+  pdf_comp_bg: "221,160,221", // Light purple
+  pdf_comp_border: "186,85,211",
+  pdf_comp_text: "128,0,128",
   
   pdf_off_day_bg: "220,220,220",
   pdf_off_day_text: "100,100,100",
   
-  // Partial PTO Colors
-  pdf_partial_pto_supervisor_bg: "255,255,200",
-  pdf_partial_pto_officer_bg: "255,255,224",
-  
-  // Weekly Schedule Colors
+  // Weekly Schedule Colors - SYNC WITH PDF COLORS
   weekly_supervisor_bg: "240,249,255",
   weekly_supervisor_text: "0,75,150",
   
@@ -42,16 +52,25 @@ const DEFAULT_COLORS = {
   weekly_ppo_bg: "255,250,240",
   weekly_ppo_text: "150,75,0",
   
-  weekly_pto_bg: "144,238,144",
-  weekly_pto_text: "0,100,0",
+  // NEW: Weekly PTO type colors (same as PDF but in RGB format)
+  weekly_vacation_bg: "173,216,230",
+  weekly_vacation_text: "0,0,139",
   
   weekly_sick_bg: "255,200,200",
   weekly_sick_text: "139,0,0",
   
+  weekly_holiday_bg: "255,218,185",
+  weekly_holiday_text: "165,42,42",
+  
+  weekly_comp_bg: "221,160,221",
+  weekly_comp_text: "128,0,128",
+  
+  weekly_pto_bg: "144,238,144", // General PTO fallback
+  weekly_pto_text: "0,100,0",
+  
   weekly_off_bg: "240,240,240",
   weekly_off_text: "100,100,100",
 };
-
 export const WebsiteSettings = () => {
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);

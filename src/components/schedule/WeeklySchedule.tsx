@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
-import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { 
@@ -29,6 +28,9 @@ import {
   calculateStaffingCounts
 } from "@/utils/scheduleUtils";
 import { cn } from "@/lib/utils";
+
+// ADD THIS IMPORT LINE RIGHT HERE:
+import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
 
 interface WeeklyScheduleProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
@@ -226,7 +228,6 @@ const WeeklySchedule = ({
       const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
 
       if (activeView === "weekly") {
-        const { exportWeeklyPDF } = await import("@/utils/pdfExportUtils");
         
         const result = await exportWeeklyPDF({
           startDate,
@@ -245,7 +246,6 @@ const WeeklySchedule = ({
           toast.error("Failed to export weekly PDF");
         }
       } else {
-        const { exportMonthlyPDF } = await import("@/utils/pdfExportUtils");
         
         const result = await exportMonthlyPDF({
           startDate,

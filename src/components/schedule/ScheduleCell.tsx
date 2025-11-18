@@ -43,8 +43,9 @@ export const ScheduleCell = ({
   isPPO = false,
   partnerInfo = null
 }: ScheduleCellProps) => {
+  const { weekly: weeklyColors } = useColorSettings();
   // Use color settings with error boundary
-  let weeklyColors = FALLBACK_COLORS;
+//  let weeklyColors = FALLBACK_COLORS;
   try {
     const colorSettings = useColorSettings();
     weeklyColors = colorSettings.weekly;

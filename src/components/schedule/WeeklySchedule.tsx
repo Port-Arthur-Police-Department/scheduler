@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
-import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
+//import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { 

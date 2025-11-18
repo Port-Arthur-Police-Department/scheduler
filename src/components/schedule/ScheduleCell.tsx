@@ -1,4 +1,4 @@
-// src/components/schedule/ScheduleCell.tsx - UPDATED WITH BETTER ERROR HANDLING
+// src/components/schedule/ScheduleCell.tsx - UPDATED WITH PTO TYPE COLORS AND SUPERVISOR BADGES
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Clock } from "lucide-react";
@@ -26,6 +26,10 @@ const FALLBACK_COLORS = {
   officer: { bg: 'rgb(240, 255, 240)', text: 'rgb(0, 100, 0)' },
   ppo: { bg: 'rgb(255, 250, 240)', text: 'rgb(150, 75, 0)' },
   pto: { bg: 'rgb(144, 238, 144)', text: 'rgb(0, 100, 0)' },
+  vacation: { bg: 'rgb(173, 216, 230)', text: 'rgb(0, 0, 139)' },
+  sick: { bg: 'rgb(255, 200, 200)', text: 'rgb(139, 0, 0)' },
+  holiday: { bg: 'rgb(255, 218, 185)', text: 'rgb(165, 42, 42)' },
+  comp: { bg: 'rgb(221, 160, 221)', text: 'rgb(128, 0, 128)' },
   off: { bg: 'rgb(240, 240, 240)', text: 'rgb(100, 100, 100)' },
 };
 
@@ -43,9 +47,8 @@ export const ScheduleCell = ({
   isPPO = false,
   partnerInfo = null
 }: ScheduleCellProps) => {
-  const { weekly: weeklyColors } = useColorSettings();
   // Use color settings with error boundary
-//  let weeklyColors = FALLBACK_COLORS;
+  let weeklyColors = FALLBACK_COLORS;
   try {
     const colorSettings = useColorSettings();
     weeklyColors = colorSettings.weekly;
@@ -80,16 +83,58 @@ export const ScheduleCell = ({
     ? `Partner with ${partnerInfo}`
     : position;
 
+  // Helper function to check if officer is supervisor
+  const isSupervisor = officer?.rank && (
+    officer.rank.toLowerCase().includes('sergeant') ||
+    officer.rank.toLowerCase().includes('lieutenant') ||
+    officer.rank.toLowerCase().includes('captain') ||
+    officer.rank.toLowerCase().includes('chief') ||
+    officer.rank.toLowerCase().includes('sgt') ||
+    officer.rank.toLowerCase().includes('lt')
+  );
+
+  // Helper function to get PTO color based on type
+  const getPTOColor = (ptoType: string) => {
+    const ptoTypeLower = ptoType?.toLowerCase() || '';
+    
+    if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
+      return {
+        bg: weeklyColors.vacation?.bg || FALLBACK_COLORS.vacation.bg,
+        text: weeklyColors.vacation?.text || FALLBACK_COLORS.vacation.text
+      };
+    } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
+      return {
+        bg: weeklyColors.sick?.bg || FALLBACK_COLORS.sick.bg,
+        text: weeklyColors.sick?.text || FALLBACK_COLORS.sick.text
+      };
+    } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
+      return {
+        bg: weeklyColors.holiday?.bg || FALLBACK_COLORS.holiday.bg,
+        text: weeklyColors.holiday?.text || FALLBACK_COLORS.holiday.text
+      };
+    } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
+      return {
+        bg: weeklyColors.comp?.bg || FALLBACK_COLORS.comp.bg,
+        text: weeklyColors.comp?.text || FALLBACK_COLORS.comp.text
+      };
+    } else {
+      // Default PTO color
+      return {
+        bg: weeklyColors.pto?.bg || FALLBACK_COLORS.pto.bg,
+        text: weeklyColors.pto?.text || FALLBACK_COLORS.pto.text
+      };
+    }
+  };
+
   // Get background color based on officer status using color settings
   const getBackgroundColor = () => {
     if (isOff) {
-      return weeklyColors.off.bg;
-    } else if (isFullDayPTO) {
-      return weeklyColors.pto.bg;
-    } else if (isPartialPTO) {
-      return weeklyColors.pto.bg;
+      return weeklyColors.off?.bg || FALLBACK_COLORS.off.bg;
+    } else if (hasPTO) {
+      const ptoColors = getPTOColor(ptoData?.ptoType);
+      return ptoColors.bg;
     } else if (isPPO) {
-      return weeklyColors.ppo.bg;
+      return weeklyColors.ppo?.bg || FALLBACK_COLORS.ppo.bg;
     }
     return 'bg-white';
   };
@@ -97,11 +142,12 @@ export const ScheduleCell = ({
   // Get text color based on officer status using color settings
   const getTextColor = () => {
     if (isOff) {
-      return weeklyColors.off.text;
+      return weeklyColors.off?.text || FALLBACK_COLORS.off.text;
     } else if (hasPTO) {
-      return weeklyColors.pto.text;
+      const ptoColors = getPTOColor(ptoData?.ptoType);
+      return ptoColors.text;
     } else if (isPPO) {
-      return weeklyColors.ppo.text;
+      return weeklyColors.ppo?.text || FALLBACK_COLORS.ppo.text;
     }
     return 'text-foreground';
   };
@@ -111,7 +157,7 @@ export const ScheduleCell = ({
     return (
       <div 
         className="p-2 border-r min-h-10 relative"
-        style={{ backgroundColor: weeklyColors.off.bg }}
+        style={{ backgroundColor: weeklyColors.off?.bg || FALLBACK_COLORS.off.bg }}
       />
     );
   }
@@ -131,17 +177,27 @@ export const ScheduleCell = ({
         <div className="text-center font-medium">DD</div>
       ) : hasPTO ? (
         <div className="text-center">
-          {/* PTO Badge */}
-          <Badge 
-            className="text-xs border-green-200"
-            style={{
-              backgroundColor: weeklyColors.pto.bg,
-              color: weeklyColors.pto.text,
-              borderColor: weeklyColors.pto.text
-            }}
-          >
-            {ptoData?.ptoType || 'PTO'}
-          </Badge>
+          {/* PTO Badge with supervisor indicator */}
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <Badge 
+              className="text-xs"
+              style={{
+                backgroundColor: getPTOColor(ptoData?.ptoType).bg,
+                color: getPTOColor(ptoData?.ptoType).text,
+                borderColor: getPTOColor(ptoData?.ptoType).text
+              }}
+            >
+              {ptoData?.ptoType || 'PTO'}
+            </Badge>
+            {isSupervisor && (
+              <Badge 
+                variant="outline" 
+                className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300"
+              >
+                SUP
+              </Badge>
+            )}
+          </div>
           
           {/* Show position for partial PTO */}
           {isPartialPTO && displayPosition && (

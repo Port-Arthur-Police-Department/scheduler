@@ -188,8 +188,7 @@ const WeeklySchedule = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-// UPDATED handleExportPDF function for WeeklySchedule.tsx
-// REPLACE your handleExportPDF function with this:
+// In WeeklySchedule.tsx - update the handleExportPDF function
 const handleExportPDF = async () => {
   if (!dateRange?.from || !dateRange?.to) {
     toast.error("Please select a date range");
@@ -215,12 +214,13 @@ const handleExportPDF = async () => {
     const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
     
     const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
+
+    // Get color settings from your settings
+    const { colors } = useColorSettings();
     
-    // Use the appropriate export hook based on active view
     if (activeView === "weekly") {
-      // Dynamically import the weekly PDF export hook
-      const { useWeeklyPDFExport } = await import("@/hooks/useWeeklyPDFExport");
-      const { exportWeeklyPDF } = useWeeklyPDFExport();
+      // Use the standalone weekly PDF export
+      const { exportWeeklyPDF } = await import("@/utils/pdfExportUtils");
       
       const result = await exportWeeklyPDF({
         startDate,
@@ -228,7 +228,8 @@ const handleExportPDF = async () => {
         shiftName,
         scheduleData: scheduleDataResponse.dailySchedules || [],
         minimumStaffing: schedules?.minimumStaffing,
-        selectedShiftId
+        selectedShiftId,
+        colorSettings: colors // Pass color settings here
       });
 
       if (result.success) {
@@ -238,15 +239,15 @@ const handleExportPDF = async () => {
         toast.error("Failed to export weekly PDF");
       }
     } else {
-      // Monthly view - use the monthly export hook with the CORRECT parameters
-      const { useMonthlyPDFExport } = await import("@/hooks/useMonthlyPDFExport");
-      const { exportMonthlyPDF } = useMonthlyPDFExport();
+      // Use the standalone monthly PDF export
+      const { exportMonthlyPDF } = await import("@/utils/pdfExportUtils");
       
       const result = await exportMonthlyPDF({
-        startDate, // Pass startDate
-        endDate,   // Pass endDate
+        startDate,
+        endDate,
         shiftName,
-        scheduleData: scheduleDataResponse.dailySchedules || []
+        scheduleData: scheduleDataResponse.dailySchedules || [],
+        colorSettings: colors // Pass color settings here
       });
 
       if (result.success) {

@@ -51,8 +51,7 @@ const WeeklySchedule = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
-  // ✅ CORRECT - Move useColorSettings to component level
-  const { colors } = useColorSettings();
+  const { weekly: weeklyColors } = useColorSettings();
   
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -82,6 +81,7 @@ const WeeklySchedule = ({
   } = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
 
   const { exportWeeklyPDF } = useWeeklyPDFExport();
+  const { colors } = useColorSettings();
 
   // Get shift types
   const { data: shiftTypes, isLoading: shiftsLoading } = useQuery({
@@ -212,12 +212,9 @@ const WeeklySchedule = ({
         format(date, "yyyy-MM-dd")
       );
 
-      // Fetch schedule data for the date range
       const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
-      
       const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
 
-      // ✅ CORRECT - colors is now available from component level
       if (activeView === "weekly") {
         const { exportWeeklyPDF } = await import("@/utils/pdfExportUtils");
         
@@ -228,7 +225,7 @@ const WeeklySchedule = ({
           scheduleData: scheduleDataResponse.dailySchedules || [],
           minimumStaffing: schedules?.minimumStaffing,
           selectedShiftId,
-          colorSettings: colors // Use colors from component level
+          colorSettings: colors // ✅ Use colors from component level
         });
 
         if (result.success) {
@@ -245,7 +242,7 @@ const WeeklySchedule = ({
           endDate,
           shiftName,
           scheduleData: scheduleDataResponse.dailySchedules || [],
-          colorSettings: colors // Use colors from component level
+          colorSettings: colors // ✅ Use colors from component level
         });
 
         if (result.success) {
@@ -260,7 +257,6 @@ const WeeklySchedule = ({
       toast.error("Error generating PDF export");
     }
   };
-
 
   // Function to fetch schedule data for a date range - FIXED VERSION
   const fetchScheduleDataForRange = async (startDate: Date, endDate: Date, dates: string[]) => {
@@ -1055,37 +1051,38 @@ const WeeklySchedule = ({
             })}
           </div>
 
-          {supervisors.map((officer) => (
-  <div 
-    key={officer.officerId} 
-    className="grid grid-cols-9 border-b hover:bg-muted/30"
-    style={{
-      backgroundColor: weeklyColors.supervisor.bg,
-      color: weeklyColors.supervisor.text
-    }}
-  >
-    <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-    <div className="p-2 border-r font-medium">
-      {getLastName(officer.officerName)}
-      <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
-    </div>
-    {weekDays.map(({ dateStr }) => (
-      <ScheduleCell
-        key={dateStr}
-        officer={officer.weeklySchedule[dateStr]}
-        dateStr={dateStr}
-        officerId={officer.officerId}
-        officerName={officer.officerName}
-        isAdminOrSupervisor={isAdminOrSupervisor}
-        onAssignPTO={handleAssignPTO}
-        onRemovePTO={handleRemovePTO}
-        onEditAssignment={handleEditAssignment}
-        onRemoveOfficer={removeOfficerMutation.mutate}
-        isUpdating={removeOfficerMutation.isPending}
-      />
-    ))}
-  </div>
-))}
+      {supervisors.map((officer) => (
+          <div 
+            key={officer.officerId} 
+            className="grid grid-cols-9 border-b hover:bg-muted/30"
+            style={{
+              backgroundColor: weeklyColors.supervisor.bg, // ✅ Now weeklyColors is defined
+              color: weeklyColors.supervisor.text
+            }}
+          >
+            <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+            <div className="p-2 border-r font-medium">
+              {getLastName(officer.officerName)}
+              <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
+            </div>
+            {weekDays.map(({ dateStr }) => (
+              <ScheduleCell
+                key={dateStr}
+                officer={officer.weeklySchedule[dateStr]}
+                dateStr={dateStr}
+                officerId={officer.officerId}
+                officerName={officer.officerName}
+                isAdminOrSupervisor={isAdminOrSupervisor}
+                onAssignPTO={handleAssignPTO}
+                onRemovePTO={handleRemovePTO}
+                onEditAssignment={handleEditAssignment}
+                onRemoveOfficer={removeOfficerMutation.mutate}
+                isUpdating={removeOfficerMutation.isPending}
+              />
+            ))}
+          </div>
+        ))}
+
 
           {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS) */}
           <div className="grid grid-cols-9 border-b bg-muted/30">

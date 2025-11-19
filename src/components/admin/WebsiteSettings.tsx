@@ -1,4 +1,4 @@
-// components/settings/WebsiteSettings.tsx - FIXED VERSION
+// components/settings/WebsiteSettings.tsx - UPDATED WITH PTO TYPE TOGGLES
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -71,9 +71,19 @@ const DEFAULT_COLORS = {
   weekly_off_bg: "240,240,240",
   weekly_off_text: "100,100,100",
 };
+
+// Default PTO type visibility settings
+const DEFAULT_PTO_VISIBILITY = {
+  show_vacation_pto: true,
+  show_holiday_pto: true,
+  show_sick_pto: false,
+  show_comp_pto: false,
+};
+
 export const WebsiteSettings = () => {
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
+  const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
 
   // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({
@@ -98,7 +108,8 @@ export const WebsiteSettings = () => {
               enable_notifications: false,
               show_pto_balances: false,
               pto_balances_visible: false,
-              color_settings: DEFAULT_COLORS
+              color_settings: DEFAULT_COLORS,
+              pto_type_visibility: DEFAULT_PTO_VISIBILITY
             })
             .select()
             .single();
@@ -125,6 +136,15 @@ export const WebsiteSettings = () => {
         data.color_settings = { ...DEFAULT_COLORS, ...data.color_settings };
       }
       
+      // Ensure pto_type_visibility exists and has all required properties
+      if (!data.pto_type_visibility) {
+        console.log('No pto_type_visibility found, using defaults');
+        data.pto_type_visibility = DEFAULT_PTO_VISIBILITY;
+      } else {
+        // Merge with defaults to ensure all properties exist
+        data.pto_type_visibility = { ...DEFAULT_PTO_VISIBILITY, ...data.pto_type_visibility };
+      }
+      
       return data;
     },
     retry: 1,
@@ -135,6 +155,10 @@ export const WebsiteSettings = () => {
     if (settings?.color_settings) {
       console.log('Setting color settings:', settings.color_settings);
       setColorSettings(settings.color_settings);
+    }
+    if (settings?.pto_type_visibility) {
+      console.log('Setting PTO visibility:', settings.pto_type_visibility);
+      setPtoVisibility(settings.pto_type_visibility);
     }
   }, [settings]);
 
@@ -174,6 +198,18 @@ export const WebsiteSettings = () => {
     updateSettingsMutation.mutate({
       id: settings?.id,
       [key]: value,
+      color_settings: colorSettings,
+      pto_type_visibility: ptoVisibility,
+    });
+  };
+
+  const handlePtoVisibilityToggle = (key: string, value: boolean) => {
+    const newPtoVisibility = { ...ptoVisibility, [key]: value };
+    setPtoVisibility(newPtoVisibility);
+    
+    updateSettingsMutation.mutate({
+      id: settings?.id,
+      pto_type_visibility: newPtoVisibility,
       color_settings: colorSettings,
     });
   };
@@ -243,15 +279,18 @@ export const WebsiteSettings = () => {
     updateSettingsMutation.mutate({
       id: settings?.id,
       color_settings: newColors,
+      pto_type_visibility: ptoVisibility,
     });
   };
 
   const resetToDefaults = () => {
-    console.log('Resetting to default colors');
+    console.log('Resetting to default colors and PTO visibility');
     setColorSettings(DEFAULT_COLORS);
+    setPtoVisibility(DEFAULT_PTO_VISIBILITY);
     updateSettingsMutation.mutate({
       id: settings?.id,
       color_settings: DEFAULT_COLORS,
+      pto_type_visibility: DEFAULT_PTO_VISIBILITY,
     });
   };
 
@@ -336,6 +375,96 @@ export const WebsiteSettings = () => {
         </CardContent>
       </Card>
 
+      {/* NEW: PTO Type Visibility Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Eye className="h-5 w-5" />
+            PTO Type Visibility
+          </CardTitle>
+          <CardDescription>
+            Control which PTO types are displayed in the monthly calendar view
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="vacation-pto-toggle" className="text-base">
+                Show Vacation PTO
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                Display vacation time off in the monthly calendar view
+              </div>
+            </div>
+            <Switch
+              id="vacation-pto-toggle"
+              checked={ptoVisibility?.show_vacation_pto || false}
+              onCheckedChange={(checked) => 
+                handlePtoVisibilityToggle('show_vacation_pto', checked)
+              }
+              disabled={updateSettingsMutation.isPending}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="holiday-pto-toggle" className="text-base">
+                Show Holiday PTO
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                Display holiday time off in the monthly calendar view
+              </div>
+            </div>
+            <Switch
+              id="holiday-pto-toggle"
+              checked={ptoVisibility?.show_holiday_pto || false}
+              onCheckedChange={(checked) => 
+                handlePtoVisibilityToggle('show_holiday_pto', checked)
+              }
+              disabled={updateSettingsMutation.isPending}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="sick-pto-toggle" className="text-base">
+                Show Sick PTO
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                Display sick time off in the monthly calendar view
+              </div>
+            </div>
+            <Switch
+              id="sick-pto-toggle"
+              checked={ptoVisibility?.show_sick_pto || false}
+              onCheckedChange={(checked) => 
+                handlePtoVisibilityToggle('show_sick_pto', checked)
+              }
+              disabled={updateSettingsMutation.isPending}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="comp-pto-toggle" className="text-base">
+                Show Comp Time PTO
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                Display comp time off in the monthly calendar view
+              </div>
+            </div>
+            <Switch
+              id="comp-pto-toggle"
+              checked={ptoVisibility?.show_comp_pto || false}
+              onCheckedChange={(checked) => 
+                handlePtoVisibilityToggle('show_comp_pto', checked)
+              }
+              disabled={updateSettingsMutation.isPending}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Color Customization Card */}
       <Card>
         <CardHeader>
@@ -393,13 +522,13 @@ export const WebsiteSettings = () => {
                 <div className="flex gap-2">
                   <Input
                     type="color"
-                    value={rgbStringToHex(colorSettings.pdf_sick_time_bg)}
-                    onChange={(e) => handleColorChange('pdf_sick_time_bg', e.target.value)}
+                    value={rgbStringToHex(colorSettings.pdf_sick_bg)}
+                    onChange={(e) => handleColorChange('pdf_sick_bg', e.target.value)}
                     className="w-12 h-10 p-1"
                   />
                   <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_time_bg}</div>
-                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_time_bg)}</div>
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_bg)}</div>
                   </div>
                 </div>
               </div>
@@ -417,40 +546,6 @@ export const WebsiteSettings = () => {
                   <div className="flex-1">
                     <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_off_day_bg}</div>
                     <div className="text-sm">{rgbStringToHex(colorSettings.pdf_off_day_bg)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Supervisor Partial PTO */}
-              <div className="space-y-2">
-                <Label>Supervisor Partial PTO Background</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="color"
-                    value={rgbStringToHex(colorSettings.pdf_partial_pto_supervisor_bg)}
-                    onChange={(e) => handleColorChange('pdf_partial_pto_supervisor_bg', e.target.value)}
-                    className="w-12 h-10 p-1"
-                  />
-                  <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_partial_pto_supervisor_bg}</div>
-                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_partial_pto_supervisor_bg)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Officer Partial PTO */}
-              <div className="space-y-2">
-                <Label>Officer Partial PTO Background</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="color"
-                    value={rgbStringToHex(colorSettings.pdf_partial_pto_officer_bg)}
-                    onChange={(e) => handleColorChange('pdf_partial_pto_officer_bg', e.target.value)}
-                    className="w-12 h-10 p-1"
-                  />
-                  <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_partial_pto_officer_bg}</div>
-                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_partial_pto_officer_bg)}</div>
                   </div>
                 </div>
               </div>
@@ -532,81 +627,80 @@ export const WebsiteSettings = () => {
             </div>
           </div>
 
-          // Add these new color inputs to your WebsiteSettings.tsx
-{/* PTO Type Colors */}
-<div className="space-y-4">
-  <h4 className="font-semibold">PTO Type Colors</h4>
-  
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {/* Vacation */}
-    <div className="space-y-2">
-      <Label>Vacation Background</Label>
-      <div className="flex gap-2">
-        <Input
-          type="color"
-          value={rgbStringToHex(colorSettings.pdf_vacation_bg)}
-          onChange={(e) => handleColorChange('pdf_vacation_bg', e.target.value)}
-          className="w-12 h-10 p-1"
-        />
-        <div className="flex-1">
-          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_vacation_bg}</div>
-          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_vacation_bg)}</div>
-        </div>
-      </div>
-    </div>
+          {/* PTO Type Colors */}
+          <div className="space-y-4">
+            <h4 className="font-semibold">PTO Type Colors</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Vacation */}
+              <div className="space-y-2">
+                <Label>Vacation Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_vacation_bg)}
+                    onChange={(e) => handleColorChange('pdf_vacation_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_vacation_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_vacation_bg)}</div>
+                  </div>
+                </div>
+              </div>
 
-    {/* Sick */}
-    <div className="space-y-2">
-      <Label>Sick Time Background</Label>
-      <div className="flex gap-2">
-        <Input
-          type="color"
-          value={rgbStringToHex(colorSettings.pdf_sick_bg)}
-          onChange={(e) => handleColorChange('pdf_sick_bg', e.target.value)}
-          className="w-12 h-10 p-1"
-        />
-        <div className="flex-1">
-          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_bg}</div>
-          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_bg)}</div>
-        </div>
-      </div>
-    </div>
+              {/* Sick */}
+              <div className="space-y-2">
+                <Label>Sick Time Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_sick_bg)}
+                    onChange={(e) => handleColorChange('pdf_sick_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_sick_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_sick_bg)}</div>
+                  </div>
+                </div>
+              </div>
 
-    {/* Holiday */}
-    <div className="space-y-2">
-      <Label>Holiday Background</Label>
-      <div className="flex gap-2">
-        <Input
-          type="color"
-          value={rgbStringToHex(colorSettings.pdf_holiday_bg)}
-          onChange={(e) => handleColorChange('pdf_holiday_bg', e.target.value)}
-          className="w-12 h-10 p-1"
-        />
-        <div className="flex-1">
-          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_holiday_bg}</div>
-          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_holiday_bg)}</div>
-        </div>
-      </div>
-    </div>
+              {/* Holiday */}
+              <div className="space-y-2">
+                <Label>Holiday Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_holiday_bg)}
+                    onChange={(e) => handleColorChange('pdf_holiday_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_holiday_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_holiday_bg)}</div>
+                  </div>
+                </div>
+              </div>
 
-    {/* Comp Time */}
-    <div className="space-y-2">
-      <Label>Comp Time Background</Label>
-      <div className="flex gap-2">
-        <Input
-          type="color"
-          value={rgbStringToHex(colorSettings.pdf_comp_bg)}
-          onChange={(e) => handleColorChange('pdf_comp_bg', e.target.value)}
-          className="w-12 h-10 p-1"
-        />
-        <div className="flex-1">
-          <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_comp_bg}</div>
-          <div className="text-sm">{rgbStringToHex(colorSettings.pdf_comp_bg)}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+              {/* Comp Time */}
+              <div className="space-y-2">
+                <Label>Comp Time Background</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={rgbStringToHex(colorSettings.pdf_comp_bg)}
+                    onChange={(e) => handleColorChange('pdf_comp_bg', e.target.value)}
+                    className="w-12 h-10 p-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs text-muted-foreground">RGB: {colorSettings.pdf_comp_bg}</div>
+                    <div className="text-sm">{rgbStringToHex(colorSettings.pdf_comp_bg)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Reset Button */}
           <div className="flex justify-end pt-4 border-t">
@@ -630,6 +724,10 @@ export const WebsiteSettings = () => {
           <div>
             <strong>PTO Balances:</strong> When disabled, all PTO balance tracking is turned off. 
             Staff will have indefinite time off availability, and balance calculations are suspended.
+          </div>
+          <div>
+            <strong>PTO Type Visibility:</strong> Control which types of PTO are displayed in the monthly calendar view. 
+            This does not affect PTO assignment or balance tracking.
           </div>
           <div>
             <strong>Color Customization:</strong> Changes to colors will affect both PDF exports and 

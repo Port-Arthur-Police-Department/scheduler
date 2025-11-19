@@ -31,24 +31,26 @@ interface PTOAssignmentDialogProps {
       endTime: string;
       isFullShift: boolean;
     };
-  } | null; // Make officer nullable
+  } | null;
   shift: {
     id: string;
     name: string;
     start_time: string;
     end_time: string;
-  } | null; // Make shift nullable
+  } | null;
   date: string;
+  // ADD THIS PROP
+  ptoBalancesEnabled?: boolean;
 }
 
-const PTO_TYPES = [
-  { value: "vacation", label: "Vacation", column: "vacation_hours" },
-  { value: "holiday", label: "Holiday", column: "holiday_hours" },
-  { value: "sick", label: "Sick", column: "sick_hours" },
-  { value: "comp", label: "Comp", column: "comp_hours" },
-];
-
 export const PTOAssignmentDialog = ({
+  open,
+  onOpenChange,
+  officer,
+  shift,
+  date,
+  ptoBalancesEnabled = true // Default to true for backward compatibility
+}: PTOAssignmentDialogProps) => {
   open,
   onOpenChange,
   officer,
@@ -128,7 +130,7 @@ export const PTOAssignmentDialog = ({
       const hoursUsed = calculateHours(ptoStartTime, ptoEndTime);
 
       // If editing existing PTO, first restore the previous PTO balance
-      if (officer.existingPTO) {
+      if (officer.existingPTO && ptoBalancesEnabled) { // ADD CONDITION
         await restorePTOCredit(officer.existingPTO);
         
         // Delete the existing PTO exception
@@ -149,24 +151,37 @@ export const PTOAssignmentDialog = ({
           .eq("is_off", false);
       }
 
-      // Get current PTO balance for the new PTO type
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", officer.officerId)
-        .single();
+      // ONLY CHECK BALANCES IF PTO BALANCES ARE ENABLED
+      if (ptoBalancesEnabled) {
+        // Get current PTO balance for the new PTO type
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", officer.officerId)
+          .single();
 
-      if (profileError) throw profileError;
+        if (profileError) throw profileError;
 
-      const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
-      if (!ptoColumn) throw new Error("Invalid PTO type");
+        const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
+        if (!ptoColumn) throw new Error("Invalid PTO type");
 
-      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-      if (currentBalance < hoursUsed) {
-        throw new Error(`Insufficient ${ptoType} balance. Available: ${currentBalance} hours`);
+        const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+        if (currentBalance < hoursUsed) {
+          throw new Error(`Insufficient ${ptoType} balance. Available: ${currentBalance} hours`);
+        }
+
+        // Deduct PTO from balance
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            [ptoColumn]: currentBalance - hoursUsed,
+          })
+          .eq("id", officer.officerId);
+
+        if (updateError) throw updateError;
       }
 
-      // Create PTO exception
+      // Create PTO exception (this should always happen regardless of balance settings)
       const { error: ptoError } = await supabase.from("schedule_exceptions").insert({
         officer_id: officer.officerId,
         date: date,

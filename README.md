@@ -1,31 +1,31 @@
 ##BulkPTO
 
-Key Features of the Bulk PTO Assignment:
-Date Range Selection: Choose start and end dates for the PTO period
+##Key Features of the Bulk PTO Assignment:
+#Date Range Selection: Choose start and end dates for the PTO period
 
-Weekend Exclusion: Option to automatically exclude weekends
+#Weekend Exclusion: Option to automatically exclude weekends
 
-Shift Selection: Select which shifts to apply PTO to (based on officer's recurring schedule)
+#Shift Selection: Select which shifts to apply PTO to (based on officer's recurring schedule)
 
-Full/Partial Day: Choose between full shifts or partial days
+#Full/Partial Day: Choose between full shifts or partial days
 
-PTO Balance Validation: Automatically checks if officer has sufficient PTO balance
+#PTO Balance Validation: Automatically checks if officer has sufficient PTO balance
 
-Smart Scheduling: Only applies PTO to days the officer actually works based on their recurring schedule
+#Smart Scheduling: Only applies PTO to days the officer actually works based on their recurring schedule
 
-Real-time Calculation: Shows total hours and affected shifts before submitting
+#Real-time Calculation: Shows total hours and affected shifts before submitting
 
-How it Works:
-Officer Selection: Choose an officer from the staff directory
+##How it Works:
+#Officer Selection: Choose an officer from the staff directory
 
-Date Range: Select the start and end dates for the PTO
+#Date Range: Select the start and end dates for the PTO
 
-Shift Filtering: The system automatically determines which shifts the officer works during that period based on their recurring schedule
+#Shift Filtering: The system automatically determines which shifts the officer works during that period based on their recurring schedule
 
-PTO Calculation: Real-time calculation of total PTO hours needed
+#PTO Calculation: Real-time calculation of total PTO hours needed
 
-Balance Check: Validates against the officer's available PTO balance
+#Balance Check: Validates against the officer's available PTO balance
 
-Bulk Creation: Creates all necessary schedule exceptions in one operation
+#Bulk Creation: Creates all necessary schedule exceptions in one operation
 
 This solution integrates seamlessly with your existing PTO management system while providing the bulk assignment functionality you need for managing vacation schedules efficiently across your 129+ officers.

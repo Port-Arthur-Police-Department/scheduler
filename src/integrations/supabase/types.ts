@@ -502,6 +502,40 @@ export type Database = {
           },
         ]
       }
+      // NEW: website_settings table
+      website_settings: {
+        Row: {
+          id: string
+          enable_notifications: boolean | null
+          show_pto_balances: boolean | null
+          pto_balances_visible: boolean | null
+          color_settings: Json | null
+          pto_type_visibility: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          enable_notifications?: boolean | null
+          show_pto_balances?: boolean | null
+          pto_balances_visible?: boolean | null
+          color_settings?: Json | null
+          pto_type_visibility?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          enable_notifications?: boolean | null
+          show_pto_balances?: boolean | null
+          pto_balances_visible?: boolean | null
+          color_settings?: Json | null
+          pto_type_visibility?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

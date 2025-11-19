@@ -67,6 +67,8 @@ const WeeklySchedule = ({
 }: WeeklyScheduleProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const { data: websiteSettings } = useWebsiteSettings();
   
   const { weekly: weeklyColors } = useColorSettings();
   
@@ -1833,27 +1835,27 @@ const renderMonthlyView = () => {
           </Dialog>
 
           {/* PTO Assignment Dialog - Import from your existing component */}
-          {selectedSchedule && (
-            <PTOAssignmentDialog
-              open={ptoDialogOpen}
-              onOpenChange={(open) => {
-                setPtoDialogOpen(open);
-                if (!open) {
-                  queryClient.invalidateQueries({ queryKey });
-                }
-              }}
-              officer={{
-                officerId: selectedSchedule.officerId,
-                name: selectedSchedule.officerName,
-                scheduleId: selectedSchedule.scheduleId,
-                type: selectedSchedule.type,
-                ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
-              }}
-              shift={selectedSchedule.shift}
-              date={selectedSchedule.date}
-            />
-          )}
-        </>
+      {selectedSchedule && (
+        <PTOAssignmentDialog
+          open={ptoDialogOpen}
+          onOpenChange={(open) => {
+            setPtoDialogOpen(open);
+            if (!open) {
+              queryClient.invalidateQueries({ queryKey });
+            }
+          }}
+          officer={{
+            officerId: selectedSchedule.officerId,
+            name: selectedSchedule.officerName,
+            scheduleId: selectedSchedule.scheduleId,
+            type: selectedSchedule.type,
+            ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
+          }}
+          shift={selectedSchedule.shift}
+          date={selectedSchedule.date}
+          // ADD THIS PROP
+          ptoBalancesEnabled={websiteSettings?.show_pto_balances}
+        />
       )}
     </>
   );

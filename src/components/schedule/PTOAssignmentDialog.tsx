@@ -92,37 +92,39 @@ export const PTOAssignmentDialog = ({
     return (endMinutes - startMinutes) / 60;
   };
 
-  // Helper function to restore PTO credit
-  const restorePTOCredit = async (existingPTO: any) => {
-    const ptoType = existingPTO.ptoType;
-    const startTime = existingPTO.startTime;
-    const endTime = existingPTO.endTime;
-    const hoursUsed = calculateHours(startTime, endTime);
+ // In PTOAssignmentDialog.tsx - update the restorePTOCredit function
+const restorePTOCredit = async (existingPTO: any) => {
+  // ONLY RESTORE BALANCE IF PTO BALANCES ARE ENABLED
+  if (!ptoBalancesEnabled) return;
 
-    // Restore PTO balance
-    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
-    if (ptoColumn) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", officer.officerId)
-        .single();
+  const ptoType = existingPTO.ptoType;
+  const startTime = existingPTO.startTime;
+  const endTime = existingPTO.endTime;
+  const hoursUsed = calculateHours(startTime, endTime);
 
-      if (profileError) throw profileError;
+  // Restore PTO balance
+  const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
+  if (ptoColumn) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", officer.officerId)
+      .single();
 
-      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-      
-      const { error: restoreError } = await supabase
-        .from("profiles")
-        .update({
-          [ptoColumn]: currentBalance + hoursUsed,
-        })
-        .eq("id", officer.officerId);
+    if (profileError) throw profileError;
 
-      if (restoreError) throw restoreError;
-    }
-  };
+    const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+    
+    const { error: restoreError } = await supabase
+      .from("profiles")
+      .update({
+        [ptoColumn]: currentBalance + hoursUsed,
+      })
+      .eq("id", officer.officerId);
 
+    if (restoreError) throw restoreError;
+  }
+};
   const assignPTOMutation = useMutation({
     mutationFn: async () => {
       const ptoStartTime = isFullShift ? shift.start_time : startTime;

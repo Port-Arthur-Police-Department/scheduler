@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Users, Clock, Edit2, Calendar, Award, Plus, Search } from "lucide-react";
 import { OfficerProfileDialog } from "./OfficerProfileDialog";
 import { OfficerScheduleManager } from "./OfficerScheduleManager";
+import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
@@ -16,6 +17,7 @@ export const StaffManagement = () => {
   const [managingSchedule, setManagingSchedule] = useState<any>(null);
   const [creatingNewOfficer, setCreatingNewOfficer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [bulkPTOOfficer, setBulkPTOOfficer] = useState<any>(null);
   
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
@@ -251,6 +253,15 @@ export const StaffManagement = () => {
                           <Calendar className="h-3 w-3 mr-1" />
                           Schedule
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBulkPTOOfficer(officer)}
+                          title="Assign Bulk PTO"
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          Bulk PTO
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -282,6 +293,14 @@ export const StaffManagement = () => {
           officer={null}
           open={!!creatingNewOfficer}
           onOpenChange={(open) => !open && setCreatingNewOfficer(false)}
+        />
+      )}
+
+      {bulkPTOOfficer && (
+        <BulkPTOAssignmentDialog
+          officer={bulkPTOOfficer}
+          open={!!bulkPTOOfficer}
+          onOpenChange={(open) => !open && setBulkPTOOfficer(null)}
         />
       )}
     </Card>

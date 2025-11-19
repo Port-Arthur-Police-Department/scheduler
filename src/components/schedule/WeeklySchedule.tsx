@@ -22,6 +22,7 @@ import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { useColorSettings } from "@/hooks/useColorSettings";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { 
   getLastName, 
   categorizeAndSortOfficers,
@@ -56,6 +57,10 @@ const getRankAbbreviation = (rank: string): string => {
   return 'Ofc';
 };
 
+// Add this import at the top of WeeklySchedule.tsx
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+
+// Inside the WeeklySchedule component, add this hook call:
 const WeeklySchedule = ({  
   userRole = 'officer', 
   isAdminOrSupervisor = false 
@@ -64,6 +69,9 @@ const WeeklySchedule = ({
   const queryClient = useQueryClient();
   
   const { weekly: weeklyColors } = useColorSettings();
+  
+  // ADD THIS LINE to get website settings
+  const { data: websiteSettings } = useWebsiteSettings();
   
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -1294,7 +1302,7 @@ const renderMonthlyView = () => {
           const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
           const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
           
-          // UPDATED: Use website settings to filter PTO types
+          // UPDATED: Use websiteSettings instead of settings
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => {
             if (!officer.shiftInfo?.hasPTO || !officer.shiftInfo?.ptoData?.isFullShift) {
               return false;
@@ -1303,16 +1311,16 @@ const renderMonthlyView = () => {
             const ptoType = officer.shiftInfo?.ptoData?.ptoType?.toLowerCase() || '';
             
             // Use website settings to determine which PTO types to show
-            if (ptoType.includes('vacation') && settings?.pto_type_visibility?.show_vacation_pto) {
+            if (ptoType.includes('vacation') && websiteSettings?.pto_type_visibility?.show_vacation_pto) {
               return true;
             }
-            if (ptoType.includes('holiday') && settings?.pto_type_visibility?.show_holiday_pto) {
+            if (ptoType.includes('holiday') && websiteSettings?.pto_type_visibility?.show_holiday_pto) {
               return true;
             }
-            if (ptoType.includes('sick') && settings?.pto_type_visibility?.show_sick_pto) {
+            if (ptoType.includes('sick') && websiteSettings?.pto_type_visibility?.show_sick_pto) {
               return true;
             }
-            if (ptoType.includes('comp') && settings?.pto_type_visibility?.show_comp_pto) {
+            if (ptoType.includes('comp') && websiteSettings?.pto_type_visibility?.show_comp_pto) {
               return true;
             }
             

@@ -69,9 +69,6 @@ const WeeklySchedule = ({
   
   const { weekly: weeklyColors } = useColorSettings();
   
-  // ADD THIS LINE to get website settings
-  const { data: websiteSettings } = useWebsiteSettings();
-  
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeView, setActiveView] = useState<"weekly" | "monthly">("weekly");

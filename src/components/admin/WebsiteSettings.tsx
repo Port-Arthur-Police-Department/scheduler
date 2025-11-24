@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
+import { PasswordResetManager } from "./PasswordResetManager"; // Add this import
 
 // Default color scheme - COMPLETE WITH ALL COLORS
 // Update your DEFAULT_COLORS in WebsiteSettings.tsx
@@ -732,6 +733,37 @@ export const WebsiteSettings = () => {
           <div>
             <strong>Color Customization:</strong> Changes to colors will affect both PDF exports and 
             the weekly schedule display. Changes are saved automatically.
+          </div>
+        </CardContent>
+      </Card>
+      {/* Add the Password Reset Card */}
+      <PasswordResetManager />
+
+      {/* Instructions Card - Update to include password reset info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">How These Settings Work</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <div>
+            <strong>Notifications Feature:</strong> When disabled, the ability to create new notifications 
+            will be hidden from the interface. Existing notifications will still be visible.
+          </div>
+          <div>
+            <strong>PTO Balances:</strong> When disabled, all PTO balance tracking is turned off. 
+            Staff will have indefinite time off availability, and balance calculations are suspended.
+          </div>
+          <div>
+            <strong>PTO Type Visibility:</strong> Control which types of PTO are displayed in the monthly calendar view. 
+            This does not affect PTO assignment or balance tracking.
+          </div>
+          <div>
+            <strong>Color Customization:</strong> Changes to colors will affect both PDF exports and 
+            the weekly schedule display. Changes are saved automatically.
+          </div>
+          <div>
+            <strong>Password Reset:</strong> Administrators can reset passwords for any officer or staff member. 
+            The new password takes effect immediately.
           </div>
         </CardContent>
       </Card>

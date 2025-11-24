@@ -43,6 +43,14 @@ interface PTOAssignmentDialogProps {
   ptoBalancesEnabled?: boolean;
 }
 
+const PTO_TYPES = [
+  { value: "vacation", label: "Vacation", column: "vacation_balance" },
+  { value: "sick", label: "Sick Leave", column: "sick_balance" },
+  { value: "personal", label: "Personal Leave", column: "personal_balance" },
+  { value: "comp", label: "Comp Time", column: "comp_time_balance" },
+  { value: "holiday", label: "Holiday", column: "holiday_balance" },
+];
+
 export const PTOAssignmentDialog = ({
   open,
   onOpenChange,
@@ -50,12 +58,6 @@ export const PTOAssignmentDialog = ({
   shift,
   date,
   ptoBalancesEnabled = true // Default to true for backward compatibility
-}: PTOAssignmentDialogProps) => {
-  open,
-  onOpenChange,
-  officer,
-  shift,
-  date,
 }: PTOAssignmentDialogProps) => {
   const queryClient = useQueryClient();
   const [ptoType, setPtoType] = useState("");
@@ -79,11 +81,6 @@ export const PTOAssignmentDialog = ({
     }
   }, [open, officer, shift]);
 
-  // Don't render the dialog content if officer or shift is null
-  if (!officer || !shift) {
-    return null;
-  }
-
   const calculateHours = (start: string, end: string) => {
     const [startHour, startMin] = start.split(":").map(Number);
     const [endHour, endMin] = end.split(":").map(Number);
@@ -92,41 +89,44 @@ export const PTOAssignmentDialog = ({
     return (endMinutes - startMinutes) / 60;
   };
 
- // In PTOAssignmentDialog.tsx - update the restorePTOCredit function
-const restorePTOCredit = async (existingPTO: any) => {
-  // ONLY RESTORE BALANCE IF PTO BALANCES ARE ENABLED
-  if (!ptoBalancesEnabled) return;
+  // In PTOAssignmentDialog.tsx - update the restorePTOCredit function
+  const restorePTOCredit = async (existingPTO: any) => {
+    // ONLY RESTORE BALANCE IF PTO BALANCES ARE ENABLED
+    if (!ptoBalancesEnabled) return;
 
-  const ptoType = existingPTO.ptoType;
-  const startTime = existingPTO.startTime;
-  const endTime = existingPTO.endTime;
-  const hoursUsed = calculateHours(startTime, endTime);
+    const ptoType = existingPTO.ptoType;
+    const startTime = existingPTO.startTime;
+    const endTime = existingPTO.endTime;
+    const hoursUsed = calculateHours(startTime, endTime);
 
-  // Restore PTO balance
-  const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
-  if (ptoColumn) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", officer.officerId)
-      .single();
+    // Restore PTO balance
+    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
+    if (ptoColumn) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", officer!.officerId)
+        .single();
 
-    if (profileError) throw profileError;
+      if (profileError) throw profileError;
 
-    const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-    
-    const { error: restoreError } = await supabase
-      .from("profiles")
-      .update({
-        [ptoColumn]: currentBalance + hoursUsed,
-      })
-      .eq("id", officer.officerId);
+      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+      
+      const { error: restoreError } = await supabase
+        .from("profiles")
+        .update({
+          [ptoColumn]: currentBalance + hoursUsed,
+        })
+        .eq("id", officer!.officerId);
 
-    if (restoreError) throw restoreError;
-  }
-};
+      if (restoreError) throw restoreError;
+    }
+  };
+
   const assignPTOMutation = useMutation({
     mutationFn: async () => {
+      if (!officer || !shift) throw new Error("Officer or shift not available");
+
       const ptoStartTime = isFullShift ? shift.start_time : startTime;
       const ptoEndTime = isFullShift ? shift.end_time : endTime;
       const hoursUsed = calculateHours(ptoStartTime, ptoEndTime);
@@ -235,19 +235,9 @@ const restorePTOCredit = async (existingPTO: any) => {
           if (workError) throw workError;
         }
       }
-
-      // Deduct PTO from balance
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          [ptoColumn]: currentBalance - hoursUsed,
-        })
-        .eq("id", officer.officerId);
-
-      if (updateError) throw updateError;
     },
     onSuccess: () => {
-      toast.success(officer.existingPTO ? "PTO updated successfully" : "PTO assigned successfully");
+      toast.success(officer?.existingPTO ? "PTO updated successfully" : "PTO assigned successfully");
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       onOpenChange(false);
@@ -259,7 +249,7 @@ const restorePTOCredit = async (existingPTO: any) => {
 
   const removePTOMutation = useMutation({
     mutationFn: async () => {
-      if (!officer.existingPTO) return;
+      if (!officer?.existingPTO) return;
 
       await restorePTOCredit(officer.existingPTO);
 
@@ -277,7 +267,7 @@ const restorePTOCredit = async (existingPTO: any) => {
         .delete()
         .eq("officer_id", officer.officerId)
         .eq("date", date)
-        .eq("shift_type_id", shift.id)
+        .eq("shift_type_id", shift!.id)
         .eq("is_off", false);
     },
     onSuccess: () => {
@@ -290,6 +280,11 @@ const restorePTOCredit = async (existingPTO: any) => {
       toast.error(error.message || "Failed to remove PTO");
     },
   });
+
+  // Don't render the dialog content if officer or shift is null
+  if (!officer || !shift) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

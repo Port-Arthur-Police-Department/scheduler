@@ -1,4 +1,4 @@
-// components/settings/PasswordResetManager.tsx
+// src/components/admin/PasswordResetManager.tsx
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";

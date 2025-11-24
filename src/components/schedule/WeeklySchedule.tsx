@@ -57,9 +57,6 @@ const getRankAbbreviation = (rank: string): string => {
   return 'Ofc';
 };
 
-// Add this import at the top of WeeklySchedule.tsx
-import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
-
 // Inside the WeeklySchedule component, add this hook call:
 const WeeklySchedule = ({  
   userRole = 'officer', 
@@ -1858,6 +1855,7 @@ const renderMonthlyView = () => {
         />
       )}
     </>
+      }
   );
 };
 

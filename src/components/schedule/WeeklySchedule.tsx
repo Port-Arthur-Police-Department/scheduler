@@ -45,7 +45,6 @@ interface ExportOptions {
   scheduleData: any[];
 }
 
-
 const getRankAbbreviation = (rank: string): string => {
   if (!rank) return 'Ofc';
   
@@ -65,6 +64,7 @@ const WeeklySchedule = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // REMOVE THE DUPLICATE DECLARATION - KEEP ONLY THIS ONE
   const { data: websiteSettings } = useWebsiteSettings();
   
   const { weekly: weeklyColors } = useColorSettings();
@@ -87,7 +87,6 @@ const WeeklySchedule = ({
     to: addWeeks(startOfWeek(new Date(), { weekStartsOn: 0 }), 4)
   });
 
-
   // Use consolidated mutations hook
   const {
     updatePositionMutation,
@@ -96,7 +95,6 @@ const WeeklySchedule = ({
     queryKey
   } = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
 
- 
   const { colors } = useColorSettings();
 
   // Get shift types
@@ -206,7 +204,7 @@ const WeeklySchedule = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-// In WeeklySchedule.tsx - update the handleExportPDF function
+  // In WeeklySchedule.tsx - update the handleExportPDF function
   const handleExportPDF = async () => {
     if (!dateRange?.from || !dateRange?.to) {
       toast.error("Please select a date range");
@@ -1851,8 +1849,9 @@ const renderMonthlyView = () => {
           ptoBalancesEnabled={websiteSettings?.show_pto_balances}
         />
       )}
+        </>
+      )}
     </>
-      }
   );
 };
 

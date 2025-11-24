@@ -712,34 +712,7 @@ export const WebsiteSettings = () => {
         </CardContent>
       </Card>
 
-      {/* Instructions Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">How These Settings Work</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <div>
-            <strong>Notifications Feature:</strong> When disabled, the ability to create new notifications 
-            will be hidden from the interface. Existing notifications will still be visible.
-          </div>
-          <div>
-            <strong>PTO Balances:</strong> When disabled, all PTO balance tracking is turned off. 
-            Staff will have indefinite time off availability, and balance calculations are suspended.
-          </div>
-          <div>
-            <strong>PTO Type Visibility:</strong> Control which types of PTO are displayed in the monthly calendar view. 
-            This does not affect PTO assignment or balance tracking.
-          </div>
-          <div>
-            <strong>Color Customization:</strong> Changes to colors will affect both PDF exports and 
-            the weekly schedule display. Changes are saved automatically.
-          </div>
-        </CardContent>
-      </Card>
-      {/* Add the Password Reset Card */}
-      <PasswordResetManager />
-
-      {/* Instructions Card - Update to include password reset info */}
+       {/* Instructions Card - SINGLE UPDATED VERSION */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">How These Settings Work</CardTitle>

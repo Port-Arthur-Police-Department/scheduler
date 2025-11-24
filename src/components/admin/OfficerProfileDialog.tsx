@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Award, KeyRound, Clock } from "lucide-react";
+import { CalendarIcon, Award, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -59,7 +59,6 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     comp_hours: officer?.comp_hours?.toString() || "0",
     holiday_hours: officer?.holiday_hours?.toString() || "0",
   });
-  const [newPassword, setNewPassword] = useState("");
 
   // Reset form when dialog opens/closes or officer changes
   useEffect(() => {
@@ -77,7 +76,6 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         comp_hours: officer?.comp_hours?.toString() || "0",
         holiday_hours: officer?.holiday_hours?.toString() || "0",
       });
-      setNewPassword("");
       
       // Only fetch service credit for existing officers
       if (officer?.id) {
@@ -206,51 +204,6 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     },
   })
 
-  const updatePasswordMutation = useMutation({
-    mutationFn: async () => {
-      if (!officer?.id) throw new Error("No officer ID provided");
-      if (!newPassword) throw new Error("New password is required");
-
-      if (newPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error("You must be logged in to update passwords");
-      }
-
-      const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/update-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          userId: officer.id,
-          newPassword: newPassword
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update password');
-      }
-
-      return result;
-    },
-    onSuccess: () => {
-      toast.success("Password updated successfully");
-      setNewPassword("");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update password");
-    },
-  });
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name || !formData.email) {
@@ -265,15 +218,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     }
   };
 
-  const handlePasswordUpdate = () => {
-    if (newPassword) {
-      updatePasswordMutation.mutate();
-    } else {
-      toast.error("Please enter a new password");
-    }
-  };
-
-  const isPending = updateProfileMutation.isPending || createProfileMutation.isPending || updatePasswordMutation.isPending;
+  const isPending = updateProfileMutation.isPending || createProfileMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -415,31 +360,6 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
               <p className="text-xs text-muted-foreground">
                 Enter positive values to add credit, negative to deduct (e.g., -2 to subtract 2 years)
               </p>
-            </div>
-          )}
-
-          {isEditing && (
-            <div className="space-y-2">
-              <Label htmlFor="newPassword" className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4" />
-                New Password
-              </Label>
-              <Input
-                id="newPassword"
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handlePasswordUpdate}
-                disabled={updatePasswordMutation.isPending}
-              >
-                {updatePasswordMutation.isPending ? "Updating..." : "Update Password"}
-              </Button>
             </div>
           )}
 

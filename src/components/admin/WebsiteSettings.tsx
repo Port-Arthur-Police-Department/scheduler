@@ -11,7 +11,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
 import { PasswordResetManager } from "@/components/admin/PasswordResetManager";
 
-// Default color scheme - COMPLETE WITH ALL COLORS
 // Update your DEFAULT_COLORS in WebsiteSettings.tsx
 const DEFAULT_COLORS = {
   // PDF Export Colors
@@ -711,6 +710,9 @@ export const WebsiteSettings = () => {
           </div>
         </CardContent>
       </Card>
+
+            {/* ADD THE PASSWORD RESET MANAGER HERE - THIS IS WHAT'S MISSING */}
+      <PasswordResetManager />
 
        {/* Instructions Card - SINGLE UPDATED VERSION */}
       <Card>

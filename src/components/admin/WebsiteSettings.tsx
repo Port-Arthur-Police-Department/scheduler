@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Palette, Eye, EyeOff } from "lucide-react";
-import { PasswordResetManager } from "./PasswordResetManager"; // Add this import
+import { PasswordResetManager } from "@/components/admin/PasswordResetManager";
 
 // Default color scheme - COMPLETE WITH ALL COLORS
 // Update your DEFAULT_COLORS in WebsiteSettings.tsx

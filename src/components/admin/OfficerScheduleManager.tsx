@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { auditLogger } from "@/lib/auditLogger";
 
 interface OfficerScheduleManagerProps {
   officer: {
@@ -181,14 +182,35 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
   // Delete schedule mutation
   const deleteScheduleMutation = useMutation({
-    mutationFn: async (scheduleId: string) => {
-      const { error } = await supabase
-        .from("recurring_schedules")
-        .delete()
-        .eq("id", scheduleId);
+  mutationFn: async (scheduleId: string) => {
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Get schedule data before deletion for audit logging
+    const { data: scheduleData } = await supabase
+      .from("recurring_schedules")
+      .select("*")
+      .eq("id", scheduleId)
+      .single();
 
-      if (error) throw error;
-    },
+    const { error } = await supabase
+      .from("recurring_schedules")
+      .delete()
+      .eq("id", scheduleId);
+
+    if (error) throw error;
+
+    // AUDIT LOGGING: Log schedule deletion
+    if (currentUser && scheduleData) {
+      await auditLogger.logScheduleChange(
+        'Deleted',
+        scheduleId,
+        scheduleData,
+        currentUser.id,
+        currentUser.email
+      );
+    }
+  },
     onSuccess: () => {
       toast.success("Schedule removed");
       queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
@@ -203,57 +225,82 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
   // FIXED: Add schedule mutation (bulk insert multiple days)
   const addScheduleMutation = useMutation({
-    mutationFn: async (data: { 
-      days: number[]; 
-      shiftId: string; 
-      start: string; 
-      end?: string;
-      unitNumber?: string;
-      assignedPosition?: string;
-    }) => {
-      // Validate date range
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const startDate = new Date(data.start);
-      if (startDate < today) {
-        throw new Error("Start date cannot be in the past");
+  mutationFn: async (data: { 
+    days: number[]; 
+    shiftId: string; 
+    start: string; 
+    end?: string;
+    unitNumber?: string;
+    assignedPosition?: string;
+  }) => {
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+    // Validate date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startDate = new Date(data.start);
+    if (startDate < today) {
+      throw new Error("Start date cannot be in the past");
+    }
+
+    if (data.end && new Date(data.end) < startDate) {
+      throw new Error("End date cannot be before start date");
+    }
+
+    // Create schedules array
+    const schedules = data.days.map(day => ({
+      officer_id: officer.id,
+      day_of_week: day,
+      shift_type_id: data.shiftId,
+      start_date: data.start,
+      end_date: data.end || null,
+      unit_number: data.unitNumber || null,
+      position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+    }));
+
+    console.log("Inserting schedules:", schedules); // Debug log
+
+    // Use insert with select to get feedback
+    const { data: insertedSchedules, error } = await supabase
+      .from("recurring_schedules")
+      .insert(schedules)
+      .select();
+
+    if (error) {
+      console.error("Insert error:", error);
+      throw error;
+    }
+
+    if (!insertedSchedules || insertedSchedules.length === 0) {
+      throw new Error("No schedules were created");
+    }
+
+    // AUDIT LOGGING: Log schedule creation
+    if (currentUser) {
+      for (const schedule of insertedSchedules) {
+        await auditLogger.logScheduleChange(
+          'Created',
+          schedule.id,
+          {
+            officer_id: officer.id,
+            officer_name: officer.full_name,
+            day_of_week: schedule.day_of_week,
+            shift_type_id: schedule.shift_type_id,
+            start_date: schedule.start_date,
+            end_date: schedule.end_date,
+            unit_number: schedule.unit_number,
+            position_name: schedule.position_name
+          },
+          currentUser.id,
+          currentUser.email
+        );
       }
+    }
 
-      if (data.end && new Date(data.end) < startDate) {
-        throw new Error("End date cannot be before start date");
-      }
-
-      // Create schedules array
-      const schedules = data.days.map(day => ({
-        officer_id: officer.id,
-        day_of_week: day,
-        shift_type_id: data.shiftId,
-        start_date: data.start,
-        end_date: data.end || null,
-        unit_number: data.unitNumber || null,
-        position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-      }));
-
-      console.log("Inserting schedules:", schedules); // Debug log
-
-      // Use insert with select to get feedback
-      const { data: insertedSchedules, error } = await supabase
-        .from("recurring_schedules")
-        .insert(schedules)
-        .select();
-
-      if (error) {
-        console.error("Insert error:", error);
-        throw error;
-      }
-
-      if (!insertedSchedules || insertedSchedules.length === 0) {
-        throw new Error("No schedules were created");
-      }
-
-      return insertedSchedules;
-    },
+    return insertedSchedules;
+  },
     onSuccess: (insertedSchedules) => {
       console.log("Successfully created schedules:", insertedSchedules);
       toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);

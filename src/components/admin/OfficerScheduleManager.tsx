@@ -1118,23 +1118,8 @@ const handleAddSchedule = () => {
                           <Calendar
                             mode="single"
                             selected={startDate}
-                            onSelect={(date) => {
-                              if (date) {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                if (date >= today) {
-                                  setStartDate(date);
-                                } else {
-                                  toast.error("Start date cannot be in the past");
-                                }
-                              }
-                            }}
+                            onSelect={(date) => date && setStartDate(date)}
                             initialFocus
-                            disabled={(date) => {
-                              const today = new Date();
-                              today.setHours(0, 0, 0, 0);
-                              return date < today;
-                            }}
                             className="pointer-events-auto"
                           />
                         </PopoverContent>

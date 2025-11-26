@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { auditLogger } from "@/lib/auditLogger"; // ADD THIS IMPORT
+import { useUser } from "@/contexts/UserContext"; // ADD THIS IMPORT
 
 interface PTOAssignmentDialogProps {
   open: boolean;
@@ -39,8 +41,8 @@ interface PTOAssignmentDialogProps {
     end_time: string;
   } | null;
   date: string;
-  // ADD THIS PROP
   ptoBalancesEnabled?: boolean;
+  onSuccess?: (ptoData: any) => void; // ADD THIS PROP
 }
 
 const PTO_TYPES = [
@@ -56,9 +58,11 @@ export const PTOAssignmentDialog = ({
   officer,
   shift,
   date,
-  ptoBalancesEnabled = true // Default to true for backward compatibility
+  ptoBalancesEnabled = true,
+  onSuccess // ADD THIS PROP
 }: PTOAssignmentDialogProps) => {
   const queryClient = useQueryClient();
+  const { userEmail } = useUser(); // ADD THIS HOOK
   const [ptoType, setPtoType] = useState("");
   const [isFullShift, setIsFullShift] = useState(true);
   const [startTime, setStartTime] = useState("");
@@ -88,9 +92,7 @@ export const PTOAssignmentDialog = ({
     return (endMinutes - startMinutes) / 60;
   };
 
-  // In PTOAssignmentDialog.tsx - update the restorePTOCredit function
   const restorePTOCredit = async (existingPTO: any) => {
-    // ONLY RESTORE BALANCE IF PTO BALANCES ARE ENABLED
     if (!ptoBalancesEnabled) return;
 
     const ptoType = existingPTO.ptoType;
@@ -98,7 +100,6 @@ export const PTOAssignmentDialog = ({
     const endTime = existingPTO.endTime;
     const hoursUsed = calculateHours(startTime, endTime);
 
-    // Restore PTO balance
     const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
     if (ptoColumn) {
       const { data: profile, error: profileError } = await supabase
@@ -131,7 +132,7 @@ export const PTOAssignmentDialog = ({
       const hoursUsed = calculateHours(ptoStartTime, ptoEndTime);
 
       // If editing existing PTO, first restore the previous PTO balance
-      if (officer.existingPTO && ptoBalancesEnabled) { // ADD CONDITION
+      if (officer.existingPTO && ptoBalancesEnabled) {
         await restorePTOCredit(officer.existingPTO);
         
         // Delete the existing PTO exception
@@ -234,9 +235,38 @@ export const PTOAssignmentDialog = ({
           if (workError) throw workError;
         }
       }
+
+      // Return data for audit logging
+      return {
+        officerId: officer.officerId,
+        officerName: officer.name,
+        ptoType,
+        date,
+        startTime: ptoStartTime,
+        endTime: ptoEndTime,
+        hoursUsed,
+        isFullShift,
+        shiftName: shift.name
+      };
     },
-    onSuccess: () => {
+    onSuccess: (ptoData) => {
       toast.success(officer?.existingPTO ? "PTO updated successfully" : "PTO assigned successfully");
+      
+      // Log the PTO assignment
+      auditLogger.logPTOAssignment(
+        ptoData.officerId,
+        ptoData.ptoType,
+        ptoData.date,
+        ptoData.hoursUsed,
+        userEmail,
+        `${officer?.existingPTO ? 'Updated' : 'Assigned'} ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours)`
+      );
+
+      // Call the onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess(ptoData);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       onOpenChange(false);
@@ -244,17 +274,7 @@ export const PTOAssignmentDialog = ({
     onError: (error: any) => {
       toast.error(error.message || "Failed to assign PTO");
     },
-  }
-
- // After successful PTO assignment
-auditLogger.logPTOAssignment(
-  officerId,
-  ptoType,
-  startDate,
-  duration,
-  userEmail,
-  `Assigned ${ptoType} PTO to officer ${officerName}`
-);
+  });
 
   const removePTOMutation = useMutation({
     mutationFn: async () => {
@@ -278,9 +298,28 @@ auditLogger.logPTOAssignment(
         .eq("date", date)
         .eq("shift_type_id", shift!.id)
         .eq("is_off", false);
+
+      // Return data for audit logging
+      return {
+        officerId: officer.officerId,
+        officerName: officer.name,
+        ptoType: officer.existingPTO.ptoType,
+        date,
+        hoursUsed: calculateHours(officer.existingPTO.startTime, officer.existingPTO.endTime)
+      };
     },
-    onSuccess: () => {
+    onSuccess: (ptoData) => {
       toast.success("PTO removed and balance restored");
+      
+      // Log the PTO removal
+      auditLogger.logPTORemoval(
+        ptoData.officerId,
+        ptoData.ptoType,
+        ptoData.date,
+        userEmail,
+        `Removed ${ptoData.ptoType} PTO from ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours restored)`
+      );
+
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       onOpenChange(false);
@@ -289,6 +328,9 @@ auditLogger.logPTOAssignment(
       toast.error(error.message || "Failed to remove PTO");
     },
   });
+
+  // Remove the duplicate audit logging line that was outside the mutation
+  // (The one that said: "After successful PTO assignment")
 
   // Don't render the dialog content if officer or shift is null
   if (!officer || !shift) {

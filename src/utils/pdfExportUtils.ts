@@ -722,8 +722,25 @@ export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
   
   pdf.text(displayText, xPos + 3, listY + 1.8);
   
-  // PTO type (abbreviated)
-  const shortPtoType = ptoType.length > 6 ? ptoType.substring(0, 6) : ptoType;
+  // PTO type (abbreviated) - UPDATED WITH VAC/HOL ABBREVIATIONS
+  const getAbbreviatedPTOType = (ptoType: string): string => {
+    const ptoTypeLower = ptoType.toLowerCase();
+    
+    if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
+      return 'vac';
+    } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
+      return 'hol';
+    } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
+      return 'sick';
+    } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
+      return 'comp';
+    } else {
+      // Default abbreviation for other types
+      return ptoType.length > 6 ? ptoType.substring(0, 6) : ptoType;
+    }
+  };
+  
+  const shortPtoType = getAbbreviatedPTOType(ptoType);
   pdf.text(shortPtoType, xPos + cellWidth - 10, listY + 1.8);
   
   listY += 3;

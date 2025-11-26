@@ -16,6 +16,7 @@ import { PositionEditor } from "./PositionEditor";
 import { usePositionMutation } from "@/hooks/usePositionMutation";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
+import { useUser } from "@/contexts/UserContext";
 
 interface OfficersManagementProps {
   userId: string;
@@ -46,6 +47,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<"weekly" | "monthly">("weekly");
   const queryClient = useQueryClient();
+  const { userEmail } = useUser();
 
   // Initialize selectedOfficerId when component mounts or props change
   useEffect(() => {
@@ -430,9 +432,9 @@ const handleRemovePTO = async (schedule: any, date: string) => {
 
   try {
     console.log("🔄 handleRemovePTO called with:", { schedule, date });
+
+    };
     
-    const userEmail = await getCurrentUserEmail();
-    console.log("📧 User email for audit:", userEmail);
     
     // Get officer name from the schedule
     const officerName = schedule.name || schedule.officerName || 'Unknown Officer';

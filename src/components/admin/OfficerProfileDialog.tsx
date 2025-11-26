@@ -13,6 +13,7 @@ import { CalendarIcon, Award, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { auditLogger } from "@/lib/auditLogger";
 
 interface OfficerProfileDialogProps {
   officer: {
@@ -96,54 +97,75 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   };
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      if (!officer?.id) throw new Error("No officer ID provided");
-      
-      // Prepare profile data
-      const profileData: any = {
-        full_name: data.full_name,
-        email: data.email,
-        phone: data.phone || null,
-        badge_number: data.badge_number || null,
-        rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
-        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-      };
+  mutationFn: async (data: typeof formData) => {
+    if (!officer?.id) throw new Error("No officer ID provided");
+    
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Get old data first for audit logging
+    const { data: oldProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", officer.id)
+      .single();
 
-      // Only include PTO balances if they are enabled in settings
-      if (settings?.show_pto_balances) {
-        profileData.vacation_hours = Number(data.vacation_hours) || 0;
-        profileData.sick_hours = Number(data.sick_hours) || 0;
-        profileData.comp_hours = Number(data.comp_hours) || 0;
-        profileData.holiday_hours = Number(data.holiday_hours) || 0;
-      }
+    // Prepare profile data
+    const profileData: any = {
+      full_name: data.full_name,
+      email: data.email,
+      phone: data.phone || null,
+      badge_number: data.badge_number || null,
+      rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
+      hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
+      service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+    };
 
-      // Update profile
-      const { error } = await supabase
-        .from("profiles")
-        .update(profileData)
-        .eq("id", officer.id);
+    // Only include PTO balances if they are enabled in settings
+    if (settings?.show_pto_balances) {
+      profileData.vacation_hours = Number(data.vacation_hours) || 0;
+      profileData.sick_hours = Number(data.sick_hours) || 0;
+      profileData.comp_hours = Number(data.comp_hours) || 0;
+      profileData.holiday_hours = Number(data.holiday_hours) || 0;
+    }
 
-      if (error) throw error;
+    // Update profile
+    const { error } = await supabase
+      .from("profiles")
+      .update(profileData)
+      .eq("id", officer.id);
 
-      // Update user role based on new rank
-      const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
-        const rankLower = rank.toLowerCase();
-        if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
-        if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
-        return 'officer';
-      };
+    if (error) throw error;
 
-      const newRole = getRoleFromRank(data.rank);
-      
-      // Update the user_roles table
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .update({ role: newRole as any })
-        .eq('user_id', officer.id);
+    // AUDIT LOGGING: Log profile update
+    if (currentUser) {
+      await auditLogger.logProfileUpdate(
+        officer.id,
+        oldProfile,
+        profileData,
+        currentUser.id,
+        currentUser.email
+      );
+    }
 
-      if (roleError) {
-        console.error('Failed to update role:', roleError);
+    // Update user role based on new rank
+    const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
+      const rankLower = rank.toLowerCase();
+      if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
+      if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
+      return 'officer';
+    };
+
+    const newRole = getRoleFromRank(data.rank);
+    
+    // Update the user_roles table
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .update({ role: newRole as any })
+      .eq('user_id', officer.id);
+
+    if (roleError) {
+      console.error('Failed to update role:', roleError);
         // Don't throw - the profile was updated successfully, just role update failed
       }
     },
@@ -157,43 +179,57 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     },
   });
 
-  const createProfileMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      // Prepare profile data
-      const profileData: any = {
-        email: data.email,
-        full_name: data.full_name,
-        phone: data.phone,
-        badge_number: data.badge_number,
-        rank: data.rank,
-        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-      };
+ const createProfileMutation = useMutation({
+  mutationFn: async (data: typeof formData) => {
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Prepare profile data
+    const profileData: any = {
+      email: data.email,
+      full_name: data.full_name,
+      phone: data.phone,
+      badge_number: data.badge_number,
+      rank: data.rank,
+      hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
+      service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+    };
 
-      // Only include PTO balances if they are enabled in settings
-      if (settings?.show_pto_balances) {
-        profileData.vacation_hours = Number(data.vacation_hours) || 0;
-        profileData.sick_hours = Number(data.sick_hours) || 0;
-        profileData.comp_hours = Number(data.comp_hours) || 0;
-        profileData.holiday_hours = Number(data.holiday_hours) || 0;
-      }
+    // Only include PTO balances if they are enabled in settings
+    if (settings?.show_pto_balances) {
+      profileData.vacation_hours = Number(data.vacation_hours) || 0;
+      profileData.sick_hours = Number(data.sick_hours) || 0;
+      profileData.comp_hours = Number(data.comp_hours) || 0;
+      profileData.holiday_hours = Number(data.holiday_hours) || 0;
+    }
 
-      const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(profileData),
-      })
+    const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profileData),
+    })
 
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create user')
-      }
-      
-      return result
-    },
+    const result = await response.json()
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to create user')
+    }
+    
+    // AUDIT LOGGING: Log profile creation
+    if (currentUser && result.userId) {
+      await auditLogger.logProfileUpdate(
+        result.userId,
+        null, // No old data for creation
+        profileData,
+        currentUser.id,
+        currentUser.email
+      );
+    }
+    
+    return result
+  },
     onSuccess: (result) => {
       toast.success(result.message || "Profile created successfully");
       queryClient.invalidateQueries({ queryKey: ["all-officers"] });

@@ -15,6 +15,7 @@ import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { PositionEditor } from "./PositionEditor";
 import { usePositionMutation } from "@/hooks/usePositionMutation";
 import { toast } from "sonner";
+import { auditLogger } from "@/lib/auditLogger";
 
 interface OfficersManagementProps {
   userId: string;
@@ -306,65 +307,80 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
   // Add mutation for removing PTO
   const removePTOMutation = useMutation({
-    mutationFn: async (ptoData: { id: string; officerId: string; date: string; shiftTypeId: string; ptoType: string; startTime: string; endTime: string }) => {
-      // Calculate hours to restore
-      const calculateHours = (start: string, end: string) => {
-        const [startHour, startMin] = start.split(":").map(Number);
-        const [endHour, endMin] = end.split(":").map(Number);
-        const startMinutes = startHour * 60 + startMin;
-        const endMinutes = endHour * 60 + endMin;
-        return (endMinutes - startMinutes) / 60;
-      };
+  mutationFn: async (ptoData: { id: string; officerId: string; date: string; shiftTypeId: string; ptoType: string; startTime: string; endTime: string }) => {
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-      const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
+    // Calculate hours to restore
+    const calculateHours = (start: string, end: string) => {
+      const [startHour, startMin] = start.split(":").map(Number);
+      const [endHour, endMin] = end.split(":").map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      return (endMinutes - startMinutes) / 60;
+    };
 
-      // Restore PTO balance
-      const PTO_TYPES = [
-        { value: "vacation", label: "Vacation", column: "vacation_hours" },
-        { value: "holiday", label: "Holiday", column: "holiday_hours" },
-        { value: "sick", label: "Sick", column: "sick_hours" },
-        { value: "comp", label: "Comp", column: "comp_hours" },
-      ];
+    const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
 
-      const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
-      if (ptoColumn) {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", ptoData.officerId)
-          .single();
+    // Restore PTO balance
+    const PTO_TYPES = [
+      { value: "vacation", label: "Vacation", column: "vacation_hours" },
+      { value: "holiday", label: "Holiday", column: "holiday_hours" },
+      { value: "sick", label: "Sick", column: "sick_hours" },
+      { value: "comp", label: "Comp", column: "comp_hours" },
+    ];
 
-        if (profileError) throw profileError;
+    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
+    if (ptoColumn) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", ptoData.officerId)
+        .single();
 
-        const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-        
-        const { error: restoreError } = await supabase
-          .from("profiles")
-          .update({
-            [ptoColumn]: currentBalance + hoursUsed,
-          })
-          .eq("id", ptoData.officerId);
+      if (profileError) throw profileError;
 
-        if (restoreError) throw restoreError;
-      }
+      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+      
+      const { error: restoreError } = await supabase
+        .from("profiles")
+        .update({
+          [ptoColumn]: currentBalance + hoursUsed,
+        })
+        .eq("id", ptoData.officerId);
 
-      // Delete the PTO exception
-      const { error: deleteError } = await supabase
-        .from("schedule_exceptions")
-        .delete()
-        .eq("id", ptoData.id);
+      if (restoreError) throw restoreError;
+    }
 
-      if (deleteError) throw deleteError;
+    // Delete the PTO exception
+    const { error: deleteError } = await supabase
+      .from("schedule_exceptions")
+      .delete()
+      .eq("id", ptoData.id);
 
-      // Also delete any associated working time exception
-      await supabase
-        .from("schedule_exceptions")
-        .delete()
-        .eq("officer_id", ptoData.officerId)
-        .eq("date", ptoData.date)
-        .eq("shift_type_id", ptoData.shiftTypeId)
-        .eq("is_off", false);
-    },
+    if (deleteError) throw deleteError;
+
+    // AUDIT LOGGING: Log PTO removal
+    if (currentUser) {
+      await auditLogger.log({
+        user_id: currentUser.id,
+        user_email: currentUser.email!,
+        action_type: 'pto_removed',
+        table_name: 'schedule_exceptions',
+        record_id: ptoData.id,
+        description: `PTO removed for officer ${ptoData.officerId} on ${ptoData.date}: ${ptoData.ptoType} (${hoursUsed} hours restored)`,
+      });
+    }
+
+    // Also delete any associated working time exception
+    await supabase
+      .from("schedule_exceptions")
+      .delete()
+      .eq("officer_id", ptoData.officerId)
+      .eq("date", ptoData.date)
+      .eq("shift_type_id", ptoData.shiftTypeId)
+      .eq("is_off", false);
+  },
     onSuccess: () => {
       toast.success("PTO removed and balance restored");
       queryClient.invalidateQueries({ queryKey: ["schedule"] });

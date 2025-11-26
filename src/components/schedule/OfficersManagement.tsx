@@ -422,68 +422,102 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     setPtoDialogOpen(true);
   };
 
-  // In OfficersManagement.tsx - update handleRemovePTO
 const handleRemovePTO = async (schedule: any, date: string) => {
-  if (!schedule.hasPTO || !schedule.ptoData) return;
-  
+  if (!schedule.hasPTO || !schedule.ptoData) {
+    console.error("❌ No PTO data found in schedule:", schedule);
+    return;
+  }
+
   try {
-    const userEmail = await getCurrentUserEmail(); // Add this helper or use useUser()
+    console.log("🔄 handleRemovePTO called with:", { schedule, date });
     
-    let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
+    const userEmail = await getCurrentUserEmail();
+    console.log("📧 User email for audit:", userEmail);
     
+    // Get officer name from the schedule
+    const officerName = schedule.name || schedule.officerName || 'Unknown Officer';
+    console.log("👤 Officer name for audit:", officerName);
+    
+    // STRATEGY 1: Try to get shift ID from multiple possible sources
+    let shiftTypeId = schedule.shift?.id || 
+                     schedule.ptoData.shiftTypeId || 
+                     schedule.originalShiftId;
+    
+    // STRATEGY 2: If we still don't have a shift ID, try to infer it from the officer's schedule
     if (!shiftTypeId) {
-      const { data: officerSchedule } = await supabase
+      console.log("🔍 No direct shift ID found, inferring from officer's schedule...");
+      
+      // Get the officer's schedule for this date to find their shift
+      const { data: officerSchedule, error } = await supabase
         .from("schedule_exceptions")
         .select("shift_type_id")
-        .eq("officer_id", schedule.officerId)
+        .eq("officer_id", selectedOfficerId)
         .eq("date", date)
         .eq("is_off", false)
         .single();
 
-      if (officerSchedule?.shift_type_id) {
+      if (!error && officerSchedule?.shift_type_id) {
         shiftTypeId = officerSchedule.shift_type_id;
+        console.log("📊 Found shift_type_id from working schedule:", shiftTypeId);
       } else {
+        // STRATEGY 3: Try to get from recurring schedule
         const dayOfWeek = parseISO(date).getDay();
-        const { data: recurringSchedule } = await supabase
+        const { data: recurringSchedule, error: recurringError } = await supabase
           .from("recurring_schedules")
           .select("shift_type_id")
-          .eq("officer_id", schedule.officerId)
+          .eq("officer_id", selectedOfficerId)
           .eq("day_of_week", dayOfWeek)
-          .is("end_date", null)
-          .single();
+          .or(`end_date.is.null,end_date.gte.${date}`);
 
-        if (recurringSchedule?.shift_type_id) {
-          shiftTypeId = recurringSchedule.shift_type_id;
+        if (!recurringError && recurringSchedule?.length > 0) {
+          shiftTypeId = recurringSchedule[0]?.shift_type_id;
+          console.log("📊 Found shift_type_id from recurring schedule:", shiftTypeId);
         }
       }
     }
 
     if (!shiftTypeId) {
+      console.error("❌ No shift_type_id found after all attempts");
       toast.error("Cannot remove PTO: Unable to determine shift");
       return;
     }
 
-    removePTOMutation.mutate({
+    const ptoData = {
       id: schedule.ptoData.id,
-      officerId: schedule.officerId,
-      date,
-      shiftTypeId,
+      officerId: selectedOfficerId,
+      date: date,
+      shiftTypeId: shiftTypeId,
       ptoType: schedule.ptoData.ptoType,
       startTime: schedule.ptoData.startTime,
       endTime: schedule.ptoData.endTime
-    }, {
+    };
+
+    console.log("✅ Calling removePTOMutation with:", ptoData);
+    
+    removePTOMutation.mutate(ptoData, {
       onSuccess: () => {
-        // Log PTO removal
+        console.log("✅ PTO removal successful, calling auditLogger...");
+        
+        // Log PTO removal to audit log - NOW INCLUDING OFFICER NAME
         auditLogger.logPTORemoval(
-          schedule.officerId,
+          selectedOfficerId,
           schedule.ptoData.ptoType,
           date,
           userEmail,
-          `Removed ${schedule.ptoData.ptoType} PTO from ${schedule.name || 'officer'}`
-        );
+          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}` // Include officer name
+        ).then(() => {
+          console.log("📝 Audit log entry created successfully");
+        }).catch((error) => {
+          console.error("❌ Failed to create audit log entry:", error);
+        });
+      },
+      onError: (error) => {
+        console.error("❌ PTO removal mutation failed:", error);
       }
     });
+    
   } catch (error) {
+    console.error("❌ Error in handleRemovePTO:", error);
     toast.error("Unexpected error while removing PTO");
   }
 };

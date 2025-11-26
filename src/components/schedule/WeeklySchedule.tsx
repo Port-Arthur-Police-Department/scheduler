@@ -863,9 +863,6 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
   try {
     console.log("🔄 WeeklySchedule handleRemovePTO called with:", { schedule, date, officerId });
     
-    const userEmail = await getCurrentUserEmail();
-    console.log("📧 User email for audit:", userEmail);
-    
     // Get officer name from multiple possible sources
     const officerName = schedule.officerName || schedule.name || 'Unknown Officer';
     console.log("👤 Officer name for audit:", officerName);
@@ -933,8 +930,8 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
           officerId,
           schedule.ptoData.ptoType,
           date,
-          userEmail,
-          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}` // Include officer name
+          userEmail, // Using from context instead of helper function
+          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}`
         ).then(() => {
           console.log("📝 WeeklySchedule audit log entry created successfully");
         }).catch((error) => {
@@ -950,7 +947,6 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
     toast.error("Unexpected error while removing PTO");
   }
 };
-
 
 
   const renderExcelStyleWeeklyView = () => {

@@ -44,11 +44,10 @@ interface PTOAssignmentDialogProps {
 }
 
 const PTO_TYPES = [
-  { value: "vacation", label: "Vacation", column: "vacation_balance" },
-  { value: "sick", label: "Sick Leave", column: "sick_balance" },
-  { value: "personal", label: "Personal Leave", column: "personal_balance" },
-  { value: "comp", label: "Comp Time", column: "comp_time_balance" },
-  { value: "holiday", label: "Holiday", column: "holiday_balance" },
+  { value: "vacation", label: "Vacation", column: "vacation_hours" },
+  { value: "sick", label: "Sick Leave", column: "sick_hours" },
+  { value: "comp", label: "Comp Time", column: "comp_hours" },
+  { value: "holiday", label: "Holiday", column: "holiday_hours" },
 ];
 
 export const PTOAssignmentDialog = ({

@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { ScheduleCell } from "./ScheduleCell";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
+import { auditLogger } from "@/lib/auditLogger";
+import { useUser } from "@/contexts/UserContext";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -61,6 +63,7 @@ const WeeklySchedule = ({
   userRole = 'officer', 
   isAdminOrSupervisor = false 
 }: WeeklyScheduleProps) => {
+  const { userEmail } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -205,70 +208,82 @@ const WeeklySchedule = ({
   };
 
   // In WeeklySchedule.tsx - update the handleExportPDF function
-  const handleExportPDF = async () => {
-    if (!dateRange?.from || !dateRange?.to) {
-      toast.error("Please select a date range");
-      return;
-    }
+const handleExportPDF = async () => {
+  if (!dateRange?.from || !dateRange?.to) {
+    toast.error("Please select a date range");
+    return;
+  }
 
-    if (!selectedShiftId) {
-      toast.error("Please select a shift");
-      return;
-    }
+  if (!selectedShiftId) {
+    toast.error("Please select a shift");
+    return;
+  }
 
-    try {
-      toast.info("Generating PDF export...");
-      
-      const startDate = dateRange.from;
-      const endDate = dateRange.to;
-      
-      const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
-        format(date, "yyyy-MM-dd")
-      );
+  try {
+    toast.info("Generating PDF export...");
+    
+    const startDate = dateRange.from;
+    const endDate = dateRange.to;
+    
+    const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
+      format(date, "yyyy-MM-dd")
+    );
 
-      const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
-      const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
+    const scheduleDataResponse = await fetchScheduleDataForRange(startDate, endDate, dates);
+    const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
 
-      if (activeView === "weekly") {
+    if (activeView === "weekly") {
+      const result = await exportWeeklyPDF({
+        startDate,
+        endDate,
+        shiftName,
+        scheduleData: scheduleDataResponse.dailySchedules || [],
+        minimumStaffing: schedules?.minimumStaffing,
+        selectedShiftId,
+        colorSettings: colors
+      });
+
+      if (result.success) {
+        // Log PDF export
+        await auditLogger.logPDFExport(
+          userEmail,
+          'weekly_schedule',
+          `Exported weekly schedule PDF for ${shiftName} from ${format(startDate, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`
+        );
         
-        const result = await exportWeeklyPDF({
-          startDate,
-          endDate,
-          shiftName,
-          scheduleData: scheduleDataResponse.dailySchedules || [],
-          minimumStaffing: schedules?.minimumStaffing,
-          selectedShiftId,
-          colorSettings: colors // ✅ Use colors from component level
-        });
-
-        if (result.success) {
-          toast.success("Weekly PDF exported successfully");
-          setExportDialogOpen(false);
-        } else {
-          toast.error("Failed to export weekly PDF");
-        }
+        toast.success("Weekly PDF exported successfully");
+        setExportDialogOpen(false);
       } else {
-        
-        const result = await exportMonthlyPDF({
-          startDate,
-          endDate,
-          shiftName,
-          scheduleData: scheduleDataResponse.dailySchedules || [],
-          colorSettings: colors // ✅ Use colors from component level
-        });
-
-        if (result.success) {
-          toast.success("Monthly PDF exported successfully");
-          setExportDialogOpen(false);
-        } else {
-          toast.error("Failed to export monthly PDF");
-        }
+        toast.error("Failed to export weekly PDF");
       }
-    } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Error generating PDF export");
+    } else {
+      const result = await exportMonthlyPDF({
+        startDate,
+        endDate,
+        shiftName,
+        scheduleData: scheduleDataResponse.dailySchedules || [],
+        colorSettings: colors
+      });
+
+      if (result.success) {
+        // Log PDF export
+        await auditLogger.logPDFExport(
+          userEmail,
+          'monthly_schedule',
+          `Exported monthly schedule PDF for ${shiftName} from ${format(startDate, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`
+        );
+        
+        toast.success("Monthly PDF exported successfully");
+        setExportDialogOpen(false);
+      } else {
+        toast.error("Failed to export monthly PDF");
+      }
     }
-  };
+  } catch (error) {
+    console.error("Export error:", error);
+    toast.error("Error generating PDF export");
+  }
+};
 
   // Function to fetch schedule data for a date range - FIXED VERSION
   const fetchScheduleDataForRange = async (startDate: Date, endDate: Date, dates: string[]) => {
@@ -774,6 +789,16 @@ const WeeklySchedule = ({
       currentPosition: officer.shiftInfo.position
     }, {
       onSuccess: () => {
+        // Log the position change
+        auditLogger.logPositionChange(
+          officer.officerId,
+          officer.officerName,
+          officer.shiftInfo.position,
+          finalPosition,
+          userEmail,
+          `Changed position from "${officer.shiftInfo.position}" to "${finalPosition}" for ${officer.officerName} on ${dateStr}`
+        );
+        
         setEditingAssignment(null);
         setEditPosition("");
         setCustomPosition("");
@@ -782,69 +807,93 @@ const WeeklySchedule = ({
   };
 
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
-    setSelectedSchedule({
-      scheduleId: schedule.scheduleId,
-      type: schedule.scheduleType,
-      date,
-      shift: schedule.shift,
-      officerId,
-      officerName,
-      ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
-    });
-    setPtoDialogOpen(true);
-  };
+  setSelectedSchedule({
+    scheduleId: schedule.scheduleId,
+    type: schedule.scheduleType,
+    date,
+    shift: schedule.shift,
+    officerId,
+    officerName,
+    ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
+  });
+  setPtoDialogOpen(true);
+};
+
+// Add this function to handle PTO assignment success
+const handlePTOSuccess = (ptoData: any) => {
+  // This will be called from your PTOAssignmentDialog component
+  auditLogger.logPTOAssignment(
+    ptoData.officerId,
+    ptoData.ptoType,
+    ptoData.startDate,
+    ptoData.duration,
+    userEmail,
+    `Assigned ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date}`
+  );
+};
 
   const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-    if (!schedule.hasPTO || !schedule.ptoData) return;
+  if (!schedule.hasPTO || !schedule.ptoData) return;
 
-    try {
-      let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
-      
-      if (!shiftTypeId) {
-        const { data: officerSchedule } = await supabase
-          .from("schedule_exceptions")
+  try {
+    let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
+    
+    if (!shiftTypeId) {
+      const { data: officerSchedule } = await supabase
+        .from("schedule_exceptions")
+        .select("shift_type_id")
+        .eq("officer_id", officerId)
+        .eq("date", date)
+        .eq("is_off", false)
+        .single();
+
+      if (officerSchedule?.shift_type_id) {
+        shiftTypeId = officerSchedule.shift_type_id;
+      } else {
+        const dayOfWeek = parseISO(date).getDay();
+        const { data: recurringSchedule } = await supabase
+          .from("recurring_schedules")
           .select("shift_type_id")
           .eq("officer_id", officerId)
-          .eq("date", date)
-          .eq("is_off", false)
+          .eq("day_of_week", dayOfWeek)
+          .is("end_date", null)
           .single();
 
-        if (officerSchedule?.shift_type_id) {
-          shiftTypeId = officerSchedule.shift_type_id;
-        } else {
-          const dayOfWeek = parseISO(date).getDay();
-          const { data: recurringSchedule } = await supabase
-            .from("recurring_schedules")
-            .select("shift_type_id")
-            .eq("officer_id", officerId)
-            .eq("day_of_week", dayOfWeek)
-            .is("end_date", null)
-            .single();
-
-          if (recurringSchedule?.shift_type_id) {
-            shiftTypeId = recurringSchedule.shift_type_id;
-          }
+        if (recurringSchedule?.shift_type_id) {
+          shiftTypeId = recurringSchedule.shift_type_id;
         }
       }
-
-      if (!shiftTypeId) {
-        toast.error("Cannot remove PTO: Unable to determine shift");
-        return;
-      }
-
-      removePTOMutation.mutate({
-        id: schedule.ptoData.id,
-        officerId,
-        date,
-        shiftTypeId,
-        ptoType: schedule.ptoData.ptoType,
-        startTime: schedule.ptoData.startTime,
-        endTime: schedule.ptoData.endTime
-      });
-    } catch (error) {
-      toast.error("Unexpected error while removing PTO");
     }
-  };
+
+    if (!shiftTypeId) {
+      toast.error("Cannot remove PTO: Unable to determine shift");
+      return;
+    }
+
+    removePTOMutation.mutate({
+      id: schedule.ptoData.id,
+      officerId,
+      date,
+      shiftTypeId,
+      ptoType: schedule.ptoData.ptoType,
+      startTime: schedule.ptoData.startTime,
+      endTime: schedule.ptoData.endTime
+    }, {
+      onSuccess: () => {
+        // Log PTO removal
+        auditLogger.logPTORemoval(
+          officerId,
+          schedule.ptoData.ptoType,
+          date,
+          userEmail,
+          `Removed ${schedule.ptoData.ptoType} PTO from ${schedule.officerName || 'officer'}`
+        );
+      }
+    });
+  } catch (error) {
+    toast.error("Unexpected error while removing PTO");
+  }
+};
 
   const renderExcelStyleWeeklyView = () => {
     const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -1079,18 +1128,18 @@ const WeeklySchedule = ({
             </div>
             {weekDays.map(({ dateStr }) => (
               <ScheduleCell
-                key={dateStr}
-                officer={officer.weeklySchedule[dateStr]}
-                dateStr={dateStr}
-                officerId={officer.officerId}
-                officerName={officer.officerName}
-                isAdminOrSupervisor={isAdminOrSupervisor}
-                onAssignPTO={handleAssignPTO}
-                onRemovePTO={handleRemovePTO}
-                onEditAssignment={handleEditAssignment}
-                onRemoveOfficer={removeOfficerMutation.mutate}
-                isUpdating={removeOfficerMutation.isPending}
-              />
+  key={dateStr}
+  officer={officer.weeklySchedule[dateStr]}
+  dateStr={dateStr}
+  officerId={officer.officerId}
+  officerName={officer.officerName}
+  isAdminOrSupervisor={isAdminOrSupervisor}
+  onAssignPTO={handleAssignPTO}
+  onRemovePTO={handleRemovePTO}
+  onEditAssignment={handleEditAssignment}
+  onRemoveOfficer={handleRemoveOfficer} // Use the updated handler
+  isUpdating={removeOfficerMutation.isPending}
+/>
             ))}
           </div>
         ))}
@@ -1140,18 +1189,18 @@ const WeeklySchedule = ({
     <div className="p-2 border-r font-medium">{getLastName(officer.officerName)}</div>
     {weekDays.map(({ dateStr }) => (
       <ScheduleCell
-        key={dateStr}
-        officer={officer.weeklySchedule[dateStr]}
-        dateStr={dateStr}
-        officerId={officer.officerId}
-        officerName={officer.officerName}
-        isAdminOrSupervisor={isAdminOrSupervisor}
-        onAssignPTO={handleAssignPTO}
-        onRemovePTO={handleRemovePTO}
-        onEditAssignment={handleEditAssignment}
-        onRemoveOfficer={removeOfficerMutation.mutate}
-        isUpdating={removeOfficerMutation.isPending}
-      />
+  key={dateStr}
+  officer={officer.weeklySchedule[dateStr]}
+  dateStr={dateStr}
+  officerId={officer.officerId}
+  officerName={officer.officerName}
+  isAdminOrSupervisor={isAdminOrSupervisor}
+  onAssignPTO={handleAssignPTO}
+  onRemovePTO={handleRemovePTO}
+  onEditAssignment={handleEditAssignment}
+  onRemoveOfficer={handleRemoveOfficer} // Use the updated handler
+  isUpdating={removeOfficerMutation.isPending}
+/>
     ))}
   </div>
 ))}
@@ -1238,7 +1287,7 @@ const WeeklySchedule = ({
               onAssignPTO={handleAssignPTO}
               onRemovePTO={handleRemovePTO}
               onEditAssignment={handleEditAssignment}
-              onRemoveOfficer={removeOfficerMutation.mutate}
+              onRemoveOfficer={handleRemoveOfficer} // Use the updated handler
               isUpdating={removeOfficerMutation.isPending}
               isPPO={true}
               partnerInfo={partnerInfo}

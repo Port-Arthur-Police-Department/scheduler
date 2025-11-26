@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { auditLogger } from "@/lib/auditLogger";
 
 export const PTOManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState<string>("");
@@ -59,35 +60,51 @@ export const PTOManagement = () => {
   });
 
   const updatePTOMutation = useMutation({
-    mutationFn: async () => {
-      if (!settings?.show_pto_balances) {
-        throw new Error("PTO balances are currently disabled in website settings");
-      }
+  mutationFn: async () => {
+    if (!settings?.show_pto_balances) {
+      throw new Error("PTO balances are currently disabled in website settings");
+    }
 
-      if (!selectedOfficer || !hours || isNaN(Number(hours))) {
-        throw new Error("Please fill in all fields with valid numbers");
-      }
+    if (!selectedOfficer || !hours || isNaN(Number(hours))) {
+      throw new Error("Please fill in all fields with valid numbers");
+    }
 
-      const officer = officers?.find(o => o.id === selectedOfficer);
-      if (!officer) throw new Error("Officer not found");
+    const officer = officers?.find(o => o.id === selectedOfficer);
+    if (!officer) throw new Error("Officer not found");
 
-      const hoursValue = Number(hours);
-      const adjustment = operation === "add" ? hoursValue : -hoursValue;
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-      const currentBalance = officer[`${ptoType}_hours` as keyof typeof officer] as number || 0;
-      const newBalance = currentBalance + adjustment;
+    const hoursValue = Number(hours);
+    const adjustment = operation === "add" ? hoursValue : -hoursValue;
 
-      if (newBalance < 0) {
-        throw new Error(`Insufficient ${ptoType} hours balance`);
-      }
+    const currentBalance = officer[`${ptoType}_hours` as keyof typeof officer] as number || 0;
+    const newBalance = currentBalance + adjustment;
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({ [`${ptoType}_hours`]: newBalance })
-        .eq("id", selectedOfficer);
+    if (newBalance < 0) {
+      throw new Error(`Insufficient ${ptoType} hours balance`);
+    }
 
-      if (error) throw error;
-    },
+    const { error } = await supabase
+      .from("profiles")
+      .update({ [`${ptoType}_hours`]: newBalance })
+      .eq("id", selectedOfficer);
+
+    if (error) throw error;
+
+    // AUDIT LOGGING: Log PTO adjustment
+    if (currentUser) {
+      await auditLogger.logPTOAssignment(
+        selectedOfficer,
+        ptoType,
+        new Date().toISOString(),
+        hoursValue,
+        operation,
+        currentUser.id,
+        currentUser.email
+      );
+    }
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["officers-pto"] });
       toast.success("PTO balance updated successfully");

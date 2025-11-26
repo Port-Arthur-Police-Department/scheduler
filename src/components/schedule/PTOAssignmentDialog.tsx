@@ -244,7 +244,17 @@ export const PTOAssignmentDialog = ({
     onError: (error: any) => {
       toast.error(error.message || "Failed to assign PTO");
     },
-  });
+  }
+
+ // After successful PTO assignment
+auditLogger.logPTOAssignment(
+  officerId,
+  ptoType,
+  startDate,
+  duration,
+  userEmail,
+  `Assigned ${ptoType} PTO to officer ${officerName}`
+);
 
   const removePTOMutation = useMutation({
     mutationFn: async () => {

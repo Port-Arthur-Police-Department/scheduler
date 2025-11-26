@@ -837,8 +837,6 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
   if (!schedule.hasPTO || !schedule.ptoData) return;
 
   try {
-    const userEmail = await getCurrentUserEmail(); // Make sure you have this
-    
     let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
     
     if (!shiftTypeId) {
@@ -883,12 +881,12 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
       endTime: schedule.ptoData.endTime
     }, {
       onSuccess: () => {
-        // Log PTO removal
+        // Log PTO removal - now using userEmail from context
         auditLogger.logPTORemoval(
           officerId,
           schedule.ptoData.ptoType,
           date,
-          userEmail,
+          userEmail, // Using from context
           `Removed ${schedule.ptoData.ptoType} PTO from ${schedule.officerName || 'officer'}`
         );
       }

@@ -806,8 +806,8 @@ const handleExportPDF = async () => {
     });
   };
 
-    // Add this function in WeeklySchedule.tsx, near your other handlers
-const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+// Add this function in WeeklySchedule.tsx, near your other handlers
+const handleRemoveOfficer = async (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
   const userEmail = await getCurrentUserEmail(); // Use your user email method
   
   removeOfficerMutation.mutate({

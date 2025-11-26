@@ -832,10 +832,13 @@ const handlePTOSuccess = (ptoData: any) => {
   );
 };
 
-  const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
+  // In WeeklySchedule.tsx - update handleRemovePTO
+const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
   if (!schedule.hasPTO || !schedule.ptoData) return;
 
   try {
+    const userEmail = await getCurrentUserEmail(); // Make sure you have this
+    
     let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
     
     if (!shiftTypeId) {

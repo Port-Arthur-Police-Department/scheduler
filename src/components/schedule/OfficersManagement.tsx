@@ -433,10 +433,40 @@ const handleRemovePTO = async (schedule: any, date: string) => {
   try {
     console.log("🔄 handleRemovePTO called with:", { schedule, date });
     
+    // DEBUG: Log the full schedule object to see what properties are available
+    console.log("🔍 Full schedule object:", schedule);
     
-    // Get officer name from the schedule
-    const officerName = schedule.name || schedule.officerName || 'Unknown Officer';
-    console.log("👤 Officer name for audit:", officerName);
+    // Try multiple ways to get the officer's name
+    let officerName = 'Unknown Officer';
+    
+    // STRATEGY 1: Check if we have the officer name directly in the schedule
+    if (schedule.name) {
+      officerName = schedule.name;
+      console.log("✅ Found officer name in schedule.name:", officerName);
+    } else if (schedule.officerName) {
+      officerName = schedule.officerName;
+      console.log("✅ Found officer name in schedule.officerName:", officerName);
+    } else if (schedule.profiles?.full_name) {
+      officerName = schedule.profiles.full_name;
+      console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
+    } else {
+      // STRATEGY 2: Fetch officer name from database using selectedOfficerId
+      console.log("🔍 No officer name in schedule, fetching from database...");
+      const { data: officerProfile, error } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", selectedOfficerId)
+        .single();
+
+      if (!error && officerProfile?.full_name) {
+        officerName = officerProfile.full_name;
+        console.log("✅ Found officer name from database:", officerName);
+      } else {
+        console.error("❌ Could not find officer name in database");
+      }
+    }
+
+    console.log("👤 Final officer name for audit:", officerName);
     
     // STRATEGY 1: Try to get shift ID from multiple possible sources
     let shiftTypeId = schedule.shift?.id || 
@@ -498,15 +528,15 @@ const handleRemovePTO = async (schedule: any, date: string) => {
       onSuccess: () => {
         console.log("✅ PTO removal successful, calling auditLogger...");
         
-        // Log PTO removal to audit log - NOW INCLUDING OFFICER NAME
+        // Log PTO removal to audit log - NOW WITH THE ACTUAL OFFICER NAME
         auditLogger.logPTORemoval(
           selectedOfficerId,
           schedule.ptoData.ptoType,
           date,
           userEmail,
-          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}` // Include officer name
+          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}`
         ).then(() => {
-          console.log("📝 Audit log entry created successfully");
+          console.log("📝 Audit log entry created successfully for officer:", officerName);
         }).catch((error) => {
           console.error("❌ Failed to create audit log entry:", error);
         });

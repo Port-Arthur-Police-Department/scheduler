@@ -808,7 +808,6 @@ const handleExportPDF = async () => {
 
 // Add this function in WeeklySchedule.tsx, near your other handlers
 const handleRemoveOfficer = async (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
-  
   removeOfficerMutation.mutate({
     scheduleId,
     type,
@@ -819,7 +818,7 @@ const handleRemoveOfficer = async (scheduleId: string, type: 'recurring' | 'exce
       auditLogger.logOfficerRemoval(
         officerData.officerId,
         officerData.officerName,
-        userEmail,
+        userEmail, // Using from context
         `Removed ${officerData.officerName} from ${type} schedule`
       );
     }

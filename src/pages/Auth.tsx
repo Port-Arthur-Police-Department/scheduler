@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
+import { auditLogger } from "@/lib/auditLogger";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -16,6 +17,17 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  
+  // ADD THIS HELPER FUNCTION
+  const getClientIP = async (): Promise<string> => {
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      return data.ip;
+    } catch (error) {
+      return 'unknown';
+    }
+  };
 
 
   // Replace this base64 string with your actual logo
@@ -32,41 +44,49 @@ const Auth = () => {
     });
   }, [navigate]);
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+    const handleAuth = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        toast.success("Welcome back!");
-        navigate("/");
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              full_name: fullName,
-            },
-          },
-        });
-        
-        if (error) throw error;
-        toast.success("Account created! Please check your email to confirm.");
+  try {
+    if (isLogin) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      
+      // AUDIT LOGGING ADDED HERE
+      if (data.user) {
+        const ip = await getClientIP();
+        const userAgent = navigator.userAgent;
+        await auditLogger.logLogin(data.user.email!, ip, userAgent);
       }
-    } catch (error: any) {
-      toast.error(error.message || "Authentication failed");
-    } finally {
-      setLoading(false);
+      
+      toast.success("Welcome back!");
+      navigate("/");
+    } else {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+      
+      if (error) throw error;
+      toast.success("Account created! Please check your email to confirm.");
     }
-  };
+  } catch (error: any) {
+    toast.error(error.message || "Authentication failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4 py-8">

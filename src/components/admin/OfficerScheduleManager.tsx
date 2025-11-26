@@ -235,16 +235,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   }) => {
     // Get current user for audit logging
     const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-    // Validate date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     
     const startDate = new Date(data.start);
-    if (startDate < today) {
-      throw new Error("Start date cannot be in the past");
-    }
-
     if (data.end && new Date(data.end) < startDate) {
       throw new Error("End date cannot be before start date");
     }
@@ -301,19 +293,19 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
     return insertedSchedules;
   },
-    onSuccess: (insertedSchedules) => {
-      console.log("Successfully created schedules:", insertedSchedules);
-      toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
-      queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
-      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-      resetForm();
-    },
-    onError: (error: any) => {
-      console.error("Schedule creation error:", error);
-      toast.error(error.message || "Failed to add schedule");
-    },
-  });
+  onSuccess: (insertedSchedules) => {
+    console.log("Successfully created schedules:", insertedSchedules);
+    toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
+    queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    resetForm();
+  },
+  onError: (error: any) => {
+    console.error("Schedule creation error:", error);
+    toast.error(error.message || "Failed to add schedule");
+  },
+});
 
   // Update schedule mutation - now updates all fields
   const updateScheduleMutation = useMutation({
@@ -501,40 +493,31 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   });
 
   // FIXED: Handle add schedule with proper validation
-  const handleAddSchedule = () => {
-    if (selectedDays.length === 0) {
-      toast.error("Please select at least one day");
-      return;
-    }
-    if (!shiftTypeId) {
-      toast.error("Please select a shift");
-      return;
-    }
-    
-    // Validate start date is not in past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (startDate < today) {
-      toast.error("Start date cannot be in the past");
-      return;
-    }
+const handleAddSchedule = () => {
+  if (selectedDays.length === 0) {
+    toast.error("Please select at least one day");
+    return;
+  }
+  if (!shiftTypeId) {
+    toast.error("Please select a shift");
+    return;
+  }
 
     // Validate end date if provided
     if (endDate && endDate < startDate) {
       toast.error("End date cannot be before start date");
       return;
-    }
+  }
 
-    addScheduleMutation.mutate({
-      days: selectedDays,
-      shiftId: shiftTypeId,
-      start: format(startDate, "yyyy-MM-dd"),
-      end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
-      unitNumber: unitNumber || undefined,
-      assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
-    });
-  };
+  addScheduleMutation.mutate({
+    days: selectedDays,
+    shiftId: shiftTypeId,
+    start: format(startDate, "yyyy-MM-dd"),
+    end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
+    unitNumber: unitNumber || undefined,
+    assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
+  });
+};
 
   const handleEditSchedule = (schedule: any) => {
     setEditingSchedule(schedule);
@@ -993,23 +976,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           <Calendar
                             mode="single"
                             selected={startDate}
-                            onSelect={(date) => {
-                              if (date) {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                if (date >= today) {
-                                  setStartDate(date);
-                                } else {
-                                  toast.error("Start date cannot be in the past");
-                                }
-                              }
-                            }}
+                            onSelect={(date) => date && setStartDate(date)}
                             initialFocus
-                            disabled={(date) => {
-                              const today = new Date();
-                              today.setHours(0, 0, 0, 0);
-                              return date < today;
-                            }}
                             className="pointer-events-auto"
                           />
                         </PopoverContent>

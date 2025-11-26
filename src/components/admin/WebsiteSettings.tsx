@@ -103,7 +103,7 @@ interface AuditLog {
 // Add this component inside your WebsiteSettings component
 const AuditLogViewer = () => {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
+    from: subDays(new Date(), 2), // CHANGED: 2 days instead of 30
     to: new Date()
   });
   const [selectedActionTypes, setSelectedActionTypes] = useState<string[]>([]);
@@ -211,7 +211,7 @@ const AuditLogViewer = () => {
     setSelectedTables([]);
     setSearchQuery("");
     setDateRange({
-      from: subDays(new Date(), 30),
+      from: subDays(new Date(), 2), // CHANGED: 2 days instead of 30
       to: new Date()
     });
   };

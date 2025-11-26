@@ -432,8 +432,6 @@ const handleRemovePTO = async (schedule: any, date: string) => {
 
   try {
     console.log("🔄 handleRemovePTO called with:", { schedule, date });
-
-    };
     
     
     // Get officer name from the schedule

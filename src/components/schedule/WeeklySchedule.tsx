@@ -896,6 +896,27 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
   }
 };
 
+  // Add this function in WeeklySchedule.tsx, near your other handlers
+const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+  const userEmail = await getCurrentUserEmail(); // Use your user email method
+  
+  removeOfficerMutation.mutate({
+    scheduleId,
+    type,
+    officerData
+  }, {
+    onSuccess: () => {
+      // Log officer removal
+      auditLogger.logOfficerRemoval(
+        officerData.officerId,
+        officerData.officerName,
+        userEmail,
+        `Removed ${officerData.officerName} from ${type} schedule`
+      );
+    }
+  });
+};
+
   const renderExcelStyleWeeklyView = () => {
     const weekDays = Array.from({ length: 7 }, (_, i) => {
       const date = addDays(currentWeekStart, i);

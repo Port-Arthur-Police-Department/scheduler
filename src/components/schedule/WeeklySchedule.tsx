@@ -851,7 +851,7 @@ const handlePTOSuccess = (ptoData: any) => {
   );
 };
 
-  // In WeeklySchedule.tsx - update handleRemovePTO
+// In WeeklySchedule.tsx - update handleRemovePTO
 const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
   if (!schedule.hasPTO || !schedule.ptoData) {
     console.error("❌ No PTO data found in schedule:", schedule);
@@ -862,9 +862,40 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
     console.log("🔄 WeeklySchedule handleRemovePTO called with:", { schedule, date, officerId });
     console.log("📧 User email from context:", userEmail);
     
-    // Get officer name from multiple possible sources
-    const officerName = schedule.officerName || schedule.name || 'Unknown Officer';
-    console.log("👤 Officer name for audit:", officerName);
+    // DEBUG: Log the full schedule object to see what properties are available
+    console.log("🔍 Full schedule object:", schedule);
+    
+    // Try multiple ways to get the officer's name
+    let officerName = 'Unknown Officer';
+    
+    // STRATEGY 1: Check if we have the officer name directly in the schedule
+    if (schedule.officerName) {
+      officerName = schedule.officerName;
+      console.log("✅ Found officer name in schedule.officerName:", officerName);
+    } else if (schedule.name) {
+      officerName = schedule.name;
+      console.log("✅ Found officer name in schedule.name:", officerName);
+    } else if (schedule.profiles?.full_name) {
+      officerName = schedule.profiles.full_name;
+      console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
+    } else {
+      // STRATEGY 2: Fetch officer name from database using officerId
+      console.log("🔍 No officer name in schedule, fetching from database...");
+      const { data: officerProfile, error } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", officerId)
+        .single();
+
+      if (!error && officerProfile?.full_name) {
+        officerName = officerProfile.full_name;
+        console.log("✅ Found officer name from database:", officerName);
+      } else {
+        console.error("❌ Could not find officer name in database for officerId:", officerId);
+      }
+    }
+
+    console.log("👤 Final officer name for audit:", officerName);
     
     let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
     
@@ -929,10 +960,10 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
           officerId,
           schedule.ptoData.ptoType,
           date,
-          userEmail, // Using from context
-          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}`
+          userEmail,
+          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}` // Now includes actual officer name
         ).then(() => {
-          console.log("📝 WeeklySchedule audit log entry created successfully");
+          console.log("📝 WeeklySchedule audit log entry created successfully for officer:", officerName);
         }).catch((error) => {
           console.error("❌ WeeklySchedule failed to create audit log entry:", error);
         });

@@ -17,6 +17,8 @@ import { usePDFExport } from "@/hooks/usePDFExport";
 import { OfficerSection } from "./OfficerSection";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
+import { auditLogger } from "@/lib/auditLogger";
+import { useUser } from "@/contexts/UserContext";
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -34,6 +36,7 @@ export const DailyScheduleView = ({
 }: DailyScheduleViewProps) => {
   console.log("🔄 DailyScheduleView RENDERED - User Role:", userRole, "Filter Shift:", filterShiftId);
   const queryClient = useQueryClient();
+  const { userEmail } = useUser();
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editPosition, setEditPosition] = useState("");
   const [customPosition, setCustomPosition] = useState("");
@@ -92,54 +95,93 @@ const { data: scheduleData, isLoading } = useQuery({
 });
 
   // FIXED: Updated handlers to work with the new callback signatures
-  const handleSavePosition = (officer: any, position: string) => {
-    if (!position) {
-      toast.error("Please select or enter a position");
-      return;
+  const handleSavePosition = async (officer: any, position: string) => {
+  if (!position) {
+    toast.error("Please select or enter a position");
+    return;
+  }
+
+  const userEmail = await getCurrentUserEmail();
+
+  updateScheduleMutation.mutate({ 
+    scheduleId: officer.scheduleId, 
+    type: officer.type,
+    positionName: position,
+    date: dateStr,
+    officerId: officer.officerId,
+    shiftTypeId: officer.shift.id,
+    currentPosition: officer.position,
+    unitNumber: officer.unitNumber,
+    notes: officer.notes
+  }, {
+    onSuccess: () => {
+      // Log the position change
+      auditLogger.logPositionChange(
+        officer.officerId,
+        officer.name,
+        officer.position, // old position
+        position, // new position
+        userEmail,
+        `Changed position from "${officer.position}" to "${position}" for ${officer.name}`
+      );
     }
+  });
+};
+  
+const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
+  const userEmail = await getCurrentUserEmail();
 
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
-      type: officer.type,
-      positionName: position,
-      date: dateStr,
-      officerId: officer.officerId,
-      shiftTypeId: officer.shift.id,
-      currentPosition: officer.position,
-      unitNumber: officer.unitNumber,
-      notes: officer.notes
-    });
-  };
+  updateScheduleMutation.mutate({ 
+    scheduleId: officer.scheduleId, 
+    type: officer.type,
+    positionName: officer.position,
+    date: dateStr,
+    officerId: officer.officerId,
+    shiftTypeId: officer.shift.id,
+    currentPosition: officer.position,
+    unitNumber: unitNumber,
+    notes: officer.notes
+  }, {
+    onSuccess: () => {
+      // Log the unit number change
+      auditLogger.logUnitNumberChange(
+        officer.officerId,
+        officer.name,
+        officer.unitNumber, // old unit
+        unitNumber, // new unit
+        userEmail,
+        `Changed unit from "${officer.unitNumber || 'None'}" to "${unitNumber}" for ${officer.name}`
+      );
+    }
+  });
+};
 
-  const handleSaveUnitNumber = (officer: any, unitNumber: string) => {
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
-      type: officer.type,
-      positionName: officer.position,
-      date: dateStr,
-      officerId: officer.officerId,
-      shiftTypeId: officer.shift.id,
-      currentPosition: officer.position,
-      unitNumber: unitNumber,
-      notes: officer.notes
-    });
-  };
+ const handleSaveNotes = async (officer: any, notes: string) => {
+  const userEmail = await getCurrentUserEmail();
 
-  const handleSaveNotes = (officer: any, notes: string) => {
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
-      type: officer.type,
-      positionName: officer.position,
-      date: dateStr,
-      officerId: officer.officerId,
-      shiftTypeId: officer.shift.id,
-      currentPosition: officer.position,
-      unitNumber: officer.unitNumber,
-      notes: notes
-    });
-  };
+  updateScheduleMutation.mutate({ 
+    scheduleId: officer.scheduleId, 
+    type: officer.type,
+    positionName: officer.position,
+    date: dateStr,
+    officerId: officer.officerId,
+    shiftTypeId: officer.shift.id,
+    currentPosition: officer.position,
+    unitNumber: officer.unitNumber,
+    notes: notes
+  }, {
+    onSuccess: () => {
+      // Log the notes change
+      auditLogger.logNotesChange(
+        officer.officerId,
+        officer.name,
+        userEmail,
+        `Updated notes for ${officer.name}`
+      );
+    }
+  });
+};
 
-// NEW: Partnership handler
 // NEW: Handle creating partnerships
 const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
   console.log("🔄 Creating partnership:", { 
@@ -233,13 +275,35 @@ const handleRemovePartnership = (officer: any) => {
 };
 
 // Combined handler that routes to the correct function
-const handlePartnershipChange = (officer: any, partnerOfficerId?: string) => {
+const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
+  const userEmail = await getCurrentUserEmail();
+
   if (partnerOfficerId) {
     // This is a create operation
     handleCreatePartnership(officer, partnerOfficerId);
+    
+    // Log partnership creation
+    auditLogger.logPartnershipChange(
+      officer.officerId,
+      officer.name,
+      partnerOfficerId,
+      'created',
+      userEmail,
+      `Created partnership between ${officer.name} and partner`
+    );
   } else {
     // This is a remove operation  
     handleRemovePartnership(officer);
+    
+    // Log partnership removal
+    auditLogger.logPartnershipChange(
+      officer.officerId,
+      officer.name,
+      officer.partnerOfficerId,
+      'removed',
+      userEmail,
+      `Removed partnership for ${officer.name}`
+    );
   }
 };
 

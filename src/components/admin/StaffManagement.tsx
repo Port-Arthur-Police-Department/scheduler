@@ -11,6 +11,7 @@ import { OfficerScheduleManager } from "./OfficerScheduleManager";
 import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { auditLogger } from "@/lib/auditLogger";
 
 export const StaffManagement = () => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);

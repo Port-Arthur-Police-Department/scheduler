@@ -101,7 +101,7 @@ const { data: scheduleData, isLoading } = useQuery({
     return;
   }
 
-  const userEmail = await getCurrentUserEmail();
+ // const userEmail = await getCurrentUserEmail();
 
   updateScheduleMutation.mutate({ 
     scheduleId: officer.scheduleId, 
@@ -129,7 +129,7 @@ const { data: scheduleData, isLoading } = useQuery({
 };
   
 const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
-  const userEmail = await getCurrentUserEmail();
+//  const userEmail = await getCurrentUserEmail();
 
   updateScheduleMutation.mutate({ 
     scheduleId: officer.scheduleId, 
@@ -157,7 +157,7 @@ const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
 };
 
  const handleSaveNotes = async (officer: any, notes: string) => {
-  const userEmail = await getCurrentUserEmail();
+//  const userEmail = await getCurrentUserEmail();
 
   updateScheduleMutation.mutate({ 
     scheduleId: officer.scheduleId, 
@@ -276,7 +276,7 @@ const handleRemovePartnership = (officer: any) => {
 
 // Combined handler that routes to the correct function
 const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
-  const userEmail = await getCurrentUserEmail();
+//  const userEmail = await getCurrentUserEmail();
 
   if (partnerOfficerId) {
     // This is a create operation

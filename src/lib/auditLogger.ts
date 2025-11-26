@@ -14,8 +14,59 @@ export interface AuditLogEntry {
   user_agent?: string;
 }
 
+// Helper function to get client IP address
+const getClientIP = async (): Promise<string> => {
+  try {
+    // Try multiple methods to get the client IP
+    const methods = [
+      // Method 1: Direct IP detection service
+      async () => {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        return data.ip;
+      },
+      // Method 2: Alternative IP service
+      async () => {
+        const response = await fetch('https://api64.ipify.org?format=json');
+        const data = await response.json();
+        return data.ip;
+      },
+      // Method 3: Cloudflare compatible (if using Cloudflare)
+      async () => {
+        const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
+        const text = await response.text();
+        const ipMatch = text.match(/ip=([\d\.]+)/);
+        return ipMatch ? ipMatch[1] : null;
+      }
+    ];
+
+    for (const method of methods) {
+      try {
+        const ip = await method();
+        if (ip) {
+          console.log('Detected IP address:', ip);
+          return ip;
+        }
+      } catch (error) {
+        console.warn('IP detection method failed:', error);
+        continue;
+      }
+    }
+    
+    return 'unknown';
+  } catch (error) {
+    console.error('All IP detection methods failed:', error);
+    return 'unknown';
+  }
+};
+
+// Helper function to get user agent
+const getUserAgent = (): string => {
+  return navigator.userAgent || 'unknown';
+};
+
 export const auditLogger = {
-  async log(entry: Omit<AuditLogEntry, 'user_id' | 'user_email'>) {
+  async log(entry: Omit<AuditLogEntry, 'user_id' | 'user_email' | 'ip_address' | 'user_agent'>) {
     try {
       // Get current user session
       const { data: { session } } = await supabase.auth.getSession();
@@ -25,11 +76,23 @@ export const auditLogger = {
         return;
       }
 
+      // Get client IP and user agent
+      const ipAddress = await getClientIP();
+      const userAgent = getUserAgent();
+
       const fullEntry: AuditLogEntry = {
         user_id: session.user.id,
         user_email: session.user.email!,
+        ip_address: ipAddress,
+        user_agent: userAgent,
         ...entry
       };
+
+      console.log('Logging audit entry:', {
+        action: entry.action_type,
+        user: session.user.email,
+        ip: ipAddress
+      });
 
       const { error } = await supabase
         .from('audit_logs')
@@ -45,11 +108,38 @@ export const auditLogger = {
 
   // Convenience methods for common actions
   async logLogin(userEmail: string, ipAddress?: string, userAgent?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
+    
     await this.log({
       action_type: 'login',
       description: `User ${userEmail} logged in`,
-      ip_address: ipAddress,
-      user_agent: userAgent
+      ip_address: ip,
+      user_agent: ua
+    });
+  },
+
+  async logLoginSuccess(userEmail: string, ipAddress?: string, userAgent?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
+    
+    await this.log({
+      action_type: 'LOGIN_SUCCESS',
+      description: `Successful login for ${userEmail}`,
+      ip_address: ip,
+      user_agent: ua
+    });
+  },
+
+  async logLoginFailure(userEmail: string, ipAddress?: string, userAgent?: string, reason?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
+    
+    await this.log({
+      action_type: 'LOGIN_FAILURE',
+      description: `Failed login attempt for ${userEmail}${reason ? `: ${reason}` : ''}`,
+      ip_address: ip,
+      user_agent: ua
     });
   },
 
@@ -254,25 +344,6 @@ export const auditLogger = {
       description: `Changed PTO status from "${oldStatus}" to "${newStatus}"${reason ? `: ${reason}` : ''}`,
       old_values: { status: oldStatus },
       new_values: { status: newStatus }
-    });
-  },
-
-  // Enhanced login methods with success/failure tracking
-  async logLoginSuccess(userEmail: string, ipAddress?: string, userAgent?: string) {
-    await this.log({
-      action_type: 'LOGIN_SUCCESS',
-      description: `Successful login for ${userEmail}`,
-      ip_address: ipAddress,
-      user_agent: userAgent
-    });
-  },
-
-  async logLoginFailure(userEmail: string, ipAddress?: string, userAgent?: string, reason?: string) {
-    await this.log({
-      action_type: 'LOGIN_FAILURE',
-      description: `Failed login attempt for ${userEmail}${reason ? `: ${reason}` : ''}`,
-      ip_address: ipAddress,
-      user_agent: userAgent
     });
   },
 

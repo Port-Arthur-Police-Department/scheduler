@@ -86,6 +86,8 @@ const WeeklySchedule = ({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState<Date>(currentWeekStart);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [selectedMonthDate, setSelectedMonthDate] = useState<Date>(currentMonth);
   
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>({
     from: startOfWeek(new Date(), { weekStartsOn: 0 }),
@@ -1908,6 +1910,69 @@ const renderMonthlyView = () => {
       </Popover>
     )}
     
+    {/* Month Picker for Monthly View */}
+    {activeView === "monthly" && (
+      <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Jump to Month
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <div className="p-3">
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Select a month</div>
+              <Calendar
+                mode="single"
+                selected={selectedMonthDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedMonthDate(date);
+                    // When a date is selected, find the start of that month and update the view
+                    const monthStart = startOfMonth(date);
+                    setCurrentMonth(monthStart);
+                    setMonthPickerOpen(false);
+                  }
+                }}
+                className="rounded-md border"
+              />
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const monthStart = startOfMonth(new Date());
+                    setCurrentMonth(monthStart);
+                    setSelectedMonthDate(monthStart);
+                    setMonthPickerOpen(false);
+                  }}
+                >
+                  This Month
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const nextMonth = addMonths(currentMonth, 1);
+                    setCurrentMonth(nextMonth);
+                    setSelectedMonthDate(nextMonth);
+                    setMonthPickerOpen(false);
+                  }}
+                >
+                  Next Month
+                </Button>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    )}
+    
     <Button
       variant={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonthView) ? "outline" : "default"}
       size="sm"
@@ -1917,7 +1982,7 @@ const renderMonthlyView = () => {
       Today
     </Button>
   </div>
-  </div>
+</div>
 
           {selectedShiftId !== "all" && (
             <p className="text-sm text-muted-foreground mt-2">

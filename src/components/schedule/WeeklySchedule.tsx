@@ -1875,6 +1875,7 @@ const renderMonthlyView = () => {
       Today
     </Button>
   </div>
+  </div>
 
           {selectedShiftId !== "all" && (
             <p className="text-sm text-muted-foreground mt-2">

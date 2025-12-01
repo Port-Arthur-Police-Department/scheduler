@@ -84,6 +84,8 @@ const WeeklySchedule = ({
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  const [selectedWeekDate, setSelectedWeekDate] = useState<Date>(currentWeekStart);
   
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>({
     from: startOfWeek(new Date(), { weekStartsOn: 0 }),
@@ -1766,49 +1768,113 @@ const renderMonthlyView = () => {
             </TabsList>
           </Tabs>
           
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              <div className="text-center">
-                <h3 className="text-lg font-semibold">
-                  {activeView === "weekly" 
-                    ? `${format(currentWeekStart, "MMM d")} - ${format(weekEnd, "MMM d, yyyy")}`
-                    : format(currentMonth, "MMMM yyyy")
+<div className="flex items-center justify-between mt-4">
+  <div className="flex items-center gap-2">
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth}
+    >
+      <ChevronLeft className="h-4 w-4" />
+    </Button>
+    
+    <div className="text-center">
+      <h3 className="text-lg font-semibold">
+        {activeView === "weekly" 
+          ? `${format(currentWeekStart, "MMM d")} - ${format(weekEnd, "MMM d, yyyy")}`
+          : format(currentMonth, "MMMM yyyy")
+        }
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {activeView === "weekly" 
+          ? `Week of ${format(currentWeekStart, "MMMM d, yyyy")}`
+          : `Month of ${format(currentMonth, "MMMM yyyy")}`
+        }
+      </p>
+    </div>
+    
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={activeView === "weekly" ? goToNextWeek : goToNextMonth}
+    >
+      <ChevronRight className="h-4 w-4" />
+    </Button>
+  </div>
+  
+  <div className="flex items-center gap-2">
+    {/* Week Picker for Weekly View */}
+    {activeView === "weekly" && (
+      <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Jump to Week
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <div className="p-3">
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Select a week</div>
+              <Calendar
+                mode="single"
+                selected={selectedWeekDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedWeekDate(date);
+                    // When a date is selected, find the start of that week and update the view
+                    const weekStart = startOfWeek(date, { weekStartsOn: 0 });
+                    setCurrentWeekStart(weekStart);
+                    setWeekPickerOpen(false);
                   }
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {activeView === "weekly" 
-                    ? `Week of ${format(currentWeekStart, "MMMM d, yyyy")}`
-                    : `Month of ${format(currentMonth, "MMMM yyyy")}`
-                  }
-                </p>
+                }}
+                className="rounded-md border"
+              />
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
+                    setCurrentWeekStart(weekStart);
+                    setSelectedWeekDate(weekStart);
+                    setWeekPickerOpen(false);
+                  }}
+                >
+                  This Week
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const nextWeek = addWeeks(currentWeekStart, 1);
+                    setCurrentWeekStart(nextWeek);
+                    setSelectedWeekDate(nextWeek);
+                    setWeekPickerOpen(false);
+                  }}
+                >
+                  Next Week
+                </Button>
               </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={activeView === "weekly" ? goToNextWeek : goToNextMonth}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
             </div>
-            
-            <Button
-              variant={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonthView) ? "outline" : "default"}
-              size="sm"
-              onClick={activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth}
-              disabled={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonthView)}
-            >
-              Today
-            </Button>
           </div>
+        </PopoverContent>
+      </Popover>
+    )}
+    
+    <Button
+      variant={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonthView) ? "outline" : "default"}
+      size="sm"
+      onClick={activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth}
+      disabled={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonthView)}
+    >
+      Today
+    </Button>
+  </div>
 
           {selectedShiftId !== "all" && (
             <p className="text-sm text-muted-foreground mt-2">

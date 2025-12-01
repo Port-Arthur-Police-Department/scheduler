@@ -1616,23 +1616,22 @@ const renderMonthlyView = () => {
                               {ptoType}
                             </div>
                             {/* ADD TRASH ICON FOR ADMINS/SUPERVISORS */}
-                            {isAdminOrSupervisor && isCurrentMonthDay && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData) {
-                                    console.log("Monthly view: Removing PTO for", officer.officerName);
-                                    handleRemovePTO(officer, dateStr, officer.officerId);
-                                  }
-                                }}
-                                disabled={removePTOMutation.isPending}
-                                title="Remove PTO"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+{isAdminOrSupervisor && isCurrentMonthDay && (
+  <Button
+    variant="ghost"
+    size="icon"
+    className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
+    onClick={(e) => {
+      e.stopPropagation();
+      // Use the exact same pattern as the weekly view
+      handleRemovePTO(officer, dateStr, officer.officerId);
+    }}
+    disabled={removePTOMutation.isPending}
+    title="Remove PTO"
+  >
+    <Trash2 className="h-3 w-3" />
+  </Button>
+)}tton>
                             )}
                           </div>
                         </div>

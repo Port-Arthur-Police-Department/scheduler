@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Grid, Download, CalendarRange, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Grid, Download, CalendarRange, Trash2, CalendarDays } from "lucide-react";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay, isSameMonth, parseISO, eachWeekOfInterval, addYears, subYears } from "date-fns";
 import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";

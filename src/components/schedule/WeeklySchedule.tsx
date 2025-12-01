@@ -855,51 +855,94 @@ const handlePTOSuccess = (ptoData: any) => {
 
 // In WeeklySchedule.tsx - update handleRemovePTO
 const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-  if (!schedule.hasPTO || !schedule.ptoData) {
-    console.error("❌ No PTO data found in schedule:", schedule);
+  console.log("🔄 WeeklySchedule handleRemovePTO called with:", { schedule, date, officerId });
+  console.log("📧 User email from context:", userEmail);
+  
+  // DEBUG: Log the full schedule object to see what properties are available
+  console.log("🔍 Full schedule object:", schedule);
+  
+  // Check for PTO data in various possible locations
+  let hasPTO = false;
+  let ptoData = null;
+  let officerName = 'Unknown Officer';
+
+  // Check root level (weekly view structure)
+  if (schedule.hasPTO && schedule.ptoData) {
+    hasPTO = schedule.hasPTO;
+    ptoData = schedule.ptoData;
+    officerName = schedule.officerName || schedule.name || 'Unknown Officer';
+    console.log("✅ Found PTO at root level");
+  }
+  // Check shiftInfo level (monthly view structure for working officers with PTO)
+  else if (schedule.shiftInfo?.hasPTO && schedule.shiftInfo?.ptoData) {
+    hasPTO = schedule.shiftInfo.hasPTO;
+    ptoData = schedule.shiftInfo.ptoData;
+    officerName = schedule.officerName || schedule.name || 'Unknown Officer';
+    console.log("✅ Found PTO in shiftInfo");
+  }
+  // Check for officers marked as Off (PTO-only exceptions)
+  else if (schedule.shiftInfo?.isOff) {
+    hasPTO = true;
+    ptoData = {
+      id: schedule.shiftInfo.scheduleId,
+      ptoType: schedule.shiftInfo.reason || 'PTO',
+      isFullShift: true,
+      startTime: schedule.shiftInfo.startTime,
+      endTime: schedule.shiftInfo.endTime,
+      shiftTypeId: schedule.shiftInfo.shift?.id
+    };
+    officerName = schedule.officerName || schedule.name || 'Unknown Officer';
+    console.log("✅ Found PTO in isOff officer");
+  }
+
+  if (!hasPTO || !ptoData) {
+    console.error("❌ No PTO data found in schedule object. Structure:");
+    console.error("- Root hasPTO:", schedule.hasPTO);
+    console.error("- Root ptoData:", schedule.ptoData);
+    console.error("- shiftInfo.hasPTO:", schedule.shiftInfo?.hasPTO);
+    console.error("- shiftInfo.ptoData:", schedule.shiftInfo?.ptoData);
+    console.error("- shiftInfo.isOff:", schedule.shiftInfo?.isOff);
+    console.error("- Full schedule object:", schedule);
+    toast.error("No PTO data found for this officer");
     return;
   }
 
-  try {
-    console.log("🔄 WeeklySchedule handleRemovePTO called with:", { schedule, date, officerId });
-    console.log("📧 User email from context:", userEmail);
-    
-    // DEBUG: Log the full schedule object to see what properties are available
-    console.log("🔍 Full schedule object:", schedule);
-    
-    // Try multiple ways to get the officer's name
-    let officerName = 'Unknown Officer';
-    
-    // STRATEGY 1: Check if we have the officer name directly in the schedule
-    if (schedule.officerName) {
-      officerName = schedule.officerName;
-      console.log("✅ Found officer name in schedule.officerName:", officerName);
-    } else if (schedule.name) {
-      officerName = schedule.name;
-      console.log("✅ Found officer name in schedule.name:", officerName);
-    } else if (schedule.profiles?.full_name) {
-      officerName = schedule.profiles.full_name;
-      console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
-    } else {
-      // STRATEGY 2: Fetch officer name from database using officerId
-      console.log("🔍 No officer name in schedule, fetching from database...");
-      const { data: officerProfile, error } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", officerId)
-        .single();
+  console.log("✅ Using PTO data:", ptoData);
 
-      if (!error && officerProfile?.full_name) {
-        officerName = officerProfile.full_name;
-        console.log("✅ Found officer name from database:", officerName);
+  try {
+    // Try multiple ways to get the officer's name if not already found
+    if (officerName === 'Unknown Officer') {
+      // STRATEGY 1: Check if we have the officer name directly in the schedule
+      if (schedule.officerName) {
+        officerName = schedule.officerName;
+        console.log("✅ Found officer name in schedule.officerName:", officerName);
+      } else if (schedule.name) {
+        officerName = schedule.name;
+        console.log("✅ Found officer name in schedule.name:", officerName);
+      } else if (schedule.profiles?.full_name) {
+        officerName = schedule.profiles.full_name;
+        console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
       } else {
-        console.error("❌ Could not find officer name in database for officerId:", officerId);
+        // STRATEGY 2: Fetch officer name from database using officerId
+        console.log("🔍 No officer name in schedule, fetching from database...");
+        const { data: officerProfile, error } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", officerId)
+          .single();
+
+        if (!error && officerProfile?.full_name) {
+          officerName = officerProfile.full_name;
+          console.log("✅ Found officer name from database:", officerName);
+        } else {
+          console.error("❌ Could not find officer name in database for officerId:", officerId);
+        }
       }
     }
 
     console.log("👤 Final officer name for audit:", officerName);
     
-    let shiftTypeId = schedule.shift?.id || schedule.ptoData.shiftTypeId;
+    let shiftTypeId = schedule.shift?.id || ptoData.shiftTypeId || schedule.shiftInfo?.shift?.id;
     
     if (!shiftTypeId) {
       console.log("🔍 No direct shift ID found, searching for shift...");
@@ -939,31 +982,31 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
     }
 
     console.log("✅ Calling removePTOMutation with:", {
-      id: schedule.ptoData.id,
+      id: ptoData.id,
       officerId,
       date,
       shiftTypeId,
-      ptoType: schedule.ptoData.ptoType
+      ptoType: ptoData.ptoType
     });
 
     removePTOMutation.mutate({
-      id: schedule.ptoData.id,
+      id: ptoData.id,
       officerId,
       date,
       shiftTypeId,
-      ptoType: schedule.ptoData.ptoType,
-      startTime: schedule.ptoData.startTime,
-      endTime: schedule.ptoData.endTime
+      ptoType: ptoData.ptoType,
+      startTime: ptoData.startTime,
+      endTime: ptoData.endTime
     }, {
       onSuccess: () => {
         console.log("✅ WeeklySchedule PTO removal successful, calling auditLogger...");
         
         auditLogger.logPTORemoval(
           officerId,
-          schedule.ptoData.ptoType,
+          ptoData.ptoType,
           date,
           userEmail,
-          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}` // Now includes actual officer name
+          `Removed ${ptoData.ptoType} PTO from ${officerName}` // Now includes actual officer name
         ).then(() => {
           console.log("📝 WeeklySchedule audit log entry created successfully for officer:", officerName);
         }).catch((error) => {
@@ -1432,28 +1475,29 @@ const renderMonthlyView = () => {
           
           // UPDATED: Use websiteSettings instead of settings
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => {
-            if (!officer.shiftInfo?.hasPTO || !officer.shiftInfo?.ptoData?.isFullShift) {
-              return false;
-            }
-            
-            const ptoType = officer.shiftInfo?.ptoData?.ptoType?.toLowerCase() || '';
-            
-            // Use website settings to determine which PTO types to show
-            if (ptoType.includes('vacation') && websiteSettings?.pto_type_visibility?.show_vacation_pto) {
-              return true;
-            }
-            if (ptoType.includes('holiday') && websiteSettings?.pto_type_visibility?.show_holiday_pto) {
-              return true;
-            }
-            if (ptoType.includes('sick') && websiteSettings?.pto_type_visibility?.show_sick_pto) {
-              return true;
-            }
-            if (ptoType.includes('comp') && websiteSettings?.pto_type_visibility?.show_comp_pto) {
-              return true;
-            }
-            
-            return false;
-          }) || [];
+  // Check if officer has any PTO (full or partial)
+  if (!officer.shiftInfo?.hasPTO || !officer.shiftInfo?.ptoData) {
+    return false;
+  }
+  
+  const ptoType = officer.shiftInfo?.ptoData?.ptoType?.toLowerCase() || '';
+  
+  // Use website settings to determine which PTO types to show
+  if (ptoType.includes('vacation') && websiteSettings?.pto_type_visibility?.show_vacation_pto) {
+    return true;
+  }
+  if (ptoType.includes('holiday') && websiteSettings?.pto_type_visibility?.show_holiday_pto) {
+    return true;
+  }
+  if (ptoType.includes('sick') && websiteSettings?.pto_type_visibility?.show_sick_pto) {
+    return true;
+  }
+  if (ptoType.includes('comp') && websiteSettings?.pto_type_visibility?.show_comp_pto) {
+    return true;
+  }
+  
+  return false;
+}) || [];
 
           // Calculate staffing counts for the badges (but don't show all officers)
           const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule

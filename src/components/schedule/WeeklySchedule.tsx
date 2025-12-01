@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Grid, Download, CalendarRange } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Grid, Download, CalendarRange, Trash2 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay, isSameMonth, parseISO, eachWeekOfInterval, addYears, subYears } from "date-fns";
 import { toast } from "sonner";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
@@ -1589,7 +1589,7 @@ const renderMonthlyView = () => {
                       return (
                         <div 
                           key={officer.officerId} 
-                          className="text-xs p-1 rounded border flex items-center justify-between"
+                          className="text-xs p-1 rounded border flex items-center justify-between group hover:opacity-90"
                           style={{
                             backgroundColor: ptoColors.bg,
                             borderColor: ptoColors.border,
@@ -1609,8 +1609,29 @@ const renderMonthlyView = () => {
                             {/* REMOVED Ofc BADGE */}
                             {/* REMOVED PPO BADGE */}
                           </div>
-                          <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
-                            {ptoType}
+                          <div className="flex items-center gap-1">
+                            <div className={`text-[10px] font-medium ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>
+                              {ptoType}
+                            </div>
+                            {/* ADD TRASH ICON FOR ADMINS/SUPERVISORS */}
+                            {isAdminOrSupervisor && isCurrentMonthDay && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData) {
+                                    console.log("Monthly view: Removing PTO for", officer.officerName);
+                                    handleRemovePTO(officer, dateStr, officer.officerId);
+                                  }
+                                }}
+                                disabled={removePTOMutation.isPending}
+                                title="Remove PTO"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );

@@ -240,18 +240,28 @@ const [filters, setFilters] = useState<ForceListFilters>({
     });
   };
 
-  // Categorize officers
-  const supervisors = forceListData?.officers?.filter(officer => 
-    isSupervisorByRank(officer)
-  ) || [];
+  // Categorize officers - Force List only includes Sergeants as supervisors
+const supervisors = forceListData?.officers?.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  // Only include Sergeants (Sgt)
+  return rank.includes('sergeant') || rank.includes('sgt');
+}) || [];
 
-  const regularOfficers = forceListData?.officers?.filter(officer => 
-    !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
-  ) || [];
+const regularOfficers = forceListData?.officers?.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  // Exclude Sergeants, PPOs, Lieutenants, Deputy Chiefs, Chiefs
+  return !rank.includes('sergeant') && 
+         !rank.includes('sgt') &&
+         !rank.includes('probationary') &&
+         !rank.includes('lieutenant') &&
+         !rank.includes('lt') &&
+         !rank.includes('deputy') &&
+         !rank.includes('chief');
+}) || [];
 
-  const ppos = forceListData?.officers?.filter(officer => 
-    officer.rank?.toLowerCase() === 'probationary'
-  ) || [];
+const ppos = forceListData?.officers?.filter(officer => 
+  officer.rank?.toLowerCase() === 'probationary'
+) || [];
 
   // Format service credit to one decimal place
   const formatServiceCredit = (credit: any) => {

@@ -821,7 +821,7 @@ if (minError) {
     );
   };
 
-// In DailyScheduleView.tsx - update the recurring schedules query
+// Get recurring schedules for this day of week that are active on the selected date
 const { data: recurringData, error: recurringError } = await supabase
   .from("recurring_schedules")
   .select(`
@@ -840,7 +840,8 @@ const { data: recurringData, error: recurringError } = await supabase
     )
   `)
   .eq("day_of_week", dayOfWeek)
-  .or(`end_date.is.null,end_date.gte.${dateStr}`);
+  .lte("start_date", dateStr)  // ADD THIS: Selected date must be AFTER or EQUAL to start_date
+  .or(`end_date.is.null,end_date.gte.${dateStr}`);  // AND (end_date is null OR selected date is BEFORE or EQUAL to end_date)
 
   if (recurringError) {
     console.error("Recurring schedules error:", recurringError);
@@ -917,21 +918,41 @@ const { data: recurringData, error: recurringError } = await supabase
     // Get ALL officers for this shift, avoiding duplicates
     const allOfficersMap = new Map();
 
-    // Process recurring officers for this shift
-    recurringData
-      ?.filter(r => r.shift_types?.id === shift.id)
-      .forEach(r => {
-        const officerKey = `${r.officer_id}-${shift.id}`;
-        
-        const workingException = workingExceptions?.find(e => 
-          e.officer_id === r.officer_id && e.shift_type_id === shift.id
-        );
+// Process recurring officers for this shift
+recurringData
+  ?.filter(r => r.shift_types?.id === shift.id)
+  .forEach(r => {
+    // ADD DATE RANGE VALIDATION
+    const currentDate = parseISO(dateStr);
+    const scheduleStartDate = parseISO(r.start_date);
+    const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
+    
+    // Validate that current date is within schedule date range
+    if (currentDate < scheduleStartDate) {
+      console.log(`Skipping officer ${r.officer_id}: Date ${dateStr} is before schedule start ${r.start_date}`);
+      return;
+    }
+    
+    if (scheduleEndDate && currentDate > scheduleEndDate) {
+      console.log(`Skipping officer ${r.officer_id}: Date ${dateStr} is after schedule end ${r.end_date}`);
+      return;
+    }
+    
+    const officerKey = `${r.officer_id}-${shift.id}`;
+    
+    // ONLY look for PTO exceptions if the date is within the schedule range
+    const ptoException = ptoExceptions?.find(e => 
+      e.officer_id === r.officer_id && 
+      e.shift_type_id === shift.id &&
+      // Also verify the PTO exception date matches (it should, but good to check)
+      e.date === dateStr
+    );
 
-        const ptoException = ptoExceptions?.find(e => 
-          e.officer_id === r.officer_id && e.shift_type_id === shift.id
-        );
+    const workingException = workingExceptions?.find(e => 
+      e.officer_id === r.officer_id && e.shift_type_id === shift.id
+    );
 
-        const defaultAssignment = getDefaultAssignment(r.officer_id);
+    const defaultAssignment = getDefaultAssignment(r.officer_id);
 
         const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
         const isProbationary = officerRank?.toLowerCase().includes('probationary');

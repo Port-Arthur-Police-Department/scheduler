@@ -81,7 +81,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {
     if (hash.startsWith('/daily-schedule')) setActiveTab('daily');
-    else if (hash.startsWith('/weekly-schedule')) setActiveTab('schedule');
+    else if (hash.startsWith('/the-book')) setActiveTab('schedule'); 
     else if (hash.startsWith('/vacancies')) setActiveTab('vacancies');
     else if (hash.startsWith('/staff')) setActiveTab('staff');
     else if (hash.startsWith('/time-off') || hash.startsWith('/pto')) setActiveTab('requests');

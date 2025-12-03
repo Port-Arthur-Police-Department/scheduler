@@ -1,22 +1,19 @@
 // src/components/schedule/the-book/WeeklyView.tsx
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO } from "date-fns";
+import { format, addDays, isSameDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScheduleCell } from "../ScheduleCell";
-import { supabase } from "@/integrations/supabase/client";
 import { CalendarDays } from "lucide-react";
-import { toast } from "sonner";
-import type { ViewProps, ScheduleData } from "./types";
-import { calculateStaffingCounts, isSupervisorByRank } from "./utils";
+import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 export const WeeklyView: React.FC<ViewProps> = ({
   currentDate,
   selectedShiftId,
+  schedules,
   isAdminOrSupervisor,
   weeklyColors,
   onDateNavigation,
@@ -25,30 +22,13 @@ export const WeeklyView: React.FC<ViewProps> = ({
   navigateToDailySchedule,
   getLastName,
   getRankPriority,
-  isSupervisorByRank: isSupervisorRank,
+  isSupervisorByRank,
 }) => {
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
-  const [selectedWeekDate, setSelectedWeekDate] = useState(currentDate);
 
-  // Fetch schedule data for the week
-  const { data: scheduleData, isLoading } = useQuery<ScheduleData>({
-    queryKey: ['weekly-schedule', selectedShiftId, currentDate.toISOString()],
-    queryFn: async () => {
-      if (!selectedShiftId) return null;
-
-      const startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
-      const endDate = endOfWeek(currentDate, { weekStartsOn: 0 });
-      const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
-        format(date, "yyyy-MM-dd")
-      );
-
-      // Similar data fetching logic from original TheBook.tsx
-      // You'll need to adapt your existing fetchScheduleDataForRange function
-      
-      return null as any; // Return fetched data
-    },
-    enabled: !!selectedShiftId,
-  });
+  if (!schedules) {
+    return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
+  }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentDate, i);
@@ -63,18 +43,18 @@ export const WeeklyView: React.FC<ViewProps> = ({
     };
   });
 
-  // Extract and organize officer data (similar to original implementation)
+  // Extract and organize officer data
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
-  scheduleData?.recurring?.forEach(recurring => {
+  schedules.recurring?.forEach((recurring: any) => {
     if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
       recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
     }
     recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
   });
 
-  scheduleData?.dailySchedules?.forEach(day => {
+  schedules.dailySchedules?.forEach(day => {
     day.officers.forEach((officer: any) => {
       if (!allOfficers.has(officer.officerId)) {
         allOfficers.set(officer.officerId, {
@@ -95,7 +75,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
 
   // Categorize officers
   const supervisors = Array.from(allOfficers.values())
-    .filter(o => isSupervisorRank(o))
+    .filter(o => isSupervisorByRank(o))
     .sort((a, b) => {
       const aPriority = getRankPriority(a.rank);
       const bPriority = getRankPriority(b.rank);
@@ -108,7 +88,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
     });
 
   const allOfficersList = Array.from(allOfficers.values())
-    .filter(o => !isSupervisorRank(o));
+    .filter(o => !isSupervisorByRank(o));
 
   const ppos = allOfficersList
     .filter(o => o.rank?.toLowerCase() === 'probationary')
@@ -132,9 +112,13 @@ export const WeeklyView: React.FC<ViewProps> = ({
       return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
     });
 
-  if (isLoading) {
-    return <div className="text-center py-8">Loading weekly schedule...</div>;
-  }
+  // Helper function to check if an assignment is a special assignment
+  const isSpecialAssignment = (position: string) => {
+    return position && (
+      position.toLowerCase().includes('other') ||
+      (position && !PREDEFINED_POSITIONS.includes(position))
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -142,61 +126,89 @@ export const WeeklyView: React.FC<ViewProps> = ({
         <div className="text-lg font-bold">
           {format(currentDate, "MMM d")} - {format(addDays(currentDate, 6), "MMM d, yyyy")}
         </div>
-        <div className="flex gap-2">
-          <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Jump to Week
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-3">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Select a week</div>
-                  <Calendar
-                    mode="single"
-                    selected={selectedWeekDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setSelectedWeekDate(date);
-                        const weekStart = startOfWeek(date, { weekStartsOn: 0 });
-                        onDateNavigation.goToCurrent = () => {}; // Would need to update parent state
-                        setWeekPickerOpen(false);
-                      }
-                    }}
-                    className="rounded-md border"
-                  />
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
       </div>
 
       <div className="mobile-scroll overflow-x-auto">
         <div className="border rounded-lg overflow-hidden min-w-[900px]">
-          {/* Rest of the weekly view table structure */}
-          {/* This would be the same as in your original renderExcelStyleWeeklyView */}
-          {/* I'll create a simplified version for demonstration */}
-          
           <div className="grid grid-cols-9 bg-muted/50 border-b">
             <div className="p-2 font-semibold border-r">Empl#</div>
             <div className="p-2 font-semibold border-r">NAME</div>
-            {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => (
-              <div key={dateStr} className={`p-2 text-center font-semibold border-r ${isToday ? 'bg-primary/10' : ''}`}>
-                <Button variant="ghost" size="sm" className="h-auto p-0 font-semibold hover:bg-transparent hover:underline" 
-                  onClick={() => navigateToDailySchedule(dateStr)}>
-                  <div>{dayName}</div>
-                  <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
-                </Button>
-                {/* Staffing badges would go here */}
-              </div>
-            ))}
+            {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
+              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              
+              // Get minimum staffing for this day of week and shift
+              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
+              const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+              
+              // Calculate counts excluding full-day PTO AND special assignments
+              const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
+                const isSupervisor = isSupervisorByRank(officer);
+                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+                return isSupervisor && isScheduled;
+              }).length || 0;
+
+              const officerCount = daySchedule?.officers?.filter((officer: any) => {
+                const isOfficer = !isSupervisorByRank(officer);
+                const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+                return isOfficer && isNotPPO && isScheduled;
+              }).length || 0;
+              
+              const isOfficersUnderstaffed = officerCount < minimumOfficers;
+              const isSupervisorsUnderstaffed = supervisorCount < minimumSupervisors;
+
+              return (
+                <div key={dateStr} className={`p-2 text-center font-semibold border-r ${isToday ? 'bg-primary/10' : ''}`}>
+                  <Button variant="ghost" size="sm" className="h-auto p-0 font-semibold hover:bg-transparent hover:underline" onClick={() => navigateToDailySchedule(dateStr)}>
+                    <div>{dayName}</div>
+                    <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
+                  </Button>
+                  <Badge variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} className="text-xs mb-1">
+                    {supervisorCount} / {minimumSupervisors} Sup
+                  </Badge>
+                  <Badge variant={isOfficersUnderstaffed ? "destructive" : "outline"} className="text-xs">
+                    {officerCount} / {minimumOfficers} Ofc
+                  </Badge>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Supervisors section */}
-          {supervisors.map((officer) => (
+          {/* SUPERVISOR COUNT ROW */}
+          <div className="grid grid-cols-9 border-b">
+            <div className="p-2 border-r"></div>
+            <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
+            {weekDays.map(({ dateStr, dayOfWeek }) => {
+              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              
+              // Get minimum staffing from database
+              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+              
+              // Count supervisors, excluding full-day PTO AND special assignments
+              const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
+                const isSupervisor = isSupervisorByRank(officer);
+                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+                return isSupervisor && isScheduled;
+              }).length || 0;
+              
+              return (
+                <div key={dateStr} className="p-2 text-center border-r text-sm">
+                  {supervisorCount} / {minimumSupervisors}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* SUPERVISORS */}
+          {supervisors.map((officer: any) => (
             <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
               style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -215,10 +227,10 @@ export const WeeklyView: React.FC<ViewProps> = ({
                   onAssignPTO={onEventHandlers.onAssignPTO}
                   onRemovePTO={onEventHandlers.onRemovePTO}
                   onEditAssignment={onEventHandlers.onEditAssignment}
-                  onRemoveOfficer={(officerData) => onEventHandlers.onRemoveOfficer(
-                    officerData.shiftInfo.scheduleId,
-                    officerData.shiftInfo.scheduleType,
-                    officerData
+                  onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                    officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleId,
+                    officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleType,
+                    officer
                   )}
                   isUpdating={mutations.removeOfficerMutation.isPending}
                 />
@@ -226,7 +238,153 @@ export const WeeklyView: React.FC<ViewProps> = ({
             </div>
           ))}
 
-          {/* Regular officers and PPO sections would follow */}
+          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS) */}
+          <div className="grid grid-cols-9 border-b bg-muted/30">
+            <div className="p-2 border-r"></div>
+            <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
+            {weekDays.map(({ dateStr, dayOfWeek }) => {
+              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              
+              // Get minimum staffing from database
+              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
+              
+              // Count only non-PPO officers, excluding only full-day PTO
+              const officerCount = daySchedule?.officers?.filter((officer: any) => {
+                const isOfficer = !isSupervisorByRank(officer);
+                const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+                // Only exclude if they have full-day PTO
+                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+                return isOfficer && isNotPPO && isScheduled;
+              }).length || 0;
+              
+              return (
+                <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                  {officerCount} / {minimumOfficers}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* REGULAR OFFICERS SECTION */}
+          <div>
+            {regularOfficers.map((officer: any) => (
+              <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
+                style={{ backgroundColor: weeklyColors.officer?.bg, color: weeklyColors.officer?.text }}>
+                <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+                <div className="p-2 border-r font-medium">{getLastName(officer.officerName)}</div>
+                {weekDays.map(({ dateStr }) => {
+                  const dayOfficer = officer.weeklySchedule[dateStr];
+                  return (
+                    <ScheduleCell
+                      key={dateStr}
+                      officer={dayOfficer}
+                      dateStr={dateStr}
+                      officerId={officer.officerId}
+                      officerName={officer.officerName}
+                      isAdminOrSupervisor={isAdminOrSupervisor}
+                      onAssignPTO={onEventHandlers.onAssignPTO}
+                      onRemovePTO={onEventHandlers.onRemovePTO}
+                      onEditAssignment={onEventHandlers.onEditAssignment}
+                      onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                        dayOfficer?.shiftInfo?.scheduleId,
+                        dayOfficer?.shiftInfo?.scheduleType,
+                        officer
+                      )}
+                      isUpdating={mutations.removeOfficerMutation.isPending}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* PPO SECTION */}
+          {ppos.length > 0 && (
+            <div className="border-t-2 border-blue-200">
+              {/* PPO COUNT ROW */}
+              <div className="grid grid-cols-9 border-b"
+                style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
+                <div className="p-2 border-r"></div>
+                <div className="p-2 border-r text-sm font-medium">PPO</div>
+                {weekDays.map(({ dateStr }) => {
+                  const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+                  
+                  // Count PPOs, excluding only full-day PTO
+                  const ppoCount = daySchedule?.officers?.filter((officer: any) => {
+                    const isOfficer = !isSupervisorByRank(officer);
+                    const isPPO = officer.rank?.toLowerCase() === 'probationary';
+                    // Only exclude if they have full-day PTO
+                    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+                    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+                    return isOfficer && isPPO && isScheduled;
+                  }).length || 0;
+                  
+                  return (
+                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                      {ppoCount}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* PPO OFFICERS */}
+              {ppos.map((officer: any) => (
+                <div key={officer.officerId} className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
+                  <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+                  <div className="p-2 border-r font-medium flex items-center gap-2">
+                    {getLastName(officer.officerName)}
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs border-blue-300"
+                      style={{
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        color: weeklyColors.ppo?.text
+                      }}
+                    >
+                      PPO
+                    </Badge>
+                  </div>
+                  {weekDays.map(({ dateStr }) => {
+                    const dayOfficer = officer.weeklySchedule[dateStr];
+                    
+                    // Extract partner information from position for PPOs
+                    let partnerInfo = null;
+                    if (dayOfficer?.shiftInfo?.position) {
+                      const partnerMatch = dayOfficer.shiftInfo.position.match(/Partner with\s+(.+)/i);
+                      if (partnerMatch) {
+                        partnerInfo = partnerMatch[1];
+                      }
+                    }
+                    
+                    return (
+                      <ScheduleCell
+                        key={dateStr}
+                        officer={dayOfficer}
+                        dateStr={dateStr}
+                        officerId={officer.officerId}
+                        officerName={officer.officerName}
+                        isAdminOrSupervisor={isAdminOrSupervisor}
+                        onAssignPTO={onEventHandlers.onAssignPTO}
+                        onRemovePTO={onEventHandlers.onRemovePTO}
+                        onEditAssignment={onEventHandlers.onEditAssignment}
+                        onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                          dayOfficer?.shiftInfo?.scheduleId,
+                          dayOfficer?.shiftInfo?.scheduleType,
+                          officer
+                        )}
+                        isUpdating={mutations.removeOfficerMutation.isPending}
+                        isPPO={true}
+                        partnerInfo={partnerInfo}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

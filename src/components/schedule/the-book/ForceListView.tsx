@@ -1,3 +1,4 @@
+// ForceListView.tsx - Updated to filter by selected shift
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from "date-fns";
@@ -33,28 +34,104 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   });
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
 
-  // Remove the local shiftTypes query since we get it from parent
-  // Fetch force list data
+  // Fetch force list data - FILTERED BY SELECTED SHIFT
   const { data: forceListData, isLoading } = useQuery({
     queryKey: ['force-list', selectedShiftId, filters],
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
-      const { data: officers, error } = await supabase
-        .from("profiles")
+      // Get officers who have recurring schedules for this shift
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
         .select(`
-          id,
-          full_name,
-          badge_number,
-          rank,
-          service_credit_override,
-          hire_date
+          officer_id,
+          profiles!recurring_schedules_officer_id_fkey (
+            id,
+            full_name,
+            badge_number,
+            rank,
+            service_credit_override,
+            hire_date
+          )
         `)
-        .order("full_name");
+        .eq("shift_type_id", selectedShiftId)
+        .is("end_date", null);
 
-      if (error) throw error;
+      if (recurringError) {
+        console.error("Error fetching recurring schedules for force list:", recurringError);
+        throw recurringError;
+      }
 
-      // Get schedule data for the date range
+      // Get unique officers from recurring schedules
+      const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
+      const uniqueOfficers = Array.from(
+        new Map(officers.map(officer => [officer.id, officer])).values()
+      );
+
+      // Also get officers who have schedule exceptions for this shift within the date range
+      const { data: exceptionOfficers, error: exceptionError } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          officer_id,
+          profiles!schedule_exceptions_officer_id_fkey (
+            id,
+            full_name,
+            badge_number,
+            rank,
+            service_credit_override,
+            hire_date
+          )
+        `)
+        .gte("date", format(filters.startDate, "yyyy-MM-dd"))
+        .lte("date", format(filters.endDate, "yyyy-MM-dd"))
+        .eq("shift_type_id", selectedShiftId);
+
+      if (exceptionError) {
+        console.error("Error fetching schedule exceptions for force list:", exceptionError);
+        // Don't throw, just continue with recurring schedules
+      }
+
+      // Add exception officers to the list if they're not already included
+      const allOfficers = [...uniqueOfficers];
+      
+      if (exceptionOfficers) {
+        exceptionOfficers.forEach((exception: any) => {
+          if (exception.profiles && !allOfficers.some(o => o.id === exception.profiles.id)) {
+            allOfficers.push(exception.profiles);
+          }
+        });
+      }
+
+      // Fetch service credits for all officers
+      const officersWithCredits = await Promise.all(
+        allOfficers.map(async (officer) => {
+          try {
+            const { data: serviceCredit, error } = await supabase
+              .rpc('get_service_credit', { profile_id: officer.id });
+            
+            if (error) {
+              console.error(`Error fetching service credit for officer ${officer.id}:`, error);
+              return {
+                ...officer,
+                service_credit: officer.service_credit_override || 0
+              };
+            }
+            
+            return {
+              ...officer,
+              service_credit: serviceCredit || officer.service_credit_override || 0
+            };
+          } catch (error) {
+            console.error(`Error fetching service credit for officer ${officer.id}:`, error);
+            return {
+              ...officer,
+              service_credit: officer.service_credit_override || 0
+            };
+          }
+        })
+      );
+
+      // Get schedule data for the date range for informational purposes
       const { data: scheduleData } = await supabase
         .from("recurring_schedules")
         .select(`
@@ -64,8 +141,9 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         .eq("shift_type_id", selectedShiftId);
 
       return {
-        officers: officers || [],
-        scheduleData: scheduleData || []
+        officers: officersWithCredits || [],
+        scheduleData: scheduleData || [],
+        totalCount: officersWithCredits.length
       };
     },
     enabled: !!selectedShiftId,
@@ -98,15 +176,15 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   });
 
   const sortedRegularOfficers = [...regularOfficers].sort((a, b) => {
-    const aCredit = a.service_credit_override || 0;
-    const bCredit = b.service_credit_override || 0;
+    const aCredit = a.service_credit || a.service_credit_override || 0;
+    const bCredit = b.service_credit || b.service_credit_override || 0;
     if (bCredit !== aCredit) return bCredit - aCredit;
     return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
   });
 
   const sortedPPOs = [...ppos].sort((a, b) => {
-    const aCredit = a.service_credit_override || 0;
-    const bCredit = b.service_credit_override || 0;
+    const aCredit = a.service_credit || a.service_credit_override || 0;
+    const bCredit = b.service_credit || b.service_credit_override || 0;
     if (bCredit !== aCredit) return bCredit - aCredit;
     return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
   });
@@ -143,6 +221,11 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
               Force List
+              {forceListData?.totalCount !== undefined && (
+                <Badge variant="outline" className="ml-2">
+                  {forceListData.totalCount} officers
+                </Badge>
+              )}
             </CardTitle>
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium text-muted-foreground">
@@ -261,6 +344,10 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
             </div>
           ) : isLoading ? (
             <div className="text-center py-8">Loading force list...</div>
+          ) : forceListData?.officers?.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No officers found for {shiftTypes?.find(s => s.id === selectedShiftId)?.name} shift
+            </div>
           ) : (
             <div className="space-y-6">
               {/* Date Header */}
@@ -286,7 +373,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                 {/* Left Column - Supervisors */}
                 <div className="space-y-4">
                   <div className="text-lg font-semibold border-b pb-2">
-                    Supervisors
+                    Supervisors ({sortedSupervisors.length})
                   </div>
                   <div className="space-y-2">
                     {sortedSupervisors.map((officer) => (
@@ -300,7 +387,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                               </Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit_override || 0}
+                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
                             </div>
                           </div>
                         </div>
@@ -312,7 +399,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                 {/* Right Column - Regular Officers */}
                 <div className="space-y-4">
                   <div className="text-lg font-semibold border-b pb-2">
-                    Officers
+                    Officers ({sortedRegularOfficers.length})
                   </div>
                   <div className="space-y-2">
                     {sortedRegularOfficers.map((officer) => (
@@ -321,7 +408,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                           <div>
                             <div className="font-medium">{getLastName(officer.full_name)}</div>
                             <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit_override || 0}
+                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
                             </div>
                           </div>
                         </div>
@@ -335,7 +422,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
               {sortedPPOs.length > 0 && (
                 <div className="space-y-4">
                   <div className="text-lg font-semibold border-b pb-2">
-                    PPO Officers
+                    PPO Officers ({sortedPPOs.length})
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {sortedPPOs.map((officer) => (
@@ -349,7 +436,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                               </Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit_override || 0}
+                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
                             </div>
                           </div>
                         </div>

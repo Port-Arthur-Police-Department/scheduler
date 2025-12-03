@@ -1,10 +1,9 @@
-// src/components/schedule/the-book/BeatPreferencesView.tsx - FINAL WORKING VERSION
+// BeatPreferencesView.tsx - Updated version
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,29 +26,24 @@ interface BeatPreference {
 
 interface Props {
   isAdminOrSupervisor: boolean;
+  selectedShiftId: string;
+  setSelectedShiftId: (shiftId: string) => void;
+  shiftTypes: any[];
 }
 
-export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) => {
-  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+export const BeatPreferencesView: React.FC<Props> = ({ 
+  isAdminOrSupervisor,
+  selectedShiftId,
+  setSelectedShiftId,
+  shiftTypes 
+}) => {
   const [showAllBeats, setShowAllBeats] = useState<boolean>(true);
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
   const [beatPreferences, setBeatPreferences] = useState<{
     [key: string]: BeatPreference
   }>({});
 
-  // Get shift types
-  const { data: shiftTypes } = useQuery({
-    queryKey: ["shift-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shift_types")
-        .select("*")
-        .order("start_time");
-      if (error) throw error;
-      return data;
-    },
-  });
-
+  // Remove the local shiftTypes query since we get it from parent
   // Filter out "Supervisor" and "Other (Custom)" from beat positions
   const beatPositions = PREDEFINED_POSITIONS.filter(pos => 
     pos !== "Supervisor" && pos !== "Other (Custom)"
@@ -308,7 +302,7 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
     getLastName(a.full_name).localeCompare(getLastName(b.full_name))
   );
 
-  return (
+ return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
@@ -318,18 +312,9 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
               Beat Preferences
             </CardTitle>
             <div className="flex items-center gap-3">
-              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shiftTypes?.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.start_time} - {shift.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="text-sm font-medium text-muted-foreground">
+                Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
+              </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={showAllBeats}
@@ -354,7 +339,7 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
-              Please select a shift to view beat preferences
+              Please select a shift from the Weekly or Monthly tab first
             </div>
           ) : isLoading ? (
             <div className="text-center py-8">Loading beat preferences...</div>

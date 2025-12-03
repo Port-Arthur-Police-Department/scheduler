@@ -397,47 +397,27 @@ const TheBook = ({
         }
       });
 
-      // Convert to array format
-      const dailySchedules = dates.map(date => {
-        const officers = Object.values(scheduleByDateAndOfficer[date] || {});
-        
-        // Categorize officers
-        const supervisors = officers.filter(officer => {
-          const rank = officer.rank?.toLowerCase() || '';
-          return rank.includes('sergeant') || rank.includes('lieutenant') || 
-                 rank.includes('chief') || rank.includes('sgt') || rank.includes('lt');
-        });
-        
-        const ppos = officers.filter(officer => officer.rank?.toLowerCase() === 'probationary');
-        const regularOfficers = officers.filter(officer => {
-          const rank = officer.rank?.toLowerCase() || '';
-          return !(rank.includes('sergeant') || rank.includes('lieutenant') || 
-                  rank.includes('chief') || rank.includes('sgt') || rank.includes('lt') ||
-                  rank === 'probationary');
-        });
+     // Convert to array format
+const dailySchedules = dates.map(date => {
+  const officers = Object.values(scheduleByDateAndOfficer[date] || {});
+  
+  // Use the imported categorizeAndSortOfficers function
+  const categorized = categorizeAndSortOfficers(officers);
+  const { supervisorCount, officerCount } = calculateStaffingCounts(categorized);
 
-        const { supervisorCount, officerCount } = calculateStaffingCounts({
-          supervisors,
-          officers: [...regularOfficers, ...ppos]
-        });
-
-        return {
-          date,
-          dayOfWeek: parseISO(date).getDay(),
-          officers,
-          categorizedOfficers: {
-            supervisors,
-            officers: regularOfficers,
-            ppos
-          },
-          staffing: {
-            supervisors: supervisorCount,
-            officers: officerCount,
-            total: supervisorCount + officerCount
-          },
-          isCurrentMonth: activeView === "monthly" ? isSameMonth(parseISO(date), currentMonth) : true
-        };
-      });
+  return {
+    date,
+    dayOfWeek: parseISO(date).getDay(),
+    officers,
+    categorizedOfficers: categorized,
+    staffing: {
+      supervisors: supervisorCount,
+      officers: officerCount,
+      total: supervisorCount + officerCount
+    },
+    isCurrentMonth: activeView === "monthly" ? isSameMonth(parseISO(date), currentMonth) : true
+  };
+});
 
       return { 
         dailySchedules, 

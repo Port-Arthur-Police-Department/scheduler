@@ -505,18 +505,25 @@ const dailySchedules = dates.map(date => {
   };
 
   // Prepare common props for view components
-  const viewProps = {
-    currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
-    selectedShiftId,
-    schedules: schedules || null,
-    shiftTypes: shiftTypes || [],
-    isAdminOrSupervisor,
-    weeklyColors,
-    onDateNavigation: {
-      goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
-      goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
-      goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
-    },
+const viewProps = {
+  currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
+  selectedShiftId,
+  schedules: schedules || null,
+  shiftTypes: shiftTypes || [],
+  isAdminOrSupervisor,
+  weeklyColors,
+  onDateChange: (date: Date) => { // Add this callback
+    if (activeView === "weekly") {
+      setCurrentWeekStart(date);
+    } else if (activeView === "monthly") {
+      setCurrentMonth(date);
+    }
+  },
+  onDateNavigation: {
+    goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
+    goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
+    goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
+  },
     onEventHandlers: {
       onAssignPTO: handleAssignPTO,
       onRemovePTO: handleRemovePTO,
@@ -589,133 +596,87 @@ const renderView = () => {
   return (
     <>
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              {isAdminOrSupervisor && (
-                <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                  <SelectTrigger className="w-64">
-                    <SelectValue placeholder="Select Shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shiftTypes?.map((shift) => (
-                      <SelectItem key={shift.id} value={shift.id}>
-                        {shift.name} ({shift.start_time} - {shift.end_time})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {(activeView === "weekly" || activeView === "monthly") && (
-                <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export PDF
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {!isAdminOrSupervisor && (
-            <div className="flex items-center gap-3">
-              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shiftTypes?.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.start_time} - {shift.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {/* Tabs for different views */}
-          <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
-            <TabsList className="grid w-full max-w-2xl grid-cols-5">
-              <TabsTrigger value="weekly" className="flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4" />
-                Weekly
-              </TabsTrigger>
-              <TabsTrigger value="monthly" className="flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Monthly
-              </TabsTrigger>
-              <TabsTrigger value="force-list" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Force List
-              </TabsTrigger>
-              <TabsTrigger value="vacation-list" className="flex items-center gap-2">
-                <Plane className="h-4 w-4" />
-                Vacation List
-              </TabsTrigger>
-              <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Beat Preferences
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          {/* Date Navigation - only show for weekly/monthly views */}
-          {(activeView === "weekly" || activeView === "monthly") && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={viewProps.onDateNavigation.goToPrevious}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold">
-                    {activeView === "weekly" 
-                      ? `${format(currentWeekStart, "MMM d")} - ${format(addDays(currentWeekStart, 6), "MMM d, yyyy")}`
-                      : format(currentMonth, "MMMM yyyy")
-                    }
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {activeView === "weekly" 
-                      ? `Week of ${format(currentWeekStart, "MMMM d, yyyy")}`
-                      : `Month of ${format(currentMonth, "MMMM yyyy")}`
-                    }
-                  </p>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={viewProps.onDateNavigation.goToNext}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={viewProps.onDateNavigation.goToCurrent}
-                >
-                  Today
-                </Button>
-              </div>
-            </div>
-          )}
-          
-          {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
-            <p className="text-sm text-muted-foreground mt-2">
-              Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
-            </p>
-          )}
-        </CardHeader>
+       <CardHeader>
+  <div className="flex items-center justify-between">
+    <CardTitle className="flex items-center gap-2">
+      <CalendarIcon className="h-5 w-5" />
+      Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
+    </CardTitle>
+    <div className="flex items-center gap-3">
+      {isAdminOrSupervisor && (
+        <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+          <SelectTrigger className="w-64">
+            <SelectValue placeholder="Select Shift" />
+          </SelectTrigger>
+          <SelectContent>
+            {shiftTypes?.map((shift) => (
+              <SelectItem key={shift.id} value={shift.id}>
+                {shift.name} ({shift.start_time} - {shift.end_time})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {(activeView === "weekly" || activeView === "monthly") && (
+        <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          Export PDF
+        </Button>
+      )}
+    </div>
+  </div>
+  
+  {!isAdminOrSupervisor && (
+    <div className="flex items-center gap-3 mt-3">
+      <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+        <SelectTrigger className="w-64">
+          <SelectValue placeholder="Select Shift" />
+        </SelectTrigger>
+        <SelectContent>
+          {shiftTypes?.map((shift) => (
+            <SelectItem key={shift.id} value={shift.id}>
+              {shift.name} ({shift.start_time} - {shift.end_time})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )}
+  
+  {/* Tabs for different views */}
+  <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
+    <TabsList className="grid w-full max-w-2xl grid-cols-5">
+      <TabsTrigger value="weekly" className="flex items-center gap-2">
+        <CalendarIcon className="h-4 w-4" />
+        Weekly
+      </TabsTrigger>
+      <TabsTrigger value="monthly" className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4" />
+        Monthly
+      </TabsTrigger>
+      <TabsTrigger value="force-list" className="flex items-center gap-2">
+        <Users className="h-4 w-4" />
+        Force List
+      </TabsTrigger>
+      <TabsTrigger value="vacation-list" className="flex items-center gap-2">
+        <Plane className="h-4 w-4" />
+        Vacation List
+      </TabsTrigger>
+      <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
+        <MapPin className="h-4 w-4" />
+        Beat Preferences
+      </TabsTrigger>
+    </TabsList>
+  </Tabs>
+  
+  {/* REMOVED: Duplicate date navigation - it's now in the view components */}
+  
+  {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
+    <p className="text-sm text-muted-foreground mt-2">
+      Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
+    </p>
+  )}
+</CardHeader>
         <CardContent>
           {!selectedShiftId && (activeView === "weekly" || activeView === "monthly") ? (
             <div className="text-center py-8 text-muted-foreground">

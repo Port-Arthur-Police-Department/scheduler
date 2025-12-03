@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+// MonthlyView.tsx
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths, startOfYear, endOfYear } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { ViewProps } from "./types";
-import { calculateStaffingCounts } from "./utils";
+import { calculateStaffingCounts, getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
 
-export const MonthlyView: React.FC<ViewProps> = ({
+// Define extended interface that includes onDateChange
+interface ExtendedViewProps extends ViewProps {
+  onDateChange?: (date: Date) => void;
+}
+
+export const MonthlyView: React.FC<ExtendedViewProps> = ({
   currentDate,
   selectedShiftId,
   schedules,
@@ -20,12 +26,24 @@ export const MonthlyView: React.FC<ViewProps> = ({
   mutations,
   navigateToDailySchedule,
   getLastName,
-  getRankAbbreviation,
+  getRankAbbreviation = getRankAbbreviationUtil,
   onDateChange,
 }) => {
   // Add state hooks here
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthDate, setSelectedMonthDate] = useState(currentDate);
+
+  // Sync with parent when date changes
+  useEffect(() => {
+    setSelectedMonthDate(currentDate);
+  }, [currentDate]);
+
+  // Call onDateChange when component mounts with initial date
+  useEffect(() => {
+    if (onDateChange) {
+      onDateChange(currentDate);
+    }
+  }, []);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -47,6 +65,15 @@ export const MonthlyView: React.FC<ViewProps> = ({
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
+
+  // Handle jump to month
+  const handleJumpToMonth = (date: Date) => {
+    const monthStart = startOfMonth(date);
+    setMonthPickerOpen(false);
+    if (onDateChange) {
+      onDateChange(monthStart);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -97,12 +124,7 @@ export const MonthlyView: React.FC<ViewProps> = ({
                     selected={selectedMonthDate}
                     onSelect={(date) => {
                       if (date) {
-                        setSelectedMonthDate(date);
-                        const monthStart = startOfMonth(date);
-                        setMonthPickerOpen(false);
-                        if (onDateChange) {
-                          onDateChange(monthStart);
-                        }
+                        handleJumpToMonth(date);
                       }
                     }}
                     className="rounded-md border"
@@ -113,11 +135,7 @@ export const MonthlyView: React.FC<ViewProps> = ({
                       size="sm"
                       onClick={() => {
                         const monthStart = startOfMonth(new Date());
-                        if (onDateChange) {
-                          onDateChange(monthStart);
-                        }
-                        setSelectedMonthDate(monthStart);
-                        setMonthPickerOpen(false);
+                        handleJumpToMonth(monthStart);
                       }}
                     >
                       This Month
@@ -127,11 +145,7 @@ export const MonthlyView: React.FC<ViewProps> = ({
                       size="sm"
                       onClick={() => {
                         const nextMonth = addMonths(currentDate, 1);
-                        if (onDateChange) {
-                          onDateChange(nextMonth);
-                        }
-                        setSelectedMonthDate(nextMonth);
-                        setMonthPickerOpen(false);
+                        handleJumpToMonth(nextMonth);
                       }}
                     >
                       Next Month

@@ -5,6 +5,28 @@ import { Tables } from "@/integrations/supabase/types";
 export type TheBookView = "weekly" | "monthly" | "force-list" | "vacation-list" | "beat-preferences";
 export type ScheduleType = "recurring" | "exception";
 export type PTOType = "vacation" | "holiday" | "sick" | "comp";
+export type ForceType = "true-force" | "regular-force";
+
+export interface ForceListFilters {
+  startDate: Date;
+  endDate: Date;
+  forceType: ForceType;
+}
+
+export interface VacationListFilters {
+  year: number;
+  showAll: boolean;
+}
+
+export interface BeatPreference {
+  officerId: string;
+  officerName: string;
+  rank?: string;
+  badgeNumber?: string;
+  preferredBeats: string[];
+  unavailableBeats: string[];
+  notes?: string;
+}
 
 // Base interfaces
 export interface OfficerSchedule {

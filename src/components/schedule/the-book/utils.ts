@@ -39,7 +39,6 @@ export const isSpecialAssignment = (position: string | undefined): boolean => {
          !PREDEFINED_POSITIONS.includes(position);
 };
 
-// ADD THIS FUNCTION - it was missing
 export const calculateStaffingCounts = (categorizedOfficers: any) => {
   if (!categorizedOfficers) return { supervisorCount: 0, officerCount: 0 };
   
@@ -55,12 +54,12 @@ export const calculateStaffingCounts = (categorizedOfficers: any) => {
   return { supervisorCount, officerCount };
 };
 
-// Also add this helper function that's used in TheBook.tsx
 export const categorizeAndSortOfficers = (officers: any[]) => {
   const supervisors = officers
     .filter(officer => 
       officer.shiftInfo?.position?.toLowerCase().includes('supervisor') ||
-      officer.position?.toLowerCase().includes('supervisor')
+      officer.position?.toLowerCase().includes('supervisor') ||
+      isSupervisorByRank(officer)
     );
   
   const ppos = officers.filter(officer => officer.rank?.toLowerCase() === 'probationary');
@@ -68,10 +67,9 @@ export const categorizeAndSortOfficers = (officers: any[]) => {
   const regularOfficers = officers.filter(officer => {
     const rank = officer.rank?.toLowerCase() || '';
     const position = officer.shiftInfo?.position?.toLowerCase() || '';
+    const isSup = isSupervisorByRank(officer) || position.includes('supervisor');
     
-    return !(rank.includes('sergeant') || rank.includes('lieutenant') || 
-            rank.includes('chief') || rank.includes('sgt') || rank.includes('lt') ||
-            rank === 'probationary' || position.includes('supervisor'));
+    return !isSup && rank !== 'probationary';
   });
 
   return { supervisors, officers: regularOfficers, ppos };

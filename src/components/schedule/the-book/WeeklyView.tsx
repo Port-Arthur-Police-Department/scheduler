@@ -10,7 +10,12 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
-export const WeeklyView: React.FC<ViewProps> = ({
+// Define extended interface that includes onDateChange
+interface ExtendedViewProps extends ViewProps {
+  onDateChange?: (date: Date) => void;
+}
+
+export const WeeklyView: React.FC<ExtendedViewProps> = ({
   currentDate: initialDate,
   selectedShiftId,
   schedules,
@@ -23,7 +28,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
   getLastName,
   getRankPriority,
   isSupervisorByRank,
-  onDateChange,
+  onDateChange, // Added this prop
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -34,6 +39,13 @@ export const WeeklyView: React.FC<ViewProps> = ({
     setCurrentWeekStart(initialDate);
     setSelectedWeekDate(initialDate);
   }, [initialDate]);
+
+  // Call onDateChange when component mounts with initial date
+  useEffect(() => {
+    if (onDateChange) {
+      onDateChange(currentWeekStart);
+    }
+  }, []);
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
@@ -52,81 +64,23 @@ export const WeeklyView: React.FC<ViewProps> = ({
     };
   });
 
-  // Extract and organize officer data
-  const allOfficers = new Map();
-  const recurringSchedulesByOfficer = new Map();
-
-  schedules.recurring?.forEach((recurring: any) => {
-    if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
-      recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
-    }
-    recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
-  });
-
-  schedules.dailySchedules?.forEach(day => {
-    day.officers.forEach((officer: any) => {
-      if (!allOfficers.has(officer.officerId)) {
-        allOfficers.set(officer.officerId, {
-          ...officer,
-          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-          weeklySchedule: {} as Record<string, any>
-        });
-      }
-      
-      const daySchedule = {
-        ...officer,
-        isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false
-      };
-      
-      allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
-    });
-  });
-
-  // Categorize officers
-  const supervisors = Array.from(allOfficers.values())
-    .filter(o => isSupervisorByRank(o))
-    .sort((a, b) => {
-      const aPriority = getRankPriority(a.rank);
-      const bPriority = getRankPriority(b.rank);
-      
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority;
-      }
-      
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-    });
-
-  const allOfficersList = Array.from(allOfficers.values())
-    .filter(o => !isSupervisorByRank(o));
-
-  const ppos = allOfficersList
-    .filter(o => o.rank?.toLowerCase() === 'probationary')
-    .sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-    });
-
-  const regularOfficers = allOfficersList
-    .filter(o => o.rank?.toLowerCase() !== 'probationary')
-    .sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-    });
-
   // Helper function to check if an assignment is a special assignment
   const isSpecialAssignment = (position: string) => {
     return position && (
       position.toLowerCase().includes('other') ||
       (position && !PREDEFINED_POSITIONS.includes(position))
     );
+  };
+
+  // Handle jump to week
+  const handleJumpToWeek = (date: Date) => {
+    const weekStart = startOfWeek(date, { weekStartsOn: 0 });
+    setCurrentWeekStart(weekStart);
+    setSelectedWeekDate(weekStart);
+    setWeekPickerOpen(false);
+    if (onDateChange) {
+      onDateChange(weekStart);
+    }
   };
 
   return (
@@ -157,13 +111,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
                     selected={selectedWeekDate}
                     onSelect={(date) => {
                       if (date) {
-                        setSelectedWeekDate(date);
-                        const weekStart = startOfWeek(date, { weekStartsOn: 0 });
-                        setCurrentWeekStart(weekStart);
-                        setWeekPickerOpen(false);
-                        if (onDateChange) {
-                          onDateChange(weekStart);
-                        }
+                        handleJumpToWeek(date);
                       }
                     }}
                     className="rounded-md border"
@@ -174,12 +122,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
                       size="sm"
                       onClick={() => {
                         const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
-                        setCurrentWeekStart(weekStart);
-                        setSelectedWeekDate(weekStart);
-                        setWeekPickerOpen(false);
-                        if (onDateChange) {
-                          onDateChange(weekStart);
-                        }
+                        handleJumpToWeek(weekStart);
                       }}
                     >
                       This Week
@@ -189,12 +132,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
                       size="sm"
                       onClick={() => {
                         const nextWeek = addWeeks(currentWeekStart, 1);
-                        setCurrentWeekStart(nextWeek);
-                        setSelectedWeekDate(nextWeek);
-                        setWeekPickerOpen(false);
-                        if (onDateChange) {
-                          onDateChange(nextWeek);
-                        }
+                        handleJumpToWeek(nextWeek);
                       }}
                     >
                       Next Week
@@ -218,6 +156,7 @@ export const WeeklyView: React.FC<ViewProps> = ({
         </div>
       </div>
 
+      {/* The rest of your WeeklyView component remains the same */}
       <div className="mobile-scroll overflow-x-auto">
         <div className="border rounded-lg overflow-hidden min-w-[900px]">
           <div className="grid grid-cols-9 bg-muted/50 border-b">

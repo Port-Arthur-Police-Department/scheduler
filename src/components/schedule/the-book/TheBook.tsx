@@ -563,11 +563,24 @@ const renderView = () => {
     case "monthly":
       return <MonthlyView {...viewProps} />;
     case "force-list":
-      return <ForceListView />;
+      return <ForceListView 
+        selectedShiftId={selectedShiftId}
+        setSelectedShiftId={setSelectedShiftId}
+        shiftTypes={shiftTypes || []}
+      />;
     case "vacation-list":
-      return <VacationListView />;
+      return <VacationListView 
+        selectedShiftId={selectedShiftId}
+        setSelectedShiftId={setSelectedShiftId}
+        shiftTypes={shiftTypes || []}
+      />;
     case "beat-preferences":
-      return <BeatPreferencesView isAdminOrSupervisor={isAdminOrSupervisor} />;
+      return <BeatPreferencesView 
+        isAdminOrSupervisor={isAdminOrSupervisor}
+        selectedShiftId={selectedShiftId}
+        setSelectedShiftId={setSelectedShiftId}
+        shiftTypes={shiftTypes || []}
+      />;
     default:
       return <WeeklyView {...viewProps} />;
   }

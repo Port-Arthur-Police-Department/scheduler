@@ -459,8 +459,7 @@ const dailySchedules = dates.map(date => {
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-  // Event handlers
-// In TheBook.tsx - Update handleEditAssignment for debugging
+// Event handlers
 const handleEditAssignment = (officer: any, dateStr: string) => {
   // Log the officer object to see its structure
   console.log('=== EDIT ASSIGNMENT CLICKED ===');
@@ -482,7 +481,6 @@ const handleEditAssignment = (officer: any, dateStr: string) => {
   });
 };
 
-// In TheBook.tsx - Add audit logging to PTO assignment
 const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
   setSelectedSchedule({
     scheduleId: schedule.scheduleId,
@@ -494,32 +492,15 @@ const handleAssignPTO = (schedule: any, date: string, officerId: string, officer
     ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
   });
   setPtoDialogOpen(true);
+  
+  // Note: The actual PTO assignment logging should happen in the PTO dialog's save handler
+  // not here. This function just opens the dialog.
 };
 
-// When PTO is saved (in PTOAssignmentDialog or similar), add:
-auditLogger.logPTOAssignment(
-  officerId,
-  ptoType,
-  date,
-  hours,
-  userEmail,
-  `${ptoType} PTO assigned for ${officerName}`
-);
+const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
+  // This will be handled by the view components
+};
 
-// When PTO is removed:
-auditLogger.logPTORemoval(
-  officerId,
-  ptoType,
-  date,
-  userEmail,
-  `PTO removed for ${officerName}`
-);
-
-  const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-    // This will be handled by the view components
-  };
-
-// In TheBook.tsx - Update the handleSaveAssignment function
 const handleSaveAssignment = () => {
   if (!editingAssignment) return;
 
@@ -579,7 +560,6 @@ const handleSaveAssignment = () => {
   });
 };
 
-// Also update handleRemoveOfficer to include audit logging
 const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
   removeOfficerMutation.mutate({
     scheduleId,
@@ -589,11 +569,15 @@ const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception'
     onSuccess: () => {
       if (officerData) {
         // AUDIT LOGGING - Log officer removal
+        // Extract officer ID safely
+        const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
+        const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
+        
         auditLogger.logOfficerRemoval(
-          officerData.officerId,
-          officerData.officerName,
+          officerId,
+          officerName,
           userEmail,
-          `Removed ${officerData.officerName} from schedule`
+          `Removed ${officerName} from schedule`
         );
       }
     }

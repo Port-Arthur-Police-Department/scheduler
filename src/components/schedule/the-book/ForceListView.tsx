@@ -238,48 +238,42 @@ const { data: forceListData, isLoading } = useQuery({
     });
   };
 
-  // Categorize officers
-  const supervisors = forceListData?.officers?.filter(officer => 
-    isSupervisorByRank(officer)
-  ) || [];
+// Categorize officers
+const supervisors = forceListData?.officers?.filter(officer => 
+  isSupervisorByRank(officer)
+) || [];
 
-  const regularOfficers = forceListData?.officers?.filter(officer => 
-    !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
-  ) || [];
+const regularOfficers = forceListData?.officers?.filter(officer => 
+  !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
+) || [];
 
-  const ppos = forceListData?.officers?.filter(officer => 
-    officer.rank?.toLowerCase() === 'probationary'
-  ) || [];
+const ppos = forceListData?.officers?.filter(officer => 
+  officer.rank?.toLowerCase() === 'probationary'
+) || [];
 
-const sortByForceCount = (a: any, b: any) => {
-  const aCount = getForceCount(a.id);
-  const bCount = getForceCount(b.id);
-  return aCount - bCount; // Lowest to highest
-};
-
-// Add this helper function near the other sorting logic
+// NEW: Sort by service credit (least to most)
 const sortByServiceCredit = (a: any, b: any) => {
-  // Get service credits (use service_credit_override if available, otherwise service_credit)
-  const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : a.service_credit || 0;
-  const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : b.service_credit || 0;
+  // Get service credits
+  const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : (a.service_credit || 0);
+  const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : (b.service_credit || 0);
   
-  // Sort by service credit (least to most)
+  // Primary sort: service credit (least to most)
   if (aCredit !== bCredit) {
     return aCredit - bCredit;
   }
   
-  // If service credits are equal, sort by force count (least to most)
+  // Secondary sort: force count (least to most)
   const aForceCount = getForceCount(a.id);
   const bForceCount = getForceCount(b.id);
   if (aForceCount !== bForceCount) {
     return aForceCount - bForceCount;
   }
   
-  // If force counts are also equal, sort alphabetically by last name
+  // Tertiary sort: last name (A-Z)
   return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
 };
 
-// Update the sorting to use the new function
+// Sort all categories by service credit
 const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
 const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
 const sortedPPOs = [...ppos].sort(sortByServiceCredit);

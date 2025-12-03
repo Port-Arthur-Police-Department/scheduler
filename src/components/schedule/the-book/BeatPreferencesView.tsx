@@ -455,6 +455,7 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
                                             <SelectValue placeholder="Select" />
                                           </SelectTrigger>
                                           <SelectContent>
+                                            <SelectItem value="">Select...</SelectItem>
                                             {beatPositions.map((beat) => (
                                               <SelectItem key={beat} value={beat}>
                                                 {beat}
@@ -473,6 +474,7 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
                                             <SelectValue placeholder="Select" />
                                           </SelectTrigger>
                                           <SelectContent>
+                                            <SelectItem value="">Select...</SelectItem>
                                             {beatPositions.map((beat) => (
                                               <SelectItem key={beat} value={beat}>
                                                 {beat}
@@ -491,6 +493,7 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
                                             <SelectValue placeholder="Select" />
                                           </SelectTrigger>
                                           <SelectContent>
+                                            <SelectItem value="">Select...</SelectItem>
                                             {beatPositions.map((beat) => (
                                               <SelectItem key={beat} value={beat}>
                                                 {beat}

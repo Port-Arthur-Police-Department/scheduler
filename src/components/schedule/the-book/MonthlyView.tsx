@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays } from "lucide-react";
 import { startOfMonth, format, addMonths } from "date-fns";
+import React, { useState } from 'react'; 
 
 export const MonthlyView: React.FC<ViewProps> = ({
   currentDate,

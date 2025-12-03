@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, Users, AlertTriangle, Clock, LogOut, Bell, X, RefreshCw, Settings, Moon, Sun, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
-import TheBook from "@/components/schedule/TheBook";
+import TheBook from "@/components/schedule/the-book";
 import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 import { DailyScheduleManagement } from "@/components/schedule/DailyScheduleManagement";
 import { DailyScheduleView } from "@/components/schedule/DailyScheduleView";

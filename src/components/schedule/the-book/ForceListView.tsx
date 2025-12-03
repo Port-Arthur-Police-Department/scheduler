@@ -300,29 +300,29 @@ const [filters, setFilters] = useState<ForceListFilters>({
     });
   };
 
-  const handlePreviousWeek = () => {
-    setFilters(prev => ({
-      ...prev,
-      startDate: addDays(prev.startDate, -7),
-      endDate: addDays(prev.endDate, -7)
-    }));
-  };
+const handlePreviousWeek = () => {
+  setFilters(prev => ({
+    ...prev,
+    startDate: startOfYear(addDays(prev.startDate, -365)),
+    endDate: endOfYear(addDays(prev.endDate, -365))
+  }));
+};
 
-  const handleNextWeek = () => {
-    setFilters(prev => ({
-      ...prev,
-      startDate: addDays(prev.startDate, 7),
-      endDate: addDays(prev.endDate, 7)
-    }));
-  };
+const handleNextWeek = () => {
+  setFilters(prev => ({
+    ...prev,
+    startDate: startOfYear(addDays(prev.startDate, 365)),
+    endDate: endOfYear(addDays(prev.endDate, 365))
+  }));
+};
 
-  const handleToday = () => {
-    setFilters({
-      startDate: startOfWeek(new Date(), { weekStartsOn: 0 }),
-      endDate: endOfWeek(new Date(), { weekStartsOn: 0 }),
-      forceType: filters.forceType
-    });
-  };
+const handleToday = () => {
+  setFilters({
+    startDate: startOfYear(new Date()),
+    endDate: endOfYear(new Date()),
+    forceType: filters.forceType
+  });
+};
 
   const handleAddForcedDate = (officerId: string, officerName: string) => {
     setEditingForcedDate({
@@ -383,7 +383,7 @@ const [filters, setFilters] = useState<ForceListFilters>({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             {/* Date Range Selector */}
             <div className="space-y-2">
-              <Label htmlFor="date-range">Date Range</Label>
+              <Label htmlFor="date-range">Calendar Year</Label>
               <div className="flex items-center gap-2">
                 <Popover open={calendarOpen === "start"} onOpenChange={(open) => setCalendarOpen(open ? "start" : null)}>
                   <PopoverTrigger asChild>
@@ -444,6 +444,11 @@ const [filters, setFilters] = useState<ForceListFilters>({
                 </Popover>
               </div>
             </div>
+            <div className="text-center mt-2">
+  <Badge variant="secondary">
+    {format(filters.startDate, "yyyy")}
+  </Badge>
+</div>
 
             {/* Force Type Toggle */}
             <div className="space-y-2">
@@ -469,15 +474,17 @@ const [filters, setFilters] = useState<ForceListFilters>({
             <div className="space-y-2">
               <Label>Navigation</Label>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handlePreviousWeek}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleToday}>
-                  Today
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleNextWeek}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+               <Button variant="outline" size="sm" onClick={handlePreviousWeek}>
+  <ChevronLeft className="h-4 w-4" />
+  Prev Year
+</Button>
+<Button variant="outline" size="sm" onClick={handleToday}>
+  Current Year
+</Button>
+<Button variant="outline" size="sm" onClick={handleNextWeek}>
+  Next Year
+  <ChevronRight className="h-4 w-4" />
+</Button>
               </div>
             </div>
           </div>

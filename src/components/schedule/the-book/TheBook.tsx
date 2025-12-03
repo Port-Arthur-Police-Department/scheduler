@@ -534,22 +534,23 @@ const dailySchedules = dates.map(date => {
     isSupervisorByRank,
   };
 
-  const renderView = () => {
-    switch (activeView) {
-      case "weekly":
-        return <WeeklyView {...viewProps} />;
-      case "monthly":
-        return <MonthlyView {...viewProps} />;
-      case "force-list":
-        return <ForceListView />;
-      case "vacation-list":
-        return <VacationListView />;
-      case "beat-preferences":
-        return <BeatPreferencesView />;
-      default:
-        return <WeeklyView {...viewProps} />;
-    }
-  };
+// In TheBook.tsx, update the renderView function:
+const renderView = () => {
+  switch (activeView) {
+    case "weekly":
+      return <WeeklyView {...viewProps} />;
+    case "monthly":
+      return <MonthlyView {...viewProps} />;
+    case "force-list":
+      return <ForceListView />;
+    case "vacation-list":
+      return <VacationListView />;
+    case "beat-preferences":
+      return <BeatPreferencesView isAdminOrSupervisor={isAdminOrSupervisor} />;
+    default:
+      return <WeeklyView {...viewProps} />;
+  }
+};
 
   const isLoading = schedulesLoading || shiftsLoading;
 

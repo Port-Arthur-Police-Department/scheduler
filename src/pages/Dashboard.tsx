@@ -404,7 +404,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
           />
         );
       case "schedule":
-        return <WeeklySchedule userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
+        return <TheBook userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
       case "officers":
         return <OfficersManagement userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
       case "vacancies":

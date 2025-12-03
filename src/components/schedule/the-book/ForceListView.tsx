@@ -41,10 +41,12 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   isAdminOrSupervisor
 }) => {
   const queryClient = useQueryClient();
-const [filters, setFilters] = useState<ForceListFilters>({
+const [filters, setFilters] = useState<{
+  startDate: Date;
+  endDate: Date;
+}>({
   startDate: startOfYear(new Date()),
   endDate: endOfYear(new Date()),
-  forceType: "regular-force"
 });
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
   const [editingForcedDate, setEditingForcedDate] = useState<{

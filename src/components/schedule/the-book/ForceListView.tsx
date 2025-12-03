@@ -1,4 +1,4 @@
-// ForceListView.tsx - Updated with Force Count column
+// ForceListView.tsx - Updated with Force Count column and Service Credit sorting
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, parseISO, addDays } from "date-fns";
@@ -31,14 +31,14 @@ interface ForceListViewProps {
   selectedShiftId: string;
   setSelectedShiftId: (shiftId: string) => void;
   shiftTypes: any[];
-  isAdminOrSupervisor: boolean; // ADD THIS PROP
+  isAdminOrSupervisor: boolean;
 }
 
 export const ForceListView: React.FC<ForceListViewProps> = ({
   selectedShiftId,
   setSelectedShiftId,
   shiftTypes,
-  isAdminOrSupervisor // ADD THIS
+  isAdminOrSupervisor
 }) => {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ForceListFilters>({
@@ -72,149 +72,149 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     },
   });
 
-// In ForceListView.tsx - Update the addForcedDateMutation
-const addForcedDateMutation = useMutation({
-  mutationFn: async ({ officerId, forcedDate, isRed, notes }: {
-    officerId: string;
-    forcedDate: string;
-    isRed: boolean;
-    notes: string;
-  }) => {
-    const { data, error } = await supabase
-      .from("forced_dates")
-      .upsert({
-        officer_id: officerId,
-        forced_date: forcedDate,
-        is_red: isRed,
-        notes: notes || null
-      }, {
-        onConflict: 'officer_id,forced_date'
-      });
+  // Mutation to add/update forced date
+  const addForcedDateMutation = useMutation({
+    mutationFn: async ({ officerId, forcedDate, isRed, notes }: {
+      officerId: string;
+      forcedDate: string;
+      isRed: boolean;
+      notes: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("forced_dates")
+        .upsert({
+          officer_id: officerId,
+          forced_date: forcedDate,
+          is_red: isRed,
+          notes: notes || null
+        }, {
+          onConflict: 'officer_id,forced_date'
+        });
 
-    if (error) throw error;
-    return data;
-  },
-  onSuccess: (data, variables) => {
-    // Log to audit - ADD userEmail parameter if available
-    auditLogger.logDatabaseOperation(
-      'UPSERT',
-      'forced_dates',
-      data?.[0]?.id,
-      undefined,
-      variables,
-      `Forced date added for officer ${variables.officerId}`
-    );
-    
-    toast.success("Forced date saved");
-    queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
-    setEditingForcedDate(null);
-  },
-  onError: (error) => {
-    toast.error("Error saving forced date");
-    console.error("Error saving forced date:", error);
-  }
-});
-
-// Update the deleteForcedDateMutation
-const deleteForcedDateMutation = useMutation({
-  mutationFn: async (forcedDateId: string) => {
-    const { error } = await supabase
-      .from("forced_dates")
-      .delete()
-      .eq("id", forcedDateId);
-
-    if (error) throw error;
-  },
-  onSuccess: (_, forcedDateId) => {
-    // Log to audit - ADD userEmail parameter if available
-    auditLogger.logDatabaseOperation(
-      'DELETE',
-      'forced_dates',
-      forcedDateId,
-      undefined,
-      undefined,
-      `Forced date removed`
-    );
-    
-    toast.success("Forced date removed");
-    queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
-  },
-  onError: (error) => {
-    toast.error("Error removing forced date");
-    console.error("Error removing forced date:", error);
-  }
-});
-
-// In ForceListView.tsx - Update the force list data query
-const { data: forceListData, isLoading } = useQuery({
-  queryKey: ['force-list', selectedShiftId],
-  queryFn: async () => {
-    if (!selectedShiftId) return null;
-
-    // Get officers who have recurring schedules for this shift
-    const { data: recurringSchedules, error: recurringError } = await supabase
-      .from("recurring_schedules")
-      .select(`
-        officer_id,
-        profiles!recurring_schedules_officer_id_fkey (
-          id,
-          full_name,
-          badge_number,
-          rank,
-          service_credit_override,
-          hire_date
-        )
-      `)
-      .eq("shift_type_id", selectedShiftId)
-      .is("end_date", null);
-
-    if (recurringError) {
-      console.error("Error fetching recurring schedules for force list:", recurringError);
-      throw recurringError;
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      // Log to audit
+      auditLogger.logDatabaseOperation(
+        'UPSERT',
+        'forced_dates',
+        data?.[0]?.id,
+        undefined,
+        variables,
+        `Forced date added for officer ${variables.officerId}`
+      );
+      
+      toast.success("Forced date saved");
+      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+      setEditingForcedDate(null);
+    },
+    onError: (error) => {
+      toast.error("Error saving forced date");
+      console.error("Error saving forced date:", error);
     }
+  });
 
-    // Get unique officers from recurring schedules
-    const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
-    const uniqueOfficers = Array.from(
-      new Map(officers.map(officer => [officer.id, officer])).values()
-    );
+  // Mutation to delete forced date
+  const deleteForcedDateMutation = useMutation({
+    mutationFn: async (forcedDateId: string) => {
+      const { error } = await supabase
+        .from("forced_dates")
+        .delete()
+        .eq("id", forcedDateId);
 
-    // NEW: Fetch service credits for all officers
-    const officerIds = uniqueOfficers.map(o => o.id);
-    const serviceCredits = new Map();
-    
-    if (officerIds.length > 0) {
-      // Use your existing service credit RPC function
-      for (const officerId of officerIds) {
-        try {
-          const { data, error } = await supabase
-            .rpc('get_service_credit', { profile_id: officerId });
-          
-          if (!error && data !== null) {
-            serviceCredits.set(officerId, data);
-          } else {
+      if (error) throw error;
+    },
+    onSuccess: (_, forcedDateId) => {
+      // Log to audit
+      auditLogger.logDatabaseOperation(
+        'DELETE',
+        'forced_dates',
+        forcedDateId,
+        undefined,
+        undefined,
+        `Forced date removed`
+      );
+      
+      toast.success("Forced date removed");
+      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+    },
+    onError: (error) => {
+      toast.error("Error removing forced date");
+      console.error("Error removing forced date:", error);
+    }
+  });
+
+  // Fetch force list data - FILTERED BY SELECTED SHIFT
+  const { data: forceListData, isLoading } = useQuery({
+    queryKey: ['force-list', selectedShiftId],
+    queryFn: async () => {
+      if (!selectedShiftId) return null;
+
+      // Get officers who have recurring schedules for this shift
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          officer_id,
+          profiles!recurring_schedules_officer_id_fkey (
+            id,
+            full_name,
+            badge_number,
+            rank,
+            service_credit_override,
+            hire_date
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .is("end_date", null);
+
+      if (recurringError) {
+        console.error("Error fetching recurring schedules for force list:", recurringError);
+        throw recurringError;
+      }
+
+      // Get unique officers from recurring schedules
+      const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
+      const uniqueOfficers = Array.from(
+        new Map(officers.map(officer => [officer.id, officer])).values()
+      );
+
+      // Fetch service credits for all officers
+      const officerIds = uniqueOfficers.map(o => o.id);
+      const serviceCredits = new Map();
+      
+      if (officerIds.length > 0) {
+        // Use your existing service credit RPC function
+        for (const officerId of officerIds) {
+          try {
+            const { data, error } = await supabase
+              .rpc('get_service_credit', { profile_id: officerId });
+            
+            if (!error && data !== null) {
+              serviceCredits.set(officerId, data);
+            } else {
+              serviceCredits.set(officerId, 0);
+            }
+          } catch (error) {
+            console.error(`Error fetching service credit for officer ${officerId}:`, error);
             serviceCredits.set(officerId, 0);
           }
-        } catch (error) {
-          console.error(`Error fetching service credit for officer ${officerId}:`, error);
-          serviceCredits.set(officerId, 0);
         }
       }
-    }
 
-    // Add service credits to each officer object
-    const officersWithCredits = uniqueOfficers.map(officer => ({
-      ...officer,
-      service_credit: serviceCredits.get(officer.id) || 0
-    }));
+      // Add service credits to each officer object
+      const officersWithCredits = uniqueOfficers.map(officer => ({
+        ...officer,
+        service_credit: serviceCredits.get(officer.id) || 0
+      }));
 
-    return {
-      officers: officersWithCredits || [],
-      totalCount: uniqueOfficers.length
-    };
-  },
-  enabled: !!selectedShiftId,
-});
+      return {
+        officers: officersWithCredits || [],
+        totalCount: uniqueOfficers.length
+      };
+    },
+    enabled: !!selectedShiftId,
+  });
 
   // Get forced dates for each officer
   const getOfficerForcedDates = (officerId: string) => {
@@ -238,45 +238,45 @@ const { data: forceListData, isLoading } = useQuery({
     });
   };
 
-// Categorize officers
-const supervisors = forceListData?.officers?.filter(officer => 
-  isSupervisorByRank(officer)
-) || [];
+  // Categorize officers
+  const supervisors = forceListData?.officers?.filter(officer => 
+    isSupervisorByRank(officer)
+  ) || [];
 
-const regularOfficers = forceListData?.officers?.filter(officer => 
-  !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
-) || [];
+  const regularOfficers = forceListData?.officers?.filter(officer => 
+    !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
+  ) || [];
 
-const ppos = forceListData?.officers?.filter(officer => 
-  officer.rank?.toLowerCase() === 'probationary'
-) || [];
+  const ppos = forceListData?.officers?.filter(officer => 
+    officer.rank?.toLowerCase() === 'probationary'
+  ) || [];
 
-// NEW: Sort by service credit (least to most)
-const sortByServiceCredit = (a: any, b: any) => {
-  // Get service credits
-  const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : (a.service_credit || 0);
-  const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : (b.service_credit || 0);
-  
-  // Primary sort: service credit (least to most)
-  if (aCredit !== bCredit) {
-    return aCredit - bCredit;
-  }
-  
-  // Secondary sort: force count (least to most)
-  const aForceCount = getForceCount(a.id);
-  const bForceCount = getForceCount(b.id);
-  if (aForceCount !== bForceCount) {
-    return aForceCount - bForceCount;
-  }
-  
-  // Tertiary sort: last name (A-Z)
-  return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-};
+  // Sort by service credit (least to most)
+  const sortByServiceCredit = (a: any, b: any) => {
+    // Get service credits
+    const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : (a.service_credit || 0);
+    const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : (b.service_credit || 0);
+    
+    // Primary sort: service credit (least to most)
+    if (aCredit !== bCredit) {
+      return aCredit - bCredit;
+    }
+    
+    // Secondary sort: force count (least to most)
+    const aForceCount = getForceCount(a.id);
+    const bForceCount = getForceCount(b.id);
+    if (aForceCount !== bForceCount) {
+      return aForceCount - bForceCount;
+    }
+    
+    // Tertiary sort: last name (A-Z)
+    return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+  };
 
-// Sort all categories by service credit
-const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
-const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
-const sortedPPOs = [...ppos].sort(sortByServiceCredit);
+  // Sort all categories by service credit
+  const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
+  const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
+  const sortedPPOs = [...ppos].sort(sortByServiceCredit);
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({
@@ -466,313 +466,39 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
             </div>
           ) : (
             <div className="space-y-6">
-  {/* Header - with Service Credit column */}
-  <div className="grid grid-cols-10 bg-muted/50 p-3 font-semibold border rounded-t-lg">
-    <div className="col-span-2">Officer</div>
-    <div className="col-span-1">Badge #</div>
-    <div className="col-span-1">Rank</div>
-    <div className="col-span-1 text-center">Service Credit</div>
-    <div className="col-span-1 text-center">Force Count</div>
-    <div className="col-span-2">Forced Dates</div>
-    <div className="col-span-1">Actions</div>
-  </div>
+              {/* Header with Service Credit Column */}
+              <div className="grid grid-cols-10 bg-muted/50 p-3 font-semibold border rounded-t-lg">
+                <div className="col-span-2">Officer</div>
+                <div className="col-span-1">Badge #</div>
+                <div className="col-span-1">Rank</div>
+                <div className="col-span-1 text-center">Service Credit</div>
+                <div className="col-span-1 text-center">Force Count</div>
+                <div className="col-span-2">Forced Dates</div>
+                <div className="col-span-1">Actions</div>
+              </div>
 
-  {/* Two Column Layout */}
-  <div className="grid grid-cols-1 gap-4">
-    {/* Supervisors Section */}
-    {sortedSupervisors.length > 0 && (
-      <div className="space-y-2">
-        <div className="text-lg font-semibold border-b pb-2">
-          Supervisors ({sortedSupervisors.length})
-        </div>
-        {sortedSupervisors.map((officer) => {
-          const forcedDates = getOfficerForcedDates(officer.id);
-          const forceCount = getForceCount(officer.id);
-          const mostRecent = getMostRecentForcedDate(officer.id);
-          
-          return (
-            <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
-              <div className="col-span-2">
-                <div className="font-medium">
-                  {getLastName(officer.full_name)}
-                  <Badge variant="outline" className="ml-2 text-xs">
-                    {getRankAbbreviation(officer.rank)}
-                  </Badge>
-                </div>
-              </div>
-              <div className="col-span-1">
-                {officer.badge_number}
-              </div>
-              <div className="col-span-1">
-                <Badge variant="secondary" className="text-xs">
-                  {getRankAbbreviation(officer.rank)}
-                </Badge>
-              </div>
-              {/* Service Credit Column */}
-              <div className="col-span-1 text-center">
-                <Badge variant="outline" className="text-xs">
-                  {officer.service_credit || 0}
-                </Badge>
-              </div>
-              <div className="col-span-1 text-center">
-                <Badge 
-                  variant={forceCount === 0 ? "outline" : "default"}
-                  className={forceCount === 0 ? "" : "bg-blue-600"}
-                >
-                  {forceCount}
-                </Badge>
-              </div>
-              <div className="col-span-2">
-                <div className="flex flex-wrap gap-1">
-                  {forcedDates.map((forcedDate) => (
-                    <Badge 
-                      key={forcedDate.id}
-                      variant="outline"
-                      className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
-                    >
-                      {format(parseISO(forcedDate.forced_date), "MMM d")}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
-                        onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
-                        title="Remove forced date"
-                      >
-                        <X className="h-2 w-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  {forcedDates.length === 0 && (
-                    <span className="text-sm text-muted-foreground italic">Never forced</span>
-                  )}
-                </div>
-                {mostRecent && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Last: {format(parseISO(mostRecent.forced_date), "MMM d, yyyy")}
-                  </div>
-                )}
-              </div>
-              <div className="col-span-1">
-                {isAdminOrSupervisor ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                    title="Add forced date"
-                  >
-                    <Clock className="h-3 w-3 mr-1" />
-                    Force
-                  </Button>
-                ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    View Only
-                  </Badge>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-
-    {/* Regular Officers Section - Update similarly */}
-    {sortedRegularOfficers.length > 0 && (
-      <div className="space-y-2">
-        <div className="text-lg font-semibold border-b pb-2 mt-4">
-          Officers ({sortedRegularOfficers.length})
-        </div>
-        {sortedRegularOfficers.map((officer) => {
-          const forcedDates = getOfficerForcedDates(officer.id);
-          const forceCount = getForceCount(officer.id);
-          const mostRecent = getMostRecentForcedDate(officer.id);
-          
-          return (
-            <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
-              <div className="col-span-2">
-                <div className="font-medium">{getLastName(officer.full_name)}</div>
-              </div>
-              <div className="col-span-1">
-                {officer.badge_number}
-              </div>
-              <div className="col-span-1">
-                <Badge variant="secondary" className="text-xs">
-                  {getRankAbbreviation(officer.rank)}
-                </Badge>
-              </div>
-              {/* Service Credit Column */}
-              <div className="col-span-1 text-center">
-                <Badge variant="outline" className="text-xs">
-                  {officer.service_credit || 0}
-                </Badge>
-              </div>
-              <div className="col-span-1 text-center">
-                <Badge 
-                  variant={forceCount === 0 ? "outline" : "default"}
-                  className={forceCount === 0 ? "" : "bg-blue-600"}
-                >
-                  {forceCount}
-                </Badge>
-              </div>
-              <div className="col-span-2">
-                <div className="flex flex-wrap gap-1">
-                  {forcedDates.map((forcedDate) => (
-                    <Badge 
-                      key={forcedDate.id}
-                      variant="outline"
-                      className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
-                    >
-                      {format(parseISO(forcedDate.forced_date), "MMM d")}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
-                        onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
-                        title="Remove forced date"
-                      >
-                        <X className="h-2 w-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  {forcedDates.length === 0 && (
-                    <span className="text-sm text-muted-foreground italic">Never forced</span>
-                  )}
-                </div>
-                {mostRecent && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Last: {format(parseISO(mostRecent.forced_date), "MMM d, yyyy")}
-                  </div>
-                )}
-              </div>
-              <div className="col-span-1">
-                {isAdminOrSupervisor ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                    title="Add forced date"
-                  >
-                    <Clock className="h-3 w-3 mr-1" />
-                    Force
-                  </Button>
-                ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    View Only
-                  </Badge>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-
-    {/* PPO Section - Update similarly */}
-    {sortedPPOs.length > 0 && (
-      <div className="space-y-2">
-        <div className="text-lg font-semibold border-b pb-2 mt-4">
-          PPO Officers ({sortedPPOs.length})
-        </div>
-        {sortedPPOs.map((officer) => {
-          const forcedDates = getOfficerForcedDates(officer.id);
-          const forceCount = getForceCount(officer.id);
-          
-          return (
-            <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center bg-blue-50">
-              <div className="col-span-2">
-                <div className="font-medium">
-                  {getLastName(officer.full_name)}
-                  <Badge variant="outline" className="ml-2 text-xs bg-blue-100">
-                    PPO
-                  </Badge>
-                </div>
-              </div>
-              <div className="col-span-1">
-                {officer.badge_number}
-              </div>
-              <div className="col-span-1">
-                <Badge variant="secondary" className="text-xs">
-                  PPO
-                </Badge>
-              </div>
-              {/* Service Credit Column */}
-              <div className="col-span-1 text-center">
-                <Badge variant="outline" className="text-xs">
-                  {officer.service_credit || 0}
-                </Badge>
-              </div>
-              <div className="col-span-1 text-center">
-                <Badge 
-                  variant={forceCount === 0 ? "outline" : "default"}
-                  className={forceCount === 0 ? "" : "bg-blue-600"}
-                >
-                  {forceCount}
-                </Badge>
-              </div>
-              <div className="col-span-2">
-                <div className="flex flex-wrap gap-1">
-                  {forcedDates.map((forcedDate) => (
-                    <Badge 
-                      key={forcedDate.id}
-                      variant="outline"
-                      className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
-                    >
-                      {format(parseISO(forcedDate.forced_date), "MMM d")}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
-                        onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
-                        title="Remove forced date"
-                      >
-                        <X className="h-2 w-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  {forcedDates.length === 0 && (
-                    <span className="text-sm text-muted-foreground italic">Never forced</span>
-                  )}
-                </div>
-              </div>
-              <div className="col-span-1">
-                {isAdminOrSupervisor ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                    title="Add forced date"
-                    className="bg-white"
-                  >
-                    <Clock className="h-3 w-3 mr-1" />
-                    Force
-                  </Button>
-                ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    View Only
-                  </Badge>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-
-                {/* Regular Officers Section */}
-                {sortedRegularOfficers.length > 0 && (
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 gap-4">
+                {/* Supervisors Section */}
+                {sortedSupervisors.length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-lg font-semibold border-b pb-2 mt-4">
-                      Officers ({sortedRegularOfficers.length})
+                    <div className="text-lg font-semibold border-b pb-2">
+                      Supervisors ({sortedSupervisors.length})
                     </div>
-                    {sortedRegularOfficers.map((officer) => {
+                    {sortedSupervisors.map((officer) => {
                       const forcedDates = getOfficerForcedDates(officer.id);
                       const forceCount = getForceCount(officer.id);
                       const mostRecent = getMostRecentForcedDate(officer.id);
                       
                       return (
-                        <div key={officer.id} className="grid grid-cols-8 p-3 border rounded-lg hover:bg-muted/30 items-center">
+                        <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
                           <div className="col-span-2">
-                            <div className="font-medium">{getLastName(officer.full_name)}</div>
+                            <div className="font-medium">
+                              {getLastName(officer.full_name)}
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                {getRankAbbreviation(officer.rank)}
+                              </Badge>
+                            </div>
                           </div>
                           <div className="col-span-1">
                             {officer.badge_number}
@@ -780,6 +506,11 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                           <div className="col-span-1">
                             <Badge variant="secondary" className="text-xs">
                               {getRankAbbreviation(officer.rank)}
+                            </Badge>
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <Badge variant="outline" className="text-xs">
+                              {officer.service_credit || 0}
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
@@ -820,23 +551,113 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                               </div>
                             )}
                           </div>
-                           <div className="col-span-1">
-    {isAdminOrSupervisor ? (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-        title="Add forced date"
-      >
-        <Clock className="h-3 w-3 mr-1" />
-        Force
-      </Button>
-    ) : (
-      <Badge variant="secondary" className="text-xs">
-        View Only
-      </Badge>
-    )}
-  </div>
+                          <div className="col-span-1">
+                            {isAdminOrSupervisor ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                                title="Add forced date"
+                              >
+                                <Clock className="h-3 w-3 mr-1" />
+                                Force
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                View Only
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Regular Officers Section */}
+                {sortedRegularOfficers.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-lg font-semibold border-b pb-2 mt-4">
+                      Officers ({sortedRegularOfficers.length})
+                    </div>
+                    {sortedRegularOfficers.map((officer) => {
+                      const forcedDates = getOfficerForcedDates(officer.id);
+                      const forceCount = getForceCount(officer.id);
+                      const mostRecent = getMostRecentForcedDate(officer.id);
+                      
+                      return (
+                        <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
+                          <div className="col-span-2">
+                            <div className="font-medium">{getLastName(officer.full_name)}</div>
+                          </div>
+                          <div className="col-span-1">
+                            {officer.badge_number}
+                          </div>
+                          <div className="col-span-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {getRankAbbreviation(officer.rank)}
+                            </Badge>
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <Badge variant="outline" className="text-xs">
+                              {officer.service_credit || 0}
+                            </Badge>
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <Badge 
+                              variant={forceCount === 0 ? "outline" : "default"}
+                              className={forceCount === 0 ? "" : "bg-blue-600"}
+                            >
+                              {forceCount}
+                            </Badge>
+                          </div>
+                          <div className="col-span-2">
+                            <div className="flex flex-wrap gap-1">
+                              {forcedDates.map((forcedDate) => (
+                                <Badge 
+                                  key={forcedDate.id}
+                                  variant="outline"
+                                  className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
+                                >
+                                  {format(parseISO(forcedDate.forced_date), "MMM d")}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
+                                    onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
+                                    title="Remove forced date"
+                                  >
+                                    <X className="h-2 w-2" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                              {forcedDates.length === 0 && (
+                                <span className="text-sm text-muted-foreground italic">Never forced</span>
+                              )}
+                            </div>
+                            {mostRecent && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Last: {format(parseISO(mostRecent.forced_date), "MMM d, yyyy")}
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-span-1">
+                            {isAdminOrSupervisor ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                                title="Add forced date"
+                              >
+                                <Clock className="h-3 w-3 mr-1" />
+                                Force
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                View Only
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -854,7 +675,7 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                       const forceCount = getForceCount(officer.id);
                       
                       return (
-                        <div key={officer.id} className="grid grid-cols-8 p-3 border rounded-lg hover:bg-muted/30 items-center bg-blue-50">
+                        <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center bg-blue-50">
                           <div className="col-span-2">
                             <div className="font-medium">
                               {getLastName(officer.full_name)}
@@ -869,6 +690,11 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                           <div className="col-span-1">
                             <Badge variant="secondary" className="text-xs">
                               PPO
+                            </Badge>
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <Badge variant="outline" className="text-xs">
+                              {officer.service_credit || 0}
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
@@ -905,22 +731,23 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                             </div>
                           </div>
                           <div className="col-span-1">
-    {isAdminOrSupervisor ? (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-        title="Add forced date"
-      >
-        <Clock className="h-3 w-3 mr-1" />
-        Force
-      </Button>
-    ) : (
-      <Badge variant="secondary" className="text-xs">
-        View Only
-      </Badge>
-    )}
-  </div>
+                            {isAdminOrSupervisor ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                                title="Add forced date"
+                                className="bg-white"
+                              >
+                                <Clock className="h-3 w-3 mr-1" />
+                                Force
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                View Only
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -928,7 +755,7 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
                 )}
               </div>
 
-              
+              {/* Forced Date Entry Modal */}
               {editingForcedDate && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                   <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">

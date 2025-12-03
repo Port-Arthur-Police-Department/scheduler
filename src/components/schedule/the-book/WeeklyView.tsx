@@ -1,17 +1,17 @@
-// src/components/schedule/the-book/WeeklyView.tsx
-import React, { useState } from 'react';
-import { format, addDays, isSameDay } from "date-fns";
+// WeeklyView.tsx - Complete with navigation
+import React, { useState, useEffect } from 'react';
+import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScheduleCell } from "../ScheduleCell";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 export const WeeklyView: React.FC<ViewProps> = ({
-  currentDate,
+  currentDate: initialDate,
   selectedShiftId,
   schedules,
   isAdminOrSupervisor,
@@ -23,15 +23,24 @@ export const WeeklyView: React.FC<ViewProps> = ({
   getLastName,
   getRankPriority,
   isSupervisorByRank,
+  onDateChange,
 }) => {
+  const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
+
+  // Sync with parent when date changes
+  useEffect(() => {
+    setCurrentWeekStart(initialDate);
+    setSelectedWeekDate(initialDate);
+  }, [initialDate]);
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(currentDate, i);
+    const date = addDays(currentWeekStart, i);
     const dayOfWeek = date.getDay();
     return {
       date,
@@ -124,7 +133,88 @@ export const WeeklyView: React.FC<ViewProps> = ({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="text-lg font-bold">
-          {format(currentDate, "MMM d")} - {format(addDays(currentDate, 6), "MMM d, yyyy")}
+          {format(currentWeekStart, "MMM d")} - {format(addDays(currentWeekStart, 6), "MMM d, yyyy")}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onDateNavigation.goToPrevious}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          {/* Jump to Week Button */}
+          <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Jump to Week
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <div className="p-3">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Select a week</div>
+                  <Calendar
+                    mode="single"
+                    selected={selectedWeekDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setSelectedWeekDate(date);
+                        const weekStart = startOfWeek(date, { weekStartsOn: 0 });
+                        setCurrentWeekStart(weekStart);
+                        setWeekPickerOpen(false);
+                        if (onDateChange) {
+                          onDateChange(weekStart);
+                        }
+                      }
+                    }}
+                    className="rounded-md border"
+                  />
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
+                        setCurrentWeekStart(weekStart);
+                        setSelectedWeekDate(weekStart);
+                        setWeekPickerOpen(false);
+                        if (onDateChange) {
+                          onDateChange(weekStart);
+                        }
+                      }}
+                    >
+                      This Week
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const nextWeek = addWeeks(currentWeekStart, 1);
+                        setCurrentWeekStart(nextWeek);
+                        setSelectedWeekDate(nextWeek);
+                        setWeekPickerOpen(false);
+                        if (onDateChange) {
+                          onDateChange(nextWeek);
+                        }
+                      }}
+                    >
+                      Next Week
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          
+          <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDateNavigation.goToCurrent}
+          >
+            Today
+          </Button>
         </div>
       </div>
 

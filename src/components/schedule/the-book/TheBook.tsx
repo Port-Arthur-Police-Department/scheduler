@@ -29,7 +29,14 @@ import { AssignmentEditDialog } from "./AssignmentEditDialog";
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData } from "./types";
-import { getLastName, getRankAbbreviation, getRankPriority, isSupervisorByRank } from "./utils";
+import { 
+  getLastName, 
+  getRankAbbreviation, 
+  getRankPriority, 
+  isSupervisorByRank,
+  categorizeAndSortOfficers, // Add this
+  calculateStaffingCounts    // And this
+} from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 const TheBook = ({  

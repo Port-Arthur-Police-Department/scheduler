@@ -467,7 +467,6 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
           ) : (
             <div className="space-y-6">
               {/* Header */}
-              // In the table header - Add a Service Credit column
 <div className="grid grid-cols-9 bg-muted/50 p-3 font-semibold border rounded-t-lg">
   <div className="col-span-2">Officer</div>
   <div className="col-span-1">Badge #</div>
@@ -478,7 +477,7 @@ const sortedPPOs = [...ppos].sort(sortByServiceCredit);
   <div className="col-span-1">Actions</div>
 </div>
 
-// In each officer row - Add service credit display
+
 <div className="col-span-1 text-center">
   <Badge variant="outline" className="text-xs">
     {officer.service_credit || 0}

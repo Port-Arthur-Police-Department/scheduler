@@ -18,6 +18,7 @@ export const MonthlyView: React.FC<ViewProps> = ({
   isAdminOrSupervisor,
   weeklyColors,
   onEventHandlers,
+  onDateChange,
   mutations,
   navigateToDailySchedule,
   getLastName,

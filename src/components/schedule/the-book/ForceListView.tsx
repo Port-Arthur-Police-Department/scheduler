@@ -1,20 +1,30 @@
-// ForceListView.tsx - Updated to filter by selected shift
+// ForceListView.tsx - Updated for forced shift tracking
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from "date-fns";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays, parseISO, isAfter, isBefore, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Users, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { CalendarIcon, Users, ChevronLeft, ChevronRight, Trash2, Save, X, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ForceType, ForceListFilters } from "./types";
 import { getLastName, getRankAbbreviation, getRankPriority, isSupervisorByRank } from "./utils";
+
+interface ForcedDate {
+  id?: string;
+  officer_id: string;
+  forced_date: string;
+  is_red?: boolean;
+  notes?: string;
+  created_at?: string;
+}
 
 interface ForceListViewProps {
   selectedShiftId: string;
@@ -27,16 +37,93 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   setSelectedShiftId,
   shiftTypes
 }) => {
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ForceListFilters>({
     startDate: startOfWeek(new Date(), { weekStartsOn: 0 }),
     endDate: endOfWeek(new Date(), { weekStartsOn: 0 }),
     forceType: "regular-force"
   });
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
+  const [editingForcedDate, setEditingForcedDate] = useState<{
+    officerId: string;
+    date: Date | null;
+    isRed: boolean;
+    notes: string;
+  } | null>(null);
+
+  // Fetch forced dates
+  const { data: forcedDates } = useQuery({
+    queryKey: ['forced-dates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("forced_dates")
+        .select("*")
+        .order("forced_date", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching forced dates:", error);
+        return [];
+      }
+      return data as ForcedDate[];
+    },
+  });
+
+  // Mutation to add/update forced date
+  const addForcedDateMutation = useMutation({
+    mutationFn: async ({ officerId, forcedDate, isRed, notes }: {
+      officerId: string;
+      forcedDate: string;
+      isRed: boolean;
+      notes: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("forced_dates")
+        .upsert({
+          officer_id: officerId,
+          forced_date: forcedDate,
+          is_red: isRed,
+          notes: notes || null
+        }, {
+          onConflict: 'officer_id,forced_date'
+        });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Forced date saved");
+      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+      setEditingForcedDate(null);
+    },
+    onError: (error) => {
+      toast.error("Error saving forced date");
+      console.error("Error saving forced date:", error);
+    }
+  });
+
+  // Mutation to delete forced date
+  const deleteForcedDateMutation = useMutation({
+    mutationFn: async (forcedDateId: string) => {
+      const { error } = await supabase
+        .from("forced_dates")
+        .delete()
+        .eq("id", forcedDateId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Forced date removed");
+      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+    },
+    onError: (error) => {
+      toast.error("Error removing forced date");
+      console.error("Error removing forced date:", error);
+    }
+  });
 
   // Fetch force list data - FILTERED BY SELECTED SHIFT
   const { data: forceListData, isLoading } = useQuery({
-    queryKey: ['force-list', selectedShiftId, filters],
+    queryKey: ['force-list', selectedShiftId],
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
@@ -68,43 +155,9 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         new Map(officers.map(officer => [officer.id, officer])).values()
       );
 
-      // Also get officers who have schedule exceptions for this shift within the date range
-      const { data: exceptionOfficers, error: exceptionError } = await supabase
-        .from("schedule_exceptions")
-        .select(`
-          officer_id,
-          profiles!schedule_exceptions_officer_id_fkey (
-            id,
-            full_name,
-            badge_number,
-            rank,
-            service_credit_override,
-            hire_date
-          )
-        `)
-        .gte("date", format(filters.startDate, "yyyy-MM-dd"))
-        .lte("date", format(filters.endDate, "yyyy-MM-dd"))
-        .eq("shift_type_id", selectedShiftId);
-
-      if (exceptionError) {
-        console.error("Error fetching schedule exceptions for force list:", exceptionError);
-        // Don't throw, just continue with recurring schedules
-      }
-
-      // Add exception officers to the list if they're not already included
-      const allOfficers = [...uniqueOfficers];
-      
-      if (exceptionOfficers) {
-        exceptionOfficers.forEach((exception: any) => {
-          if (exception.profiles && !allOfficers.some(o => o.id === exception.profiles.id)) {
-            allOfficers.push(exception.profiles);
-          }
-        });
-      }
-
       // Fetch service credits for all officers
       const officersWithCredits = await Promise.all(
-        allOfficers.map(async (officer) => {
+        uniqueOfficers.map(async (officer) => {
           try {
             const { data: serviceCredit, error } = await supabase
               .rpc('get_service_credit', { profile_id: officer.id });
@@ -131,18 +184,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         })
       );
 
-      // Get schedule data for the date range for informational purposes
-      const { data: scheduleData } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          *,
-          shift_types (id, name, start_time, end_time)
-        `)
-        .eq("shift_type_id", selectedShiftId);
-
       return {
         officers: officersWithCredits || [],
-        scheduleData: scheduleData || [],
         totalCount: officersWithCredits.length
       };
     },
@@ -167,27 +210,57 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     officer.rank?.toLowerCase() === 'probationary'
   ) || [];
 
+  // Get forced dates for each officer
+  const getOfficerForcedDates = (officerId: string) => {
+    return forcedDates?.filter(fd => fd.officer_id === officerId) || [];
+  };
+
+  // Get most recent forced date
+  const getMostRecentForcedDate = (officerId: string) => {
+    const dates = getOfficerForcedDates(officerId);
+    if (dates.length === 0) return null;
+    
+    return dates.reduce((mostRecent, current) => {
+      const mostRecentDate = parseISO(mostRecent.forced_date);
+      const currentDate = parseISO(current.forced_date);
+      return isAfter(currentDate, mostRecentDate) ? current : mostRecent;
+    });
+  };
+
+  // Sort officers by last forced date (officers who haven't been forced recently come first)
+  const sortByForcedDate = (a: any, b: any) => {
+    const aRecent = getMostRecentForcedDate(a.id);
+    const bRecent = getMostRecentForcedDate(b.id);
+    
+    // If neither has been forced, sort by service credit
+    if (!aRecent && !bRecent) {
+      const aCredit = a.service_credit || a.service_credit_override || 0;
+      const bCredit = b.service_credit || b.service_credit_override || 0;
+      if (bCredit !== aCredit) return bCredit - aCredit;
+      return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+    }
+    
+    // If one has been forced and the other hasn't, the one not forced comes first
+    if (!aRecent && bRecent) return -1;
+    if (aRecent && !bRecent) return 1;
+    
+    // Both have been forced, sort by date (most recent last)
+    const aDate = parseISO(aRecent!.forced_date);
+    const bDate = parseISO(bRecent!.forced_date);
+    return aDate.getTime() - bDate.getTime();
+  };
+
   // Sort officers
   const sortedSupervisors = [...supervisors].sort((a, b) => {
     const aPriority = getRankPriority(a.rank);
     const bPriority = getRankPriority(b.rank);
     if (aPriority !== bPriority) return aPriority - bPriority;
-    return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+    return sortByForcedDate(a, b);
   });
 
-  const sortedRegularOfficers = [...regularOfficers].sort((a, b) => {
-    const aCredit = a.service_credit || a.service_credit_override || 0;
-    const bCredit = b.service_credit || b.service_credit_override || 0;
-    if (bCredit !== aCredit) return bCredit - aCredit;
-    return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-  });
+  const sortedRegularOfficers = [...regularOfficers].sort(sortByForcedDate);
 
-  const sortedPPOs = [...ppos].sort((a, b) => {
-    const aCredit = a.service_credit || a.service_credit_override || 0;
-    const bCredit = b.service_credit || b.service_credit_override || 0;
-    if (bCredit !== aCredit) return bCredit - aCredit;
-    return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-  });
+  const sortedPPOs = [...ppos].sort(sortByForcedDate);
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({
@@ -211,6 +284,32 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       endDate: endOfWeek(new Date(), { weekStartsOn: 0 }),
       forceType: filters.forceType
     });
+  };
+
+  const handleAddForcedDate = (officerId: string, officerName: string) => {
+    setEditingForcedDate({
+      officerId,
+      date: new Date(),
+      isRed: false,
+      notes: ''
+    });
+  };
+
+  const handleSaveForcedDate = () => {
+    if (!editingForcedDate || !editingForcedDate.date) return;
+
+    addForcedDateMutation.mutate({
+      officerId: editingForcedDate.officerId,
+      forcedDate: format(editingForcedDate.date, "yyyy-MM-dd"),
+      isRed: editingForcedDate.isRed,
+      notes: editingForcedDate.notes
+    });
+  };
+
+  const handleDeleteForcedDate = (forcedDateId: string) => {
+    if (confirm("Are you sure you want to remove this forced date?")) {
+      deleteForcedDateMutation.mutate(forcedDateId);
+    }
   };
 
   return (
@@ -351,97 +450,323 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
           ) : (
             <div className="space-y-6">
               {/* Date Header */}
-              <div className="grid grid-cols-2 gap-4">
-                {dates.map((date, index) => {
-                  const isToday = isSameDay(date, new Date());
-                  const dateColor = filters.forceType === "true-force" 
-                    ? "text-red-600 font-bold" 
-                    : "text-foreground";
-                  
-                  return (
-                    <div key={index} className={`text-center p-2 border rounded-lg ${isToday ? 'bg-primary/10' : ''}`}>
-                      <div className={`text-sm font-medium ${dateColor}`}>
-                        {format(date, "EEE, MMM d")}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-8 bg-muted/50 p-3 font-semibold border rounded-t-lg">
+                <div className="col-span-2">Officer</div>
+                <div className="col-span-1">Badge #</div>
+                <div className="col-span-1">Rank</div>
+                <div className="col-span-1">Service Credit</div>
+                <div className="col-span-2">Forced Dates</div>
+                <div className="col-span-1">Actions</div>
               </div>
 
               {/* Two Column Layout */}
-              <div className="grid grid-cols-2 gap-8">
-                {/* Left Column - Supervisors */}
-                <div className="space-y-4">
-                  <div className="text-lg font-semibold border-b pb-2">
-                    Supervisors ({sortedSupervisors.length})
-                  </div>
+              <div className="grid grid-cols-1 gap-4">
+                {/* Supervisors Section */}
+                {sortedSupervisors.length > 0 && (
                   <div className="space-y-2">
-                    {sortedSupervisors.map((officer) => (
-                      <div key={officer.id} className="p-3 border rounded-lg hover:bg-muted/50">
-                        <div className="flex items-center justify-between">
-                          <div>
+                    <div className="text-lg font-semibold border-b pb-2">
+                      Supervisors ({sortedSupervisors.length})
+                    </div>
+                    {sortedSupervisors.map((officer) => {
+                      const forcedDates = getOfficerForcedDates(officer.id);
+                      const mostRecent = getMostRecentForcedDate(officer.id);
+                      const daysSinceForced = mostRecent ? 
+                        Math.floor((new Date().getTime() - parseISO(mostRecent.forced_date).getTime()) / (1000 * 60 * 60 * 24)) : 
+                        null;
+                      
+                      return (
+                        <div key={officer.id} className="grid grid-cols-8 p-3 border rounded-lg hover:bg-muted/30 items-center">
+                          <div className="col-span-2">
                             <div className="font-medium">
                               {getLastName(officer.full_name)}
                               <Badge variant="outline" className="ml-2 text-xs">
                                 {getRankAbbreviation(officer.rank)}
                               </Badge>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-1">
+                            {officer.badge_number}
+                          </div>
+                          <div className="col-span-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {getRankAbbreviation(officer.rank)}
+                            </Badge>
+                          </div>
+                          <div className="col-span-1">
+                            {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-2">
+                            <div className="flex flex-wrap gap-1">
+                              {forcedDates.map((forcedDate) => (
+                                <Badge 
+                                  key={forcedDate.id}
+                                  variant="outline"
+                                  className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
+                                >
+                                  {format(parseISO(forcedDate.forced_date), "MMM d")}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
+                                    onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
+                                    title="Remove forced date"
+                                  >
+                                    <X className="h-2 w-2" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                              {forcedDates.length === 0 && (
+                                <span className="text-sm text-muted-foreground italic">Never forced</span>
+                              )}
                             </div>
+                            {mostRecent && daysSinceForced !== null && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Last forced: {daysSinceForced} days ago
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-span-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                              title="Add forced date"
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Force
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
+                )}
 
-                {/* Right Column - Regular Officers */}
-                <div className="space-y-4">
-                  <div className="text-lg font-semibold border-b pb-2">
-                    Officers ({sortedRegularOfficers.length})
-                  </div>
+                {/* Regular Officers Section */}
+                {sortedRegularOfficers.length > 0 && (
                   <div className="space-y-2">
-                    {sortedRegularOfficers.map((officer) => (
-                      <div key={officer.id} className="p-3 border rounded-lg hover:bg-muted/50">
-                        <div className="flex items-center justify-between">
-                          <div>
+                    <div className="text-lg font-semibold border-b pb-2 mt-4">
+                      Officers ({sortedRegularOfficers.length})
+                    </div>
+                    {sortedRegularOfficers.map((officer) => {
+                      const forcedDates = getOfficerForcedDates(officer.id);
+                      const mostRecent = getMostRecentForcedDate(officer.id);
+                      const daysSinceForced = mostRecent ? 
+                        Math.floor((new Date().getTime() - parseISO(mostRecent.forced_date).getTime()) / (1000 * 60 * 60 * 24)) : 
+                        null;
+                      
+                      return (
+                        <div key={officer.id} className="grid grid-cols-8 p-3 border rounded-lg hover:bg-muted/30 items-center">
+                          <div className="col-span-2">
                             <div className="font-medium">{getLastName(officer.full_name)}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-1">
+                            {officer.badge_number}
+                          </div>
+                          <div className="col-span-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {getRankAbbreviation(officer.rank)}
+                            </Badge>
+                          </div>
+                          <div className="col-span-1">
+                            {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-2">
+                            <div className="flex flex-wrap gap-1">
+                              {forcedDates.map((forcedDate) => (
+                                <Badge 
+                                  key={forcedDate.id}
+                                  variant="outline"
+                                  className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
+                                >
+                                  {format(parseISO(forcedDate.forced_date), "MMM d")}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
+                                    onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
+                                    title="Remove forced date"
+                                  >
+                                    <X className="h-2 w-2" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                              {forcedDates.length === 0 && (
+                                <span className="text-sm text-muted-foreground italic">Never forced</span>
+                              )}
                             </div>
+                            {mostRecent && daysSinceForced !== null && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Last forced: {daysSinceForced} days ago
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-span-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                              title="Add forced date"
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Force
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* PPO Section - Full Width */}
-              {sortedPPOs.length > 0 && (
-                <div className="space-y-4">
-                  <div className="text-lg font-semibold border-b pb-2">
-                    PPO Officers ({sortedPPOs.length})
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {sortedPPOs.map((officer) => (
-                      <div key={officer.id} className="p-3 border rounded-lg hover:bg-muted/50 bg-blue-50">
-                        <div className="flex items-center justify-between">
-                          <div>
+                {/* PPO Section */}
+                {sortedPPOs.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-lg font-semibold border-b pb-2 mt-4">
+                      PPO Officers ({sortedPPOs.length})
+                    </div>
+                    {sortedPPOs.map((officer) => {
+                      const forcedDates = getOfficerForcedDates(officer.id);
+                      const mostRecent = getMostRecentForcedDate(officer.id);
+                      
+                      return (
+                        <div key={officer.id} className="grid grid-cols-8 p-3 border rounded-lg hover:bg-muted/30 items-center bg-blue-50">
+                          <div className="col-span-2">
                             <div className="font-medium">
                               {getLastName(officer.full_name)}
                               <Badge variant="outline" className="ml-2 text-xs bg-blue-100">
                                 PPO
                               </Badge>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {officer.badge_number} • Service Credit: {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-1">
+                            {officer.badge_number}
+                          </div>
+                          <div className="col-span-1">
+                            <Badge variant="secondary" className="text-xs">
+                              PPO
+                            </Badge>
+                          </div>
+                          <div className="col-span-1">
+                            {officer.service_credit || officer.service_credit_override || 0}
+                          </div>
+                          <div className="col-span-2">
+                            <div className="flex flex-wrap gap-1">
+                              {forcedDates.map((forcedDate) => (
+                                <Badge 
+                                  key={forcedDate.id}
+                                  variant="outline"
+                                  className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
+                                >
+                                  {format(parseISO(forcedDate.forced_date), "MMM d")}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
+                                    onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
+                                    title="Remove forced date"
+                                  >
+                                    <X className="h-2 w-2" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                              {forcedDates.length === 0 && (
+                                <span className="text-sm text-muted-foreground italic">Never forced</span>
+                              )}
                             </div>
                           </div>
+                          <div className="col-span-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+                              title="Add forced date"
+                              className="bg-white"
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Force
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Forced Date Entry Modal */}
+              {editingForcedDate && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                    <h3 className="text-lg font-semibold mb-4">Add Forced Date</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="forced-date">Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {editingForcedDate.date ? format(editingForcedDate.date, "PPP") : "Pick a date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={editingForcedDate.date || undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setEditingForcedDate(prev => prev ? {...prev, date} : null);
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <Label htmlFor="force-color">Color</Label>
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            type="button"
+                            variant={editingForcedDate.isRed ? "default" : "outline"}
+                            className={editingForcedDate.isRed ? "bg-red-600 hover:bg-red-700" : ""}
+                            onClick={() => setEditingForcedDate(prev => prev ? {...prev, isRed: true} : null)}
+                          >
+                            Red
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={!editingForcedDate.isRed ? "default" : "outline"}
+                            className={!editingForcedDate.isRed ? "bg-gray-800 hover:bg-gray-900" : ""}
+                            onClick={() => setEditingForcedDate(prev => prev ? {...prev, isRed: false} : null)}
+                          >
+                            Black
+                          </Button>
                         </div>
                       </div>
-                    ))}
+                      <div>
+                        <Label htmlFor="notes">Notes (Optional)</Label>
+                        <Input
+                          id="notes"
+                          value={editingForcedDate.notes}
+                          onChange={(e) => setEditingForcedDate(prev => prev ? {...prev, notes: e.target.value} : null)}
+                          placeholder="Any notes about this forced shift"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button variant="outline" onClick={() => setEditingForcedDate(null)}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          onClick={handleSaveForcedDate}
+                          disabled={!editingForcedDate.date || addForcedDateMutation.isPending}
+                        >
+                          {addForcedDateMutation.isPending ? "Saving..." : "Save"}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -465,6 +790,26 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                     {sortedSupervisors.length + sortedRegularOfficers.length + sortedPPOs.length}
                   </div>
                   <div className="text-sm text-muted-foreground">Total Force</div>
+                </div>
+              </div>
+
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-4 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
+                    Black Date
+                  </Badge>
+                  <span className="text-sm">Regular forced shift</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
+                    Red Date
+                  </Badge>
+                  <span className="text-sm">Special/emergency forced shift</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-sm">Click "Force" to add a forced date</span>
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-// WeeklyView.tsx - Complete with navigation
+// WeeklyView.tsx - Complete with navigation and officer categorization
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   getLastName,
   getRankPriority,
   isSupervisorByRank,
-  onDateChange, // Added this prop
+  onDateChange,
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -83,7 +83,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-    // ============ ADD THIS SECTION: Extract and organize officer data ============
+  // ============ ADD THIS SECTION: Extract and organize officer data ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
@@ -228,7 +228,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         </div>
       </div>
 
-      {/* The rest of your WeeklyView component remains the same */}
       <div className="mobile-scroll overflow-x-auto">
         <div className="border rounded-lg overflow-hidden min-w-[900px]">
           <div className="grid grid-cols-9 bg-muted/50 border-b">

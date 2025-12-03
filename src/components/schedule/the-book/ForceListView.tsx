@@ -1,11 +1,9 @@
-// src/components/schedule/the-book/ForceListView.tsx
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,8 +15,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ForceType, ForceListFilters } from "./types";
 import { getLastName, getRankAbbreviation, getRankPriority, isSupervisorByRank } from "./utils";
 
-export const ForceListView: React.FC = () => {
-  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+interface ForceListViewProps {
+  selectedShiftId: string;
+  setSelectedShiftId: (shiftId: string) => void;
+  shiftTypes: any[];
+}
+
+export const ForceListView: React.FC<ForceListViewProps> = ({
+  selectedShiftId,
+  setSelectedShiftId,
+  shiftTypes
+}) => {
   const [filters, setFilters] = useState<ForceListFilters>({
     startDate: startOfWeek(new Date(), { weekStartsOn: 0 }),
     endDate: endOfWeek(new Date(), { weekStartsOn: 0 }),
@@ -26,19 +33,7 @@ export const ForceListView: React.FC = () => {
   });
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
 
-  // Get shift types
-  const { data: shiftTypes } = useQuery({
-    queryKey: ["shift-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shift_types")
-        .select("*")
-        .order("start_time");
-      if (error) throw error;
-      return data;
-    },
-  });
-
+  // Remove the local shiftTypes query since we get it from parent
   // Fetch force list data
   const { data: forceListData, isLoading } = useQuery({
     queryKey: ['force-list', selectedShiftId, filters],
@@ -150,18 +145,9 @@ export const ForceListView: React.FC = () => {
               Force List
             </CardTitle>
             <div className="flex items-center gap-3">
-              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shiftTypes?.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.start_time} - {shift.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="text-sm font-medium text-muted-foreground">
+                Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
+              </div>
             </div>
           </div>
           
@@ -271,7 +257,7 @@ export const ForceListView: React.FC = () => {
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
-              Please select a shift to view the force list
+              Please select a shift from the Weekly or Monthly tab first
             </div>
           ) : isLoading ? (
             <div className="text-center py-8">Loading force list...</div>

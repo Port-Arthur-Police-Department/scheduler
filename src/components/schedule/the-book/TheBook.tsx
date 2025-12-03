@@ -507,27 +507,42 @@ const handleSaveAssignment = () => {
 
   const { officer, dateStr } = editingAssignment;
   
+  const officerId = officer?.officerId || officer?.id || officer?.officer_id;
+  const officerName = officer?.officerName || officer?.full_name || 'Unknown Officer';
+  const currentPosition = officer?.shiftInfo?.position || '';
+  
+  if (!officerId) {
+    console.error('No officerId found in editingAssignment:', editingAssignment);
+    toast.error("Cannot save: Officer ID not found");
+    return;
+  }
+  
   updatePositionMutation.mutate({
-    scheduleId: officer.shiftInfo.scheduleId,
-    type: officer.shiftInfo.scheduleType,
-    positionName: officer.shiftInfo.position,
+    scheduleId: officer.shiftInfo?.scheduleId,
+    type: officer.shiftInfo?.scheduleType,
+    positionName: officer.shiftInfo?.position,
     date: dateStr,
-    officerId: officer.officerId,
+    officerId: officerId, // Use the extracted officerId
     shiftTypeId: selectedShiftId,
-    currentPosition: officer.shiftInfo.position
+    currentPosition: currentPosition
   }, {
     onSuccess: () => {
       // AUDIT LOGGING - Log the position change
       auditLogger.logPositionChange(
-        officer.officerId,
-        officer.officerName,
-        officer.shiftInfo.position,
-        officer.shiftInfo.position,
+        officerId, // Use the extracted officerId
+        officerName, // Use the extracted officerName
+        currentPosition,
+        officer.shiftInfo?.position || currentPosition,
         userEmail,
-        `Changed position for ${officer.officerName} on ${dateStr}`
+        `Changed position for ${officerName} on ${dateStr}`
       );
       
       setEditingAssignment(null);
+      toast.success("Assignment updated successfully");
+    },
+    onError: (error) => {
+      console.error('Error updating assignment:', error);
+      toast.error("Failed to update assignment");
     }
   });
 };

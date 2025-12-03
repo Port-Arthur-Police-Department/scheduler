@@ -440,11 +440,10 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
                               </div>
 
                               {isEditing ? (
-                                {/* Priority Selection - Fixed Version */}
-<div className="space-y-2">
-  <Label className="text-sm font-medium">Priority Preferences *</Label>
-  <div className="grid grid-cols-3 gap-2">
-    <div className="space-y-1">
+                                <div className="space-y-2">
+                              <Label className="text-sm font-medium">Priority Preferences *</Label>
+                              <div className="grid grid-cols-3 gap-2">
+                              <div className="space-y-1">
       <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
       <Select
         value={beatPreferences[officer.id]?.first_choice || ''}

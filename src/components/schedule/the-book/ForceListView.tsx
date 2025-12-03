@@ -1,4 +1,4 @@
-// ForceListView.tsx - Updated with Force Count column and Service Credit sorting
+// ForceListView.tsx - Updated to show all profiles with recurring schedules
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, parseISO, addDays, startOfYear, endOfYear } from "date-fns";
@@ -13,9 +13,7 @@ import { CalendarIcon, Users, ChevronLeft, ChevronRight, Clock, X, Save } from "
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import type { ForceType, ForceListFilters } from "./types";
-import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
+import { getLastName, getRankAbbreviation } from "./utils";
 import { auditLogger } from "@/lib/auditLogger";
 
 interface ForcedDate {
@@ -41,13 +39,13 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   isAdminOrSupervisor
 }) => {
   const queryClient = useQueryClient();
-const [filters, setFilters] = useState<{
-  startDate: Date;
-  endDate: Date;
-}>({
-  startDate: startOfYear(new Date()),
-  endDate: endOfYear(new Date()),
-});
+  const [filters, setFilters] = useState<{
+    startDate: Date;
+    endDate: Date;
+  }>({
+    startDate: startOfYear(new Date()),
+    endDate: endOfYear(new Date()),
+  });
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
   const [editingForcedDate, setEditingForcedDate] = useState<{
     officerId: string;
@@ -147,13 +145,14 @@ const [filters, setFilters] = useState<{
     }
   });
 
-  // Fetch force list data - FILTERED BY SELECTED SHIFT
+  // Fetch force list data - SHOW ALL PROFILES WITH RECURRING SCHEDULES FOR THE SELECTED SHIFT
   const { data: forceListData, isLoading } = useQuery({
     queryKey: ['force-list', selectedShiftId],
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
-      // Get officers who have recurring schedules for this shift
+      // Get ALL officers who have recurring schedules for this shift
+      // Removed .is("end_date", null) to include ALL recurring schedules
       const { data: recurringSchedules, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
@@ -167,8 +166,7 @@ const [filters, setFilters] = useState<{
             hire_date
           )
         `)
-        .eq("shift_type_id", selectedShiftId)
-        .is("end_date", null);
+        .eq("shift_type_id", selectedShiftId);
 
       if (recurringError) {
         console.error("Error fetching recurring schedules for force list:", recurringError);
@@ -242,35 +240,35 @@ const [filters, setFilters] = useState<{
     });
   };
 
-  // Categorize officers - Force List only includes Sergeants as supervisors
-const supervisors = forceListData?.officers?.filter(officer => {
-  const rank = officer?.rank?.toLowerCase() || '';
-  // Only include Sergeants (Sgt)
-  return rank.includes('sergeant') || rank.includes('sgt');
-}) || [];
-
-const regularOfficers = forceListData?.officers?.filter(officer => {
-  const rank = officer?.rank?.toLowerCase() || '';
-  // Exclude Sergeants, PPOs, Lieutenants, Deputy Chiefs, Chiefs
-  return !rank.includes('sergeant') && 
-         !rank.includes('sgt') &&
-         !rank.includes('probationary') &&
-         !rank.includes('lieutenant') &&
-         !rank.includes('lt') &&
-         !rank.includes('deputy') &&
-         !rank.includes('chief');
-}) || [];
-
-const ppos = forceListData?.officers?.filter(officer => 
-  officer.rank?.toLowerCase() === 'probationary'
-) || [];
-
   // Format service credit to one decimal place
   const formatServiceCredit = (credit: any) => {
     if (credit === undefined || credit === null) return '0.0';
     const num = parseFloat(credit);
     return isNaN(num) ? '0.0' : num.toFixed(1);
   };
+
+  // Categorize officers - Force List only includes Sergeants as supervisors
+  const supervisors = forceListData?.officers?.filter(officer => {
+    const rank = officer?.rank?.toLowerCase() || '';
+    // Only include Sergeants (Sgt)
+    return rank.includes('sergeant') || rank.includes('sgt');
+  }) || [];
+
+  const regularOfficers = forceListData?.officers?.filter(officer => {
+    const rank = officer?.rank?.toLowerCase() || '';
+    // Exclude Sergeants, PPOs, Lieutenants, Deputy Chiefs, Chiefs
+    return !rank.includes('sergeant') && 
+           !rank.includes('sgt') &&
+           !rank.includes('probationary') &&
+           !rank.includes('lieutenant') &&
+           !rank.includes('lt') &&
+           !rank.includes('deputy') &&
+           !rank.includes('chief');
+  }) || [];
+
+  const ppos = forceListData?.officers?.filter(officer => 
+    officer.rank?.toLowerCase() === 'probationary'
+  ) || [];
 
   // Sort by service credit (least to most) - FIXED VERSION
   const sortByServiceCredit = (a: any, b: any) => {
@@ -299,42 +297,28 @@ const ppos = forceListData?.officers?.filter(officer =>
   const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
   const sortedPPOs = [...ppos].sort(sortByServiceCredit);
 
-  // Debug function to check sorting
-  const debugSorting = () => {
-    console.log('=== SORTING DEBUG ===');
-    console.log('Supervisors with credits:');
-    sortedSupervisors.forEach((o, i) => {
-      console.log(`${i + 1}. ${getLastName(o.full_name)}: ${formatServiceCredit(o.service_credit)}`);
-    });
-    console.log('Regular Officers with credits:');
-    sortedRegularOfficers.forEach((o, i) => {
-      console.log(`${i + 1}. ${getLastName(o.full_name)}: ${formatServiceCredit(o.service_credit)}`);
-    });
+  const handlePreviousWeek = () => {
+    setFilters(prev => ({
+      ...prev,
+      startDate: startOfYear(addDays(prev.startDate, -365)),
+      endDate: endOfYear(addDays(prev.endDate, -365))
+    }));
   };
 
-const handlePreviousWeek = () => {
-  setFilters(prev => ({
-    ...prev,
-    startDate: startOfYear(addDays(prev.startDate, -365)),
-    endDate: endOfYear(addDays(prev.endDate, -365))
-  }));
-};
+  const handleNextWeek = () => {
+    setFilters(prev => ({
+      ...prev,
+      startDate: startOfYear(addDays(prev.startDate, 365)),
+      endDate: endOfYear(addDays(prev.endDate, 365))
+    }));
+  };
 
-const handleNextWeek = () => {
-  setFilters(prev => ({
-    ...prev,
-    startDate: startOfYear(addDays(prev.startDate, 365)),
-    endDate: endOfYear(addDays(prev.endDate, 365))
-  }));
-};
-
-const handleToday = () => {
-  setFilters({
-    startDate: startOfYear(new Date()),
-    endDate: endOfYear(new Date()),
-    forceType: filters.forceType
-  });
-};
+  const handleToday = () => {
+    setFilters({
+      startDate: startOfYear(new Date()),
+      endDate: endOfYear(new Date())
+    });
+  };
 
   const handleAddForcedDate = (officerId: string, officerName: string) => {
     setEditingForcedDate({
@@ -381,14 +365,6 @@ const handleToday = () => {
               <div className="text-sm font-medium text-muted-foreground">
                 Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={debugSorting}
-                className="text-xs"
-              >
-                Debug Sorting
-              </Button>
             </div>
           </div>
           
@@ -455,7 +431,6 @@ const handleToday = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-              {/* Add this badge inside the same space-y-2 div but after the date picker */}
               <div className="text-center pt-1">
                 <Badge variant="secondary">
                   {format(filters.startDate, "yyyy")}
@@ -467,17 +442,17 @@ const handleToday = () => {
             <div className="space-y-2">
               <Label>Navigation</Label>
               <div className="flex items-center gap-2">
-               <Button variant="outline" size="sm" onClick={handlePreviousWeek}>
-  <ChevronLeft className="h-4 w-4" />
-  Prev Year
-</Button>
-<Button variant="outline" size="sm" onClick={handleToday}>
-  Current Year
-</Button>
-<Button variant="outline" size="sm" onClick={handleNextWeek}>
-  Next Year
-  <ChevronRight className="h-4 w-4" />
-</Button>
+                <Button variant="outline" size="sm" onClick={handlePreviousWeek}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Prev Year
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleToday}>
+                  Current Year
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNextWeek}>
+                  Next Year
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -513,7 +488,7 @@ const handleToday = () => {
                 {sortedSupervisors.length > 0 && (
                   <div className="space-y-2">
                     <div className="text-lg font-semibold border-b pb-2">
-                      Supervisors ({sortedSupervisors.length})
+                      Sergeants ({sortedSupervisors.length})
                     </div>
                     {sortedSupervisors.map((officer) => {
                       const forcedDates = getOfficerForcedDates(officer.id);
@@ -873,7 +848,7 @@ const handleToday = () => {
               <div className="grid grid-cols-4 gap-4 pt-4 border-t">
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold">{sortedSupervisors.length}</div>
-                  <div className="text-sm text-muted-foreground">Supervisors</div>
+                  <div className="text-sm text-muted-foreground">Sergeants</div>
                 </div>
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold">{sortedRegularOfficers.length}</div>

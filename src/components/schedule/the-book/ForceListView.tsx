@@ -1,4 +1,4 @@
-// ForceListView.tsx - Updated to show all profiles with recurring schedules
+// ForceListView.tsx - Updated to show profiles scheduled for the selected year
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, startOfWeek, endOfWeek, parseISO, addDays, startOfYear, endOfYear } from "date-fns";
@@ -145,56 +145,49 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     }
   });
 
-  // Fetch force list data - SHOW ALL PROFILES WITH RECURRING SCHEDULES FOR THE SELECTED SHIFT
+  // Fetch force list data - SHOW PROFILES WITH RECURRING SCHEDULES FOR THE SELECTED SHIFT AND YEAR
   const { data: forceListData, isLoading } = useQuery({
-    queryKey: ['force-list', selectedShiftId],
+    queryKey: ['force-list', selectedShiftId, filters.startDate],
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
-      // Get ALL officers who have recurring schedules for this shift
-     // Fetch force list data - SHOW PROFILES WITH RECURRING SCHEDULES FOR THE SELECTED SHIFT AND YEAR
-const { data: forceListData, isLoading } = useQuery({
-  queryKey: ['force-list', selectedShiftId, filters.startDate],
-  queryFn: async () => {
-    if (!selectedShiftId) return null;
+      const selectedYear = filters.startDate.getFullYear();
+      const yearStartDate = `${selectedYear}-01-01`;
+      const yearEndDate = `${selectedYear}-12-31`;
 
-    const selectedYear = filters.startDate.getFullYear();
-    const yearStartDate = `${selectedYear}-01-01`;
-    const yearEndDate = `${selectedYear}-12-31`;
+      // Get officers who have recurring schedules for this shift that overlap with the selected year
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          officer_id,
+          start_date,
+          end_date,
+          profiles!recurring_schedules_officer_id_fkey (
+            id,
+            full_name,
+            badge_number,
+            rank,
+            service_credit_override,
+            hire_date
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${yearStartDate}`)  // Schedule hasn't ended OR ends after year starts
+        .lte("start_date", yearEndDate);  // Schedule starts before year ends
 
-    // Get officers who have recurring schedules for this shift that overlap with the selected year
-    const { data: recurringSchedules, error: recurringError } = await supabase
-      .from("recurring_schedules")
-      .select(`
-        officer_id,
-        start_date,
-        end_date,
-        profiles!recurring_schedules_officer_id_fkey (
-          id,
-          full_name,
-          badge_number,
-          rank,
-          service_credit_override,
-          hire_date
-        )
-      `)
-      .eq("shift_type_id", selectedShiftId)
-      .or(`end_date.is.null,end_date.gte.${yearStartDate}`)  // Schedule hasn't ended OR ends after year starts
-      .lte("start_date", yearEndDate);  // Schedule starts before year ends
+      if (recurringError) {
+        console.error("Error fetching recurring schedules for force list:", recurringError);
+        throw recurringError;
+      }
 
-    if (recurringError) {
-      console.error("Error fetching recurring schedules for force list:", recurringError);
-      throw recurringError;
-    }
-
-    // Get unique officers from recurring schedules that are active during the selected year
-    const officers = recurringSchedules
-      ?.map(schedule => schedule.profiles)
-      .filter(Boolean) || [];
-    
-    const uniqueOfficers = Array.from(
-      new Map(officers.map(officer => [officer.id, officer])).values()
-    );
+      // Get unique officers from recurring schedules that are active during the selected year
+      const officers = recurringSchedules
+        ?.map(schedule => schedule.profiles)
+        .filter(Boolean) || [];
+      
+      const uniqueOfficers = Array.from(
+        new Map(officers.map(officer => [officer.id, officer])).values()
+      );
 
       // Fetch service credits for all officers
       const officerIds = uniqueOfficers.map(o => o.id);
@@ -484,7 +477,7 @@ const { data: forceListData, isLoading } = useQuery({
             <div className="text-center py-8">Loading force list...</div>
           ) : forceListData?.officers?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No officers found for {shiftTypes?.find(s => s.id === selectedShiftId)?.name} shift
+              No officers scheduled for {shiftTypes?.find(s => s.id === selectedShiftId)?.name} shift in {format(filters.startDate, "yyyy")}
             </div>
           ) : (
             <div className="space-y-6">
@@ -860,6 +853,7 @@ const { data: forceListData, isLoading } = useQuery({
                   </div>
                 </div>
               )}
+
 
               {/* Summary Statistics */}
               <div className="grid grid-cols-4 gap-4 pt-4 border-t">

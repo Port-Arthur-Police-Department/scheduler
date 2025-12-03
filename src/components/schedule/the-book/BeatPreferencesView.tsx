@@ -8,17 +8,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { MapPin, Filter, Save, Plus, X } from "lucide-react";
+import { MapPin, Save, X, ChevronUp, ChevronDown, Eye, Edit } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { useUser } from "@/contexts/UserContext";
 
-export const BeatPreferencesView: React.FC = () => {
+interface BeatPreference {
+  id?: string;
+  officer_id: string;
+  first_choice: string;
+  second_choice: string;
+  third_choice: string;
+  unavailable_beats: string[];
+  notes: string;
+  updated_at: string;
+}
+
+interface Props {
+  isAdminOrSupervisor: boolean;
+}
+
+export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) => {
+  const { userRole } = useUser();
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [showAllBeats, setShowAllBeats] = useState<boolean>(true);
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
-  const [beatPreferences, setBeatPreferences] = useState<Record<string, any>>({});
+  const [beatPreferences, setBeatPreferences] = useState<Record<string, BeatPreference>>({});
 
   // Get shift types
   const { data: shiftTypes } = useQuery({
@@ -62,7 +79,7 @@ export const BeatPreferencesView: React.FC = () => {
 
       if (error) throw error;
 
-      // Fetch beat preferences
+      // Fetch beat preferences - using a custom table for priority preferences
       const { data: preferences, error: prefError } = await supabase
         .from("officer_beat_preferences")
         .select("*");
@@ -90,11 +107,15 @@ export const BeatPreferencesView: React.FC = () => {
 
     const existingPrefs = beatData?.preferences.find(p => p.officer_id === officerId);
     
+    // Initialize with empty preferences or existing ones
     setBeatPreferences({
-      [officerId]: {
-        preferredBeats: existingPrefs?.preferred_beats?.split(',') || [],
-        unavailableBeats: existingPrefs?.unavailable_beats?.split(',') || [],
-        notes: existingPrefs?.notes || ''
+      [officerId]: existingPrefs || {
+        officer_id: officerId,
+        first_choice: '',
+        second_choice: '',
+        third_choice: '',
+        unavailable_beats: [],
+        notes: ''
       }
     });
     
@@ -105,13 +126,35 @@ export const BeatPreferencesView: React.FC = () => {
     const prefs = beatPreferences[officerId];
     if (!prefs) return;
 
+    // Validate that all three choices are selected and unique
+    if (!prefs.first_choice || !prefs.second_choice || !prefs.third_choice) {
+      toast.error("Please select all three beat preferences");
+      return;
+    }
+
+    const choices = [prefs.first_choice, prefs.second_choice, prefs.third_choice];
+    const uniqueChoices = new Set(choices);
+    if (uniqueChoices.size !== 3) {
+      toast.error("Please select three different beats");
+      return;
+    }
+
+    // Check if unavailable beats conflict with choices
+    const conflicts = choices.filter(choice => prefs.unavailable_beats.includes(choice));
+    if (conflicts.length > 0) {
+      toast.error(`Cannot mark ${conflicts.join(', ')} as both preferred and unavailable`);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("officer_beat_preferences")
         .upsert({
           officer_id: officerId,
-          preferred_beats: prefs.preferredBeats.join(','),
-          unavailable_beats: prefs.unavailableBeats.join(','),
+          first_choice: prefs.first_choice,
+          second_choice: prefs.second_choice,
+          third_choice: prefs.third_choice,
+          unavailable_beats: prefs.unavailable_beats,
           notes: prefs.notes,
           updated_at: new Date().toISOString()
         }, {
@@ -120,7 +163,7 @@ export const BeatPreferencesView: React.FC = () => {
 
       if (error) throw error;
 
-      toast.success("Preferences saved successfully");
+      toast.success("Beat preferences saved successfully");
       setEditingOfficerId(null);
       refetch();
     } catch (error: any) {
@@ -128,55 +171,79 @@ export const BeatPreferencesView: React.FC = () => {
     }
   };
 
-  const toggleBeat = (officerId: string, beat: string, list: 'preferredBeats' | 'unavailableBeats') => {
-    setBeatPreferences(prev => {
-      const current = prev[officerId] || { preferredBeats: [], unavailableBeats: [], notes: '' };
-      const currentList = [...current[list]];
-      const otherList = list === 'preferredBeats' ? 'unavailableBeats' : 'preferredBeats';
-      const otherListArray = [...current[otherList]];
+  const handleCancelEdit = (officerId: string) => {
+    setEditingOfficerId(null);
+  };
 
-      // Remove from other list if present
-      const otherIndex = otherListArray.indexOf(beat);
-      if (otherIndex > -1) {
-        otherListArray.splice(otherIndex, 1);
+  const updatePreferenceChoice = (officerId: string, choice: 'first_choice' | 'second_choice' | 'third_choice', value: string) => {
+    setBeatPreferences(prev => ({
+      ...prev,
+      [officerId]: {
+        ...prev[officerId],
+        [choice]: value
       }
+    }));
+  };
 
-      // Toggle in current list
-      const index = currentList.indexOf(beat);
+  const toggleUnavailableBeat = (officerId: string, beat: string) => {
+    const prefs = beatPreferences[officerId];
+    if (!prefs) return;
+
+    const choices = [prefs.first_choice, prefs.second_choice, prefs.third_choice];
+    if (choices.includes(beat)) {
+      toast.error(`Cannot mark ${beat} as both preferred and unavailable`);
+      return;
+    }
+
+    setBeatPreferences(prev => {
+      const current = prev[officerId];
+      const unavailable = [...current.unavailable_beats];
+      const index = unavailable.indexOf(beat);
+      
       if (index > -1) {
-        currentList.splice(index, 1);
+        unavailable.splice(index, 1);
       } else {
-        currentList.push(beat);
+        unavailable.push(beat);
       }
 
       return {
         ...prev,
         [officerId]: {
           ...current,
-          [list]: currentList,
-          [otherList]: otherListArray
+          unavailable_beats: unavailable
         }
       };
     });
   };
 
-  const getBeatStatus = (officerId: string, beat: string) => {
-    const prefs = beatPreferences[officerId];
-    if (!prefs) {
-      const existing = beatData?.preferences.find(p => p.officer_id === officerId);
-      if (!existing) return 'neutral';
-      
-      const preferred = existing.preferred_beats?.split(',') || [];
-      const unavailable = existing.unavailable_beats?.split(',') || [];
-      
-      if (preferred.includes(beat)) return 'preferred';
-      if (unavailable.includes(beat)) return 'unavailable';
-      return 'neutral';
-    }
-
-    if (prefs.preferredBeats.includes(beat)) return 'preferred';
-    if (prefs.unavailableBeats.includes(beat)) return 'unavailable';
-    return 'neutral';
+  const getPreferenceDisplay = (prefs: any) => {
+    if (!prefs) return null;
+    
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-green-50 border-green-200">
+            1st: {prefs.first_choice || 'Not set'}
+          </Badge>
+          <Badge variant="outline" className="bg-blue-50 border-blue-200">
+            2nd: {prefs.second_choice || 'Not set'}
+          </Badge>
+          <Badge variant="outline" className="bg-purple-50 border-purple-200">
+            3rd: {prefs.third_choice || 'Not set'}
+          </Badge>
+        </div>
+        {prefs.unavailable_beats?.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            Unavailable: {prefs.unavailable_beats.join(', ')}
+          </div>
+        )}
+        {prefs.notes && (
+          <div className="text-xs text-muted-foreground">
+            Notes: {prefs.notes}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Categorize officers
@@ -218,11 +285,17 @@ export const BeatPreferencesView: React.FC = () => {
                 <Switch
                   checked={showAllBeats}
                   onCheckedChange={setShowAllBeats}
+                  disabled={!isAdminOrSupervisor}
                 />
                 <Label>Show All Beats</Label>
               </div>
             </div>
           </div>
+          {!isAdminOrSupervisor && (
+            <div className="text-sm text-muted-foreground mt-2">
+              View-only mode. Only supervisors and admins can edit beat preferences.
+            </div>
+          )}
         </CardHeader>
         
         <CardContent>
@@ -234,22 +307,6 @@ export const BeatPreferencesView: React.FC = () => {
             <div className="text-center py-8">Loading beat preferences...</div>
           ) : (
             <div className="space-y-6">
-              {/* Beat Legend */}
-              <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-green-500"></div>
-                  <span className="text-sm">Preferred</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-red-500"></div>
-                  <span className="text-sm">Unavailable</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-gray-300"></div>
-                  <span className="text-sm">Neutral</span>
-                </div>
-              </div>
-
               {/* Two Column Layout */}
               <div className="grid grid-cols-2 gap-8">
                 {/* Left Column - Supervisors */}
@@ -258,85 +315,161 @@ export const BeatPreferencesView: React.FC = () => {
                     Supervisors
                   </div>
                   <div className="space-y-4">
-                    {supervisors.map((officer) => (
-                      <Card key={officer.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="font-medium">
-                                {getLastName(officer.full_name)}
-                                <Badge variant="outline" className="ml-2">
-                                  {getRankAbbreviation(officer.rank)}
+                    {supervisors.map((officer) => {
+                      const existingPrefs = beatData?.preferences.find(p => p.officer_id === officer.id);
+                      const isEditing = editingOfficerId === officer.id;
+                      
+                      return (
+                        <Card key={officer.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="font-medium">
+                                  {getLastName(officer.full_name)}
+                                  <Badge variant="outline" className="ml-2">
+                                    {getRankAbbreviation(officer.rank)}
+                                  </Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {officer.badge_number}
+                                </div>
+                              </div>
+                              {isAdminOrSupervisor ? (
+                                isEditing ? (
+                                  <div className="flex gap-2">
+                                    <Button size="sm" onClick={() => handleSavePreferences(officer.id)}>
+                                      <Save className="h-3 w-3 mr-1" />
+                                      Save
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleCancelEdit(officer.id)}>
+                                      <X className="h-3 w-3 mr-1" />
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
+                                    <Edit className="h-3 w-3 mr-1" />
+                                    Edit
+                                  </Button>
+                                )
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">
+                                  View Only
                                 </Badge>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {officer.badge_number}
-                              </div>
+                              )}
                             </div>
-                            {editingOfficerId === officer.id ? (
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleSavePreferences(officer.id)}>
-                                  <Save className="h-3 w-3 mr-1" />
-                                  Save
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingOfficerId(null)}>
-                                  <X className="h-3 w-3 mr-1" />
-                                  Cancel
-                                </Button>
+
+                            {isEditing ? (
+                              <div className="space-y-3">
+                                {/* Priority Selection */}
+                                <div className="space-y-2">
+                                  <Label>Priority Preferences</Label>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <Select
+                                      value={beatPreferences[officer.id]?.first_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="1st Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Select
+                                      value={beatPreferences[officer.id]?.second_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="2nd Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Select
+                                      value={beatPreferences[officer.id]?.third_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="3rd Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                {/* Unavailable Beats */}
+                                <div className="space-y-2">
+                                  <Label>Unavailable Beats</Label>
+                                  <div className="flex flex-wrap gap-1">
+                                    {beatPositions.map((beat) => {
+                                      const isUnavailable = beatPreferences[officer.id]?.unavailable_beats?.includes(beat);
+                                      const isPreferred = [
+                                        beatPreferences[officer.id]?.first_choice,
+                                        beatPreferences[officer.id]?.second_choice,
+                                        beatPreferences[officer.id]?.third_choice
+                                      ].includes(beat);
+                                      
+                                      return (
+                                        <button
+                                          key={beat}
+                                          type="button"
+                                          onClick={() => toggleUnavailableBeat(officer.id, beat)}
+                                          disabled={isPreferred}
+                                          className={`
+                                            px-2 py-1 text-xs border rounded transition-colors
+                                            ${isUnavailable ? 'bg-red-100 border-red-300 text-red-800' : 'bg-gray-100 border-gray-300 text-gray-800'}
+                                            ${isPreferred ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
+                                          `}
+                                          title={isPreferred ? "Cannot mark preferred beat as unavailable" : ""}
+                                        >
+                                          {beat.replace('District ', 'D')}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Notes */}
+                                <div className="space-y-2">
+                                  <Label htmlFor={`notes-${officer.id}`}>Notes</Label>
+                                  <Textarea
+                                    id={`notes-${officer.id}`}
+                                    value={beatPreferences[officer.id]?.notes || ''}
+                                    onChange={(e) => setBeatPreferences(prev => ({
+                                      ...prev,
+                                      [officer.id]: {
+                                        ...prev[officer.id],
+                                        notes: e.target.value
+                                      }
+                                    }))}
+                                    placeholder="Any notes about beat preferences..."
+                                    className="min-h-[80px]"
+                                  />
+                                </div>
                               </div>
                             ) : (
-                              <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
-                                <Plus className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
+                              getPreferenceDisplay(existingPrefs)
                             )}
-                          </div>
-
-                          {/* Beat Selection Grid */}
-                          <div className="grid grid-cols-3 gap-2 mb-3">
-                            {beatPositions.map((beat) => {
-                              const status = getBeatStatus(officer.id, beat);
-                              return (
-                                <button
-                                  key={beat}
-                                  onClick={() => editingOfficerId === officer.id && toggleBeat(officer.id, beat, 'preferredBeats')}
-                                  disabled={editingOfficerId !== officer.id}
-                                  className={`
-                                    p-2 text-xs border rounded text-center transition-colors
-                                    ${status === 'preferred' ? 'bg-green-100 border-green-300 text-green-800' : ''}
-                                    ${status === 'unavailable' ? 'bg-red-100 border-red-300 text-red-800' : ''}
-                                    ${status === 'neutral' ? 'bg-gray-100 border-gray-300 text-gray-800' : ''}
-                                    ${editingOfficerId === officer.id ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}
-                                  `}
-                                >
-                                  {beat.replace('District ', 'D')}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Notes */}
-                          {editingOfficerId === officer.id && (
-                            <div className="mt-3">
-                              <Label htmlFor={`notes-${officer.id}`}>Notes</Label>
-                              <Textarea
-                                id={`notes-${officer.id}`}
-                                value={beatPreferences[officer.id]?.notes || ''}
-                                onChange={(e) => setBeatPreferences(prev => ({
-                                  ...prev,
-                                  [officer.id]: {
-                                    ...prev[officer.id],
-                                    notes: e.target.value
-                                  }
-                                }))}
-                                placeholder="Any notes about beat preferences..."
-                                className="mt-1"
-                              />
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -346,80 +479,156 @@ export const BeatPreferencesView: React.FC = () => {
                     Officers
                   </div>
                   <div className="space-y-4">
-                    {regularOfficers.map((officer) => (
-                      <Card key={officer.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="font-medium">{getLastName(officer.full_name)}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {officer.badge_number}
+                    {regularOfficers.map((officer) => {
+                      const existingPrefs = beatData?.preferences.find(p => p.officer_id === officer.id);
+                      const isEditing = editingOfficerId === officer.id;
+                      
+                      return (
+                        <Card key={officer.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="font-medium">{getLastName(officer.full_name)}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {officer.badge_number}
+                                </div>
                               </div>
+                              {isAdminOrSupervisor ? (
+                                isEditing ? (
+                                  <div className="flex gap-2">
+                                    <Button size="sm" onClick={() => handleSavePreferences(officer.id)}>
+                                      <Save className="h-3 w-3 mr-1" />
+                                      Save
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleCancelEdit(officer.id)}>
+                                      <X className="h-3 w-3 mr-1" />
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
+                                    <Edit className="h-3 w-3 mr-1" />
+                                    Edit
+                                  </Button>
+                                )
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">
+                                  View Only
+                                </Badge>
+                              )}
                             </div>
-                            {editingOfficerId === officer.id ? (
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleSavePreferences(officer.id)}>
-                                  <Save className="h-3 w-3 mr-1" />
-                                  Save
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingOfficerId(null)}>
-                                  <X className="h-3 w-3 mr-1" />
-                                  Cancel
-                                </Button>
+
+                            {isEditing ? (
+                              <div className="space-y-3">
+                                {/* Priority Selection */}
+                                <div className="space-y-2">
+                                  <Label>Priority Preferences</Label>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <Select
+                                      value={beatPreferences[officer.id]?.first_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="1st Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Select
+                                      value={beatPreferences[officer.id]?.second_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="2nd Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Select
+                                      value={beatPreferences[officer.id]?.third_choice || ''}
+                                      onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="3rd Choice" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {beatPositions.map((beat) => (
+                                          <SelectItem key={beat} value={beat}>
+                                            {beat}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                {/* Unavailable Beats */}
+                                <div className="space-y-2">
+                                  <Label>Unavailable Beats</Label>
+                                  <div className="flex flex-wrap gap-1">
+                                    {beatPositions.map((beat) => {
+                                      const isUnavailable = beatPreferences[officer.id]?.unavailable_beats?.includes(beat);
+                                      const isPreferred = [
+                                        beatPreferences[officer.id]?.first_choice,
+                                        beatPreferences[officer.id]?.second_choice,
+                                        beatPreferences[officer.id]?.third_choice
+                                      ].includes(beat);
+                                      
+                                      return (
+                                        <button
+                                          key={beat}
+                                          type="button"
+                                          onClick={() => toggleUnavailableBeat(officer.id, beat)}
+                                          disabled={isPreferred}
+                                          className={`
+                                            px-2 py-1 text-xs border rounded transition-colors
+                                            ${isUnavailable ? 'bg-red-100 border-red-300 text-red-800' : 'bg-gray-100 border-gray-300 text-gray-800'}
+                                            ${isPreferred ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
+                                          `}
+                                          title={isPreferred ? "Cannot mark preferred beat as unavailable" : ""}
+                                        >
+                                          {beat.replace('District ', 'D')}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Notes */}
+                                <div className="space-y-2">
+                                  <Label htmlFor={`notes-${officer.id}`}>Notes</Label>
+                                  <Textarea
+                                    id={`notes-${officer.id}`}
+                                    value={beatPreferences[officer.id]?.notes || ''}
+                                    onChange={(e) => setBeatPreferences(prev => ({
+                                      ...prev,
+                                      [officer.id]: {
+                                        ...prev[officer.id],
+                                        notes: e.target.value
+                                      }
+                                    }))}
+                                    placeholder="Any notes about beat preferences..."
+                                    className="min-h-[80px]"
+                                  />
+                                </div>
                               </div>
                             ) : (
-                              <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
-                                <Plus className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
+                              getPreferenceDisplay(existingPrefs)
                             )}
-                          </div>
-
-                          {/* Beat Selection Grid */}
-                          <div className="grid grid-cols-3 gap-2 mb-3">
-                            {beatPositions.map((beat) => {
-                              const status = getBeatStatus(officer.id, beat);
-                              return (
-                                <button
-                                  key={beat}
-                                  onClick={() => editingOfficerId === officer.id && toggleBeat(officer.id, beat, 'preferredBeats')}
-                                  disabled={editingOfficerId !== officer.id}
-                                  className={`
-                                    p-2 text-xs border rounded text-center transition-colors
-                                    ${status === 'preferred' ? 'bg-green-100 border-green-300 text-green-800' : ''}
-                                    ${status === 'unavailable' ? 'bg-red-100 border-red-300 text-red-800' : ''}
-                                    ${status === 'neutral' ? 'bg-gray-100 border-gray-300 text-gray-800' : ''}
-                                    ${editingOfficerId === officer.id ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}
-                                  `}
-                                >
-                                  {beat.replace('District ', 'D')}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Notes */}
-                          {editingOfficerId === officer.id && (
-                            <div className="mt-3">
-                              <Label htmlFor={`notes-${officer.id}`}>Notes</Label>
-                              <Textarea
-                                id={`notes-${officer.id}`}
-                                value={beatPreferences[officer.id]?.notes || ''}
-                                onChange={(e) => setBeatPreferences(prev => ({
-                                  ...prev,
-                                  [officer.id]: {
-                                    ...prev[officer.id],
-                                    notes: e.target.value
-                                  }
-                                }))}
-                                placeholder="Any notes about beat preferences..."
-                                className="mt-1"
-                              />
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -431,47 +640,35 @@ export const BeatPreferencesView: React.FC = () => {
                     PPO Officers
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    {ppos.map((officer) => (
-                      <Card key={officer.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="font-medium">
-                                {getLastName(officer.full_name)}
-                                <Badge variant="outline" className="ml-2 bg-blue-100">
-                                  PPO
-                                </Badge>
+                    {ppos.map((officer) => {
+                      const existingPrefs = beatData?.preferences.find(p => p.officer_id === officer.id);
+                      
+                      return (
+                        <Card key={officer.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="font-medium">
+                                  {getLastName(officer.full_name)}
+                                  <Badge variant="outline" className="ml-2 bg-blue-100">
+                                    PPO
+                                  </Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {officer.badge_number}
+                                </div>
                               </div>
-                              <div className="text-sm text-muted-foreground">
-                                {officer.badge_number}
-                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                View Only
+                              </Badge>
                             </div>
-                            {editingOfficerId === officer.id ? (
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleSavePreferences(officer.id)}>
-                                  <Save className="h-3 w-3 mr-1" />
-                                  Save
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingOfficerId(null)}>
-                                  <X className="h-3 w-3 mr-1" />
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
-                                <Plus className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
-                            )}
-                          </div>
-
-                          {/* Simplified Beat Display for PPOs */}
-                          <div className="text-sm text-muted-foreground">
-                            PPOs typically rotate through all beats for training
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                            <div className="text-sm text-muted-foreground">
+                              {getPreferenceDisplay(existingPrefs) || "PPOs typically rotate through all beats for training"}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -492,9 +689,9 @@ export const BeatPreferencesView: React.FC = () => {
                 </div>
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold">
-                    {supervisors.length + regularOfficers.length + ppos.length}
+                    {beatData?.preferences.filter(p => p.first_choice && p.second_choice && p.third_choice).length || 0}
                   </div>
-                  <div className="text-sm text-muted-foreground">Total</div>
+                  <div className="text-sm text-muted-foreground">With Preferences</div>
                 </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 // ForceListView.tsx - Updated with Force Count column and Service Credit sorting
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, startOfWeek, endOfWeek, parseISO, addDays } from "date-fns";
+import { format, startOfWeek, endOfWeek, parseISO, addDays, startOfYear, endOfYear } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,11 +41,11 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   isAdminOrSupervisor
 }) => {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<ForceListFilters>({
-    startDate: startOfWeek(new Date(), { weekStartsOn: 0 }),
-    endDate: endOfWeek(new Date(), { weekStartsOn: 0 }),
-    forceType: "regular-force"
-  });
+const [filters, setFilters] = useState<ForceListFilters>({
+  startDate: startOfYear(new Date()),
+  endDate: endOfYear(new Date()),
+  forceType: "regular-force"
+});
   const [calendarOpen, setCalendarOpen] = useState<"start" | "end" | null>(null);
   const [editingForcedDate, setEditingForcedDate] = useState<{
     officerId: string;

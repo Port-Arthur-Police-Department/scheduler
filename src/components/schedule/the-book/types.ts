@@ -107,6 +107,7 @@ export interface ViewProps {
   shiftTypes: Tables<"shift_types">[];
   isAdminOrSupervisor: boolean;
   weeklyColors: any;
+  onDateChange?: (date: Date) => void;
   onDateNavigation: {
     goToPrevious: () => void;
     goToNext: () => void;

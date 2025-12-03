@@ -83,6 +83,78 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
+    // ============ ADD THIS SECTION: Extract and organize officer data ============
+  const allOfficers = new Map();
+  const recurringSchedulesByOfficer = new Map();
+
+  // Extract recurring schedule patterns
+  schedules.recurring?.forEach((recurring: any) => {
+    if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+      recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
+    }
+    recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
+  });
+
+  // Process daily schedules
+  schedules.dailySchedules?.forEach(day => {
+    day.officers.forEach((officer: any) => {
+      if (!allOfficers.has(officer.officerId)) {
+        allOfficers.set(officer.officerId, {
+          ...officer,
+          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+          weeklySchedule: {} as Record<string, any>
+        });
+      }
+      
+      const daySchedule = {
+        ...officer,
+        isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false
+      };
+      
+      allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
+    });
+  });
+
+  // Categorize officers
+  const supervisors = Array.from(allOfficers.values())
+    .filter(o => isSupervisorByRank(o))
+    .sort((a, b) => {
+      const aPriority = getRankPriority(a.rank);
+      const bPriority = getRankPriority(b.rank);
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+    });
+
+  const allOfficersList = Array.from(allOfficers.values())
+    .filter(o => !isSupervisorByRank(o));
+
+  const ppos = allOfficersList
+    .filter(o => o.rank?.toLowerCase() === 'probationary')
+    .sort((a, b) => {
+      const aCredit = a.service_credit || 0;
+      const bCredit = b.service_credit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+    });
+
+  const regularOfficers = allOfficersList
+    .filter(o => o.rank?.toLowerCase() !== 'probationary')
+    .sort((a, b) => {
+      const aCredit = a.service_credit || 0;
+      const bCredit = b.service_credit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+    });
+  // ============ END OF ADDED SECTION ============
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">

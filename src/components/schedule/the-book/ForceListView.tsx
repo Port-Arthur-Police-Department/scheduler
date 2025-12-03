@@ -30,12 +30,14 @@ interface ForceListViewProps {
   selectedShiftId: string;
   setSelectedShiftId: (shiftId: string) => void;
   shiftTypes: any[];
+  isAdminOrSupervisor: boolean; // ADD THIS PROP
 }
 
 export const ForceListView: React.FC<ForceListViewProps> = ({
   selectedShiftId,
   setSelectedShiftId,
-  shiftTypes
+  shiftTypes,
+  isAdminOrSupervisor // ADD THIS
 }) => {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ForceListFilters>({
@@ -91,7 +93,17 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      // Log to audit
+      auditLogger.logDatabaseOperation(
+        'UPSERT',
+        'forced_dates',
+        data?.[0]?.id,
+        undefined,
+        variables,
+        `Forced date added for officer ${variables.officerId}`
+      );
+      
       toast.success("Forced date saved");
       queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
       setEditingForcedDate(null);
@@ -102,7 +114,6 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     }
   });
 
-  // Mutation to delete forced date
   const deleteForcedDateMutation = useMutation({
     mutationFn: async (forcedDateId: string) => {
       const { error } = await supabase
@@ -112,7 +123,17 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, forcedDateId) => {
+      // Log to audit
+      auditLogger.logDatabaseOperation(
+        'DELETE',
+        'forced_dates',
+        forcedDateId,
+        undefined,
+        undefined,
+        `Forced date removed`
+      );
+      
       toast.success("Forced date removed");
       queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
     },
@@ -482,17 +503,23 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                               </div>
                             )}
                           </div>
-                          <div className="col-span-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                              title="Add forced date"
-                            >
-                              <Clock className="h-3 w-3 mr-1" />
-                              Force
-                            </Button>
-                          </div>
+                           <div className="col-span-1">
+    {isAdminOrSupervisor ? (
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+        title="Add forced date"
+      >
+        <Clock className="h-3 w-3 mr-1" />
+        Force
+      </Button>
+    ) : (
+      <Badge variant="secondary" className="text-xs">
+        View Only
+      </Badge>
+    )}
+  </div>
                         </div>
                       );
                     })}
@@ -561,17 +588,23 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                               </div>
                             )}
                           </div>
-                          <div className="col-span-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                              title="Add forced date"
-                            >
-                              <Clock className="h-3 w-3 mr-1" />
-                              Force
-                            </Button>
-                          </div>
+                           <div className="col-span-1">
+    {isAdminOrSupervisor ? (
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+        title="Add forced date"
+      >
+        <Clock className="h-3 w-3 mr-1" />
+        Force
+      </Button>
+    ) : (
+      <Badge variant="secondary" className="text-xs">
+        View Only
+      </Badge>
+    )}
+  </div>
                         </div>
                       );
                     })}
@@ -640,17 +673,22 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </div>
                           </div>
                           <div className="col-span-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                              title="Add forced date"
-                              className="bg-white"
-                            >
-                              <Clock className="h-3 w-3 mr-1" />
-                              Force
-                            </Button>
-                          </div>
+    {isAdminOrSupervisor ? (
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
+        title="Add forced date"
+      >
+        <Clock className="h-3 w-3 mr-1" />
+        Force
+      </Button>
+    ) : (
+      <Badge variant="secondary" className="text-xs">
+        View Only
+      </Badge>
+    )}
+  </div>
                         </div>
                       );
                     })}

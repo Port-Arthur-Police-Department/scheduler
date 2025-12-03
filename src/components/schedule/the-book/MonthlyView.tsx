@@ -376,14 +376,15 @@ export const MonthlyView: React.FC<ViewProps> = ({
               </div>
             )}
             
-            {!isCurrentMonthDay && (
-              <div className="text-[8px] text-muted-foreground text-center mt-1">
-                {format(day, "MMM")}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              {!isCurrentMonthDay && (
+                <div className="text-[8px] text-muted-foreground text-center mt-1">
+                  {format(day, "MMM")}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};

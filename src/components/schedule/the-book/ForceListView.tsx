@@ -390,7 +390,7 @@ const handleToday = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             {/* Date Range Selector */}
             <div className="space-y-2">
               <Label htmlFor="date-range">Calendar Year</Label>
@@ -459,26 +459,6 @@ const handleToday = () => {
                   {format(filters.startDate, "yyyy")}
                 </Badge>
               </div>
-            </div>
-
-            {/* Force Type Toggle */}
-            <div className="space-y-2">
-              <Label>Force Type</Label>
-              <ToggleGroup 
-                type="single" 
-                value={filters.forceType}
-                onValueChange={(value: ForceType) => {
-                  if (value) setFilters(prev => ({ ...prev, forceType: value }));
-                }}
-                className="justify-start"
-              >
-                <ToggleGroupItem value="regular-force" className="px-4">
-                  Regular Force
-                </ToggleGroupItem>
-                <ToggleGroupItem value="true-force" className="px-4">
-                  True Force
-                </ToggleGroupItem>
-              </ToggleGroup>
             </div>
 
             {/* Navigation Controls */}

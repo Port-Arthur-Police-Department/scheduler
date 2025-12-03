@@ -9,7 +9,22 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarIcon, Download, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, isSameMonth, isSameDay, eachDayOfInterval, parseISO } from "date-fns";
+import { 
+  format, 
+  startOfWeek, 
+  endOfWeek, 
+  addDays, 
+  addWeeks, 
+  subWeeks, 
+  startOfMonth, 
+  endOfMonth, 
+  addMonths, 
+  subMonths, 
+  isSameMonth, 
+  isSameDay, 
+  eachDayOfInterval, 
+  parseISO 
+} from "date-fns";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
@@ -34,10 +49,9 @@ import {
   getRankAbbreviation, 
   getRankPriority, 
   isSupervisorByRank,
-  categorizeAndSortOfficers, // Add this
-  calculateStaffingCounts    // And this
+  categorizeAndSortOfficers,
+  calculateStaffingCounts
 } from "./utils";
-import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 const TheBook = ({  
   userRole = 'officer', 
@@ -97,7 +111,7 @@ const TheBook = ({
       }
       return data || [];
     },
-    enabled: !!selectedShiftId,
+    enabled: true, // Changed: Default assignments are officer-specific, not shift-specific
   });
 
   // Helper function to get default assignment
@@ -668,8 +682,6 @@ const renderView = () => {
       </TabsTrigger>
     </TabsList>
   </Tabs>
-  
-  {/* REMOVED: Duplicate date navigation - it's now in the view components */}
   
   {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
     <p className="text-sm text-muted-foreground mt-2">

@@ -43,7 +43,6 @@ export const BeatPreferencesView: React.FC<Props> = ({
     [key: string]: BeatPreference
   }>({});
 
-  // Remove the local shiftTypes query since we get it from parent
   // Filter out "Supervisor" and "Other (Custom)" from beat positions
   const beatPositions = PREDEFINED_POSITIONS.filter(pos => 
     pos !== "Supervisor" && pos !== "Other (Custom)"
@@ -302,7 +301,7 @@ export const BeatPreferencesView: React.FC<Props> = ({
     getLastName(a.full_name).localeCompare(getLastName(b.full_name))
   );
 
- return (
+  return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
@@ -425,69 +424,63 @@ export const BeatPreferencesView: React.FC<Props> = ({
                               </div>
 
                               {isEditing ? (
-  <div className="space-y-3">
-    {/* Same editing interface as supervisors */}
-    <div className="space-y-2">
-      <Label className="text-sm font-medium">Priority Preferences *</Label>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.first_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
-          >
-            <SelectTrigger id={`first-${officer.id}`}>
-              <SelectValue placeholder="Select 1st Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-1">
-          <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.second_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
-          >
-            <SelectTrigger id={`second-${officer.id}`}>
-              <SelectValue placeholder="Select 2nd Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-1">
-          <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.third_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
-          >
-            <SelectTrigger id={`third-${officer.id}`}>
-              <SelectValue placeholder="Select 3rd Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Priority Preferences *</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
+                                        <select
+                                          id={`first-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.first_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'first_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 1st Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
+                                        <select
+                                          id={`second-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.second_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'second_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 2nd Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
+                                        <select
+                                          id={`third-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.third_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'third_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 3rd Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
                                       </div>
                                     </div>
                                   </div>
+
                                   {/* Unavailable Beats */}
                                   <div className="space-y-2">
                                     <Label className="text-sm font-medium">Unavailable Beats</Label>
@@ -584,7 +577,7 @@ export const BeatPreferencesView: React.FC<Props> = ({
                                       <Button size="sm" variant="outline" onClick={() => handleCancelEdit(officer.id)}>
                                         <X className="h-3 w-3 mr-1" />
                                         Cancel
-                                    </Button>
+                                      </Button>
                                     </div>
                                   ) : (
                                     <Button size="sm" variant="outline" onClick={() => handleEditPreferences(officer.id)}>
@@ -600,66 +593,59 @@ export const BeatPreferencesView: React.FC<Props> = ({
                               </div>
 
                               {isEditing ? (
-  <div className="space-y-3">
-    {/* Same editing interface as supervisors */}
-    <div className="space-y-2">
-      <Label className="text-sm font-medium">Priority Preferences *</Label>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.first_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
-          >
-            <SelectTrigger id={`first-${officer.id}`}>
-              <SelectValue placeholder="Select 1st Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-1">
-          <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.second_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
-          >
-            <SelectTrigger id={`second-${officer.id}`}>
-              <SelectValue placeholder="Select 2nd Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-1">
-          <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
-          <Select
-            value={beatPreferences[officer.id]?.third_choice || ''}
-            onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
-          >
-            <SelectTrigger id={`third-${officer.id}`}>
-              <SelectValue placeholder="Select 3rd Choice" />
-            </SelectTrigger>
-            <SelectContent>
-              {beatPositions.map((beat) => (
-                <SelectItem key={beat} value={beat}>
-                  {beat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Priority Preferences *</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
+                                        <select
+                                          id={`first-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.first_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'first_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 1st Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
+                                        <select
+                                          id={`second-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.second_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'second_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 2nd Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      
+                                      <div className="space-y-1">
+                                        <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
+                                        <select
+                                          id={`third-${officer.id}`}
+                                          value={beatPreferences[officer.id]?.third_choice || ''}
+                                          onChange={(e) => updatePreferenceChoice(officer.id, 'third_choice', e.target.value)}
+                                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                          <option value="">Select 3rd Choice</option>
+                                          {beatPositions.map((beat) => (
+                                            <option key={beat} value={beat}>
+                                              {beat}
+                                            </option>
+                                          ))}
+                                        </select>
                                       </div>
                                     </div>
                                   </div>

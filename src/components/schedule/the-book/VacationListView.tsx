@@ -1,11 +1,10 @@
-// src/components/schedule/the-book/VacationListView.tsx
+// VacationListView.tsx
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfYear, endOfYear, eachMonthOfInterval, isSameMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Plane, CalendarIcon, Filter, Download } from "lucide-react";
@@ -13,23 +12,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation } from "./utils";
 
-export const VacationListView: React.FC = () => {
-  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+interface VacationListViewProps {
+  selectedShiftId: string;
+  setSelectedShiftId: (shiftId: string) => void;
+  shiftTypes: any[];
+}
+
+export const VacationListView: React.FC<VacationListViewProps> = ({
+  selectedShiftId,
+  setSelectedShiftId,
+  shiftTypes
+}) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showAllVacations, setShowAllVacations] = useState<boolean>(false);
 
-  // Get shift types
-  const { data: shiftTypes } = useQuery({
-    queryKey: ["shift-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shift_types")
-        .select("*")
-        .order("start_time");
-      if (error) throw error;
-      return data;
-    },
-  });
+  // Remove the local shiftTypes query since we get it from parent
 
   // Fetch vacation data
   const { data: vacationData, isLoading } = useQuery({
@@ -133,18 +130,9 @@ export const VacationListView: React.FC = () => {
               Vacation List
             </CardTitle>
             <div className="flex items-center gap-3">
-              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shiftTypes?.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.start_time} - {shift.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="text-sm font-medium text-muted-foreground">
+                Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
+              </div>
               <Button onClick={handleExport} size="sm" variant="outline">
                 <Download className="h-4 w-4 mr-2" />
                 Export
@@ -156,18 +144,18 @@ export const VacationListView: React.FC = () => {
             {/* Year Selector */}
             <div className="space-y-2">
               <Label htmlFor="year-select">Year</Label>
-              <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2023, 2024, 2025, 2026].map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select 
+                id="year-select"
+                value={selectedYear.toString()}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                {[2023, 2024, 2025, 2026].map((year) => (
+                  <option key={year} value={year.toString()}>
+                    {year}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Show All Toggle */}
@@ -201,7 +189,7 @@ export const VacationListView: React.FC = () => {
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
-              Please select a shift to view vacation list
+              Please select a shift from the Weekly or Monthly tab first
             </div>
           ) : isLoading ? (
             <div className="text-center py-8">Loading vacation data...</div>

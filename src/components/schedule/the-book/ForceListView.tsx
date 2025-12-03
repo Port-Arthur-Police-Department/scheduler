@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ForceType, ForceListFilters } from "./types";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
+import { auditLogger } from "@/lib/auditLogger";
 
 interface ForcedDate {
   id?: string;
@@ -71,77 +72,78 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     },
   });
 
-  // Mutation to add/update forced date
-  const addForcedDateMutation = useMutation({
-    mutationFn: async ({ officerId, forcedDate, isRed, notes }: {
-      officerId: string;
-      forcedDate: string;
-      isRed: boolean;
-      notes: string;
-    }) => {
-      const { data, error } = await supabase
-        .from("forced_dates")
-        .upsert({
-          officer_id: officerId,
-          forced_date: forcedDate,
-          is_red: isRed,
-          notes: notes || null
-        }, {
-          onConflict: 'officer_id,forced_date'
-        });
+// In ForceListView.tsx - Update the addForcedDateMutation
+const addForcedDateMutation = useMutation({
+  mutationFn: async ({ officerId, forcedDate, isRed, notes }: {
+    officerId: string;
+    forcedDate: string;
+    isRed: boolean;
+    notes: string;
+  }) => {
+    const { data, error } = await supabase
+      .from("forced_dates")
+      .upsert({
+        officer_id: officerId,
+        forced_date: forcedDate,
+        is_red: isRed,
+        notes: notes || null
+      }, {
+        onConflict: 'officer_id,forced_date'
+      });
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data, variables) => {
-      // Log to audit
-      auditLogger.logDatabaseOperation(
-        'UPSERT',
-        'forced_dates',
-        data?.[0]?.id,
-        undefined,
-        variables,
-        `Forced date added for officer ${variables.officerId}`
-      );
-      
-      toast.success("Forced date saved");
-      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
-      setEditingForcedDate(null);
-    },
-    onError: (error) => {
-      toast.error("Error saving forced date");
-      console.error("Error saving forced date:", error);
-    }
-  });
+    if (error) throw error;
+    return data;
+  },
+  onSuccess: (data, variables) => {
+    // Log to audit - ADD userEmail parameter if available
+    auditLogger.logDatabaseOperation(
+      'UPSERT',
+      'forced_dates',
+      data?.[0]?.id,
+      undefined,
+      variables,
+      `Forced date added for officer ${variables.officerId}`
+    );
+    
+    toast.success("Forced date saved");
+    queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+    setEditingForcedDate(null);
+  },
+  onError: (error) => {
+    toast.error("Error saving forced date");
+    console.error("Error saving forced date:", error);
+  }
+});
 
-  const deleteForcedDateMutation = useMutation({
-    mutationFn: async (forcedDateId: string) => {
-      const { error } = await supabase
-        .from("forced_dates")
-        .delete()
-        .eq("id", forcedDateId);
+// Update the deleteForcedDateMutation
+const deleteForcedDateMutation = useMutation({
+  mutationFn: async (forcedDateId: string) => {
+    const { error } = await supabase
+      .from("forced_dates")
+      .delete()
+      .eq("id", forcedDateId);
 
-      if (error) throw error;
-    },
-    onSuccess: (_, forcedDateId) => {
-      // Log to audit
-      auditLogger.logDatabaseOperation(
-        'DELETE',
-        'forced_dates',
-        forcedDateId,
-        undefined,
-        undefined,
-        `Forced date removed`
-      );
-      
-      toast.success("Forced date removed");
-      queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
-    },
-    onError: (error) => {
-      toast.error("Error removing forced date");
-      console.error("Error removing forced date:", error);
-    }
-  });
+    if (error) throw error;
+  },
+  onSuccess: (_, forcedDateId) => {
+    // Log to audit - ADD userEmail parameter if available
+    auditLogger.logDatabaseOperation(
+      'DELETE',
+      'forced_dates',
+      forcedDateId,
+      undefined,
+      undefined,
+      `Forced date removed`
+    );
+    
+    toast.success("Forced date removed");
+    queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
+  },
+  onError: (error) => {
+    toast.error("Error removing forced date");
+    console.error("Error removing forced date:", error);
+  }
+});
 
   // Fetch force list data - FILTERED BY SELECTED SHIFT
   const { data: forceListData, isLoading } = useQuery({

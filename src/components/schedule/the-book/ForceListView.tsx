@@ -191,7 +191,9 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
               .rpc('get_service_credit', { profile_id: officerId });
             
             if (!error && data !== null) {
-              serviceCredits.set(officerId, data);
+              // Ensure data is a number and format to one decimal
+              const creditValue = parseFloat(data);
+              serviceCredits.set(officerId, isNaN(creditValue) ? 0 : creditValue);
             } else {
               serviceCredits.set(officerId, 0);
             }
@@ -251,11 +253,18 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     officer.rank?.toLowerCase() === 'probationary'
   ) || [];
 
-  // Sort by service credit (least to most)
+  // Format service credit to one decimal place
+  const formatServiceCredit = (credit: any) => {
+    if (credit === undefined || credit === null) return '0.0';
+    const num = parseFloat(credit);
+    return isNaN(num) ? '0.0' : num.toFixed(1);
+  };
+
+  // Sort by service credit (least to most) - FIXED VERSION
   const sortByServiceCredit = (a: any, b: any) => {
     // Get service credits
-    const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : (a.service_credit || 0);
-    const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : (b.service_credit || 0);
+    const aCredit = parseFloat(formatServiceCredit(a.service_credit));
+    const bCredit = parseFloat(formatServiceCredit(b.service_credit));
     
     // Primary sort: service credit (least to most)
     if (aCredit !== bCredit) {
@@ -277,6 +286,19 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
   const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
   const sortedPPOs = [...ppos].sort(sortByServiceCredit);
+
+  // Debug function to check sorting
+  const debugSorting = () => {
+    console.log('=== SORTING DEBUG ===');
+    console.log('Supervisors with credits:');
+    sortedSupervisors.forEach((o, i) => {
+      console.log(`${i + 1}. ${getLastName(o.full_name)}: ${formatServiceCredit(o.service_credit)}`);
+    });
+    console.log('Regular Officers with credits:');
+    sortedRegularOfficers.forEach((o, i) => {
+      console.log(`${i + 1}. ${getLastName(o.full_name)}: ${formatServiceCredit(o.service_credit)}`);
+    });
+  };
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({
@@ -347,6 +369,14 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
               <div className="text-sm font-medium text-muted-foreground">
                 Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
               </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={debugSorting}
+                className="text-xs"
+              >
+                Debug Sorting
+              </Button>
             </div>
           </div>
           
@@ -509,8 +539,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
-                            <Badge variant="outline" className="text-xs">
-                              {officer.service_credit || 0}
+                            <Badge variant="outline" className="text-xs font-mono">
+                              {formatServiceCredit(officer.service_credit)}
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
@@ -599,8 +629,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
-                            <Badge variant="outline" className="text-xs">
-                              {officer.service_credit || 0}
+                            <Badge variant="outline" className="text-xs font-mono">
+                              {formatServiceCredit(officer.service_credit)}
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
@@ -693,8 +723,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
-                            <Badge variant="outline" className="text-xs">
-                              {officer.service_credit || 0}
+                            <Badge variant="outline" className="text-xs font-mono">
+                              {formatServiceCredit(officer.service_credit)}
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">

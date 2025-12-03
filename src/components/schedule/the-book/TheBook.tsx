@@ -464,59 +464,94 @@ const dailySchedules = dates.map(date => {
     setEditingAssignment({ officer, dateStr });
   };
 
-  const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
-    setSelectedSchedule({
-      scheduleId: schedule.scheduleId,
-      type: schedule.scheduleType,
-      date,
-      shift: schedule.shift,
-      officerId,
-      officerName,
-      ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
-    });
-    setPtoDialogOpen(true);
-  };
+// In TheBook.tsx - Add audit logging to PTO assignment
+const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
+  setSelectedSchedule({
+    scheduleId: schedule.scheduleId,
+    type: schedule.scheduleType,
+    date,
+    shift: schedule.shift,
+    officerId,
+    officerName,
+    ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
+  });
+  setPtoDialogOpen(true);
+};
+
+// When PTO is saved (in PTOAssignmentDialog or similar), add:
+auditLogger.logPTOAssignment(
+  officerId,
+  ptoType,
+  date,
+  hours,
+  userEmail,
+  `${ptoType} PTO assigned for ${officerName}`
+);
+
+// When PTO is removed:
+auditLogger.logPTORemoval(
+  officerId,
+  ptoType,
+  date,
+  userEmail,
+  `PTO removed for ${officerName}`
+);
 
   const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
     // This will be handled by the view components
   };
 
-  const handleSaveAssignment = () => {
-    if (!editingAssignment) return;
+// In TheBook.tsx - Update handleSaveAssignment function
+const handleSaveAssignment = () => {
+  if (!editingAssignment) return;
 
-    const { officer, dateStr } = editingAssignment;
-    
-    updatePositionMutation.mutate({
-      scheduleId: officer.shiftInfo.scheduleId,
-      type: officer.shiftInfo.scheduleType,
-      positionName: officer.shiftInfo.position,
-      date: dateStr,
-      officerId: officer.officerId,
-      shiftTypeId: selectedShiftId,
-      currentPosition: officer.shiftInfo.position
-    }, {
-      onSuccess: () => {
-        auditLogger.logPositionChange(
-          officer.officerId,
-          officer.officerName,
-          officer.shiftInfo.position,
-          officer.shiftInfo.position,
+  const { officer, dateStr } = editingAssignment;
+  
+  updatePositionMutation.mutate({
+    scheduleId: officer.shiftInfo.scheduleId,
+    type: officer.shiftInfo.scheduleType,
+    positionName: officer.shiftInfo.position,
+    date: dateStr,
+    officerId: officer.officerId,
+    shiftTypeId: selectedShiftId,
+    currentPosition: officer.shiftInfo.position
+  }, {
+    onSuccess: () => {
+      // AUDIT LOGGING - Log the position change
+      auditLogger.logPositionChange(
+        officer.officerId,
+        officer.officerName,
+        officer.shiftInfo.position,
+        officer.shiftInfo.position,
+        userEmail,
+        `Changed position for ${officer.officerName} on ${dateStr}`
+      );
+      
+      setEditingAssignment(null);
+    }
+  });
+};
+
+// Also update handleRemoveOfficer to include audit logging
+const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+  removeOfficerMutation.mutate({
+    scheduleId,
+    type,
+    officerData
+  }, {
+    onSuccess: () => {
+      if (officerData) {
+        // AUDIT LOGGING - Log officer removal
+        auditLogger.logOfficerRemoval(
+          officerData.officerId,
+          officerData.officerName,
           userEmail,
-          `Changed position for ${officer.officerName} on ${dateStr}`
+          `Removed ${officerData.officerName} from schedule`
         );
-        
-        setEditingAssignment(null);
       }
-    });
-  };
-
-  const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
-    removeOfficerMutation.mutate({
-      scheduleId,
-      type,
-      officerData
-    });
-  };
+    }
+  });
+};
 
   // Prepare common props for view components
 const viewProps = {
@@ -555,7 +590,7 @@ const viewProps = {
     isSupervisorByRank,
   };
 
-// In TheBook.tsx, update the renderView function:
+// In TheBook.tsx - Update the renderView function
 const renderView = () => {
   switch (activeView) {
     case "weekly":
@@ -567,6 +602,7 @@ const renderView = () => {
         selectedShiftId={selectedShiftId}
         setSelectedShiftId={setSelectedShiftId}
         shiftTypes={shiftTypes || []}
+        isAdminOrSupervisor={isAdminOrSupervisor} // ADD THIS
       />;
     case "vacation-list":
       return <VacationListView 

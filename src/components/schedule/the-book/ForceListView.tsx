@@ -443,12 +443,13 @@ const handleToday = () => {
                   </PopoverContent>
                 </Popover>
               </div>
+              {/* Add this badge inside the same space-y-2 div but after the date picker */}
+              <div className="text-center pt-1">
+                <Badge variant="secondary">
+                  {format(filters.startDate, "yyyy")}
+                </Badge>
+              </div>
             </div>
-            <div className="text-center mt-2">
-  <Badge variant="secondary">
-    {format(filters.startDate, "yyyy")}
-  </Badge>
-</div>
 
             {/* Force Type Toggle */}
             <div className="space-y-2">

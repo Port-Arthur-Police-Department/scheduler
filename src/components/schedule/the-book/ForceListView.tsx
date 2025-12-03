@@ -145,47 +145,76 @@ const deleteForcedDateMutation = useMutation({
   }
 });
 
-  // Fetch force list data - FILTERED BY SELECTED SHIFT
-  const { data: forceListData, isLoading } = useQuery({
-    queryKey: ['force-list', selectedShiftId],
-    queryFn: async () => {
-      if (!selectedShiftId) return null;
+// In ForceListView.tsx - Update the force list data query
+const { data: forceListData, isLoading } = useQuery({
+  queryKey: ['force-list', selectedShiftId],
+  queryFn: async () => {
+    if (!selectedShiftId) return null;
 
-      // Get officers who have recurring schedules for this shift
-      const { data: recurringSchedules, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          officer_id,
-          profiles!recurring_schedules_officer_id_fkey (
-            id,
-            full_name,
-            badge_number,
-            rank,
-            service_credit_override,
-            hire_date
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .is("end_date", null);
+    // Get officers who have recurring schedules for this shift
+    const { data: recurringSchedules, error: recurringError } = await supabase
+      .from("recurring_schedules")
+      .select(`
+        officer_id,
+        profiles!recurring_schedules_officer_id_fkey (
+          id,
+          full_name,
+          badge_number,
+          rank,
+          service_credit_override,
+          hire_date
+        )
+      `)
+      .eq("shift_type_id", selectedShiftId)
+      .is("end_date", null);
 
-      if (recurringError) {
-        console.error("Error fetching recurring schedules for force list:", recurringError);
-        throw recurringError;
+    if (recurringError) {
+      console.error("Error fetching recurring schedules for force list:", recurringError);
+      throw recurringError;
+    }
+
+    // Get unique officers from recurring schedules
+    const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
+    const uniqueOfficers = Array.from(
+      new Map(officers.map(officer => [officer.id, officer])).values()
+    );
+
+    // NEW: Fetch service credits for all officers
+    const officerIds = uniqueOfficers.map(o => o.id);
+    const serviceCredits = new Map();
+    
+    if (officerIds.length > 0) {
+      // Use your existing service credit RPC function
+      for (const officerId of officerIds) {
+        try {
+          const { data, error } = await supabase
+            .rpc('get_service_credit', { profile_id: officerId });
+          
+          if (!error && data !== null) {
+            serviceCredits.set(officerId, data);
+          } else {
+            serviceCredits.set(officerId, 0);
+          }
+        } catch (error) {
+          console.error(`Error fetching service credit for officer ${officerId}:`, error);
+          serviceCredits.set(officerId, 0);
+        }
       }
+    }
 
-      // Get unique officers from recurring schedules
-      const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
-      const uniqueOfficers = Array.from(
-        new Map(officers.map(officer => [officer.id, officer])).values()
-      );
+    // Add service credits to each officer object
+    const officersWithCredits = uniqueOfficers.map(officer => ({
+      ...officer,
+      service_credit: serviceCredits.get(officer.id) || 0
+    }));
 
-      return {
-        officers: uniqueOfficers || [],
-        totalCount: uniqueOfficers.length
-      };
-    },
-    enabled: !!selectedShiftId,
-  });
+    return {
+      officers: officersWithCredits || [],
+      totalCount: uniqueOfficers.length
+    };
+  },
+  enabled: !!selectedShiftId,
+});
 
   // Get forced dates for each officer
   const getOfficerForcedDates = (officerId: string) => {
@@ -222,21 +251,38 @@ const deleteForcedDateMutation = useMutation({
     officer.rank?.toLowerCase() === 'probationary'
   ) || [];
 
-  // Sort officers by force count (lowest to highest)
-  const sortByForceCount = (a: any, b: any) => {
-    const aCount = getForceCount(a.id);
-    const bCount = getForceCount(b.id);
-    return aCount - bCount; // Lowest to highest
-  };
+const sortByForceCount = (a: any, b: any) => {
+  const aCount = getForceCount(a.id);
+  const bCount = getForceCount(b.id);
+  return aCount - bCount; // Lowest to highest
+};
 
-  // Sort supervisors by force count (lowest to highest)
-  const sortedSupervisors = [...supervisors].sort(sortByForceCount);
+// Add this helper function near the other sorting logic
+const sortByServiceCredit = (a: any, b: any) => {
+  // Get service credits (use service_credit_override if available, otherwise service_credit)
+  const aCredit = a.service_credit_override !== undefined ? a.service_credit_override : a.service_credit || 0;
+  const bCredit = b.service_credit_override !== undefined ? b.service_credit_override : b.service_credit || 0;
+  
+  // Sort by service credit (least to most)
+  if (aCredit !== bCredit) {
+    return aCredit - bCredit;
+  }
+  
+  // If service credits are equal, sort by force count (least to most)
+  const aForceCount = getForceCount(a.id);
+  const bForceCount = getForceCount(b.id);
+  if (aForceCount !== bForceCount) {
+    return aForceCount - bForceCount;
+  }
+  
+  // If force counts are also equal, sort alphabetically by last name
+  return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+};
 
-  // Sort regular officers by force count (lowest to highest)
-  const sortedRegularOfficers = [...regularOfficers].sort(sortByForceCount);
-
-  // Sort PPOs by force count (lowest to highest)
-  const sortedPPOs = [...ppos].sort(sortByForceCount);
+// Update the sorting to use the new function
+const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
+const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
+const sortedPPOs = [...ppos].sort(sortByServiceCredit);
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({
@@ -427,14 +473,23 @@ const deleteForcedDateMutation = useMutation({
           ) : (
             <div className="space-y-6">
               {/* Header */}
-              <div className="grid grid-cols-8 bg-muted/50 p-3 font-semibold border rounded-t-lg">
-                <div className="col-span-2">Officer</div>
-                <div className="col-span-1">Badge #</div>
-                <div className="col-span-1">Rank</div>
-                <div className="col-span-1 text-center">Force Count</div>
-                <div className="col-span-2">Forced Dates</div>
-                <div className="col-span-1">Actions</div>
-              </div>
+              // In the table header - Add a Service Credit column
+<div className="grid grid-cols-9 bg-muted/50 p-3 font-semibold border rounded-t-lg">
+  <div className="col-span-2">Officer</div>
+  <div className="col-span-1">Badge #</div>
+  <div className="col-span-1">Rank</div>
+  <div className="col-span-1 text-center">Service Credit</div> {/* ADD THIS */}
+  <div className="col-span-1 text-center">Force Count</div>
+  <div className="col-span-2">Forced Dates</div>
+  <div className="col-span-1">Actions</div>
+</div>
+
+// In each officer row - Add service credit display
+<div className="col-span-1 text-center">
+  <Badge variant="outline" className="text-xs">
+    {officer.service_credit || 0}
+  </Badge>
+</div>
 
               {/* Two Column Layout */}
               <div className="grid grid-cols-1 gap-4">

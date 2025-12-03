@@ -152,32 +152,49 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       if (!selectedShiftId) return null;
 
       // Get ALL officers who have recurring schedules for this shift
-      // Removed .is("end_date", null) to include ALL recurring schedules
-      const { data: recurringSchedules, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          officer_id,
-          profiles!recurring_schedules_officer_id_fkey (
-            id,
-            full_name,
-            badge_number,
-            rank,
-            service_credit_override,
-            hire_date
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId);
+     // Fetch force list data - SHOW PROFILES WITH RECURRING SCHEDULES FOR THE SELECTED SHIFT AND YEAR
+const { data: forceListData, isLoading } = useQuery({
+  queryKey: ['force-list', selectedShiftId, filters.startDate],
+  queryFn: async () => {
+    if (!selectedShiftId) return null;
 
-      if (recurringError) {
-        console.error("Error fetching recurring schedules for force list:", recurringError);
-        throw recurringError;
-      }
+    const selectedYear = filters.startDate.getFullYear();
+    const yearStartDate = `${selectedYear}-01-01`;
+    const yearEndDate = `${selectedYear}-12-31`;
 
-      // Get unique officers from recurring schedules
-      const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
-      const uniqueOfficers = Array.from(
-        new Map(officers.map(officer => [officer.id, officer])).values()
-      );
+    // Get officers who have recurring schedules for this shift that overlap with the selected year
+    const { data: recurringSchedules, error: recurringError } = await supabase
+      .from("recurring_schedules")
+      .select(`
+        officer_id,
+        start_date,
+        end_date,
+        profiles!recurring_schedules_officer_id_fkey (
+          id,
+          full_name,
+          badge_number,
+          rank,
+          service_credit_override,
+          hire_date
+        )
+      `)
+      .eq("shift_type_id", selectedShiftId)
+      .or(`end_date.is.null,end_date.gte.${yearStartDate}`)  // Schedule hasn't ended OR ends after year starts
+      .lte("start_date", yearEndDate);  // Schedule starts before year ends
+
+    if (recurringError) {
+      console.error("Error fetching recurring schedules for force list:", recurringError);
+      throw recurringError;
+    }
+
+    // Get unique officers from recurring schedules that are active during the selected year
+    const officers = recurringSchedules
+      ?.map(schedule => schedule.profiles)
+      .filter(Boolean) || [];
+    
+    const uniqueOfficers = Array.from(
+      new Map(officers.map(officer => [officer.id, officer])).values()
+    );
 
       // Fetch service credits for all officers
       const officerIds = uniqueOfficers.map(o => o.id);

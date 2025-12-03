@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 // ADD THIS IMPORT LINE RIGHT HERE:
 import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
 
-interface WeeklyScheduleProps {
+interface TheBookProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
   isAdminOrSupervisor?: boolean;
 }
@@ -59,10 +59,10 @@ const getRankAbbreviation = (rank: string): string => {
 };
 
 // Inside the WeeklySchedule component, add this hook call:
-const WeeklySchedule = ({  
+const TheBook = ({  
   userRole = 'officer', 
   isAdminOrSupervisor = false 
-}: WeeklyScheduleProps) => {
+}: TheBookProps) => {
   const { userEmail } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -2182,4 +2182,4 @@ const renderMonthlyView = () => {
   );
 };
 
-export default WeeklySchedule;
+export default TheBook;

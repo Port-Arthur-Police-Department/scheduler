@@ -440,65 +440,66 @@ export const BeatPreferencesView: React.FC<Props> = ({ isAdminOrSupervisor }) =>
                               </div>
 
                               {isEditing ? (
-                                <div className="space-y-3">
-                                  {/* Same editing interface as supervisors */}
-                                  <div className="space-y-2">
-                                    <Label className="text-sm font-medium">Priority Preferences *</Label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                      <div className="space-y-1">
-                                        <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
-                                        // In the editing sections of BeatPreferencesView.tsx, update the Select components:
-
-{/* 1st Choice Select */}
-<Select
-  value={beatPreferences[officer.id]?.first_choice || ''}
-  onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
->
-  <SelectTrigger id={`first-${officer.id}`}>
-    <SelectValue placeholder="Select 1st Choice" />
-  </SelectTrigger>
-  <SelectContent>
-    {beatPositions.map((beat) => (
-      <SelectItem key={beat} value={beat}>
-        {beat}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
-{/* 2nd Choice Select */}
-<Select
-  value={beatPreferences[officer.id]?.second_choice || ''}
-  onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
->
-  <SelectTrigger id={`second-${officer.id}`}>
-    <SelectValue placeholder="Select 2nd Choice" />
-  </SelectTrigger>
-  <SelectContent>
-    {beatPositions.map((beat) => (
-      <SelectItem key={beat} value={beat}>
-        {beat}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
-{/* 3rd Choice Select */}
-<Select
-  value={beatPreferences[officer.id]?.third_choice || ''}
-  onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
->
-  <SelectTrigger id={`third-${officer.id}`}>
-    <SelectValue placeholder="Select 3rd Choice" />
-  </SelectTrigger>
-  <SelectContent>
-    {beatPositions.map((beat) => (
-      <SelectItem key={beat} value={beat}>
-        {beat}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+  <div className="space-y-3">
+    {/* Same editing interface as supervisors */}
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">Priority Preferences *</Label>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor={`first-${officer.id}`} className="text-xs">1st Choice</Label>
+          <Select
+            value={beatPreferences[officer.id]?.first_choice || ''}
+            onValueChange={(value) => updatePreferenceChoice(officer.id, 'first_choice', value)}
+          >
+            <SelectTrigger id={`first-${officer.id}`}>
+              <SelectValue placeholder="Select 1st Choice" />
+            </SelectTrigger>
+            <SelectContent>
+              {beatPositions.map((beat) => (
+                <SelectItem key={beat} value={beat}>
+                  {beat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-1">
+          <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
+          <Select
+            value={beatPreferences[officer.id]?.second_choice || ''}
+            onValueChange={(value) => updatePreferenceChoice(officer.id, 'second_choice', value)}
+          >
+            <SelectTrigger id={`second-${officer.id}`}>
+              <SelectValue placeholder="Select 2nd Choice" />
+            </SelectTrigger>
+            <SelectContent>
+              {beatPositions.map((beat) => (
+                <SelectItem key={beat} value={beat}>
+                  {beat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-1">
+          <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
+          <Select
+            value={beatPreferences[officer.id]?.third_choice || ''}
+            onValueChange={(value) => updatePreferenceChoice(officer.id, 'third_choice', value)}
+          >
+            <SelectTrigger id={`third-${officer.id}`}>
+              <SelectValue placeholder="Select 3rd Choice" />
+            </SelectTrigger>
+            <SelectContent>
+              {beatPositions.map((beat) => (
+                <SelectItem key={beat} value={beat}>
+                  {beat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
                                       </div>
                                     </div>
                                   </div>

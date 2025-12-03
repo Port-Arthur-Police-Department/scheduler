@@ -460,9 +460,27 @@ const dailySchedules = dates.map(date => {
   };
 
   // Event handlers
-  const handleEditAssignment = (officer: any, dateStr: string) => {
-    setEditingAssignment({ officer, dateStr });
-  };
+// In TheBook.tsx - Update handleEditAssignment for debugging
+const handleEditAssignment = (officer: any, dateStr: string) => {
+  // Log the officer object to see its structure
+  console.log('=== EDIT ASSIGNMENT CLICKED ===');
+  console.log('Officer object:', officer);
+  console.log('Officer keys:', Object.keys(officer || {}));
+  console.log('Date:', dateStr);
+  
+  // Check for officer ID in various locations
+  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+  console.log('Found officerId:', officerId);
+  
+  setEditingAssignment({ 
+    officer: {
+      ...officer,
+      // Ensure we have the ID
+      officerId: officerId
+    }, 
+    dateStr 
+  });
+};
 
 // In TheBook.tsx - Add audit logging to PTO assignment
 const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
@@ -501,18 +519,32 @@ auditLogger.logPTORemoval(
     // This will be handled by the view components
   };
 
-// In TheBook.tsx - Update handleSaveAssignment function
+// In TheBook.tsx - Update the handleSaveAssignment function
 const handleSaveAssignment = () => {
   if (!editingAssignment) return;
 
   const { officer, dateStr } = editingAssignment;
   
-  const officerId = officer?.officerId || officer?.id || officer?.officer_id;
-  const officerName = officer?.officerName || officer?.full_name || 'Unknown Officer';
+  // DEBUG: Log the officer object to confirm structure
+  console.log('Officer object in handleSaveAssignment:', officer);
+  
+  // Extract officer ID - try multiple possibilities
+  const officerId = officer?.officerId || 
+                    officer?.officer_id || 
+                    officer?.id ||
+                    'unknown-id';
+  
+  const officerName = officer?.officerName || 
+                      officer?.full_name || 
+                      officer?.profiles?.full_name ||
+                      'Unknown Officer';
+  
   const currentPosition = officer?.shiftInfo?.position || '';
   
-  if (!officerId) {
-    console.error('No officerId found in editingAssignment:', editingAssignment);
+  console.log('Extracted values:', { officerId, officerName, currentPosition });
+  
+  if (!officerId || officerId === 'unknown-id') {
+    console.error('Could not find officer ID in:', officer);
     toast.error("Cannot save: Officer ID not found");
     return;
   }
@@ -522,15 +554,15 @@ const handleSaveAssignment = () => {
     type: officer.shiftInfo?.scheduleType,
     positionName: officer.shiftInfo?.position,
     date: dateStr,
-    officerId: officerId, // Use the extracted officerId
+    officerId: officerId,
     shiftTypeId: selectedShiftId,
     currentPosition: currentPosition
   }, {
     onSuccess: () => {
-      // AUDIT LOGGING - Log the position change
+      // AUDIT LOGGING
       auditLogger.logPositionChange(
-        officerId, // Use the extracted officerId
-        officerName, // Use the extracted officerName
+        officerId,
+        officerName,
         currentPosition,
         officer.shiftInfo?.position || currentPosition,
         userEmail,

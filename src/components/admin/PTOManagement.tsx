@@ -180,9 +180,7 @@ if (currentUser) {
     new Date().toISOString(),
     hoursValue,
     operation,
-    currentUser.id,
-    currentUser.email,
-    officer.full_name // Pass the officer's name
+    officer.full_name // Just pass the officer name
   );
       }
     },

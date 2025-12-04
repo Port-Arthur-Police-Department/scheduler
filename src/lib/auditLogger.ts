@@ -106,6 +106,105 @@ export const auditLogger = {
     }
   },
 
+  // Helper to format field names for display
+  formatFieldName(field: string): string {
+    const fieldNames: Record<string, string> = {
+      'full_name': 'name',
+      'badge_number': 'badge number',
+      'hire_date': 'hire date',
+      'promotion_date_sergeant': 'sergeant promotion date',
+      'promotion_date_lieutenant': 'lieutenant promotion date',
+      'service_credit_override': 'service credit adjustment',
+      'vacation_hours': 'vacation hours',
+      'sick_hours': 'sick hours',
+      'comp_hours': 'comp hours',
+      'holiday_hours': 'holiday hours'
+    };
+    
+    return fieldNames[field] || field.replace(/_/g, ' ');
+  },
+
+  // Helper to format values for display
+  formatValueForDisplay(field: string, value: any): string {
+    if (value == null) return 'None';
+    
+    // Format dates
+    if (field.includes('_date')) {
+      try {
+        return new Date(value).toLocaleDateString();
+      } catch {
+        return String(value);
+      }
+    }
+    
+    // Format hours
+    if (field.includes('_hours')) {
+      return `${value} hours`;
+    }
+    
+    // For sensitive fields like emails, show partial info
+    if (field === 'email') {
+      const emailStr = String(value);
+      if (emailStr.includes('@')) {
+        const [user, domain] = emailStr.split('@');
+        return `${user.substring(0, 3)}...@${domain}`;
+      }
+      return emailStr;
+    }
+    
+    // For phone numbers, format
+    if (field === 'phone') {
+      const phone = String(value).replace(/\D/g, '');
+      if (phone.length === 10) {
+        return `(${phone.substring(0,3)}) ${phone.substring(3,6)}-${phone.substring(6)}`;
+      }
+    }
+    
+    return String(value);
+  },
+
+  // Helper function to generate detailed change descriptions
+  generateProfileChangeDescription(officerName: string, oldData: any, newData: any): string {
+    const changes: string[] = [];
+    
+    // Define fields to track changes for
+    const trackedFields = [
+      'full_name', 'email', 'phone', 'badge_number', 'rank',
+      'hire_date', 'promotion_date_sergeant', 'promotion_date_lieutenant',
+      'service_credit_override', 'vacation_hours', 'sick_hours',
+      'comp_hours', 'holiday_hours'
+    ];
+    
+    for (const field of trackedFields) {
+      const oldValue = oldData?.[field];
+      const newValue = newData[field];
+      
+      // Handle null/undefined comparisons
+      if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
+        const oldDisplay = this.formatValueForDisplay(field, oldValue);
+        const newDisplay = this.formatValueForDisplay(field, newValue);
+        const fieldName = this.formatFieldName(field);
+        
+        if (oldData === null) {
+          // This is a creation, not an update
+          changes.push(`set ${fieldName} to ${newDisplay}`);
+        } else if (newValue == null) {
+          changes.push(`removed ${fieldName} (was ${oldDisplay})`);
+        } else if (oldValue == null) {
+          changes.push(`added ${fieldName} as ${newDisplay}`);
+        } else {
+          changes.push(`changed ${fieldName} from ${oldDisplay} to ${newDisplay}`);
+        }
+      }
+    }
+    
+    if (changes.length === 0) {
+      return `Updated profile for ${officerName} (no field changes detected)`;
+    }
+    
+    return `Updated profile for ${officerName}: ${changes.join(', ')}`;
+  },
+
   // Convenience methods for common actions
   async logLogin(userEmail: string, ipAddress?: string, userAgent?: string) {
     const ip = ipAddress || await getClientIP();
@@ -143,128 +242,35 @@ export const auditLogger = {
     });
   },
 
-// In auditLogger.ts - ENHANCED VERSION
-async logProfileUpdate(
-  officerId: string, 
-  officerName: string,
-  oldValues: any, 
-  newValues: any,
-  userId?: string,
-  userEmail?: string,
-  description?: string
-) {
-  // If description is provided, use it; otherwise generate detailed description
-  let detailedDescription = description;
-  
-  if (!detailedDescription && oldValues && newValues) {
-    detailedDescription = this.generateProfileChangeDescription(officerName, oldValues, newValues);
-  } else if (!detailedDescription) {
-    detailedDescription = oldValues 
-      ? `Updated profile for ${officerName}` 
-      : `Created profile for ${officerName}`;
-  }
-
-  await this.log({
-    action_type: 'profile_update',
-    table_name: 'profiles',
-    record_id: officerId,
-    old_values: oldValues,
-    new_values: newValues,
-    description: detailedDescription
-  });
-},
-
-// NEW HELPER FUNCTION to generate detailed change descriptions
-generateProfileChangeDescription(officerName: string, oldData: any, newData: any): string {
-  const changes: string[] = [];
-  
-  // Define fields to track changes for
-  const trackedFields = [
-    'full_name', 'email', 'phone', 'badge_number', 'rank',
-    'hire_date', 'promotion_date_sergeant', 'promotion_date_lieutenant',
-    'service_credit_override', 'vacation_hours', 'sick_hours',
-    'comp_hours', 'holiday_hours'
-  ];
-  
-  for (const field of trackedFields) {
-    const oldValue = oldData[field];
-    const newValue = newData[field];
+  async logProfileUpdate(
+    officerId: string, 
+    officerName: string,
+    oldValues: any, 
+    newValues: any,
+    userId?: string,
+    userEmail?: string,
+    description?: string
+  ) {
+    // If description is provided, use it; otherwise generate detailed description
+    let detailedDescription = description;
     
-    // Handle null/undefined comparisons
-    if (oldValue !== newValue && !(oldValue == null && newValue == null)) {
-      const oldDisplay = this.formatValueForDisplay(field, oldValue);
-      const newDisplay = this.formatValueForDisplay(field, newValue);
-      
-      if (oldData === null) {
-        // This is a creation, not an update
-        changes.push(`set ${this.formatFieldName(field)} to ${newDisplay}`);
-      } else if (newData === null) {
-        changes.push(`removed ${this.formatFieldName(field)} (was ${oldDisplay})`);
-      } else {
-        changes.push(`changed ${this.formatFieldName(field)} from ${oldDisplay} to ${newDisplay}`);
-      }
+    if (!detailedDescription && oldValues && newValues) {
+      detailedDescription = this.generateProfileChangeDescription(officerName, oldValues, newValues);
+    } else if (!detailedDescription) {
+      detailedDescription = oldValues 
+        ? `Updated profile for ${officerName}` 
+        : `Created profile for ${officerName}`;
     }
-  }
-  
-  if (changes.length === 0) {
-    return `Updated profile for ${officerName} (no field changes detected)`;
-  }
-  
-  return `Updated profile for ${officerName}: ${changes.join(', ')}`;
-},
 
-// Helper to format field names for display
-formatFieldName(field: string): string {
-  const fieldNames: Record<string, string> = {
-    'full_name': 'name',
-    'badge_number': 'badge number',
-    'hire_date': 'hire date',
-    'promotion_date_sergeant': 'sergeant promotion date',
-    'promotion_date_lieutenant': 'lieutenant promotion date',
-    'service_credit_override': 'service credit adjustment',
-    'vacation_hours': 'vacation hours',
-    'sick_hours': 'sick hours',
-    'comp_hours': 'comp hours',
-    'holiday_hours': 'holiday hours'
-  };
-  
-  return fieldNames[field] || field.replace('_', ' ');
-},
-
-// Helper to format values for display
-formatValueForDisplay(field: string, value: any): string {
-  if (value == null) return 'None';
-  
-  // Format dates
-  if (field.includes('_date')) {
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch {
-      return String(value);
-    }
-  }
-  
-  // Format hours
-  if (field.includes('_hours')) {
-    return `${value} hours`;
-  }
-  
-  // For sensitive fields like emails, show partial info
-  if (field === 'email') {
-    const [user, domain] = String(value).split('@');
-    return `${user.substring(0, 3)}...@${domain}`;
-  }
-  
-  // For phone numbers, format
-  if (field === 'phone') {
-    const phone = String(value).replace(/\D/g, '');
-    if (phone.length === 10) {
-      return `(${phone.substring(0,3)}) ${phone.substring(3,6)}-${phone.substring(6)}`;
-    }
-  }
-  
-  return String(value);
-}
+    await this.log({
+      action_type: 'profile_update',
+      table_name: 'profiles',
+      record_id: officerId,
+      old_values: oldValues,
+      new_values: newValues,
+      description: detailedDescription
+    });
+  },
 
   async logScheduleChange(action: string, scheduleId: string, details: string, oldValues?: any, newValues?: any) {
     await this.log({
@@ -493,6 +499,75 @@ formatValueForDisplay(field: string, value: any): string {
       action_type: 'ERROR',
       description: `${errorType}: ${errorMessage}`,
       new_values: context
+    });
+  },
+
+  // Additional specialized profile logging functions (optional - use if you want more granular control)
+  async logProfileRankChange(
+    officerId: string,
+    officerName: string,
+    oldRank: string,
+    newRank: string,
+    userEmail?: string
+  ) {
+    await this.log({
+      action_type: 'PROFILE_RANK_CHANGE',
+      table_name: 'profiles',
+      record_id: officerId,
+      description: `Changed rank from "${oldRank}" to "${newRank}" for ${officerName}`,
+      old_values: { rank: oldRank },
+      new_values: { rank: newRank }
+    });
+  },
+
+  async logProfileDateChange(
+    officerId: string,
+    officerName: string,
+    dateType: 'hire' | 'sergeant_promotion' | 'lieutenant_promotion',
+    oldDate: string | null,
+    newDate: string | null,
+    userEmail?: string
+  ) {
+    const dateNames = {
+      'hire': 'hire date',
+      'sergeant_promotion': 'sergeant promotion date',
+      'lieutenant_promotion': 'lieutenant promotion date'
+    };
+    
+    const oldDisplay = oldDate ? new Date(oldDate).toLocaleDateString() : 'None';
+    const newDisplay = newDate ? new Date(newDate).toLocaleDateString() : 'None';
+    
+    await this.log({
+      action_type: 'PROFILE_DATE_CHANGE',
+      table_name: 'profiles',
+      record_id: officerId,
+      description: `Changed ${dateNames[dateType]} from ${oldDisplay} to ${newDisplay} for ${officerName}`,
+      old_values: { [dateType]: oldDate },
+      new_values: { [dateType]: newDate }
+    });
+  },
+
+  async logProfileContactChange(
+    officerId: string,
+    officerName: string,
+    field: 'email' | 'phone' | 'badge_number',
+    oldValue: string,
+    newValue: string,
+    userEmail?: string
+  ) {
+    const fieldNames = {
+      'email': 'email',
+      'phone': 'phone number',
+      'badge_number': 'badge number'
+    };
+    
+    await this.log({
+      action_type: 'PROFILE_CONTACT_CHANGE',
+      table_name: 'profiles',
+      record_id: officerId,
+      description: `Changed ${fieldNames[field]} from "${oldValue}" to "${newValue}" for ${officerName}`,
+      old_values: { [field]: oldValue },
+      new_values: { [field]: newValue }
     });
   }
 };

@@ -12,6 +12,7 @@ import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { auditLogger } from "@/lib/auditLogger";
+import { CalendarIcon, TrendingUp } from "lucide-react";
 
 export const StaffManagement = () => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);
@@ -188,41 +189,75 @@ export const StaffManagement = () => {
                             <span className="text-muted-foreground">Holiday:</span>
                             <span className="font-medium">{officer.holiday_hours || 0}h</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Award className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-muted-foreground">Service Credit:</span>
-                            <div className="space-y-0.5">
-                              <span className="font-medium">{officer.service_credit?.toFixed(1) || 0} yrs</span>
-                              {officer.hire_date && (
-                                <p className="text-xs text-muted-foreground">
-                                  Since {format(new Date(officer.hire_date), "MMM yyyy")}
-                                </p>
-                              )}
-                              {officer.service_credit_override !== null && (
-                                <p className="text-xs text-amber-600 dark:text-amber-500">
-                                  (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                         <div className="space-y-2 text-sm">
+  <div className="flex items-center gap-1">
+    <Award className="h-3 w-3 text-muted-foreground" />
+    <span className="text-muted-foreground">Service Credit:</span>
+    <span className="font-medium ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
+    {officer.service_credit_override !== null && (
+      <span className="text-xs text-amber-600 dark:text-amber-500 ml-1">
+        (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
+      </span>
+    )}
+  </div>
+  
+  {/* Promotion History Section */}
+  <div className="space-y-1 text-xs">
+    {officer.hire_date && (
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <CalendarIcon className="h-3 w-3" />
+        <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
+      </div>
+    )}
+    {officer.promotion_date_sergeant && (
+      <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+        <TrendingUp className="h-3 w-3" />
+        <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+      </div>
+    )}
+    {officer.promotion_date_lieutenant && (
+      <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+        <TrendingUp className="h-3 w-3" />
+        <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+      </div>
+    )}
+  </div>
+</div>
                       ) : (
                         // Show when PTO balances are disabled
                         <div className="mt-2 text-sm">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Award className="h-3 w-3" />
-                            <span>Service Credit:</span>
-                            <span className="font-medium">{officer.service_credit?.toFixed(1) || 0} yrs</span>
-                            {officer.hire_date && (
-                              <span className="text-xs">
-                                (Since {format(new Date(officer.hire_date), "MMM yyyy")})
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground italic">
-                            PTO balances are currently managed as indefinite
-                          </div>
-                        </div>
+  <div className="flex items-center gap-1 text-muted-foreground">
+    <Award className="h-3 w-3" />
+    <span>Service Credit:</span>
+    <span className="font-medium ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
+  </div>
+  
+  {/* Promotion History Section */}
+  <div className="space-y-1 text-xs ml-4 mt-1">
+    {officer.hire_date && (
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <CalendarIcon className="h-2 w-2" />
+        <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
+      </div>
+    )}
+    {officer.promotion_date_sergeant && (
+      <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+        <TrendingUp className="h-2 w-2" />
+        <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+      </div>
+    )}
+    {officer.promotion_date_lieutenant && (
+      <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+        <TrendingUp className="h-2 w-2" />
+        <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+      </div>
+    )}
+  </div>
+  
+  <div className="mt-1 text-xs text-muted-foreground italic">
+    PTO balances are currently managed as indefinite
+  </div>
+</div>
                       )}
                     </div>
                     <div className="flex flex-col gap-2">

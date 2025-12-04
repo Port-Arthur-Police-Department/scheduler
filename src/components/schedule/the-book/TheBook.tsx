@@ -75,12 +75,29 @@ const TheBook = ({
   const [editingAssignment, setEditingAssignment] = useState<{ officer: any; dateStr: string } | null>(null);
 
   // Use consolidated mutations hook
-  const {
-    updatePositionMutation,
-    removeOfficerMutation,
-    removePTOMutation,
-    queryKey
-  } = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
+const {
+  updatePositionMutation,
+  removeOfficerMutation,  // This should be defined
+  removePTOMutation,
+  queryKey
+} = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
+
+// If removeOfficerMutation is still undefined, add a fallback
+const safeRemoveOfficerMutation = removeOfficerMutation || {
+  mutate: () => {
+    console.error("removeOfficerMutation is not available");
+    toast.error("Cannot remove officer: Mutation not available");
+  },
+  isPending: false
+};
+
+const safeRemovePTOMutation = removePTOMutation || {
+  mutate: () => {
+    console.error("removePTOMutation is not available");
+    toast.error("Cannot remove PTO: Mutation not available");
+  },
+  isPending: false
+};
 
   // Get shift types
   const { data: shiftTypes, isLoading: shiftsLoading } = useQuery({

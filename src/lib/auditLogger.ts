@@ -143,16 +143,25 @@ export const auditLogger = {
     });
   },
 
-  async logProfileUpdate(userId: string, oldValues: any, newValues: any) {
-    await this.log({
-      action_type: 'profile_update',
-      table_name: 'profiles',
-      record_id: userId,
-      old_values: oldValues,
-      new_values: newValues,
-      description: `Updated profile for user ${userId}`
-    });
-  },
+// In auditLogger.ts - FINAL FIXED VERSION
+async logProfileUpdate(
+  officerId: string, 
+  officerName: string, // Second parameter
+  oldValues: any, 
+  newValues: any,
+  userId?: string, // Optional: user who made the change
+  userEmail?: string, // Optional: user email
+  description?: string // Optional: custom description
+) {
+  await this.log({
+    action_type: 'profile_update',
+    table_name: 'profiles',
+    record_id: officerId,
+    old_values: oldValues,
+    new_values: newValues,
+    description: description || `Updated profile for ${officerName}`
+  });
+},
 
   async logScheduleChange(action: string, scheduleId: string, details: string, oldValues?: any, newValues?: any) {
     await this.log({

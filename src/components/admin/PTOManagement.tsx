@@ -173,16 +173,17 @@ export const PTOManagement = () => {
       if (error) throw error;
 
       // AUDIT LOGGING: Log PTO adjustment
-      if (currentUser) {
-        await auditLogger.logPTOAssignment(
-          selectedOfficer,
-          ptoType,
-          new Date().toISOString(),
-          hoursValue,
-          operation,
-          currentUser.id,
-          currentUser.email
-        );
+if (currentUser) {
+  await auditLogger.logPTOAssignment(
+    selectedOfficer,
+    ptoType,
+    new Date().toISOString(),
+    hoursValue,
+    operation,
+    currentUser.id,
+    currentUser.email,
+    officer.full_name // Pass the officer's name
+  );
       }
     },
     onSuccess: () => {

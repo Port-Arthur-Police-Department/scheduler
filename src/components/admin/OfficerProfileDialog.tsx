@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Award, Clock, TrendingUp } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { auditLogger } from "@/lib/auditLogger";
@@ -45,16 +45,50 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
   
+  // Helper function to parse dates without timezone issues
+  const parseDateWithoutTimezone = (dateString: string | null): Date | undefined => {
+    if (!dateString) return undefined;
+    
+    try {
+      // Split the date string and parse it manually to avoid timezone issues
+      const [year, month, day] = dateString.split('-').map(Number);
+      
+      // Create a date at local time (not UTC)
+      const date = new Date(year, month - 1, day);
+      
+      // Validate the date
+      if (isValid(date)) {
+        return date;
+      }
+    } catch (error) {
+      console.error("Error parsing date:", dateString, error);
+    }
+    
+    return undefined;
+  };
+
+  // Helper function to format date for input[type="date"]
+  const formatDateForInput = (date: Date | undefined): string => {
+    if (!date) return "";
+    
+    // Format as YYYY-MM-DD without timezone adjustment
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  };
+
   // Initialize state with defaults or existing officer data
-  const [hireDate, setHireDate] = useState<Date | undefined>(
-    officer?.hire_date ? new Date(officer.hire_date) : undefined
-  );
-  const [promotionDateSergeant, setPromotionDateSergeant] = useState<Date | undefined>(
-    officer?.promotion_date_sergeant ? new Date(officer.promotion_date_sergeant) : undefined
-  );
-  const [promotionDateLieutenant, setPromotionDateLieutenant] = useState<Date | undefined>(
-    officer?.promotion_date_lieutenant ? new Date(officer.promotion_date_lieutenant) : undefined
-  );
+  const [hireDate, setHireDate] = useState<Date | undefined>();
+  const [hireDateInput, setHireDateInput] = useState<string>("");
+  
+  const [promotionDateSergeant, setPromotionDateSergeant] = useState<Date | undefined>();
+  const [promotionDateSergeantInput, setPromotionDateSergeantInput] = useState<string>("");
+  
+  const [promotionDateLieutenant, setPromotionDateLieutenant] = useState<Date | undefined>();
+  const [promotionDateLieutenantInput, setPromotionDateLieutenantInput] = useState<string>("");
+  
   const [serviceCreditOverride, setServiceCreditOverride] = useState<string>(
     officer?.service_credit_override?.toString() || ""
   );
@@ -74,9 +108,20 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   // Reset form when dialog opens/closes or officer changes
   useEffect(() => {
     if (open) {
-      setHireDate(officer?.hire_date ? new Date(officer.hire_date) : undefined);
-      setPromotionDateSergeant(officer?.promotion_date_sergeant ? new Date(officer.promotion_date_sergeant) : undefined);
-      setPromotionDateLieutenant(officer?.promotion_date_lieutenant ? new Date(officer.promotion_date_lieutenant) : undefined);
+      // Parse dates without timezone issues
+      const parsedHireDate = parseDateWithoutTimezone(officer?.hire_date || null);
+      const parsedSergeantDate = parseDateWithoutTimezone(officer?.promotion_date_sergeant || null);
+      const parsedLieutenantDate = parseDateWithoutTimezone(officer?.promotion_date_lieutenant || null);
+      
+      setHireDate(parsedHireDate);
+      setHireDateInput(parsedHireDate ? formatDateForInput(parsedHireDate) : "");
+      
+      setPromotionDateSergeant(parsedSergeantDate);
+      setPromotionDateSergeantInput(parsedSergeantDate ? formatDateForInput(parsedSergeantDate) : "");
+      
+      setPromotionDateLieutenant(parsedLieutenantDate);
+      setPromotionDateLieutenantInput(parsedLieutenantDate ? formatDateForInput(parsedLieutenantDate) : "");
+      
       setServiceCreditOverride(officer?.service_credit_override?.toString() || "");
       setFormData({
         full_name: officer?.full_name || "",
@@ -122,18 +167,34 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         .eq("id", officer.id)
         .single();
 
-      // Prepare profile data
+      // Prepare profile data - use the input values directly
       const profileData: any = {
         full_name: data.full_name,
         email: data.email,
         phone: data.phone || null,
         badge_number: data.badge_number || null,
         rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
-        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-        promotion_date_sergeant: promotionDateSergeant ? format(promotionDateSergeant, "yyyy-MM-dd") : null,
-        promotion_date_lieutenant: promotionDateLieutenant ? format(promotionDateLieutenant, "yyyy-MM-dd") : null,
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
       };
+
+      // Add dates using the input values to avoid timezone conversion
+      if (hireDateInput) {
+        profileData.hire_date = hireDateInput;
+      } else {
+        profileData.hire_date = null;
+      }
+      
+      if (promotionDateSergeantInput) {
+        profileData.promotion_date_sergeant = promotionDateSergeantInput;
+      } else {
+        profileData.promotion_date_sergeant = null;
+      }
+      
+      if (promotionDateLieutenantInput) {
+        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+      } else {
+        profileData.promotion_date_lieutenant = null;
+      }
 
       // Only include PTO balances if they are enabled in settings
       if (settings?.show_pto_balances) {
@@ -206,11 +267,27 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         phone: data.phone,
         badge_number: data.badge_number,
         rank: data.rank,
-        hire_date: hireDate ? format(hireDate, "yyyy-MM-dd") : null,
-        promotion_date_sergeant: promotionDateSergeant ? format(promotionDateSergeant, "yyyy-MM-dd") : null,
-        promotion_date_lieutenant: promotionDateLieutenant ? format(promotionDateLieutenant, "yyyy-MM-dd") : null,
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
       };
+
+      // Add dates using input values
+      if (hireDateInput) {
+        profileData.hire_date = hireDateInput;
+      } else {
+        profileData.hire_date = null;
+      }
+      
+      if (promotionDateSergeantInput) {
+        profileData.promotion_date_sergeant = promotionDateSergeantInput;
+      } else {
+        profileData.promotion_date_sergeant = null;
+      }
+      
+      if (promotionDateLieutenantInput) {
+        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+      } else {
+        profileData.promotion_date_lieutenant = null;
+      }
 
       // Only include PTO balances if they are enabled in settings
       if (settings?.show_pto_balances) {
@@ -257,6 +334,37 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     },
   })
 
+  // Handle date input changes
+  const handleHireDateInputChange = (value: string) => {
+    setHireDateInput(value);
+    if (value) {
+      const [year, month, day] = value.split('-').map(Number);
+      setHireDate(new Date(year, month - 1, day));
+    } else {
+      setHireDate(undefined);
+    }
+  };
+
+  const handleSergeantDateInputChange = (value: string) => {
+    setPromotionDateSergeantInput(value);
+    if (value) {
+      const [year, month, day] = value.split('-').map(Number);
+      setPromotionDateSergeant(new Date(year, month - 1, day));
+    } else {
+      setPromotionDateSergeant(undefined);
+    }
+  };
+
+  const handleLieutenantDateInputChange = (value: string) => {
+    setPromotionDateLieutenantInput(value);
+    if (value) {
+      const [year, month, day] = value.split('-').map(Number);
+      setPromotionDateLieutenant(new Date(year, month - 1, day));
+    } else {
+      setPromotionDateLieutenant(undefined);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name || !formData.email) {
@@ -288,51 +396,35 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     }
   };
 
- // Replace the getCreditBreakdown function with this corrected version:
-const getCreditBreakdown = () => {
-  const now = new Date();
-  
-  // Helper function to parse dates correctly (avoid timezone issues)
-  const parseDateSafe = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    // Split and parse to avoid timezone issues
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
-
-  const hireDateObj = parseDateSafe(officer?.hire_date || null);
-  const sergeantDateObj = parseDateSafe(officer?.promotion_date_sergeant || null);
-  const lieutenantDateObj = parseDateSafe(officer?.promotion_date_lieutenant || null);
-
-  const calculateYears = (startDate: Date | null) => {
-    if (!startDate) return 0;
+  const getCreditBreakdown = () => {
+    const now = new Date();
     
-    const years = now.getFullYear() - startDate.getFullYear();
-    const months = now.getMonth() - startDate.getMonth();
-    const days = now.getDate() - startDate.getDate();
-    
-    // Calculate decimal years more accurately
-    let decimalYears = years + (months / 12) + (days / 365);
-    return Math.max(0, decimalYears);
-  };
+    const calculateYears = (startDate: Date | undefined) => {
+      if (!startDate) return 0;
+      
+      const years = now.getFullYear() - startDate.getFullYear();
+      const months = now.getMonth() - startDate.getMonth();
+      const days = now.getDate() - startDate.getDate();
+      
+      // Calculate decimal years more accurately
+      let decimalYears = years + (months / 12) + (days / 365);
+      return Math.max(0, decimalYears);
+    };
 
-  const hireDateYears = calculateYears(hireDateObj);
-  const sergeantYears = calculateYears(sergeantDateObj);
-  const lieutenantYears = calculateYears(lieutenantDateObj);
-  const override = Number(serviceCreditOverride) || 0;
-  const finalTotal = calculatedCredit;
-  
-  return {
-    totalHireYears: hireDateYears.toFixed(1),
-    sergeantYears: sergeantYears.toFixed(1),
-    lieutenantYears: lieutenantYears.toFixed(1),
-    override: override.toFixed(1),
-    finalTotal: finalTotal.toFixed(1),
-    hireDateObj,
-    sergeantDateObj,
-    lieutenantDateObj
+    const hireDateYears = calculateYears(hireDate);
+    const sergeantYears = calculateYears(promotionDateSergeant);
+    const lieutenantYears = calculateYears(promotionDateLieutenant);
+    const override = Number(serviceCreditOverride) || 0;
+    const finalTotal = calculatedCredit;
+    
+    return {
+      totalHireYears: hireDateYears.toFixed(1),
+      sergeantYears: sergeantYears.toFixed(1),
+      lieutenantYears: lieutenantYears.toFixed(1),
+      override: override.toFixed(1),
+      finalTotal: finalTotal.toFixed(1)
+    };
   };
-};
 
   const isPending = updateProfileMutation.isPending || createProfileMutation.isPending;
 
@@ -420,18 +512,9 @@ const getCreditBreakdown = () => {
                 <div className="flex gap-2">
                   <Input
                     type="date"
-                    value={hireDate ? format(hireDate, "yyyy-MM-dd") : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value) {
-                        // Parse date as local time to avoid timezone issues
-                        const [year, month, day] = value.split('-').map(Number);
-                        setHireDate(new Date(year, month - 1, day));
-                      } else {
-                        setHireDate(undefined);
-                      }
-                    }}
-                    max={format(new Date(), "yyyy-MM-dd")}
+                    value={hireDateInput}
+                    onChange={(e) => handleHireDateInputChange(e.target.value)}
+                    max={formatDateForInput(new Date())}
                     className="flex-1"
                   />
                   <Popover>
@@ -447,7 +530,15 @@ const getCreditBreakdown = () => {
                       <Calendar
                         mode="single"
                         selected={hireDate}
-                        onSelect={setHireDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            setHireDate(date);
+                            setHireDateInput(formatDateForInput(date));
+                          } else {
+                            setHireDate(undefined);
+                            setHireDateInput("");
+                          }
+                        }}
                         disabled={(date) => date > new Date()}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
@@ -490,18 +581,10 @@ const getCreditBreakdown = () => {
                 <div className="flex gap-2">
                   <Input
                     type="date"
-                    value={promotionDateSergeant ? format(promotionDateSergeant, "yyyy-MM-dd") : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value) {
-                        const [year, month, day] = value.split('-').map(Number);
-                        setPromotionDateSergeant(new Date(year, month - 1, day));
-                      } else {
-                        setPromotionDateSergeant(undefined);
-                      }
-                    }}
-                    max={format(new Date(), "yyyy-MM-dd")}
-                    min={hireDate ? format(hireDate, "yyyy-MM-dd") : undefined}
+                    value={promotionDateSergeantInput}
+                    onChange={(e) => handleSergeantDateInputChange(e.target.value)}
+                    max={formatDateForInput(new Date())}
+                    min={hireDateInput}
                     className="flex-1"
                   />
                   <Popover>
@@ -517,8 +600,17 @@ const getCreditBreakdown = () => {
                       <Calendar
                         mode="single"
                         selected={promotionDateSergeant}
-                        onSelect={setPromotionDateSergeant}
-                        disabled={(date) => date > new Date() || (hireDate ? date < hireDate : false)}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPromotionDateSergeant(date);
+                            setPromotionDateSergeantInput(formatDateForInput(date));
+                          } else {
+                            setPromotionDateSergeant(undefined);
+                            setPromotionDateSergeantInput("");
+                          }
+                        }}
+                        disabled={(date) => date > new Date() || 
+                          (hireDate ? date < hireDate : false)}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
                       />
@@ -538,19 +630,10 @@ const getCreditBreakdown = () => {
                 <div className="flex gap-2">
                   <Input
                     type="date"
-                    value={promotionDateLieutenant ? format(promotionDateLieutenant, "yyyy-MM-dd") : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value) {
-                        const [year, month, day] = value.split('-').map(Number);
-                        setPromotionDateLieutenant(new Date(year, month - 1, day));
-                      } else {
-                        setPromotionDateLieutenant(undefined);
-                      }
-                    }}
-                    max={format(new Date(), "yyyy-MM-dd")}
-                    min={promotionDateSergeant ? format(promotionDateSergeant, "yyyy-MM-dd") : 
-                         hireDate ? format(hireDate, "yyyy-MM-dd") : undefined}
+                    value={promotionDateLieutenantInput}
+                    onChange={(e) => handleLieutenantDateInputChange(e.target.value)}
+                    max={formatDateForInput(new Date())}
+                    min={promotionDateSergeantInput || hireDateInput}
                     className="flex-1"
                   />
                   <Popover>
@@ -566,7 +649,15 @@ const getCreditBreakdown = () => {
                       <Calendar
                         mode="single"
                         selected={promotionDateLieutenant}
-                        onSelect={setPromotionDateLieutenant}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPromotionDateLieutenant(date);
+                            setPromotionDateLieutenantInput(formatDateForInput(date));
+                          } else {
+                            setPromotionDateLieutenant(undefined);
+                            setPromotionDateLieutenantInput("");
+                          }
+                        }}
                         disabled={(date) => date > new Date() || 
                           (promotionDateSergeant ? date < promotionDateSergeant : 
                            hireDate ? date < hireDate : false)}

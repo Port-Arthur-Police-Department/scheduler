@@ -105,6 +105,29 @@ const getRankAbbreviation = (rank: string): string => {
   return rankMap[rank.toLowerCase()] || rank.toUpperCase().substring(0, 4);
 };
 
+// Helper function to calculate service credit
+const calculateServiceCredit = (rank: string, override?: number): number => {
+  // If there's an override, use it
+  if (override !== undefined && override !== null) {
+    return override;
+  }
+  
+  // Default service credit values by rank (you can adjust these)
+  const rankCreditMap: Record<string, number> = {
+    'probationary': 0,
+    'officer': 1,
+    'senior officer': 5,
+    'corporal': 8,
+    'sergeant': 12,
+    'lieutenant': 16,
+    'captain': 20,
+    'deputy chief': 25,
+    'chief': 30
+  };
+  
+  return rankCreditMap[rank?.toLowerCase()] || 0;
+};
+
 // Table drawing function for beat preferences
 const drawBeatPreferencesTable = (pdf: jsPDF, headers: string[], data: any[][], startY: number, margins: { left: number, right: number }, sectionColor?: number[]) => {
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -113,13 +136,14 @@ const drawBeatPreferencesTable = (pdf: jsPDF, headers: string[], data: any[][], 
   const getColumnWidths = (headers: string[]) => {
     const totalColumns = headers.length;
     const baseWidths = {
-      "OFFICER": 0.20,
+      "OFFICER": 0.18,
       "BADGE #": 0.10,
       "RANK": 0.10,
+      "SERVICE CREDIT": 0.12,
       "1ST CHOICE": 0.15,
       "2ND CHOICE": 0.15,
       "3RD CHOICE": 0.15,
-      "UNAVAILABLE": 0.25
+      "UNAVAILABLE": 0.20
     };
 
     return headers.map(header => {
@@ -210,7 +234,7 @@ const drawBeatPreferencesTable = (pdf: jsPDF, headers: string[], data: any[][], 
       }
       
       // Center specific columns
-      const centerColumns = ["BADGE #", "RANK"];
+      const centerColumns = ["BADGE #", "RANK", "SERVICE CREDIT"];
       
       if (centerColumns.includes(currentHeader)) {
         const textWidth = pdf.getTextWidth(displayText);
@@ -291,7 +315,12 @@ export const useBeatPreferencesPDFExport = () => {
       const dateWidth = pdf.getTextWidth(dateText);
       pdf.text(dateText, (pageWidth - dateWidth) / 2, 36);
 
-      yPosition = 45;
+      // Note about sorting
+      pdf.setFontSize(9);
+      pdf.setTextColor(COLORS.gray[0], COLORS.gray[1], COLORS.gray[2]);
+      pdf.text("Officers listed by service credit (most to least)", pageWidth / 2, 44, { align: "center" });
+
+      yPosition = 52;
 
       // Check if we have data
       if (!beatData.officers || beatData.officers.length === 0) {
@@ -299,16 +328,21 @@ export const useBeatPreferencesPDFExport = () => {
         pdf.setTextColor(150, 150, 150);
         pdf.text("No officer beat preferences available", pageWidth / 2, yPosition, { align: "center" });
       } else {
-        // Sort officers by last name for the PDF
-        const sortedOfficers = [...beatData.officers].sort((a, b) => 
-          getLastName(a.full_name).localeCompare(getLastName(b.full_name))
-        );
+        // Sort officers by service credit/seniority (MOST to LEAST)
+        const sortedOfficers = [...beatData.officers].sort((a, b) => {
+          const aCredit = calculateServiceCredit(a.rank, a.service_credit_override);
+          const bCredit = calculateServiceCredit(b.rank, b.service_credit_override);
+          
+          // Sort by service credit descending (most to least)
+          return bCredit - aCredit;
+        });
 
-        // Prepare table data
+        // Prepare table data with service credit column
         const tableData: any[][] = [];
         
         sortedOfficers.forEach((officer) => {
           const preferences = beatData.preferences.find(p => p.officer_id === officer.id);
+          const serviceCredit = calculateServiceCredit(officer.rank, officer.service_credit_override);
           
           // Format unavailable beats
           let unavailableText = "-";
@@ -323,6 +357,7 @@ export const useBeatPreferencesPDFExport = () => {
             getLastName(officer.full_name),
             officer.badge_number || "-",
             getRankAbbreviation(officer.rank),
+            serviceCredit.toString(),
             preferences?.first_choice || "-",
             preferences?.second_choice || "-",
             preferences?.third_choice || "-",
@@ -330,8 +365,8 @@ export const useBeatPreferencesPDFExport = () => {
           ]);
         });
 
-        // Draw table
-        const headers = ["OFFICER", "BADGE #", "RANK", "1ST CHOICE", "2ND CHOICE", "3RD CHOICE", "UNAVAILABLE"];
+        // Draw table with service credit column
+        const headers = ["OFFICER", "BADGE #", "RANK", "SERVICE CREDIT", "1ST CHOICE", "2ND CHOICE", "3RD CHOICE", "UNAVAILABLE"];
         yPosition = drawBeatPreferencesTable(pdf, headers, tableData, yPosition, { left: 15, right: 15 }, COLORS.primary);
         
         // Summary section
@@ -346,6 +381,22 @@ export const useBeatPreferencesPDFExport = () => {
         
         const summaryText = `Total Officers: ${sortedOfficers.length} | Officers with Full Preferences: ${officersWithFullPreferences}`;
         pdf.text(summaryText, 15, yPosition);
+        
+        // Service credit distribution
+        yPosition += 8;
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
+        
+        // Calculate service credit statistics
+        const serviceCredits = sortedOfficers.map(o => 
+          calculateServiceCredit(o.rank, o.service_credit_override)
+        );
+        const avgServiceCredit = serviceCredits.reduce((a, b) => a + b, 0) / serviceCredits.length;
+        const maxServiceCredit = Math.max(...serviceCredits);
+        const minServiceCredit = Math.min(...serviceCredits);
+        
+        const statsText = `Service Credit Range: ${minServiceCredit} - ${maxServiceCredit} | Average: ${avgServiceCredit.toFixed(1)}`;
+        pdf.text(statsText, 15, yPosition);
       }
 
       // Footer with generation time

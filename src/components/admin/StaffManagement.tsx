@@ -257,9 +257,9 @@ export const StaffManagement = () => {
   <div className="mt-1 text-xs text-muted-foreground italic">
     PTO balances are currently managed as indefinite
   </div>
-</div>
+
                       )}
-                  
+                  </div>
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-col gap-1">
                         {officer.roles && officer.roles.length > 0 ? (

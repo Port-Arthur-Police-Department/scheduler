@@ -212,23 +212,15 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
 
       if (error) throw error;
 
-      // AUDIT LOGGING: Log profile update
-const { data: { session } } = await supabase.auth.getSession();
-if (session) {
-  await auditLogger.log({
-    user_id: session.user.id,
-    user_email: session.user.email!,
-    action_type: 'profile_update',
-    table_name: 'profiles',
-    record_id: officer.id,
-    old_values: oldProfile,
-    new_values: profileData,
-    description: `Updated profile for ${officer.full_name} (ID: ${officer.id})`,
-    metadata: {
-      officer_name: officer.full_name,
-      officer_id: officer.id
-    }
-  });
+    // AUDIT LOGGING: Log profile update
+    if (currentUser) {
+      await auditLogger.logProfileUpdate(
+        officer.id,
+        oldProfile,
+        profileData,
+        currentUser.id,
+        currentUser.email
+      );
       }
 
       // Update user role based on new rank
@@ -320,22 +312,14 @@ if (session) {
       }
       
       // AUDIT LOGGING: Log profile creation
-const { data: { session } } = await supabase.auth.getSession();
-if (session && result.userId) {
-  await auditLogger.log({
-    user_id: session.user.id,
-    user_email: session.user.email!,
-    action_type: 'profile_creation',
-    table_name: 'profiles',
-    record_id: result.userId,
-    old_values: null,
-    new_values: profileData,
-    description: `Created new profile for ${formData.full_name}`,
-    metadata: {
-      officer_name: formData.full_name,
-      officer_id: result.userId
-    }
-  });
+    if (currentUser && result.userId) {
+      await auditLogger.logProfileUpdate(
+        result.userId,
+        null, // No old data for creation
+        profileData,
+        currentUser.id,
+        currentUser.email
+      );
       }
       
       return result

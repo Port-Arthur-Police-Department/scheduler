@@ -180,7 +180,6 @@ export const useBeatPreferencesPDFExport = () => {
           preferences?.first_choice || "-",
           preferences?.second_choice || "-",
           preferences?.third_choice || "-"
-          // REMOVED: unavailable column
         ];
       });
 
@@ -201,11 +200,11 @@ export const useBeatPreferencesPDFExport = () => {
           fillColor: [COLORS.primary[0], COLORS.primary[1], COLORS.primary[2]],
           textColor: 255,
           fontStyle: 'bold',
-          fontSize: 10, // Slightly larger for better readability
+          fontSize: 10,
           cellPadding: 4
         },
         bodyStyles: {
-          fontSize: 9, // Increased for better readability
+          fontSize: 9,
           textColor: COLORS.dark,
           cellPadding: 3
         },
@@ -221,19 +220,16 @@ export const useBeatPreferencesPDFExport = () => {
         },
         // UPDATED: Wider column widths for Rank and Seniority
         columnStyles: {
-          0: { cellWidth: 20 },  // Rank - INCREASED from 12 to 20
-          1: { cellWidth: 28 },  // Officer - slightly reduced to accommodate wider columns
-          2: { cellWidth: 22 },  // Badge # - slightly increased
-          3: { cellWidth: 25 },  // Seniority - INCREASED from 18 to 25
-          4: { cellWidth: 30 },  // 1st Choice - INCREASED from 25 to 30
-          5: { cellWidth: 30 },  // 2nd Choice - INCREASED from 25 to 30
-          6: { cellWidth: 30 }   // 3rd Choice - INCREASED from 25 to 30
+          0: { cellWidth: 20, halign: 'center' },  // Rank - centered and wider
+          1: { cellWidth: 28, halign: 'left' },    // Officer
+          2: { cellWidth: 22, halign: 'center' },  // Badge # - centered
+          3: { cellWidth: 25, halign: 'center' },  // Seniority - centered and wider
+          4: { cellWidth: 30, halign: 'center' },  // 1st Choice - centered
+          5: { cellWidth: 30, halign: 'center' },  // 2nd Choice - centered
+          6: { cellWidth: 30, halign: 'center' }   // 3rd Choice - centered
         },
         didDrawCell: (data) => {
-          // Reset text color for all cells
-          pdf.setTextColor(COLORS.dark[0], COLORS.dark[1], COLORS.dark[2]);
-          
-          // Only apply special colors to preference columns with data
+          // Apply color coding to preference columns
           if (data.column.index >= 4 && data.column.index <= 6 && data.cell.raw !== "-") {
             const colors = [
               [0, 100, 0], // Green for 1st choice
@@ -242,34 +238,26 @@ export const useBeatPreferencesPDFExport = () => {
             ];
             const colorIndex = data.column.index - 4;
             pdf.setTextColor(colors[colorIndex][0], colors[colorIndex][1], colors[colorIndex][2]);
-          }
-          
-          // Special handling for rank column - make sure "OFC" and other ranks display clearly
-          if (data.column.index === 0) {
-            // Center the rank text
-            const text = data.cell.raw.toString();
-            const textWidth = pdf.getTextWidth(text);
-            const cellWidth = data.cell.width;
-            const padding = (cellWidth - textWidth) / 2;
-            
-            if (padding > 0) {
-              pdf.text(text, data.cell.x + padding, data.cell.y + 5);
-              data.cell.textPos.x = data.cell.x; // Prevent default text rendering
-            }
+          } else {
+            // Default text color for other columns
+            pdf.setTextColor(COLORS.dark[0], COLORS.dark[1], COLORS.dark[2]);
           }
         },
         willDrawCell: (data) => {
-          // Ensure rank column text fits by reducing font size if needed
-          if (data.column.index === 0) {
+          // Ensure text fits by reducing font size if needed
+          if (data.cell.raw && typeof data.cell.raw === 'string') {
             const text = data.cell.raw.toString();
-            const textWidth = pdf.getTextWidth(text);
             const availableWidth = data.cell.width - 6; // Account for padding
+            
+            // Temporarily set font to measure text width
+            pdf.setFontSize(data.row.styles.fontSize);
+            const textWidth = pdf.getTextWidth(text);
             
             if (textWidth > availableWidth) {
               // Reduce font size if text is too wide
               const scaleFactor = availableWidth / textWidth;
               const newFontSize = Math.max(6, data.row.styles.fontSize * scaleFactor);
-              pdf.setFontSize(newFontSize);
+              data.row.styles.fontSize = newFontSize;
             }
           }
         }

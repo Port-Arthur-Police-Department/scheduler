@@ -499,51 +499,51 @@ const handleAssignPTO = (schedule: any, date: string, officerId: string, officer
 
 // In TheBook.tsx - Replace the handleRemovePTO function with this:
 
-const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-  console.log('Removing PTO:', { schedule, date, officerId });
+const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
+  console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
   
-  if (!schedule?.scheduleId || !officerId) {
-    console.error('Missing required data:', { scheduleId: schedule?.scheduleId, officerId });
-    toast.error("Invalid PTO data");
+  // Check if we have the required data
+  if (!schedule?.ptoData?.id) {
+    console.error('❌ Missing PTO data:', { 
+      hasSchedule: !!schedule, 
+      hasPTOData: !!schedule?.ptoData,
+      ptoDataId: schedule?.ptoData?.id 
+    });
+    toast.error("Cannot remove PTO: Missing PTO data");
     return;
   }
 
-  // Try to get the complete PTO data from the schedules
-  const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
-  if (!daySchedule) {
-    console.error('No schedule found for date:', date);
-    toast.error("Could not find schedule data");
+  if (!officerId) {
+    console.error('❌ Missing officer ID');
+    toast.error("Cannot remove PTO: Missing officer ID");
     return;
   }
 
-  const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
-  if (!officerData) {
-    console.error('No officer found for ID:', officerId);
-    toast.error("Could not find officer data");
-    return;
+  // Get officer name from schedule data for audit logging
+  let officerName = "Unknown Officer";
+  try {
+    // Try to find the officer in the current schedule data
+    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+    if (daySchedule) {
+      const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
+      officerName = officerData?.officerName || officerName;
+    }
+  } catch (error) {
+    console.error("Error getting officer name:", error);
   }
-
-  const ptoData = officerData.shiftInfo?.ptoData;
-  if (!ptoData) {
-    console.error('No PTO data found for officer:', officerId);
-    toast.error("No PTO data found");
-    return;
-  }
-
-  const officerName = officerData.officerName || "Unknown Officer";
 
   // Prepare the data for the mutation
   const ptoMutationData = {
-    id: ptoData.id,
+    id: schedule.ptoData.id, // This is the schedule_exceptions ID
     officerId: officerId,
     date: date,
-    shiftTypeId: schedule.shift?.id || selectedShiftId,
-    ptoType: ptoData.ptoType || "PTO",
-    startTime: ptoData.startTime || "00:00",
-    endTime: ptoData.endTime || "23:59"
+    shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
+    ptoType: schedule.ptoData.ptoType || "PTO",
+    startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
+    endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
   };
 
-  console.log('Calling removePTOMutation with:', ptoMutationData);
+  console.log('📋 Calling removePTOMutation with:', ptoMutationData);
 
   removePTOMutation.mutate(ptoMutationData, {
     onSuccess: () => {
@@ -553,14 +553,14 @@ const handleRemovePTO = async (schedule: any, date: string, officerId: string) =
         officerName,
         'removed',
         userEmail,
-        `Removed PTO for ${officerName} on ${date}`
+        `Removed PTO (${ptoMutationData.ptoType}) for ${officerName} on ${date}`
       );
       
-      toast.success("PTO removed successfully");
+      toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
     },
     onError: (error) => {
-      console.error('Error removing PTO:', error);
-      toast.error("Failed to remove PTO");
+      console.error('❌ Error removing PTO:', error);
+      toast.error(`Failed to remove PTO: ${error.message}`);
     }
   });
 };

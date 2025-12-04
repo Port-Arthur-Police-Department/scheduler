@@ -99,14 +99,6 @@ console.log("🔍 Mutations initialized:", {
   hasRemovePTOMutation: !!removePTOMutation
 });
 
-  // Use consolidated mutations hook
-const {
-  updatePositionMutation,
-  removeOfficerMutation,  // This should be defined
-  removePTOMutation,
-  queryKey
-} = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
-
 // If removeOfficerMutation is still undefined, add a fallback
 const safeRemoveOfficerMutation = removeOfficerMutation || {
   mutate: () => {

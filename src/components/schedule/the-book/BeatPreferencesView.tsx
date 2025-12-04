@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { useBeatPreferencesPDFExport } from "@/hooks/useBeatPreferencesPDFExport";
 
 interface BeatPreference {
   id?: string;
@@ -39,6 +40,7 @@ export const BeatPreferencesView: React.FC<Props> = ({
 }) => {
   const [showAllBeats, setShowAllBeats] = useState<boolean>(true);
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
+  const { exportToPDF } = useBeatPreferencesPDFExport();
   const [beatPreferences, setBeatPreferences] = useState<{
     [key: string]: BeatPreference
   }>({});
@@ -108,220 +110,25 @@ export const BeatPreferencesView: React.FC<Props> = ({
     enabled: !!selectedShiftId,
   });
 
-  const handleExportPDF = async () => {
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const pdf = new jsPDF("portrait", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      // Title
-      pdf.setFontSize(18);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(41, 128, 185);
-      pdf.text(
-        `Beat Preferences - ${shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Shift"}`,
-        pageWidth / 2,
-        20,
-        { align: "center" }
-      );
-
-      // Generation Date
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(
-        `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`,
-        pageWidth - 10,
-        30,
-        { align: "right" }
-      );
-
-      let yPosition = 40;
-
-      // Check if we have data
-      if (!beatData || beatData.officers.length === 0) {
-        pdf.setFontSize(12);
-        pdf.setTextColor(150, 150, 150);
-        pdf.text("No officer beat preferences available", pageWidth / 2, yPosition, { align: "center" });
-        pdf.save("Beat_Preferences.pdf");
-        return;
-      }
-
-      // Sort officers by last name for the PDF
-      const sortedOfficers = [...beatData.officers].sort((a, b) => 
-        getLastName(a.full_name).localeCompare(getLastName(b.full_name))
-      );
-
-      // Table headers
-      pdf.setFillColor(41, 128, 185);
-      pdf.rect(10, yPosition, pageWidth - 20, 8, "F");
-      
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-
-      let xPosition = 12;
-      
-      // Headers
-      pdf.text("Officer", xPosition, yPosition + 6);
-      xPosition += 35;
-      
-      pdf.text("Badge #", xPosition, yPosition + 6);
-      xPosition += 20;
-      
-      pdf.text("Rank", xPosition, yPosition + 6);
-      xPosition += 20;
-      
-      pdf.text("1st Choice", xPosition, yPosition + 6);
-      xPosition += 25;
-      
-      pdf.text("2nd Choice", xPosition, yPosition + 6);
-      xPosition += 25;
-      
-      pdf.text("3rd Choice", xPosition, yPosition + 6);
-      xPosition += 25;
-      
-      pdf.text("Unavailable", xPosition, yPosition + 6);
-
-      yPosition += 10;
-
-      // Officer rows
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(0, 0, 0);
-
-      const rowHeight = 8;
-      const maxRowsPerPage = Math.floor((pageHeight - yPosition - 20) / rowHeight);
-
-      sortedOfficers.forEach((officer, index) => {
-        // Check if we need a new page
-        if (index > 0 && index % maxRowsPerPage === 0) {
-          pdf.addPage();
-          yPosition = 20;
-          
-          // Add headers to new page
-          pdf.setFillColor(41, 128, 185);
-          pdf.rect(10, yPosition, pageWidth - 20, 8, "F");
-          
-          pdf.setFontSize(10);
-          pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(255, 255, 255);
-
-          xPosition = 12;
-          pdf.text("Officer", xPosition, yPosition + 6);
-          xPosition += 35;
-          pdf.text("Badge #", xPosition, yPosition + 6);
-          xPosition += 20;
-          pdf.text("Rank", xPosition, yPosition + 6);
-          xPosition += 20;
-          pdf.text("1st Choice", xPosition, yPosition + 6);
-          xPosition += 25;
-          pdf.text("2nd Choice", xPosition, yPosition + 6);
-          xPosition += 25;
-          pdf.text("3rd Choice", xPosition, yPosition + 6);
-          xPosition += 25;
-          pdf.text("Unavailable", xPosition, yPosition + 6);
-
-          yPosition += 10;
-          pdf.setFontSize(9);
-          pdf.setFont("helvetica", "normal");
-          pdf.setTextColor(0, 0, 0);
-        }
-
-        const preferences = beatData.preferences.find(p => p.officer_id === officer.id);
-        
-        // Row background - alternate colors
-        if (index % 2 === 0) {
-          pdf.setFillColor(245, 245, 245);
-          pdf.rect(10, yPosition, pageWidth - 20, rowHeight, "F");
-        }
-
-        xPosition = 12;
-        
-        // Officer name (last name only)
-        pdf.text(getLastName(officer.full_name), xPosition, yPosition + 6);
-        xPosition += 35;
-        
-        // Badge number
-        pdf.text(officer.badge_number || "-", xPosition, yPosition + 6);
-        xPosition += 20;
-        
-        // Rank
-        pdf.text(getRankAbbreviation(officer.rank), xPosition, yPosition + 6);
-        xPosition += 20;
-        
-        // 1st Choice
-        if (preferences?.first_choice) {
-          pdf.setTextColor(0, 100, 0); // Green
-          pdf.text(preferences.first_choice, xPosition, yPosition + 6);
-        } else {
-          pdf.setTextColor(150, 150, 150); // Gray
-          pdf.text("-", xPosition, yPosition + 6);
-        }
-        xPosition += 25;
-        
-        // 2nd Choice
-        if (preferences?.second_choice) {
-          pdf.setTextColor(0, 0, 150); // Blue
-          pdf.text(preferences.second_choice, xPosition, yPosition + 6);
-        } else {
-          pdf.setTextColor(150, 150, 150);
-          pdf.text("-", xPosition, yPosition + 6);
-        }
-        xPosition += 25;
-        
-        // 3rd Choice
-        if (preferences?.third_choice) {
-          pdf.setTextColor(128, 0, 128); // Purple
-          pdf.text(preferences.third_choice, xPosition, yPosition + 6);
-        } else {
-          pdf.setTextColor(150, 150, 150);
-          pdf.text("-", xPosition, yPosition + 6);
-        }
-        xPosition += 25;
-        
-        // Unavailable beats (truncated if too long)
-        if (preferences?.unavailable_beats && preferences.unavailable_beats.length > 0) {
-          pdf.setTextColor(150, 0, 0); // Red
-          const unavailableText = preferences.unavailable_beats.join(', ');
-          if (unavailableText.length > 20) {
-            pdf.text(unavailableText.substring(0, 20) + "...", xPosition, yPosition + 6);
-          } else {
-            pdf.text(unavailableText, xPosition, yPosition + 6);
-          }
-        } else {
-          pdf.setTextColor(150, 150, 150);
-          pdf.text("-", xPosition, yPosition + 6);
-        }
-
-        // Reset text color for next row
-        pdf.setTextColor(0, 0, 0);
-        
-        yPosition += rowHeight;
-      });
-
-      // Footer
-      pdf.setFontSize(8);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(
-        `Total Officers: ${sortedOfficers.length} | Officers with Preferences: ${beatData.preferences.filter(p => p.first_choice && p.second_choice && p.third_choice).length}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: "center" }
-      );
-
-      const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name.replace(/\s+/g, "_") || "Shift";
-      const filename = `Beat_Preferences_${shiftName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      
-      pdf.save(filename);
-      
+const handleExportPDF = async () => {
+  try {
+    const result = await exportToPDF({
+      selectedDate: new Date(), // Or pass your selected date
+      shiftName: shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Shift",
+      shiftId: selectedShiftId,
+      beatData: beatData
+    });
+    
+    if (result.success) {
       toast.success("PDF exported successfully");
-    } catch (error) {
-      console.error("PDF export error:", error);
+    } else {
       toast.error("Error exporting PDF");
     }
-  };
+  } catch (error) {
+    console.error("PDF export error:", error);
+    toast.error("Error exporting PDF");
+  }
+};
 
   const handleEditPreferences = (officerId: string) => {
     const officer = beatData?.officers.find(o => o.id === officerId);

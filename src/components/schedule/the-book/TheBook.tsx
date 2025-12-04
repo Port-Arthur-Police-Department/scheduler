@@ -685,22 +685,22 @@ const viewProps = {
     goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
     goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
   },
-    onEventHandlers: {
-      onAssignPTO: handleAssignPTO,
-      onRemovePTO: handleRemovePTO,
-      onEditAssignment: handleEditAssignment,
-      onRemoveOfficer: handleRemoveOfficer,
-    },
-    mutations: {
-      removeOfficerMutation,
-      removePTOMutation,
-    },
-    navigateToDailySchedule,
-    getLastName,
-    getRankAbbreviation,
-    getRankPriority,
-    isSupervisorByRank,
-  };
+  onEventHandlers: {
+    onAssignPTO: handleAssignPTO,
+    onRemovePTO: handleRemovePTO,
+    onEditAssignment: handleEditAssignment,
+    onRemoveOfficer: handleRemoveOfficer,
+  },
+  mutations: {
+    removeOfficerMutation: safeRemoveOfficerMutation,  // Use the safe version
+    removePTOMutation: safeRemovePTOMutation,          // Use the safe version
+  },
+  navigateToDailySchedule,
+  getLastName,
+  getRankAbbreviation,
+  getRankPriority,
+  isSupervisorByRank,
+};
 
 // In TheBook.tsx - Update the renderView function
 const renderView = () => {

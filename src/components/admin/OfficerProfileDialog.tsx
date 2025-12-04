@@ -222,7 +222,7 @@ mutationFn: async (data: typeof formData) => {
       profileData,
       currentUser.id,
       currentUser.email,
-      `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
+     // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
     );
   } // <-- THIS CLOSING BRACE WAS MISSING
 
@@ -323,7 +323,7 @@ const createProfileMutation = useMutation({
         profileData,
         currentUser.id,
         currentUser.email,
-        `Created profile for ${data.full_name}`
+      //  `Created profile for ${data.full_name}`
       );
     } // <-- THIS CLOSING BRACE WAS ALSO MISSING
     

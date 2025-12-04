@@ -1,5 +1,5 @@
-// BeatPreferencesView.tsx - Updated with PDF Export
-import React, { useState } from 'react';
+// BeatPreferencesView.tsx - Updated with service credit sorting
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,15 @@ interface BeatPreference {
   updated_at?: string;
 }
 
+interface OfficerWithCredit {
+  id: string;
+  full_name: string;
+  badge_number?: string | null;
+  rank?: string | null;
+  service_credit_override?: number | null;
+  service_credit?: number;
+}
+
 interface Props {
   isAdminOrSupervisor: boolean;
   selectedShiftId: string;
@@ -40,10 +49,11 @@ export const BeatPreferencesView: React.FC<Props> = ({
 }) => {
   const [showAllBeats, setShowAllBeats] = useState<boolean>(true);
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
-  const { exportToPDF } = useBeatPreferencesPDFExport();
+  const { exportToPDF: exportBeatPreferencesPDF } = useBeatPreferencesPDFExport();
   const [beatPreferences, setBeatPreferences] = useState<{
     [key: string]: BeatPreference
   }>({});
+  const [sortedOfficers, setSortedOfficers] = useState<OfficerWithCredit[]>([]);
 
   // Filter out "Supervisor" and "Other (Custom)" from beat positions
   const beatPositions = PREDEFINED_POSITIONS.filter(pos => 
@@ -102,27 +112,71 @@ export const BeatPreferencesView: React.FC<Props> = ({
         new Map(nonSupervisorOfficers.map(officer => [officer.id, officer])).values()
       );
 
+      // Fetch service credit for each officer
+      const officersWithCredit = await Promise.all(
+        uniqueOfficers.map(async (officer) => {
+          const { data: creditData } = await supabase.rpc("get_service_credit", {
+            profile_id: officer.id,
+          });
+          return {
+            ...officer,
+            service_credit: creditData || 0,
+          };
+        })
+      );
+
       return {
-        officers: uniqueOfficers,
+        officers: officersWithCredit,
         preferences: preferences || []
       };
     },
     enabled: !!selectedShiftId,
   });
 
-const handleExportPDF = async () => {
+  // Sort officers by service credit when data changes
+  useEffect(() => {
+    if (beatData?.officers) {
+      const sorted = [...beatData.officers].sort((a, b) => {
+        // Sort by service credit (highest to lowest)
+        const aCredit = a.service_credit || 0;
+        const bCredit = b.service_credit || 0;
+        
+        if (bCredit !== aCredit) {
+          return bCredit - aCredit; // Descending order (most to least)
+        }
+        
+        // If same service credit, sort by last name
+        return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+      });
+      
+      setSortedOfficers(sorted);
+    } else {
+      setSortedOfficers([]);
+    }
+  }, [beatData]);
+
+  const handleExportPDF = async () => {
   try {
-    const result = await exportToPDF({
-      selectedDate: new Date(), // Or pass your selected date
+    if (!selectedShiftId || !beatData) {
+      toast.error("No data available for export");
+      return;
+    }
+
+    const result = await exportBeatPreferencesPDF({
+      selectedDate: new Date(), // Or your selected date
       shiftName: shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Shift",
-      shiftId: selectedShiftId,
-      beatData: beatData
+      beatData: {
+        officers: sortedOfficers,
+        preferences: beatData.preferences || []
+      },
+      shiftTypes,
+      selectedShiftId
     });
-    
+
     if (result.success) {
       toast.success("PDF exported successfully");
     } else {
-      toast.error("Error exporting PDF");
+      throw result.error;
     }
   } catch (error) {
     console.error("PDF export error:", error);
@@ -303,11 +357,6 @@ const handleExportPDF = async () => {
     );
   };
 
-  // Sort officers by last name
-  const sortedOfficers = beatData?.officers?.sort((a, b) => 
-    getLastName(a.full_name).localeCompare(getLastName(b.full_name))
-  ) || [];
-
   return (
     <div className="space-y-4">
       <Card>
@@ -384,6 +433,12 @@ const handleExportPDF = async () => {
                   </Badge>
                   <span className="text-sm">Third Priority</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800">
+                    {sortedOfficers[0]?.service_credit?.toFixed(1) || '0.0'} yrs
+                  </Badge>
+                  <span className="text-sm">Highest Seniority First</span>
+                </div>
               </div>
 
               {/* Officers Section */}
@@ -410,18 +465,23 @@ const handleExportPDF = async () => {
                         <Card key={officer.id}>
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between mb-3">
-                              <div>
-                                <div className="font-medium">
-                                  {getLastName(officer.full_name)}
-                                  {officer.rank && (
-                                    <Badge variant="outline" className="ml-2">
-                                      {getRankAbbreviation(officer.rank)}
-                                    </Badge>
-                                  )}
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <div className="font-medium">
+                                    {getLastName(officer.full_name)}
+                                    {officer.rank && (
+                                      <Badge variant="outline" className="ml-2">
+                                        {getRankAbbreviation(officer.rank)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Badge: {officer.badge_number}
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  Badge: {officer.badge_number}
-                                </div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {officer.service_credit?.toFixed(1) || '0.0'} yrs
+                                </Badge>
                               </div>
                               {isAdminOrSupervisor ? (
                                 isEditing ? (

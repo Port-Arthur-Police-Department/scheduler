@@ -218,9 +218,7 @@ if (currentUser) {
     officer.id,
     oldProfile,
     profileData,
-    currentUser.id,
-    currentUser.email,
-    officer.full_name // ADD THIS: Pass the officer's name
+    officer.full_name // Just pass the officer name
   );
       }
 
@@ -314,13 +312,10 @@ if (currentUser) {
       
       // AUDIT LOGGING: Log profile creation
 if (currentUser && result.userId) {
-  await auditLogger.logProfileUpdate(
+  await auditLogger.logProfileCreation(
     result.userId,
-    null, // No old data for creation
     profileData,
-    currentUser.id,
-    currentUser.email,
-    profileData.full_name // ADD THIS: Pass the new officer's name
+    formData.full_name // Just pass the officer name
   );
       }
       

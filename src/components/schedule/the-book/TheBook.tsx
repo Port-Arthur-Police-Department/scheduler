@@ -73,6 +73,31 @@ const TheBook = ({
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [editingAssignment, setEditingAssignment] = useState<{ officer: any; dateStr: string } | null>(null);
+  const mutationsResult = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
+  // Destructure with safe fallbacks
+  const {
+  updatePositionMutation,
+  removeOfficerMutation = {
+    mutate: () => {
+      console.error("removeOfficerMutation not available");
+      toast.error("Cannot remove officer: System error");
+    },
+    isPending: false
+  },
+  removePTOMutation = {
+    mutate: () => {
+      console.error("removePTOMutation not available");
+      toast.error("Cannot remove PTO: System error");
+    },
+    isPending: false
+  },
+  queryKey
+} = mutationsResult;
+
+console.log("🔍 Mutations initialized:", {
+  hasRemoveOfficerMutation: !!removeOfficerMutation,
+  hasRemovePTOMutation: !!removePTOMutation
+});
 
   // Use consolidated mutations hook
 const {

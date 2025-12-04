@@ -495,7 +495,7 @@ const handleExportPDF = async () => {
                                         onChange={(e) => updatePreferenceChoice(officer.id, 'third_choice', e.target.value)}
                                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                                       >
-                                        <option value="">Select 3rd Choice</Option>
+                                        <option value="">Select 3rd Choice</option>
                                         {beatPositions.map((beat) => (
                                           <option key={beat} value={beat}>
                                             {beat}

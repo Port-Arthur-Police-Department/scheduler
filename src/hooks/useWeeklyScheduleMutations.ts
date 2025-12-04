@@ -106,7 +106,53 @@ const removePTOMutation = useMutation({
     startTime: string;
     endTime: string;
   }) => {
-    console.log('removePTOMutation called with:', ptoData);
+    console.log('🗑️ removePTOMutation called with:', ptoData);
+    
+    // Validate required fields
+    if (!ptoData.id) {
+      throw new Error("Missing PTO ID");
+    }
+    
+    if (!ptoData.officerId) {
+      throw new Error("Missing officer ID");
+    }
+
+    // First, try to get the actual PTO exception from the database to ensure it exists
+    const { data: ptoRecord, error: fetchError } = await supabase
+      .from("schedule_exceptions")
+      .select("id, officer_id, date, shift_type_id, reason, custom_start_time, custom_end_time")
+      .eq("id", ptoData.id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching PTO record:', fetchError);
+      // Try an alternative approach - look for any PTO for this officer on this date
+      const { data: alternativeRecords, error: altError } = await supabase
+        .from("schedule_exceptions")
+        .select("id, officer_id, date, shift_type_id, reason, custom_start_time, custom_end_time")
+        .eq("officer_id", ptoData.officerId)
+        .eq("date", ptoData.date)
+        .eq("is_off", true);
+
+      if (altError) {
+        throw new Error(`Could not find PTO record: ${fetchError.message}`);
+      }
+
+      if (!alternativeRecords || alternativeRecords.length === 0) {
+        throw new Error("No PTO record found for this officer and date");
+      }
+
+      // Use the first found record
+      const foundRecord = alternativeRecords[0];
+      console.log('Found alternative PTO record:', foundRecord);
+      
+      // Update ptoData with the found record's information
+      ptoData.id = foundRecord.id;
+      ptoData.shiftTypeId = foundRecord.shift_type_id || ptoData.shiftTypeId;
+      ptoData.ptoType = foundRecord.reason || ptoData.ptoType;
+      ptoData.startTime = foundRecord.custom_start_time || ptoData.startTime;
+      ptoData.endTime = foundRecord.custom_end_time || ptoData.endTime;
+    }
     
     // Get shift details to calculate hours
     const { data: shiftData, error: shiftError } = await supabase
@@ -124,7 +170,7 @@ const removePTOMutation = useMutation({
     const endTime = ptoData.endTime || shiftData?.end_time || "23:59";
 
     // Calculate hours to restore
-    const calculateHours = (start: string, end: string) => {
+  const calculateHours = (start: string, end: string) => {
       try {
         const [startHour, startMin] = start.split(":").map(Number);
         const [endHour, endMin] = end.split(":").map(Number);
@@ -137,7 +183,7 @@ const removePTOMutation = useMutation({
       }
     };
 
-    const hoursUsed = calculateHours(startTime, endTime);
+    const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
     const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
     
     if (ptoColumn) {
@@ -171,7 +217,10 @@ const removePTOMutation = useMutation({
       .delete()
       .eq("id", ptoData.id);
 
-    if (deleteError) throw deleteError;
+    if (deleteError) {
+      console.error('Error deleting PTO exception:', deleteError);
+      throw deleteError;
+    }
 
     // Also delete any associated working time exception
     await supabase
@@ -182,6 +231,7 @@ const removePTOMutation = useMutation({
       .eq("shift_type_id", ptoData.shiftTypeId)
       .eq("is_off", false);
 
+    console.log('✅ PTO successfully removed');
     return { success: true };
   },
   onSuccess: () => {
@@ -189,7 +239,7 @@ const removePTOMutation = useMutation({
     queryClient.invalidateQueries({ queryKey });
   },
   onError: (error: any) => {
-    console.error('Mutation error:', error);
+    console.error('❌ Mutation error:', error);
     toast.error(error.message || "Failed to remove PTO");
   },
 });

@@ -288,29 +288,51 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     }
   };
 
-  const getCreditBreakdown = () => {
-    const hireDateYears = hireDate ? 
-      (new Date().getFullYear() - hireDate.getFullYear()) + 
-      ((new Date().getMonth() - hireDate.getMonth()) / 12) : 0;
-    
-    const sergeantYears = promotionDateSergeant ? 
-      (new Date().getFullYear() - promotionDateSergeant.getFullYear()) + 
-      ((new Date().getMonth() - promotionDateSergeant.getMonth()) / 12) : 0;
-    
-    const lieutenantYears = promotionDateLieutenant ? 
-      (new Date().getFullYear() - promotionDateLieutenant.getFullYear()) + 
-      ((new Date().getMonth() - promotionDateLieutenant.getMonth()) / 12) : 0;
-    
-    const override = Number(serviceCreditOverride) || 0;
-    
-    return {
-      totalHireYears: hireDateYears.toFixed(1),
-      sergeantYears: sergeantYears.toFixed(1),
-      lieutenantYears: lieutenantYears.toFixed(1),
-      override: override.toFixed(1),
-      finalTotal: calculatedCredit.toFixed(1)
-    };
+ // Replace the getCreditBreakdown function with this corrected version:
+const getCreditBreakdown = () => {
+  const now = new Date();
+  
+  // Helper function to parse dates correctly (avoid timezone issues)
+  const parseDateSafe = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    // Split and parse to avoid timezone issues
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
   };
+
+  const hireDateObj = parseDateSafe(officer?.hire_date || null);
+  const sergeantDateObj = parseDateSafe(officer?.promotion_date_sergeant || null);
+  const lieutenantDateObj = parseDateSafe(officer?.promotion_date_lieutenant || null);
+
+  const calculateYears = (startDate: Date | null) => {
+    if (!startDate) return 0;
+    
+    const years = now.getFullYear() - startDate.getFullYear();
+    const months = now.getMonth() - startDate.getMonth();
+    const days = now.getDate() - startDate.getDate();
+    
+    // Calculate decimal years more accurately
+    let decimalYears = years + (months / 12) + (days / 365);
+    return Math.max(0, decimalYears);
+  };
+
+  const hireDateYears = calculateYears(hireDateObj);
+  const sergeantYears = calculateYears(sergeantDateObj);
+  const lieutenantYears = calculateYears(lieutenantDateObj);
+  const override = Number(serviceCreditOverride) || 0;
+  const finalTotal = calculatedCredit;
+  
+  return {
+    totalHireYears: hireDateYears.toFixed(1),
+    sergeantYears: sergeantYears.toFixed(1),
+    lieutenantYears: lieutenantYears.toFixed(1),
+    override: override.toFixed(1),
+    finalTotal: finalTotal.toFixed(1),
+    hireDateObj,
+    sergeantDateObj,
+    lieutenantDateObj
+  };
+};
 
   const isPending = updateProfileMutation.isPending || createProfileMutation.isPending;
 

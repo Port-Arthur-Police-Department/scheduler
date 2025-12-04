@@ -1,7 +1,7 @@
-// VacationListView.tsx
+// VacationListView.tsx - FIXED VERSION
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfYear, endOfYear, eachMonthOfInterval, isSameMonth } from "date-fns";
+import { format, startOfYear, endOfYear, eachMonthOfInterval, isSameMonth, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +26,6 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showAllVacations, setShowAllVacations] = useState<boolean>(false);
 
-  // Remove the local shiftTypes query since we get it from parent
-
   // Fetch vacation data
   const { data: vacationData, isLoading } = useQuery({
     queryKey: ['vacation-list', selectedShiftId, selectedYear, showAllVacations],
@@ -46,11 +44,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             id,
             full_name,
             badge_number,
-            rank,
-            vacation_hours,
-            holiday_hours,
-            sick_hours,
-            comp_hours
+            rank
           )
         `)
         .eq("is_off", true)
@@ -60,13 +54,14 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
       if (error) throw error;
 
-      // Group PTO by officer and month
+      // Group PTO by officer and month - FIXED: Use parseISO for proper date handling
       const ptoByOfficer = new Map();
       const ptoByMonth = new Map();
 
       ptoExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
-        const month = pto.date.substring(0, 7); // YYYY-MM
+        const date = parseISO(pto.date);
+        const monthKey = format(date, "yyyy-MM"); // Use date-fns format for consistency
         
         // Initialize officer data
         if (!ptoByOfficer.has(officerId)) {
@@ -78,29 +73,40 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         }
 
         // Initialize month data
-        if (!ptoByMonth.has(month)) {
-          ptoByMonth.set(month, {
-            month,
+        if (!ptoByMonth.has(monthKey)) {
+          ptoByMonth.set(monthKey, {
+            month: monthKey,
+            monthDate: date, // Store the actual date object for proper formatting
             officers: new Set(),
             totalDays: 0
           });
         }
 
         const officerData = ptoByOfficer.get(officerId);
-        const monthData = ptoByMonth.get(month);
+        const monthData = ptoByMonth.get(monthKey);
 
         // Count days
         officerData.totalDays += 1;
-        officerData.ptoDays.set(month, (officerData.ptoDays.get(month) || 0) + 1);
+        officerData.ptoDays.set(monthKey, (officerData.ptoDays.get(monthKey) || 0) + 1);
         
         monthData.officers.add(officerId);
         monthData.totalDays += 1;
       });
 
+      // Sort months chronologically
+      const sortedPtoByMonth = Array.from(ptoByMonth.values()).sort((a, b) => 
+        a.monthDate.getTime() - b.monthDate.getTime()
+      );
+
+      // Sort officers within each month by total days
+      const sortedPtoByOfficer = Array.from(ptoByOfficer.values()).sort((a, b) => 
+        b.totalDays - a.totalDays
+      );
+
       return {
         ptoExceptions: ptoExceptions || [],
-        ptoByOfficer: Array.from(ptoByOfficer.values()),
-        ptoByMonth: Array.from(ptoByMonth.values()),
+        ptoByOfficer: sortedPtoByOfficer,
+        ptoByMonth: sortedPtoByMonth,
         summary: {
           totalOfficers: ptoByOfficer.size,
           totalDays: ptoExceptions?.length || 0,
@@ -242,11 +248,15 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                         <div className="col-span-2 font-bold">{totalDays}</div>
                         <div className="col-span-3">
                           <div className="flex flex-wrap gap-1">
-                            {Array.from(ptoDays.entries()).map(([month, days]) => (
-                              <Badge key={month} variant="secondary" className="text-xs">
-                                {format(new Date(month + "-01"), "MMM")}: {days}
-                              </Badge>
-                            ))}
+                            {Array.from(ptoDays.entries()).map(([month, days]) => {
+                              // Use parseISO to properly parse the month string
+                              const monthDate = parseISO(`${month}-01`);
+                              return (
+                                <Badge key={month} variant="secondary" className="text-xs">
+                                  {format(monthDate, "MMM")}: {days}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -261,44 +271,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 </div>
               </div>
 
-              {/* PTO Balance Summary */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">PTO Balance Summary</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="p-4 border rounded-lg bg-blue-50">
-                    <div className="text-sm text-blue-700 font-medium">Vacation Hours</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {vacationData?.ptoByOfficer.reduce((sum, { officer }) => 
-                        sum + (officer.vacation_hours || 0), 0
-                      ).toFixed(1) || "0.0"}
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg bg-green-50">
-                    <div className="text-sm text-green-700 font-medium">Holiday Hours</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {vacationData?.ptoByOfficer.reduce((sum, { officer }) => 
-                        sum + (officer.holiday_hours || 0), 0
-                      ).toFixed(1) || "0.0"}
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg bg-red-50">
-                    <div className="text-sm text-red-700 font-medium">Sick Hours</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {vacationData?.ptoByOfficer.reduce((sum, { officer }) => 
-                        sum + (officer.sick_hours || 0), 0
-                      ).toFixed(1) || "0.0"}
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg bg-purple-50">
-                    <div className="text-sm text-purple-700 font-medium">Comp Hours</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {vacationData?.ptoByOfficer.reduce((sum, { officer }) => 
-                        sum + (officer.comp_hours || 0), 0
-                      ).toFixed(1) || "0.0"}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* REMOVED: PTO Balance Summary Section */}
+              
             </div>
           )}
         </CardContent>

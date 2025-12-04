@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-mobile";
+import TheBookMobile from "./TheBookMobile";
 import { CalendarIcon, Download, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin } from "lucide-react";
 import { 
   format, 
@@ -57,10 +59,20 @@ const TheBook = ({
   userRole = 'officer', 
   isAdminOrSupervisor = false 
 }: TheBookProps) => {
+  // 1. First, declare the mobile hook
+  const isMobile = useIsMobile();
+  
+  // 2. Then declare ALL your other hooks and variables
   const { userEmail } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
+  // 3. Then check for mobile
+  if (isMobile) {
+    return <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />;
+  }
+  
+  // 4. Continue with the rest of your desktop-only logic
   const { data: websiteSettings } = useWebsiteSettings();
   const { weekly: weeklyColors } = useColorSettings();
   

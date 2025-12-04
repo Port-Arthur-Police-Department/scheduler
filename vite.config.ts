@@ -12,7 +12,7 @@ export default defineConfig({
       workbox: {
         globPatterns: [],          // let Vite decide → no “empty glob” warning
         navigateFallback: null,
-        navigateFallback: '/ai-assist-ide/index.html', // ✅ ensures correct fallback
+        navigateFallback: '/scheduler/index.html', // ✅ ensures correct fallback
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,

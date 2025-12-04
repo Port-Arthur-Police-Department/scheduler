@@ -308,38 +308,62 @@ const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) 
 };
 
   // FIXED: Handlers for PTO
-  const handleSavePTOUnitNumber = (ptoRecord: any, unitNumber: string) => {
-    updatePTODetailsMutation.mutate({
-      ptoId: ptoRecord.id,
-      unitNumber: unitNumber,
-      notes: ptoRecord.notes
-    });
-  };
+// In DailyScheduleView.tsx - update PTO handlers
 
-  const handleSavePTONotes = (ptoRecord: any, notes: string) => {
-    updatePTODetailsMutation.mutate({
-      ptoId: ptoRecord.id,
-      unitNumber: ptoRecord.unitNumber,
-      notes: notes
-    });
-  };
+const handleSavePTOUnitNumber = (ptoRecord: any, unitNumber: string) => {
+  updatePTODetailsMutation.mutate({
+    ptoId: ptoRecord.id,
+    unitNumber: unitNumber,
+    notes: ptoRecord.notes
+  }, {
+    onSuccess: () => {
+      // AUDIT LOGGING: Add logging for PTO unit number change
+      auditLogger.logUnitNumberChange(
+        ptoRecord.officerId,
+        ptoRecord.name,
+        ptoRecord.unitNumber || 'None',
+        unitNumber,
+        userEmail,
+        `Changed unit number for PTO for ${ptoRecord.name}`
+      );
+    }
+  });
+};
 
-  const handleEditPTO = (ptoRecord: any) => {
-    if (!canEdit) return; // Prevent editing for officers
-    
-    setSelectedOfficer({
-      officerId: ptoRecord.officerId,
-      name: ptoRecord.name,
-      scheduleId: ptoRecord.id,
-      type: "exception" as const,
-      existingPTO: {
-        id: ptoRecord.id,
-        ptoType: ptoRecord.ptoType,
-        startTime: ptoRecord.startTime,
-        endTime: ptoRecord.endTime,
-        isFullShift: ptoRecord.isFullShift
-      }
-    });
+const handleSavePTONotes = (ptoRecord: any, notes: string) => {
+  updatePTODetailsMutation.mutate({
+    ptoId: ptoRecord.id,
+    unitNumber: ptoRecord.unitNumber,
+    notes: notes
+  }, {
+    onSuccess: () => {
+      // AUDIT LOGGING: Add logging for PTO notes change
+      auditLogger.logNotesChange(
+        ptoRecord.officerId,
+        ptoRecord.name,
+        userEmail,
+        `Updated PTO notes for ${ptoRecord.name}`
+      );
+    }
+  });
+};
+
+const handleEditPTO = (ptoRecord: any) => {
+  if (!canEdit) return;
+  
+  setSelectedOfficer({
+    officerId: ptoRecord.officerId,
+    name: ptoRecord.name, // Ensure name is passed
+    scheduleId: ptoRecord.id,
+    type: "exception" as const,
+    existingPTO: {
+      id: ptoRecord.id,
+      ptoType: ptoRecord.ptoType,
+      startTime: ptoRecord.startTime,
+      endTime: ptoRecord.endTime,
+      isFullShift: ptoRecord.isFullShift
+    }
+  });
     setSelectedShift({
       id: ptoRecord.shiftTypeId,
       name: "Unknown Shift",

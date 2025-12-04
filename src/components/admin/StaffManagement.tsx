@@ -66,6 +66,87 @@ export const StaffManagement = () => {
     },
   });
 
+  // Helper function to get seniority label based on rank and promotion dates
+  const getSeniorityLabel = (officer: any) => {
+    const rank = officer.rank?.toLowerCase() || '';
+    
+    if (rank.includes('lieutenant') || rank.includes('lt')) {
+      return 'Seniority at Lieutenant';
+    } else if (rank.includes('sergeant') || rank.includes('sgt')) {
+      return 'Seniority at Sergeant';
+    } else {
+      return 'Service Credit';
+    }
+  };
+
+  // Helper function to get seniority details
+  const getSeniorityDetails = (officer: any) => {
+    const rank = officer.rank?.toLowerCase() || '';
+    const items = [];
+    
+    // Always show hire date
+    if (officer.hire_date) {
+      items.push(
+        <div key="hire" className="flex items-center gap-1 text-muted-foreground">
+          <CalendarIcon className="h-2 w-2" />
+          <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
+        </div>
+      );
+    }
+    
+    // Show "Since" for current rank's promotion date
+    if ((rank.includes('lieutenant') || rank.includes('lt')) && officer.promotion_date_lieutenant) {
+      items.push(
+        <div key="lt-since" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+          <TrendingUp className="h-2 w-2" />
+          <span>Since: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+        </div>
+      );
+    } else if ((rank.includes('sergeant') || rank.includes('sgt')) && officer.promotion_date_sergeant) {
+      items.push(
+        <div key="sgt-since" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+          <TrendingUp className="h-2 w-2" />
+          <span>Since: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+        </div>
+      );
+    }
+    
+    // Show promotion history (previous ranks)
+    if (rank.includes('lieutenant') || rank.includes('lt')) {
+      // If Lieutenant, show Sergeant promotion if exists
+      if (officer.promotion_date_sergeant) {
+        items.push(
+          <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+            <TrendingUp className="h-2 w-2" />
+            <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+    }
+    // If Sergeant, Lieutenant promotion shouldn't exist (they'd be Lieutenant rank)
+    // If Officer, show both if they exist (historical promotions)
+    else if (!rank.includes('sergeant') && !rank.includes('sgt')) {
+      if (officer.promotion_date_sergeant) {
+        items.push(
+          <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+            <TrendingUp className="h-2 w-2" />
+            <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+      if (officer.promotion_date_lieutenant) {
+        items.push(
+          <div key="lt-promo" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+            <TrendingUp className="h-2 w-2" />
+            <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+    }
+    
+    return items;
+  };
+
   // Filter officers based on search query
   const filteredOfficers = useMemo(() => {
     if (!officers) return [];
@@ -189,11 +270,14 @@ export const StaffManagement = () => {
                             <span className="font-medium">{officer.holiday_hours || 0}h</span>
                           </div>
                           
-                          {/* Service Credit Section */}
+                          {/* Seniority Section */}
                           <div className="col-span-2 space-y-1 text-sm">
                             <div className="flex items-center gap-1">
                               <Award className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-muted-foreground">Service Credit:</span>
+                              {/* Show "Seniority at Rank" if officer has promotion date, otherwise "Service Credit" */}
+                              <span className="text-muted-foreground">
+                                {getSeniorityLabel(officer)}:
+                              </span>
                               <span className="font-medium ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
                               {officer.service_credit_override !== null && (
                                 <span className="text-xs text-amber-600 dark:text-amber-500 ml-1">
@@ -202,26 +286,9 @@ export const StaffManagement = () => {
                               )}
                             </div>
                             
-                            {/* Promotion History Section */}
+                            {/* Seniority Details */}
                             <div className="space-y-1 text-xs ml-4">
-                              {officer.hire_date && (
-                                <div className="flex items-center gap-1 text-muted-foreground">
-                                  <CalendarIcon className="h-2 w-2" />
-                                  <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
-                                </div>
-                              )}
-                              {officer.promotion_date_sergeant && (
-                                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-                                  <TrendingUp className="h-2 w-2" />
-                                  <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
-                                </div>
-                              )}
-                              {officer.promotion_date_lieutenant && (
-                                <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
-                                  <TrendingUp className="h-2 w-2" />
-                                  <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
-                                </div>
-                              )}
+                              {getSeniorityDetails(officer)}
                             </div>
                           </div>
                         </div>
@@ -230,30 +297,14 @@ export const StaffManagement = () => {
                         <div className="mt-2 text-sm">
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Award className="h-3 w-3" />
-                            <span>Service Credit:</span>
+                            {/* Show "Seniority at Rank" if officer has promotion date, otherwise "Service Credit" */}
+                            <span>{getSeniorityLabel(officer)}:</span>
                             <span className="font-medium ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
                           </div>
                           
-                          {/* Promotion History Section */}
+                          {/* Seniority Details */}
                           <div className="space-y-1 text-xs ml-4 mt-1">
-                            {officer.hire_date && (
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <CalendarIcon className="h-2 w-2" />
-                                <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
-                              </div>
-                            )}
-                            {officer.promotion_date_sergeant && (
-                              <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-                                <TrendingUp className="h-2 w-2" />
-                                <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
-                              </div>
-                            )}
-                            {officer.promotion_date_lieutenant && (
-                              <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
-                                <TrendingUp className="h-2 w-2" />
-                                <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
-                              </div>
-                            )}
+                            {getSeniorityDetails(officer)}
                           </div>
                           
                           <div className="mt-1 text-xs text-muted-foreground italic">

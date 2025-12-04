@@ -96,94 +96,103 @@ export const useWeeklyScheduleMutations = (
     },
   });
 
-  const removeOfficerMutation = useMutation({
-    mutationFn: async (officer: any) => {
-      if (officer.shiftInfo?.scheduleType === "exception") {
-        const { error } = await supabase
-          .from("schedule_exceptions")
-          .delete()
-          .eq("id", officer.shiftInfo.scheduleId);
+const removePTOMutation = useMutation({
+  mutationFn: async (ptoData: {
+    id: string;
+    officerId: string;
+    date: string;
+    shiftTypeId: string;
+    ptoType: string;
+    startTime: string;
+    endTime: string;
+  }) => {
+    console.log('removePTOMutation called with:', ptoData);
+    
+    // Get shift details to calculate hours
+    const { data: shiftData, error: shiftError } = await supabase
+      .from("shift_types")
+      .select("start_time, end_time")
+      .eq("id", ptoData.shiftTypeId)
+      .single();
 
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      toast.success("Officer removed from schedule");
-      queryClient.invalidateQueries({ queryKey });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to remove officer");
-    },
-  });
+    if (shiftError && shiftError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Error fetching shift data:', shiftError);
+    }
 
-  const removePTOMutation = useMutation({
-    mutationFn: async (ptoData: {
-      id: string;
-      officerId: string;
-      date: string;
-      shiftTypeId: string;
-      ptoType: string;
-      startTime: string;
-      endTime: string;
-    }) => {
-      // Calculate hours to restore
-      const calculateHours = (start: string, end: string) => {
+    // Use provided times or shift times
+    const startTime = ptoData.startTime || shiftData?.start_time || "00:00";
+    const endTime = ptoData.endTime || shiftData?.end_time || "23:59";
+
+    // Calculate hours to restore
+    const calculateHours = (start: string, end: string) => {
+      try {
         const [startHour, startMin] = start.split(":").map(Number);
         const [endHour, endMin] = end.split(":").map(Number);
         const startMinutes = startHour * 60 + startMin;
         const endMinutes = endHour * 60 + endMin;
         return (endMinutes - startMinutes) / 60;
-      };
+      } catch (error) {
+        console.error('Error calculating hours:', error);
+        return 8; // Default to 8 hours if calculation fails
+      }
+    };
 
-      const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
-      const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
-      
-      if (ptoColumn) {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", ptoData.officerId)
-          .single();
+    const hoursUsed = calculateHours(startTime, endTime);
+    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
+    
+    if (ptoColumn) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", ptoData.officerId)
+        .single();
 
-        if (profileError) throw profileError;
-
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+      } else if (profile) {
         const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
         
         const { error: restoreError } = await supabase
           .from("profiles")
           .update({
-            [ptoColumn]: currentBalance + hoursUsed,
+            [ptoColumn]: (currentBalance || 0) + hoursUsed,
           })
           .eq("id", ptoData.officerId);
 
-        if (restoreError) throw restoreError;
+        if (restoreError) {
+          console.error('Error restoring PTO balance:', restoreError);
+        }
       }
+    }
 
-      // Delete the PTO exception
-      const { error: deleteError } = await supabase
-        .from("schedule_exceptions")
-        .delete()
-        .eq("id", ptoData.id);
+    // Delete the PTO exception
+    const { error: deleteError } = await supabase
+      .from("schedule_exceptions")
+      .delete()
+      .eq("id", ptoData.id);
 
-      if (deleteError) throw deleteError;
+    if (deleteError) throw deleteError;
 
-      // Also delete any associated working time exception
-      await supabase
-        .from("schedule_exceptions")
-        .delete()
-        .eq("officer_id", ptoData.officerId)
-        .eq("date", ptoData.date)
-        .eq("shift_type_id", ptoData.shiftTypeId)
-        .eq("is_off", false);
-    },
-    onSuccess: () => {
-      toast.success("PTO removed and balance restored");
-      queryClient.invalidateQueries({ queryKey });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to remove PTO");
-    },
-  });
+    // Also delete any associated working time exception
+    await supabase
+      .from("schedule_exceptions")
+      .delete()
+      .eq("officer_id", ptoData.officerId)
+      .eq("date", ptoData.date)
+      .eq("shift_type_id", ptoData.shiftTypeId)
+      .eq("is_off", false);
+
+    return { success: true };
+  },
+  onSuccess: () => {
+    toast.success("PTO removed and balance restored");
+    queryClient.invalidateQueries({ queryKey });
+  },
+  onError: (error: any) => {
+    console.error('Mutation error:', error);
+    toast.error(error.message || "Failed to remove PTO");
+  },
+});
 
   return {
     updatePositionMutation,

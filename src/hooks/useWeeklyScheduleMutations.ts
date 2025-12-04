@@ -38,8 +38,11 @@ export const useWeeklyScheduleMutations = (
     selectedShiftId
   ];
 
+  // Define all mutations first
   const updatePositionMutation = useMutation({
     mutationFn: async (params: UpdatePositionParams) => {
+      console.log('📝 Updating position:', params);
+      
       if (params.type === "recurring") {
         // For recurring officers, update via exceptions table
         const { data: existingExceptions, error: checkError } = await supabase
@@ -98,15 +101,20 @@ export const useWeeklyScheduleMutations = (
       queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: any) => {
+      console.error('❌ Error updating position:', error);
       toast.error(error.message || "Failed to update position");
     },
   });
 
-  // ADD THIS MISSING MUTATION
+  // Define removeOfficerMutation BEFORE using it
   const removeOfficerMutation = useMutation({
     mutationFn: async (params: RemoveOfficerParams) => {
-      console.log('🗑️ removeOfficerMutation called with:', params);
+      console.log('🗑️ Removing officer from schedule:', params);
       
+      if (!params.scheduleId) {
+        throw new Error("Missing schedule ID");
+      }
+
       if (params.type === "exception") {
         // Delete from schedule_exceptions table
         const { error } = await supabase
@@ -138,6 +146,7 @@ export const useWeeklyScheduleMutations = (
     },
   });
 
+  // Define removePTOMutation
   const removePTOMutation = useMutation({
     mutationFn: async (ptoData: {
       id: string;
@@ -148,7 +157,7 @@ export const useWeeklyScheduleMutations = (
       startTime: string;
       endTime: string;
     }) => {
-      console.log('🗑️ removePTOMutation called with:', ptoData);
+      console.log('🗑️ Removing PTO:', ptoData);
       
       // Validate required fields
       if (!ptoData.id) {
@@ -286,9 +295,10 @@ export const useWeeklyScheduleMutations = (
     },
   });
 
+  // Return all mutations in the correct order
   return {
     updatePositionMutation,
-    removeOfficerMutation, // This was missing in your original file
+    removeOfficerMutation, // This was being referenced before it was defined
     removePTOMutation,
     queryKey
   };

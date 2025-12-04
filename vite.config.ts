@@ -11,7 +11,6 @@ export default defineConfig({
       injectRegister: 'auto',
       workbox: {
         globPatterns: [],          // let Vite decide → no “empty glob” warning
-        navigateFallback: null,
         navigateFallback: '/scheduler/index.html', // ✅ ensures correct fallback
         cleanupOutdatedCaches: true,
         clientsClaim: true,

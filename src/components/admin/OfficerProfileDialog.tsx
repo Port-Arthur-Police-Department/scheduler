@@ -213,14 +213,15 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       if (error) throw error;
 
       // AUDIT LOGGING: Log profile update
-      if (currentUser) {
-        await auditLogger.logProfileUpdate(
-          officer.id,
-          oldProfile,
-          profileData,
-          currentUser.id,
-          currentUser.email
-        );
+if (currentUser) {
+  await auditLogger.logProfileUpdate(
+    officer.id,
+    oldProfile,
+    profileData,
+    currentUser.id,
+    currentUser.email,
+    officer.full_name // ADD THIS: Pass the officer's name
+  );
       }
 
       // Update user role based on new rank
@@ -312,14 +313,15 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       }
       
       // AUDIT LOGGING: Log profile creation
-      if (currentUser && result.userId) {
-        await auditLogger.logProfileUpdate(
-          result.userId,
-          null, // No old data for creation
-          profileData,
-          currentUser.id,
-          currentUser.email
-        );
+if (currentUser && result.userId) {
+  await auditLogger.logProfileUpdate(
+    result.userId,
+    null, // No old data for creation
+    profileData,
+    currentUser.id,
+    currentUser.email,
+    profileData.full_name // ADD THIS: Pass the new officer's name
+  );
       }
       
       return result

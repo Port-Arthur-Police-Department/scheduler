@@ -59,24 +59,20 @@ const TheBook = ({
   userRole = 'officer', 
   isAdminOrSupervisor = false 
 }: TheBookProps) => {
-  // 1. First, declare the mobile hook
-  const isMobile = useIsMobile();
-  
-  // 2. Then declare ALL your other hooks and variables
+  // ALL hooks must be declared first
+  const isMobile = useIsMobile(); // Add this
   const { userEmail } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: websiteSettings } = useWebsiteSettings();
+  const { weekly: weeklyColors } = useColorSettings();
   
-  // 3. Then check for mobile
+  // THEN you can check for mobile and return early
   if (isMobile) {
     return <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />;
   }
   
-  // 4. Continue with the rest of your desktop-only logic
-  const { data: websiteSettings } = useWebsiteSettings();
-  const { weekly: weeklyColors } = useColorSettings();
-  
-  // State management
+  // NOW continue with desktop-only state and logic
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeView, setActiveView] = useState<TheBookView>("weekly");

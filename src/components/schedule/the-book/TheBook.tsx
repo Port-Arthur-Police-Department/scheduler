@@ -568,7 +568,7 @@ const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: str
 
   // Prepare the data for the mutation
   const ptoMutationData = {
-    id: schedule.ptoData.id, // This is the schedule_exceptions ID
+    id: schedule.ptoData.id,
     officerId: officerId,
     date: date,
     shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
@@ -581,14 +581,29 @@ const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: str
 
   removePTOMutation.mutate(ptoMutationData, {
     onSuccess: () => {
-      // AUDIT LOGGING
-      auditLogger.logPTOAction(
-        officerId,
-        officerName,
-        'removed',
-        userEmail,
-        `Removed PTO (${ptoMutationData.ptoType}) for ${officerName} on ${date}`
-      );
+      // AUDIT LOGGING - Use the correct method from your audit logger
+      try {
+        // Use logPTORemoval which exists in your audit logger
+        auditLogger.logPTORemoval(
+          officerId,
+          ptoMutationData.ptoType,
+          date,
+          userEmail,
+          `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
+        );
+        
+        console.log('📋 PTO removal logged to audit trail');
+      } catch (logError) {
+        console.error('Failed to log PTO removal audit:', logError);
+        // Fallback to console logging
+        console.log('PTO removed (audit logging failed):', {
+          officerId,
+          officerName,
+          date,
+          ptoType: ptoMutationData.ptoType,
+          user: userEmail
+        });
+      }
       
       toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
     },
@@ -598,6 +613,8 @@ const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: str
     }
   });
 };
+
+// In TheBook.tsx - Update the onSuccess callback in handleSaveAssignment:
 
 const handleSaveAssignment = () => {
   if (!editingAssignment) return;
@@ -638,15 +655,19 @@ const handleSaveAssignment = () => {
     currentPosition: currentPosition
   }, {
     onSuccess: () => {
-      // AUDIT LOGGING
-      auditLogger.logPositionChange(
-        officerId,
-        officerName,
-        currentPosition,
-        officer.shiftInfo?.position || currentPosition,
-        userEmail,
-        `Changed position for ${officerName} on ${dateStr}`
-      );
+      // AUDIT LOGGING - Use logPositionChange which exists in your audit logger
+      try {
+        auditLogger.logPositionChange(
+          officerId,
+          officerName,
+          currentPosition,
+          officer.shiftInfo?.position || currentPosition,
+          userEmail,
+          `Changed position for ${officerName} on ${dateStr}`
+        );
+      } catch (logError) {
+        console.error('Failed to log position change audit:', logError);
+      }
       
       setEditingAssignment(null);
       toast.success("Assignment updated successfully");

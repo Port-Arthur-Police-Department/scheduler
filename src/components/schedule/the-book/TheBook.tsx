@@ -497,8 +497,53 @@ const handleAssignPTO = (schedule: any, date: string, officerId: string, officer
   // not here. This function just opens the dialog.
 };
 
+// In TheBook.tsx - Replace the existing handleRemovePTO function with this:
+
 const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-  // This will be handled by the view components
+  console.log('Removing PTO:', { schedule, date, officerId });
+  
+  if (!schedule?.scheduleId || !officerId) {
+    toast.error("Invalid PTO data");
+    return;
+  }
+
+  // AUDIT LOGGING: Get officer name for logging
+  let officerName = "Unknown Officer";
+  try {
+    // Try to get officer name from schedule data
+    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+    if (daySchedule) {
+      const officer = daySchedule.officers.find((o: any) => o.officerId === officerId);
+      officerName = officer?.officerName || officerName;
+    }
+  } catch (error) {
+    console.error("Error getting officer name:", error);
+  }
+
+  removePTOMutation.mutate({
+    scheduleId: schedule.scheduleId,
+    type: schedule.scheduleType,
+    officerId: officerId,
+    date: date,
+    officerName: officerName
+  }, {
+    onSuccess: () => {
+      // AUDIT LOGGING
+      auditLogger.logPTOAction(
+        officerId,
+        officerName,
+        'removed',
+        userEmail,
+        `Removed PTO for ${officerName} on ${date}`
+      );
+      
+      toast.success("PTO removed successfully");
+    },
+    onError: (error) => {
+      console.error('Error removing PTO:', error);
+      toast.error("Failed to remove PTO");
+    }
+  });
 };
 
 const handleSaveAssignment = () => {

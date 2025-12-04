@@ -497,36 +497,55 @@ const handleAssignPTO = (schedule: any, date: string, officerId: string, officer
   // not here. This function just opens the dialog.
 };
 
-// In TheBook.tsx - Replace the existing handleRemovePTO function with this:
+// In TheBook.tsx - Replace the handleRemovePTO function with this:
 
 const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
   console.log('Removing PTO:', { schedule, date, officerId });
   
   if (!schedule?.scheduleId || !officerId) {
+    console.error('Missing required data:', { scheduleId: schedule?.scheduleId, officerId });
     toast.error("Invalid PTO data");
     return;
   }
 
-  // AUDIT LOGGING: Get officer name for logging
-  let officerName = "Unknown Officer";
-  try {
-    // Try to get officer name from schedule data
-    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
-    if (daySchedule) {
-      const officer = daySchedule.officers.find((o: any) => o.officerId === officerId);
-      officerName = officer?.officerName || officerName;
-    }
-  } catch (error) {
-    console.error("Error getting officer name:", error);
+  // Try to get the complete PTO data from the schedules
+  const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+  if (!daySchedule) {
+    console.error('No schedule found for date:', date);
+    toast.error("Could not find schedule data");
+    return;
   }
 
-  removePTOMutation.mutate({
-    scheduleId: schedule.scheduleId,
-    type: schedule.scheduleType,
+  const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
+  if (!officerData) {
+    console.error('No officer found for ID:', officerId);
+    toast.error("Could not find officer data");
+    return;
+  }
+
+  const ptoData = officerData.shiftInfo?.ptoData;
+  if (!ptoData) {
+    console.error('No PTO data found for officer:', officerId);
+    toast.error("No PTO data found");
+    return;
+  }
+
+  const officerName = officerData.officerName || "Unknown Officer";
+
+  // Prepare the data for the mutation
+  const ptoMutationData = {
+    id: ptoData.id,
     officerId: officerId,
     date: date,
-    officerName: officerName
-  }, {
+    shiftTypeId: schedule.shift?.id || selectedShiftId,
+    ptoType: ptoData.ptoType || "PTO",
+    startTime: ptoData.startTime || "00:00",
+    endTime: ptoData.endTime || "23:59"
+  };
+
+  console.log('Calling removePTOMutation with:', ptoMutationData);
+
+  removePTOMutation.mutate(ptoMutationData, {
     onSuccess: () => {
       // AUDIT LOGGING
       auditLogger.logPTOAction(

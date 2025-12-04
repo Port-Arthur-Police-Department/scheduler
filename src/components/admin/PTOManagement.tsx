@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { auditLogger } from "@/lib/auditLogger";
+import { TrendingUp } from "lucide-react";
 
 export const PTOManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState<string>("");
@@ -274,24 +275,42 @@ export const PTOManagement = () => {
                   </div>
                 )}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Award className="h-3 w-3" />
-                    Service Credit
-                  </p>
-                  <div className="space-y-0.5">
-                    <p className="text-lg font-semibold">{officer.service_credit?.toFixed(1) || 0} yrs</p>
-                    {officer.hire_date && (
-                      <p className="text-xs text-muted-foreground">
-                        Since {format(new Date(officer.hire_date), "MMM yyyy")}
-                      </p>
-                    )}
-                    {officer.service_credit_override !== null && (
-                      <p className="text-xs text-amber-600 dark:text-amber-500">
-                        (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
-                      </p>
-                    )}
-                  </div>
-                </div>
+  <p className="text-xs text-muted-foreground flex items-center gap-1">
+    <Award className="h-3 w-3" />
+    Service Credit
+  </p>
+  <div className="space-y-0.5">
+    <p className="text-lg font-semibold">{officer.service_credit?.toFixed(1) || 0} yrs</p>
+    
+    {/* Promotion History - Use smaller icons and better spacing */}
+    <div className="space-y-0.5 text-xs">
+      {officer.hire_date && (
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <CalendarIcon className="h-2.5 w-2.5" />
+          <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
+        </div>
+      )}
+      {officer.promotion_date_sergeant && (
+        <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+          <TrendingUp className="h-2.5 w-2.5" />
+          <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+        </div>
+      )}
+      {officer.promotion_date_lieutenant && (
+        <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+          <TrendingUp className="h-2.5 w-2.5" />
+          <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+        </div>
+      )}
+    </div>
+    
+    {officer.service_credit_override !== null && (
+      <p className="text-xs text-amber-600 dark:text-amber-500">
+        (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
+      </p>
+    )}
+  </div>
+</div>
               </div>
             </div>
           ))}

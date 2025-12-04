@@ -12,23 +12,26 @@ export interface AuditLogEntry {
   description: string;
   ip_address?: string;
   user_agent?: string;
-  metadata?: any;
 }
 
 // Helper function to get client IP address
 const getClientIP = async (): Promise<string> => {
   try {
+    // Try multiple methods to get the client IP
     const methods = [
+      // Method 1: Direct IP detection service
       async () => {
         const response = await fetch('https://api.ipify.org?format=json');
         const data = await response.json();
         return data.ip;
       },
+      // Method 2: Alternative IP service
       async () => {
         const response = await fetch('https://api64.ipify.org?format=json');
         const data = await response.json();
         return data.ip;
       },
+      // Method 3: Cloudflare compatible (if using Cloudflare)
       async () => {
         const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
         const text = await response.text();
@@ -41,6 +44,7 @@ const getClientIP = async (): Promise<string> => {
       try {
         const ip = await method();
         if (ip) {
+          console.log('Detected IP address:', ip);
           return ip;
         }
       } catch (error) {
@@ -61,22 +65,11 @@ const getUserAgent = (): string => {
   return navigator.userAgent || 'unknown';
 };
 
-// Helper function to get current user session
-const getCurrentUserSession = async () => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session;
-  } catch (error) {
-    console.error('Error getting user session:', error);
-    return null;
-  }
-};
-
 export const auditLogger = {
   async log(entry: Omit<AuditLogEntry, 'user_id' | 'user_email' | 'ip_address' | 'user_agent'>) {
     try {
       // Get current user session
-      const session = await getCurrentUserSession();
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         console.warn('No session found for audit logging');
@@ -98,7 +91,7 @@ export const auditLogger = {
       console.log('Logging audit entry:', {
         action: entry.action_type,
         user: session.user.email,
-        description: entry.description
+        ip: ipAddress
       });
 
       const { error } = await supabase
@@ -113,86 +106,76 @@ export const auditLogger = {
     }
   },
 
-  // UPDATED PROFILE METHODS - SIMPLIFIED TO MATCH YOUR PATTERN
-  async logProfileUpdate(
-    officerId: string, 
-    oldData: any, 
-    newData: any,
-    officerName?: string // Just need officer name
-  ) {
-    const description = officerName 
-      ? `Updated profile for ${officerName} (ID: ${officerId})`
-      : `Updated profile for officer ID: ${officerId}`;
+  // Convenience methods for common actions
+  async logLogin(userEmail: string, ipAddress?: string, userAgent?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
     
+    await this.log({
+      action_type: 'login',
+      description: `User ${userEmail} logged in`,
+      ip_address: ip,
+      user_agent: ua
+    });
+  },
+
+  async logLoginSuccess(userEmail: string, ipAddress?: string, userAgent?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
+    
+    await this.log({
+      action_type: 'LOGIN_SUCCESS',
+      description: `Successful login for ${userEmail}`,
+      ip_address: ip,
+      user_agent: ua
+    });
+  },
+
+  async logLoginFailure(userEmail: string, ipAddress?: string, userAgent?: string, reason?: string) {
+    const ip = ipAddress || await getClientIP();
+    const ua = userAgent || getUserAgent();
+    
+    await this.log({
+      action_type: 'LOGIN_FAILURE',
+      description: `Failed login attempt for ${userEmail}${reason ? `: ${reason}` : ''}`,
+      ip_address: ip,
+      user_agent: ua
+    });
+  },
+
+  async logProfileUpdate(userId: string, oldValues: any, newValues: any) {
     await this.log({
       action_type: 'profile_update',
       table_name: 'profiles',
-      record_id: officerId,
-      old_values: oldData,
-      new_values: newData,
-      description: description,
-      metadata: {
-        officer_name: officerName,
-        officer_id: officerId
-      }
+      record_id: userId,
+      old_values: oldValues,
+      new_values: newValues,
+      description: `Updated profile for user ${userId}`
     });
   },
 
-  async logProfileCreation(
-    officerId: string,
-    newData: any,
-    officerName?: string // Just need officer name
-  ) {
-    const description = officerName
-      ? `Created new profile for ${officerName}`
-      : `Created new officer profile`;
-    
+  async logScheduleChange(action: string, scheduleId: string, details: string, oldValues?: any, newValues?: any) {
     await this.log({
-      action_type: 'profile_creation',
-      table_name: 'profiles',
-      record_id: officerId,
-      old_values: null,
-      new_values: newData,
-      description: description,
-      metadata: {
-        officer_name: officerName,
-        officer_id: officerId
-      }
+      action_type: 'schedule_change',
+      table_name: 'recurring_schedules',
+      record_id: scheduleId,
+      old_values: oldValues,
+      new_values: newValues,
+      description: `${action}: ${details}`
     });
   },
 
-  // UPDATED PTO METHOD - SIMPLIFIED TO MATCH YOUR PATTERN
-  async logPTOAssignment(
-    officerId: string, 
-    ptoType: string, 
-    date: string, 
-    hours: number, 
-    operation: 'add' | 'subtract',
-    officerName?: string // Just need officer name
-  ) {
-    const description = officerName
-      ? `${operation === 'add' ? 'Added' : 'Subtracted'} ${hours} ${ptoType} hours for ${officerName} on ${date}`
-      : `${operation === 'add' ? 'Added' : 'Subtracted'} ${hours} ${ptoType} hours for officer ${officerId} on ${date}`;
-    
+  async logPTOAssignment(officerId: string, ptoType: string, date: string, hours: number, userEmail?: string, description?: string) {
     await this.log({
       action_type: 'PTO_ASSIGNMENT',
       table_name: 'schedule_exceptions',
       record_id: officerId,
-      description: description,
-      new_values: { 
-        pto_type: ptoType, 
-        date, 
-        hours,
-        operation
-      },
-      metadata: {
-        officer_name: officerName,
-        officer_id: officerId
-      }
+      description: description || `Assigned ${ptoType} PTO for officer ${officerId} on ${date} (${hours} hours)`,
+      new_values: { pto_type: ptoType, date, hours }
     });
   },
 
-  // Keep all your existing methods as they are (they already work with officer names)
+  // NEW METHODS FOR SCHEDULING SYSTEM
   async logPositionChange(
     officerId: string, 
     officerName: string, 
@@ -211,7 +194,6 @@ export const auditLogger = {
     });
   },
 
-  // ... keep all other existing methods exactly as they are ...
   async logUnitNumberChange(
     officerId: string, 
     officerName: string, 
@@ -283,13 +265,11 @@ export const auditLogger = {
     userEmail?: string,
     description?: string
   ) {
-    const descriptionText = description || `Removed ${ptoType} PTO from officer ${officerId} on ${date}`;
-    
     await this.log({
       action_type: 'PTO_REMOVAL',
       table_name: 'schedule_exceptions',
       record_id: officerId,
-      description: descriptionText,
+      description: description || `Removed ${ptoType} PTO from officer ${officerId} on ${date}`,
       old_values: { pto_type: ptoType, date }
     });
   },
@@ -324,45 +304,29 @@ export const auditLogger = {
     officerId: string,
     officerEmail: string,
     resetBy: string,
-    officerName?: string
+    description?: string
   ) {
-    const description = officerName
-      ? `Password reset for ${officerName} (${officerEmail}) by ${resetBy}`
-      : `Password reset for ${officerEmail} by ${resetBy}`;
-    
     await this.log({
       action_type: 'PASSWORD_RESET',
       table_name: 'profiles',
       record_id: officerId,
-      description: description,
-      metadata: {
-        officer_name: officerName,
-        officer_id: officerId
-      }
+      description: description || `Password reset for ${officerEmail} by ${resetBy}`
     });
   },
 
-  async logLoginSuccess(userEmail: string, ipAddress?: string, userAgent?: string) {
-    const ip = ipAddress || await getClientIP();
-    const ua = userAgent || getUserAgent();
-    
+  async logOfficerChange(
+    action: string,
+    officerId: string,
+    officerData: any,
+    userEmail?: string,
+    description?: string
+  ) {
     await this.log({
-      action_type: 'LOGIN_SUCCESS',
-      description: `Successful login for ${userEmail}`,
-      ip_address: ip,
-      user_agent: ua
-    });
-  },
-
-  async logLoginFailure(userEmail: string, ipAddress?: string, userAgent?: string, reason?: string) {
-    const ip = ipAddress || await getClientIP();
-    const ua = userAgent || getUserAgent();
-    
-    await this.log({
-      action_type: 'LOGIN_FAILURE',
-      description: `Failed login attempt for ${userEmail}${reason ? `: ${reason}` : ''}`,
-      ip_address: ip,
-      user_agent: ua
+      action_type: `OFFICER_${action.toUpperCase()}`,
+      table_name: 'officers',
+      record_id: officerId,
+      description: description || `${action} officer ${officerData.name || officerId}`,
+      new_values: action === 'CREATE' ? officerData : undefined
     });
   },
 
@@ -383,6 +347,7 @@ export const auditLogger = {
     });
   },
 
+  // Database operation logging
   async logDatabaseOperation(
     operation: 'INSERT' | 'UPDATE' | 'DELETE',
     tableName: string,
@@ -401,6 +366,7 @@ export const auditLogger = {
     });
   },
 
+  // System events
   async logSystemEvent(eventType: string, details: string, metadata?: any) {
     await this.log({
       action_type: 'SYSTEM_EVENT',
@@ -409,6 +375,7 @@ export const auditLogger = {
     });
   },
 
+  // Error logging
   async logError(errorType: string, errorMessage: string, context?: any) {
     await this.log({
       action_type: 'ERROR',

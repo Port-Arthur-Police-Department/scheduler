@@ -173,25 +173,16 @@ export const PTOManagement = () => {
       if (error) throw error;
 
       // AUDIT LOGGING: Log PTO adjustment
-const { data: { session } } = await supabase.auth.getSession();
-if (session) {
-  await auditLogger.log({
-    user_id: session.user.id,
-    user_email: session.user.email!,
-    action_type: 'PTO_ASSIGNMENT',
-    table_name: 'profiles',
-    record_id: selectedOfficer,
-    old_values: { [`${ptoType}_hours`]: currentBalance },
-    new_values: { [`${ptoType}_hours`]: newBalance },
-    description: `${operation === 'add' ? 'Added' : 'Subtracted'} ${hoursValue} ${ptoType} hours for ${officer.full_name}`,
-    metadata: {
-      officer_name: officer.full_name,
-      officer_id: selectedOfficer,
-      pto_type: ptoType,
-      hours: hoursValue,
-      operation: operation
-    }
-  });
+    if (currentUser) {
+      await auditLogger.logPTOAssignment(
+        selectedOfficer,
+        ptoType,
+        new Date().toISOString(),
+        hoursValue,
+        operation,
+        currentUser.id,
+        currentUser.email
+      );
       }
     },
     onSuccess: () => {

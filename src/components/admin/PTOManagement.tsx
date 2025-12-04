@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Clock, Plus, Minus, Award, CalendarClock, Settings, AlertCircle } from "lucide-react";
+import { Clock, Plus, Minus, Award, CalendarClock, Settings, AlertCircle, CalendarIcon, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { auditLogger } from "@/lib/auditLogger";
-import { TrendingUp } from "lucide-react";
 
 export const PTOManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState<string>("");
@@ -34,7 +33,7 @@ export const PTOManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, badge_number, sick_hours, comp_hours, vacation_hours, holiday_hours, hire_date, service_credit_override");
+        .select("id, full_name, badge_number, sick_hours, comp_hours, vacation_hours, holiday_hours, hire_date, service_credit_override, promotion_date_sergeant, promotion_date_lieutenant");
 
       if (error) throw error;
 
@@ -60,52 +59,132 @@ export const PTOManagement = () => {
     },
   });
 
-  const updatePTOMutation = useMutation({
-  mutationFn: async () => {
-    if (!settings?.show_pto_balances) {
-      throw new Error("PTO balances are currently disabled in website settings");
+  // Helper function to get seniority label based on rank and promotion dates
+  const getSeniorityLabel = (officer: any) => {
+    const rank = officer.rank?.toLowerCase() || '';
+    
+    if (rank.includes('lieutenant') || rank.includes('lt')) {
+      return 'Seniority at Lieutenant';
+    } else if (rank.includes('sergeant') || rank.includes('sgt')) {
+      return 'Seniority at Sergeant';
+    } else {
+      return 'Service Credit';
     }
+  };
 
-    if (!selectedOfficer || !hours || isNaN(Number(hours))) {
-      throw new Error("Please fill in all fields with valid numbers");
-    }
-
-    const officer = officers?.find(o => o.id === selectedOfficer);
-    if (!officer) throw new Error("Officer not found");
-
-    // Get current user for audit logging
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-    const hoursValue = Number(hours);
-    const adjustment = operation === "add" ? hoursValue : -hoursValue;
-
-    const currentBalance = officer[`${ptoType}_hours` as keyof typeof officer] as number || 0;
-    const newBalance = currentBalance + adjustment;
-
-    if (newBalance < 0) {
-      throw new Error(`Insufficient ${ptoType} hours balance`);
-    }
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ [`${ptoType}_hours`]: newBalance })
-      .eq("id", selectedOfficer);
-
-    if (error) throw error;
-
-    // AUDIT LOGGING: Log PTO adjustment
-    if (currentUser) {
-      await auditLogger.logPTOAssignment(
-        selectedOfficer,
-        ptoType,
-        new Date().toISOString(),
-        hoursValue,
-        operation,
-        currentUser.id,
-        currentUser.email
+  // Helper function to get seniority details
+  const getSeniorityDetails = (officer: any) => {
+    const rank = officer.rank?.toLowerCase() || '';
+    const items = [];
+    
+    if (officer.hire_date) {
+      items.push(
+        <div key="hire" className="flex items-center gap-1 text-muted-foreground">
+          <CalendarIcon className="h-2.5 w-2.5" />
+          <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
+        </div>
       );
     }
-  },
+    
+    // Show "Since" for current rank's promotion date
+    if ((rank.includes('lieutenant') || rank.includes('lt')) && officer.promotion_date_lieutenant) {
+      items.push(
+        <div key="lt-since" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+          <TrendingUp className="h-2.5 w-2.5" />
+          <span>Since: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+        </div>
+      );
+    } else if ((rank.includes('sergeant') || rank.includes('sgt')) && officer.promotion_date_sergeant) {
+      items.push(
+        <div key="sgt-since" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+          <TrendingUp className="h-2.5 w-2.5" />
+          <span>Since: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+        </div>
+      );
+    }
+    
+    // Show promotion history (previous ranks)
+    if (rank.includes('lieutenant') || rank.includes('lt')) {
+      // If Lieutenant, show Sergeant promotion if exists
+      if (officer.promotion_date_sergeant) {
+        items.push(
+          <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+            <TrendingUp className="h-2.5 w-2.5" />
+            <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+    }
+    // If Sergeant, Lieutenant promotion shouldn't exist (they'd be Lieutenant rank)
+    // If Officer, show both if they exist (historical promotions)
+    else if (!rank.includes('sergeant') && !rank.includes('sgt')) {
+      if (officer.promotion_date_sergeant) {
+        items.push(
+          <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
+            <TrendingUp className="h-2.5 w-2.5" />
+            <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+      if (officer.promotion_date_lieutenant) {
+        items.push(
+          <div key="lt-promo" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
+            <TrendingUp className="h-2.5 w-2.5" />
+            <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
+          </div>
+        );
+      }
+    }
+    
+    return items;
+  };
+
+  const updatePTOMutation = useMutation({
+    mutationFn: async () => {
+      if (!settings?.show_pto_balances) {
+        throw new Error("PTO balances are currently disabled in website settings");
+      }
+
+      if (!selectedOfficer || !hours || isNaN(Number(hours))) {
+        throw new Error("Please fill in all fields with valid numbers");
+      }
+
+      const officer = officers?.find(o => o.id === selectedOfficer);
+      if (!officer) throw new Error("Officer not found");
+
+      // Get current user for audit logging
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      const hoursValue = Number(hours);
+      const adjustment = operation === "add" ? hoursValue : -hoursValue;
+
+      const currentBalance = officer[`${ptoType}_hours` as keyof typeof officer] as number || 0;
+      const newBalance = currentBalance + adjustment;
+
+      if (newBalance < 0) {
+        throw new Error(`Insufficient ${ptoType} hours balance`);
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ [`${ptoType}_hours`]: newBalance })
+        .eq("id", selectedOfficer);
+
+      if (error) throw error;
+
+      // AUDIT LOGGING: Log PTO adjustment
+      if (currentUser) {
+        await auditLogger.logPTOAssignment(
+          selectedOfficer,
+          ptoType,
+          new Date().toISOString(),
+          hoursValue,
+          operation,
+          currentUser.id,
+          currentUser.email
+        );
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["officers-pto"] });
       toast.success("PTO balance updated successfully");
@@ -245,6 +324,9 @@ export const PTOManagement = () => {
                 <div>
                   <p className="font-medium">{officer.full_name}</p>
                   <p className="text-sm text-muted-foreground">Badge #{officer.badge_number}</p>
+                  {officer.rank && (
+                    <p className="text-sm font-medium text-primary">Rank: {officer.rank}</p>
+                  )}
                 </div>
               </div>
               <div className={`grid gap-4 ${settings?.show_pto_balances ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-2'}`}>
@@ -275,42 +357,25 @@ export const PTOManagement = () => {
                   </div>
                 )}
                 <div className="space-y-1">
-  <p className="text-xs text-muted-foreground flex items-center gap-1">
-    <Award className="h-3 w-3" />
-    Service Credit
-  </p>
-  <div className="space-y-0.5">
-    <p className="text-lg font-semibold">{officer.service_credit?.toFixed(1) || 0} yrs</p>
-    
-    {/* Promotion History - Use smaller icons and better spacing */}
-    <div className="space-y-0.5 text-xs">
-      {officer.hire_date && (
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <CalendarIcon className="h-2.5 w-2.5" />
-          <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
-        </div>
-      )}
-      {officer.promotion_date_sergeant && (
-        <div className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-          <TrendingUp className="h-2.5 w-2.5" />
-          <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
-        </div>
-      )}
-      {officer.promotion_date_lieutenant && (
-        <div className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
-          <TrendingUp className="h-2.5 w-2.5" />
-          <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
-        </div>
-      )}
-    </div>
-    
-    {officer.service_credit_override !== null && (
-      <p className="text-xs text-amber-600 dark:text-amber-500">
-        (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
-      </p>
-    )}
-  </div>
-</div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Award className="h-3 w-3" />
+                    {getSeniorityLabel(officer)}
+                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-lg font-semibold">{officer.service_credit?.toFixed(1) || 0} yrs</p>
+                    
+                    {/* Seniority Details */}
+                    <div className="space-y-0.5 text-xs">
+                      {getSeniorityDetails(officer)}
+                    </div>
+                    
+                    {officer.service_credit_override !== null && (
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           ))}

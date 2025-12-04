@@ -154,97 +154,99 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   };
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      if (!officer?.id) throw new Error("No officer ID provided");
-      
-      // Get current user for audit logging
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      // Get old data first for audit logging
-      const { data: oldProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", officer.id)
-        .single();
+// In the updateProfileMutation mutationFn - FIXED VERSION
+mutationFn: async (data: typeof formData) => {
+  if (!officer?.id) throw new Error("No officer ID provided");
+  
+  // Get current user for audit logging
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  
+  // Get old data first for audit logging
+  const { data: oldProfile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", officer.id)
+    .single();
 
-      // Prepare profile data - use the input values directly
-      const profileData: any = {
-        full_name: data.full_name,
-        email: data.email,
-        phone: data.phone || null,
-        badge_number: data.badge_number || null,
-        rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
-        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-      };
+  // Prepare profile data - use the input values directly
+  const profileData: any = {
+    full_name: data.full_name,
+    email: data.email,
+    phone: data.phone || null,
+    badge_number: data.badge_number || null,
+    rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
+    service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+  };
 
-      // Add dates using the input values to avoid timezone conversion
-      if (hireDateInput) {
-        profileData.hire_date = hireDateInput;
-      } else {
-        profileData.hire_date = null;
-      }
-      
-      if (promotionDateSergeantInput) {
-        profileData.promotion_date_sergeant = promotionDateSergeantInput;
-      } else {
-        profileData.promotion_date_sergeant = null;
-      }
-      
-      if (promotionDateLieutenantInput) {
-        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
-      } else {
-        profileData.promotion_date_lieutenant = null;
-      }
+  // Add dates using the input values to avoid timezone conversion
+  if (hireDateInput) {
+    profileData.hire_date = hireDateInput;
+  } else {
+    profileData.hire_date = null;
+  }
+  
+  if (promotionDateSergeantInput) {
+    profileData.promotion_date_sergeant = promotionDateSergeantInput;
+  } else {
+    profileData.promotion_date_sergeant = null;
+  }
+  
+  if (promotionDateLieutenantInput) {
+    profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+  } else {
+    profileData.promotion_date_lieutenant = null;
+  }
 
-      // Only include PTO balances if they are enabled in settings
-      if (settings?.show_pto_balances) {
-        profileData.vacation_hours = Number(data.vacation_hours) || 0;
-        profileData.sick_hours = Number(data.sick_hours) || 0;
-        profileData.comp_hours = Number(data.comp_hours) || 0;
-        profileData.holiday_hours = Number(data.holiday_hours) || 0;
-      }
+  // Only include PTO balances if they are enabled in settings
+  if (settings?.show_pto_balances) {
+    profileData.vacation_hours = Number(data.vacation_hours) || 0;
+    profileData.sick_hours = Number(data.sick_hours) || 0;
+    profileData.comp_hours = Number(data.comp_hours) || 0;
+    profileData.holiday_hours = Number(data.holiday_hours) || 0;
+  }
 
-      // Update profile
-      const { error } = await supabase
-        .from("profiles")
-        .update(profileData)
-        .eq("id", officer.id);
+  // Update profile
+  const { error } = await supabase
+    .from("profiles")
+    .update(profileData)
+    .eq("id", officer.id);
 
-      if (error) throw error;
+  if (error) throw error;
 
-    // AUDIT LOGGING: Log profile update
-await auditLogger.logProfileUpdate(
-  officer.id,
-  data.full_name || officer.full_name, // Use the new name from form
-  oldProfile,
-  profileData,
-  currentUser.id,
-  currentUser.email,
-  `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
-);
-      }
+  // AUDIT LOGGING: Log profile update
+  if (currentUser) {
+    await auditLogger.logProfileUpdate(
+      officer.id,
+      data.full_name || officer.full_name, // Use the new name from form
+      oldProfile,
+      profileData,
+      currentUser.id,
+      currentUser.email,
+      `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
+    );
+  } // <-- THIS CLOSING BRACE WAS MISSING
 
-      // Update user role based on new rank
-      const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
-        const rankLower = rank.toLowerCase();
-        if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
-        if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
-        return 'officer';
-      };
+  // Update user role based on new rank
+  const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
+    const rankLower = rank.toLowerCase();
+    if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
+    if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
+    return 'officer';
+  };
 
-      const newRole = getRoleFromRank(data.rank);
-      
-      // Update the user_roles table
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .update({ role: newRole as any })
-        .eq('user_id', officer.id);
+  const newRole = getRoleFromRank(data.rank);
+  
+  // Update the user_roles table
+  const { error: roleError } = await supabase
+    .from('user_roles')
+    .update({ role: newRole as any })
+    .eq('user_id', officer.id);
 
-      if (roleError) {
-        console.error('Failed to update role:', roleError);
-        // Don't throw - the profile was updated successfully, just role update failed
-      }
-    },
+  if (roleError) {
+    console.error('Failed to update role:', roleError);
+    // Don't throw - the profile was updated successfully, just role update failed
+  }
+},
     onSuccess: () => {
       toast.success("Profile updated successfully");
       queryClient.invalidateQueries({ queryKey: ["all-officers"] });
@@ -256,85 +258,86 @@ await auditLogger.logProfileUpdate(
     },
   });
 
-  const createProfileMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      // Get current user for audit logging
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      // Prepare profile data
-      const profileData: any = {
-        email: data.email,
-        full_name: data.full_name,
-        phone: data.phone,
-        badge_number: data.badge_number,
-        rank: data.rank,
-        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-      };
+const createProfileMutation = useMutation({
+  mutationFn: async (data: typeof formData) => {
+    // Get current user for audit logging
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Prepare profile data
+    const profileData: any = {
+      email: data.email,
+      full_name: data.full_name,
+      phone: data.phone,
+      badge_number: data.badge_number,
+      rank: data.rank,
+      service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+    };
 
-      // Add dates using input values
-      if (hireDateInput) {
-        profileData.hire_date = hireDateInput;
-      } else {
-        profileData.hire_date = null;
-      }
-      
-      if (promotionDateSergeantInput) {
-        profileData.promotion_date_sergeant = promotionDateSergeantInput;
-      } else {
-        profileData.promotion_date_sergeant = null;
-      }
-      
-      if (promotionDateLieutenantInput) {
-        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
-      } else {
-        profileData.promotion_date_lieutenant = null;
-      }
+    // Add dates using input values
+    if (hireDateInput) {
+      profileData.hire_date = hireDateInput;
+    } else {
+      profileData.hire_date = null;
+    }
+    
+    if (promotionDateSergeantInput) {
+      profileData.promotion_date_sergeant = promotionDateSergeantInput;
+    } else {
+      profileData.promotion_date_sergeant = null;
+    }
+    
+    if (promotionDateLieutenantInput) {
+      profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+    } else {
+      profileData.promotion_date_lieutenant = null;
+    }
 
-      // Only include PTO balances if they are enabled in settings
-      if (settings?.show_pto_balances) {
-        profileData.vacation_hours = Number(data.vacation_hours) || 0;
-        profileData.sick_hours = Number(data.sick_hours) || 0;
-        profileData.comp_hours = Number(data.comp_hours) || 0;
-        profileData.holiday_hours = Number(data.holiday_hours) || 0;
-      }
+    // Only include PTO balances if they are enabled in settings
+    if (settings?.show_pto_balances) {
+      profileData.vacation_hours = Number(data.vacation_hours) || 0;
+      profileData.sick_hours = Number(data.sick_hours) || 0;
+      profileData.comp_hours = Number(data.comp_hours) || 0;
+      profileData.holiday_hours = Number(data.holiday_hours) || 0;
+    }
 
-      const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(profileData),
-      })
+    const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profileData),
+    })
 
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create user')
-      }
-      
-      // AUDIT LOGGING: Log profile creation
-await auditLogger.logProfileUpdate(
-  result.userId,
-  data.full_name, // Use the new officer's name
-  null, // No old data for creation
-  profileData,
-  currentUser.id,
-  currentUser.email,
-  `Created profile for ${data.full_name}`
-);
-      }
-      
-      return result
-    },
-    onSuccess: (result) => {
-      toast.success(result.message || "Profile created successfully");
-      queryClient.invalidateQueries({ queryKey: ["all-officers"] });
-      onOpenChange(false);
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
-    },
-  })
+    const result = await response.json()
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to create user')
+    }
+    
+    // AUDIT LOGGING: Log profile creation
+    if (currentUser) {
+      await auditLogger.logProfileUpdate(
+        result.userId,
+        data.full_name, // Use the new officer's name
+        null, // No old data for creation
+        profileData,
+        currentUser.id,
+        currentUser.email,
+        `Created profile for ${data.full_name}`
+      );
+    } // <-- THIS CLOSING BRACE WAS ALSO MISSING
+    
+    return result;
+  },
+  onSuccess: (result) => {
+    toast.success(result.message || "Profile created successfully");
+    queryClient.invalidateQueries({ queryKey: ["all-officers"] });
+    onOpenChange(false);
+  },
+  onError: (error: any) => {
+    toast.error(error.message);
+  },
+});
 
   // Handle date input changes
   const handleHireDateInputChange = (value: string) => {

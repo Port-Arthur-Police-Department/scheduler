@@ -43,7 +43,7 @@ import { ScheduleExportDialog } from "./ScheduleExportDialog";
 import { AssignmentEditDialog } from "./AssignmentEditDialog";
 
 // Import types and utils
-import type { TheBookProps, TheBookView, ScheduleData } from "./types";
+import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";
 import { 
   getLastName, 
   getRankAbbreviation, 

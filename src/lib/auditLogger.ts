@@ -12,6 +12,7 @@ export interface AuditLogEntry {
   description: string;
   ip_address?: string;
   user_agent?: string;
+  metadata?: any; // ADDED: For storing additional metadata like officer names
 }
 
 // Helper function to get client IP address
@@ -143,14 +144,56 @@ export const auditLogger = {
     });
   },
 
-  async logProfileUpdate(userId: string, oldValues: any, newValues: any) {
+  // UPDATED: logProfileUpdate now accepts officer name
+  async logProfileUpdate(
+    officerId: string, 
+    oldValues: any, 
+    newValues: any, 
+    userId: string, 
+    userEmail: string,
+    officerName?: string
+  ) {
+    const description = officerName 
+      ? `Updated profile for ${officerName} (ID: ${officerId})`
+      : `Updated profile for officer ID: ${officerId}`;
+    
     await this.log({
       action_type: 'profile_update',
       table_name: 'profiles',
-      record_id: userId,
+      record_id: officerId,
       old_values: oldValues,
       new_values: newValues,
-      description: `Updated profile for user ${userId}`
+      description: description,
+      metadata: {
+        officer_name: officerName,
+        officer_id: officerId
+      }
+    });
+  },
+
+  // NEW: logProfileCreation method
+  async logProfileCreation(
+    officerId: string,
+    newValues: any,
+    userId: string,
+    userEmail: string,
+    officerName?: string
+  ) {
+    const description = officerName
+      ? `Created new profile for ${officerName}`
+      : `Created new officer profile`;
+    
+    await this.log({
+      action_type: 'profile_creation',
+      table_name: 'profiles',
+      record_id: officerId,
+      old_values: null,
+      new_values: newValues,
+      description: description,
+      metadata: {
+        officer_name: officerName,
+        officer_id: officerId
+      }
     });
   },
 
@@ -165,13 +208,62 @@ export const auditLogger = {
     });
   },
 
-  async logPTOAssignment(officerId: string, ptoType: string, date: string, hours: number, userEmail?: string, description?: string) {
+  // UPDATED: logPTOAssignment now accepts officer name
+  async logPTOAssignment(
+    officerId: string, 
+    ptoType: string, 
+    date: string, 
+    hours: number, 
+    operation: 'add' | 'subtract',
+    userId: string,
+    userEmail: string,
+    officerName?: string
+  ) {
+    const description = officerName
+      ? `${operation === 'add' ? 'Added' : 'Subtracted'} ${hours} ${ptoType} hours for ${officerName} on ${date}`
+      : `${operation === 'add' ? 'Added' : 'Subtracted'} ${hours} ${ptoType} hours for officer ${officerId} on ${date}`;
+    
     await this.log({
       action_type: 'PTO_ASSIGNMENT',
       table_name: 'schedule_exceptions',
       record_id: officerId,
-      description: description || `Assigned ${ptoType} PTO for officer ${officerId} on ${date} (${hours} hours)`,
-      new_values: { pto_type: ptoType, date, hours }
+      description: description,
+      new_values: { 
+        pto_type: ptoType, 
+        date, 
+        hours,
+        operation
+      },
+      metadata: {
+        officer_name: officerName,
+        officer_id: officerId
+      }
+    });
+  },
+
+  // UPDATED: logPTORemoval now accepts officer name
+  async logPTORemoval(
+    officerId: string,
+    ptoType: string,
+    date: string,
+    userId: string,
+    userEmail: string,
+    officerName?: string
+  ) {
+    const description = officerName
+      ? `Removed ${ptoType} PTO from ${officerName} on ${date}`
+      : `Removed ${ptoType} PTO from officer ${officerId} on ${date}`;
+    
+    await this.log({
+      action_type: 'PTO_REMOVAL',
+      table_name: 'schedule_exceptions',
+      record_id: officerId,
+      description: description,
+      old_values: { pto_type: ptoType, date },
+      metadata: {
+        officer_name: officerName,
+        officer_id: officerId
+      }
     });
   },
 
@@ -258,22 +350,6 @@ export const auditLogger = {
     });
   },
 
-  async logPTORemoval(
-    officerId: string,
-    ptoType: string,
-    date: string,
-    userEmail?: string,
-    description?: string
-  ) {
-    await this.log({
-      action_type: 'PTO_REMOVAL',
-      table_name: 'schedule_exceptions',
-      record_id: officerId,
-      description: description || `Removed ${ptoType} PTO from officer ${officerId} on ${date}`,
-      old_values: { pto_type: ptoType, date }
-    });
-  },
-
   async logPDFExport(
     userEmail?: string, 
     exportType?: string, 
@@ -300,17 +376,26 @@ export const auditLogger = {
     });
   },
 
+  // UPDATED: logPasswordReset now accepts officer name
   async logPasswordReset(
     officerId: string,
     officerEmail: string,
     resetBy: string,
-    description?: string
+    officerName?: string
   ) {
+    const description = officerName
+      ? `Password reset for ${officerName} (${officerEmail}) by ${resetBy}`
+      : `Password reset for ${officerEmail} by ${resetBy}`;
+    
     await this.log({
       action_type: 'PASSWORD_RESET',
       table_name: 'profiles',
       record_id: officerId,
-      description: description || `Password reset for ${officerEmail} by ${resetBy}`
+      description: description,
+      metadata: {
+        officer_name: officerName,
+        officer_id: officerId
+      }
     });
   },
 

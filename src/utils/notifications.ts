@@ -1,4 +1,4 @@
-// utils/notifications.ts - COMPLETE FIXED VERSION
+// utils/notifications.ts - UPDATED TO USE user_roles TABLE
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -97,7 +97,7 @@ export const sendInAppNotification = async (
 };
 
 /**
- * Send notification to all supervisors and admins - FIXED
+ * Send notification to all supervisors and admins - UPDATED TO USE user_roles TABLE
  */
 export const notifySupervisorsAndAdmins = async (
   title: string,
@@ -108,29 +108,80 @@ export const notifySupervisorsAndAdmins = async (
   try {
     console.log(`📢 Starting to notify supervisors and admins: ${title}`);
     
-    // FIXED: Use profiles table, not user_roles
-    const { data: supervisors, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, role')
-      .in('role', ['supervisor', 'admin'])
-      .eq('active', true);
+    // CORRECTED: Query user_roles table to get supervisors and admins
+    const { data: userRoles, error } = await supabase
+      .from('user_roles')
+      .select(`
+        user_id,
+        role,
+        profiles!user_roles_user_id_fkey(
+          id,
+          full_name,
+          active
+        )
+      `)
+      .in('role', ['supervisor', 'admin']);
 
     if (error) {
-      console.error('❌ Error fetching supervisors:', error);
+      console.error('❌ Error fetching user roles:', error);
+      
+      // Fallback: Try a simpler query
+      console.log('🔄 Trying fallback query...');
+      const { data: simpleRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('role', ['supervisor', 'admin']);
+      
+      if (simpleRoles) {
+        console.log(`👥 Found ${simpleRoles.length} supervisors/admins via fallback query`);
+        const notificationPromises = simpleRoles.map(role => 
+          sendInAppNotification(role.user_id, title, message, type, relatedId)
+        );
+        await Promise.all(notificationPromises);
+        return;
+      }
       return;
     }
 
-    console.log(`👥 Found ${supervisors?.length || 0} supervisors/admins`);
+    console.log(`👥 Found ${userRoles?.length || 0} supervisor/admin roles:`, userRoles);
 
-    if (supervisors && supervisors.length > 0) {
-      const notificationPromises = supervisors.map(supervisor => 
-        sendInAppNotification(supervisor.id, title, message, type, relatedId)
+    if (userRoles && userRoles.length > 0) {
+      // Filter to only active profiles if we have that info
+      const activeRoles = userRoles.filter(role => 
+        role.profiles?.active !== false
+      );
+      
+      console.log(`👥 ${activeRoles.length} active supervisors/admins after filtering`);
+      
+      const notificationPromises = activeRoles.map(role => 
+        sendInAppNotification(role.user_id, title, message, type, relatedId)
       );
 
       const results = await Promise.all(notificationPromises);
       const successful = results.filter(result => result).length;
       
-      console.log(`🎯 Notifications sent: ${successful}/${supervisors.length} successful`);
+      console.log(`🎯 Notifications sent: ${successful}/${activeRoles.length} successful`);
+    } else {
+      console.warn('⚠️ WARNING: No supervisors/admins found in user_roles table!');
+      
+      // Emergency fallback: Try to find ANY user with supervisor or admin role in profiles
+      console.log('🚨 Emergency fallback: Checking profiles table directly');
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, role')
+        .in('role', ['supervisor', 'admin'])
+        .limit(5);
+      
+      if (profiles && profiles.length > 0) {
+        console.log(`🆘 Found ${profiles.length} supervisors/admins in profiles table`);
+        const notificationPromises = profiles.map(profile => 
+          sendInAppNotification(profile.id, title, message, type, relatedId)
+        );
+        await Promise.all(notificationPromises);
+      } else {
+        console.error('❌ CRITICAL: No supervisors or admins found anywhere in the system!');
+        toast.warning('No supervisors found to notify. Please check user roles.');
+      }
     }
   } catch (error) {
     console.error('❌ Error notifying supervisors:', error);
@@ -138,7 +189,7 @@ export const notifySupervisorsAndAdmins = async (
 };
 
 /**
- * Send PTO request notifications - FIXED
+ * Send PTO request notifications - UPDATED
  */
 export const sendPTORequestNotification = async (
   requestId: string,
@@ -229,7 +280,7 @@ export const sendPTORequestNotification = async (
 };
 
 /**
- * Send vacancy alert notifications - FIXED
+ * Send vacancy alert notifications - UPDATED TO USE user_roles TABLE
  */
 export const sendVacancyAlert = async (
   position: string,
@@ -247,24 +298,23 @@ export const sendVacancyAlert = async (
 
     console.log('📢 Sending vacancy alert to supervisors/admins');
     
-    // FIXED: Use profiles table, not user_roles
-    const { data: supervisors, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, role')
-      .in('role', ['supervisor', 'admin'])
-      .eq('active', true);
+    // CORRECTED: Use user_roles table
+    const { data: userRoles, error } = await supabase
+      .from('user_roles')
+      .select('user_id, role')
+      .in('role', ['supervisor', 'admin']);
 
     if (error) {
-      console.error('❌ Error fetching supervisors:', error);
+      console.error('❌ Error fetching user roles:', error);
       return;
     }
 
-    console.log(`👥 Found ${supervisors?.length || 0} supervisors/admins`);
+    console.log(`👥 Found ${userRoles?.length || 0} supervisors/admins in user_roles`);
 
-    if (supervisors && supervisors.length > 0) {
-      const notificationPromises = supervisors.map(supervisor => 
+    if (userRoles && userRoles.length > 0) {
+      const notificationPromises = userRoles.map(role => 
         sendInAppNotification(
-          supervisor.id,
+          role.user_id,
           'New Vacancy Alert',
           `Vacancy created for ${position} on ${format(new Date(date), 'MMM d, yyyy')} (${shift})`,
           'vacancy_alert'
@@ -274,7 +324,7 @@ export const sendVacancyAlert = async (
       const results = await Promise.all(notificationPromises);
       const successful = results.filter(result => result).length;
       
-      console.log(`🎯 Vacancy notifications sent: ${successful}/${supervisors.length} successful`);
+      console.log(`🎯 Vacancy notifications sent: ${successful}/${userRoles.length} successful`);
       toast.success(`Vacancy alert sent to ${successful} supervisor(s)`);
     }
   } catch (error) {

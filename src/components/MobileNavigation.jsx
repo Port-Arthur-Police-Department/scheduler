@@ -1,4 +1,4 @@
-// src/components/MobileNavigation.jsx - Matches Dashboard header blur
+// src/components/MobileNavigation.jsx - Fixed with proper admin access
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -10,7 +10,10 @@ import {
   Clock,
   UserPlus,
   LogOut,
-  X
+  X,
+  Briefcase,
+  FileText,
+  Shield
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,18 +24,45 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const allTabs = [
+  // Define ALL navigation items
+  const allNavItems = [
+    // Primary tabs (always in bottom bar for quick access)
     { id: 'daily', label: 'Riding List', icon: Calendar, roles: ['all'], primary: true },
     { id: 'schedule', label: 'The Book', icon: CalendarDays, roles: ['all'], primary: true },
     { id: 'requests', label: 'PTO', icon: Clock, roles: ['all'], primary: true },
-    { id: 'officers', label: 'Officers', icon: Users, roles: ['supervisor', 'admin'] },
-    { id: 'vacancies', label: 'Vacancies', icon: AlertTriangle, roles: ['supervisor', 'admin'] },
-    { id: 'staff', label: 'Staff', icon: UserPlus, roles: ['supervisor', 'admin'] },
-    { id: 'settings', label: 'Settings', icon: Settings, roles: ['admin'] },
+    
+    // Supervisor/Admin tabs (in menu)
+    { id: 'officers', label: 'Officers', icon: Users, roles: ['supervisor', 'admin'], icon: Users },
+    { id: 'vacancies', label: 'Vacancies', icon: AlertTriangle, roles: ['supervisor', 'admin'], icon: AlertTriangle },
+    { id: 'staff', label: 'Staff Management', icon: UserPlus, roles: ['supervisor', 'admin'], icon: UserPlus },
+    
+    // Admin-only tabs (in menu)
+    { id: 'settings', label: 'Website Settings', icon: Settings, roles: ['admin'], icon: Settings },
   ];
 
-  const primaryTabs = allTabs.filter(tab => tab.primary);
-  const secondaryTabs = allTabs.filter(tab => !tab.primary);
+  // Filter tabs based on user role
+  const getVisibleTabs = () => {
+    return allNavItems.filter(item => {
+      if (item.roles.includes('all')) return true;
+      if (item.roles.includes('supervisor') && isAdminOrSupervisor) return true;
+      if (item.roles.includes('admin') && isAdmin) return true;
+      return false;
+    });
+  };
+
+  const visibleTabs = getVisibleTabs();
+  
+  // Separate into primary (bottom bar) and secondary (menu)
+  const primaryTabs = visibleTabs.filter(tab => tab.primary);
+  const secondaryTabs = visibleTabs.filter(tab => !tab.primary);
+
+  // Group secondary tabs by role for better organization in menu
+  const supervisorTabs = secondaryTabs.filter(tab => 
+    tab.roles.includes('supervisor') && !tab.roles.includes('admin')
+  );
+  const adminOnlyTabs = secondaryTabs.filter(tab => 
+    tab.roles.includes('admin')
+  );
 
   const handleTabClick = (tabId) => {
     onTabChange(tabId);
@@ -59,16 +89,11 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
 
   return (
     <>
-      {/* Bottom Navigation Bar - MATCHES DASHBOARD HEADER BLUR */}
+      {/* Bottom Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 dashboard-blur border-t border-border/50 shadow-sm z-40 safe-area-bottom mobile-nav-elevation">
         <div className="flex justify-around items-center h-16 px-2">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
-            const hasAccess = tab.roles.includes('all') || 
-              (tab.roles.includes('supervisor') && isAdminOrSupervisor) ||
-              (tab.roles.includes('admin') && isAdmin);
-            
-            if (!hasAccess) return null;
             
             return (
               <button
@@ -81,7 +106,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {/* Active indicator dot - matches Dashboard active states */}
+                {/* Active indicator dot */}
                 <div className={cn(
                   "absolute -top-1 w-8 h-1 bg-primary rounded-full transition-all duration-300",
                   activeTab === tab.id 
@@ -105,19 +130,29 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
               </button>
             );
           })}
+          
+          {/* FAB/Menu Button - Shows count of available options */}
+          <button
+            onClick={() => setIsMenuOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 h-full relative mobile-nav-button text-muted-foreground hover:text-foreground"
+            aria-label={`Open menu (${secondaryTabs.length} more options)`}
+          >
+            <div className="p-2 rounded-lg group-hover:bg-muted/50">
+              <div className="relative">
+                <Plus className="h-5 w-5" />
+                {secondaryTabs.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {secondaryTabs.length}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className="text-xs font-medium mt-1">More</span>
+          </button>
         </div>
       </nav>
 
-      {/* Floating Action Button - Matches Dashboard primary button style */}
-      <button
-        onClick={() => setIsMenuOpen(true)}
-        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95 mobile-nav-button"
-        aria-label="Open menu"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
-
-      {/* Menu Overlay - Also uses Dashboard blur style */}
+      {/* Menu Overlay */}
       {isMenuOpen && (
         <>
           {/* Backdrop */}
@@ -126,19 +161,24 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
             onClick={() => setIsMenuOpen(false)}
           />
           
-          {/* Menu Sheet - Uses same blur as Dashboard */}
+          {/* Menu Sheet */}
           <div className="fixed inset-x-0 bottom-0 z-50 animate-in">
-            <div className="dashboard-blur rounded-t-2xl border-t border-border/50 shadow-lg mx-auto max-w-lg">
+            <div className="dashboard-blur rounded-t-2xl border-t border-border/50 shadow-lg mx-auto max-w-lg max-h-[80vh] overflow-y-auto">
               
               {/* Drag Handle */}
-              <div className="flex justify-center pt-3 pb-2">
+              <div className="flex justify-center pt-3 pb-2 sticky top-0 bg-inherit">
                 <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
               </div>
               
               {/* Menu Header */}
-              <div className="px-6 pt-2 pb-4">
+              <div className="px-6 pt-2 pb-4 sticky top-4 bg-inherit">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">More Options</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold">More Options</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {isAdmin ? 'Administrator' : isAdminOrSupervisor ? 'Supervisor' : 'Officer'} Tools
+                    </p>
+                  </div>
                   <button
                     onClick={() => setIsMenuOpen(false)}
                     className="p-2 rounded-lg hover:bg-muted/50 transition-colors mobile-nav-button"
@@ -150,42 +190,116 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
               </div>
 
               {/* Secondary Menu Items */}
-              <div className="px-4 pb-4 space-y-2">
-                {secondaryTabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const hasAccess = tab.roles.includes('all') || 
-                    (tab.roles.includes('supervisor') && isAdminOrSupervisor) ||
-                    (tab.roles.includes('admin') && isAdmin);
-                  
-                  if (!hasAccess) return null;
-                  
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleTabClick(tab.id)}
-                      className={cn(
-                        "flex items-center w-full p-4 rounded-lg hover:bg-muted/50 transition-all duration-200 active:scale-95 mobile-nav-button",
-                        activeTab === tab.id && "bg-primary/10 text-primary"
-                      )}
-                    >
-                      <div className="p-2 rounded-lg bg-muted/50 mr-3">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <span className="font-medium">{tab.label}</span>
-                    </button>
-                  );
-                })}
+              <div className="px-4 pb-4 space-y-4">
+                {/* Supervisor Tools Section */}
+                {supervisorTabs.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground px-4 mb-2">
+                      Supervisor Tools
+                    </h4>
+                    <div className="space-y-2">
+                      {supervisorTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => handleTabClick(tab.id)}
+                            className={cn(
+                              "flex items-center w-full p-4 rounded-lg hover:bg-muted/50 transition-all duration-200 active:scale-95 mobile-nav-button",
+                              activeTab === tab.id && "bg-primary/10 text-primary border-l-4 border-primary"
+                            )}
+                          >
+                            <div className="p-2 rounded-lg bg-muted/50 mr-3">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium block">{tab.label}</span>
+                              {tab.description && (
+                                <span className="text-xs text-muted-foreground">{tab.description}</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin Tools Section */}
+                {adminOnlyTabs.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground px-4 mb-2">
+                      <Shield className="h-3 w-3 inline mr-1" />
+                      Administrator Tools
+                    </h4>
+                    <div className="space-y-2">
+                      {adminOnlyTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => handleTabClick(tab.id)}
+                            className={cn(
+                              "flex items-center w-full p-4 rounded-lg hover:bg-muted/50 transition-all duration-200 active:scale-95 mobile-nav-button",
+                              activeTab === tab.id && "bg-primary/10 text-primary border-l-4 border-primary"
+                            )}
+                          >
+                            <div className="p-2 rounded-lg bg-muted/50 mr-3">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium block">{tab.label}</span>
+                              {tab.id === 'settings' && (
+                                <span className="text-xs text-muted-foreground">Configure website settings</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* All Other Secondary Tabs */}
+                {secondaryTabs.filter(tab => 
+                  !supervisorTabs.includes(tab) && !adminOnlyTabs.includes(tab)
+                ).length > 0 && (
+                  <div className="space-y-2">
+                    {secondaryTabs.filter(tab => 
+                      !supervisorTabs.includes(tab) && !adminOnlyTabs.includes(tab)
+                    ).map((tab) => {
+                      const Icon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => handleTabClick(tab.id)}
+                          className={cn(
+                            "flex items-center w-full p-4 rounded-lg hover:bg-muted/50 transition-all duration-200 active:scale-95 mobile-nav-button",
+                            activeTab === tab.id && "bg-primary/10 text-primary"
+                          )}
+                        >
+                          <div className="p-2 rounded-lg bg-muted/50 mr-3">
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <span className="font-medium">{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 
                 {/* Sign Out Button */}
-                <button
-                  onClick={handleSignOut}
-                  className="flex items-center w-full p-4 rounded-lg text-destructive hover:bg-destructive/10 transition-all duration-200 active:scale-95 mt-4 mobile-nav-button"
-                >
-                  <div className="p-2 rounded-lg bg-destructive/10 mr-3">
-                    <LogOut className="h-5 w-5" />
-                  </div>
-                  <span className="font-medium">Sign Out</span>
-                </button>
+                <div className="pt-4 border-t border-border/50">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center w-full p-4 rounded-lg text-destructive hover:bg-destructive/10 transition-all duration-200 active:scale-95 mobile-nav-button"
+                  >
+                    <div className="p-2 rounded-lg bg-destructive/10 mr-3">
+                      <LogOut className="h-5 w-5" />
+                    </div>
+                    <span className="font-medium">Sign Out</span>
+                  </button>
+                </div>
               </div>
 
               {/* Safe Area Padding */}

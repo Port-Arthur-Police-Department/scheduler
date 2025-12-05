@@ -416,8 +416,8 @@ const renderTabContent = () => {
       return isAdminOrSupervisor ? <VacancyManagement /> : <VacancyAlerts userId={user!.id} isAdminOrSupervisor={false} />;
     case "staff":
       return <StaffManagement />;
-    case "requests":
-      return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
+   case "requests":
+     return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
     case "settings":
       return <WebsiteSettings />;
     default:

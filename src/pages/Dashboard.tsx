@@ -384,48 +384,52 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     );
   }
 
-  const renderTabContent = () => {
-    console.log("🔄 Rendering tab content for:", activeTab);
-    
-    switch (activeTab) {
-      case "daily":
-        return isAdminOrSupervisor ? (
-          <DailyScheduleManagement isAdminOrSupervisor={isAdminOrSupervisor} />
-        ) : (
-          <DailyScheduleView 
-            selectedDate={new Date()} 
-            isAdminOrSupervisor={false} 
-            userRole="officer" 
-          />
-        );
-      case "schedule":
-        return (
+const renderTabContent = () => {
+  console.log("🔄 Rendering tab content for:", activeTab);
+  
+  switch (activeTab) {
+    case "daily":
+      return isAdminOrSupervisor ? (
+        <DailyScheduleManagement isAdminOrSupervisor={isAdminOrSupervisor} />
+      ) : (
+        <DailyScheduleView 
+          selectedDate={new Date()} 
+          isAdminOrSupervisor={false} 
+          userRole="officer" 
+        />
+      );
+    case "schedule":
+      // This is where we use the responsive The Book
+      return (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold">The Book</h2>
+          <p className="text-muted-foreground mb-4">Schedule management with weekly, monthly, and other views</p>
           <ResponsiveTheBook 
             userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
             isAdminOrSupervisor={isAdminOrSupervisor}
           />
-        );
-      case "officers":
-        return <OfficersManagement userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
-      case "vacancies":
-        return isAdminOrSupervisor ? <VacancyManagement /> : <VacancyAlerts userId={user!.id} isAdminOrSupervisor={false} />;
-      case "staff":
-        return <StaffManagement />;
-      case "requests":
-        return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
-      case "settings":
-        return <WebsiteSettings />;
-      default:
-        console.warn("Unknown tab:", activeTab);
-        return (
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-muted-foreground">Tab not found: {activeTab}</p>
-            </CardContent>
-          </Card>
-        );
-    }
-  };
+        </div>
+      );
+    case "officers":
+      return <OfficersManagement userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
+    case "vacancies":
+      return isAdminOrSupervisor ? <VacancyManagement /> : <VacancyAlerts userId={user!.id} isAdminOrSupervisor={false} />;
+    case "staff":
+      return <StaffManagement />;
+    case "requests":
+      return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
+    case "settings":
+      return <WebsiteSettings />;
+    default:
+      return (
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">Tab not found: {activeTab}</p>
+          </CardContent>
+        </Card>
+      );
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10">

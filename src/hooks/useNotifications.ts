@@ -1,4 +1,4 @@
-// hooks/useNotifications.ts - FINAL VERSION
+// hooks/useNotifications.ts - FIXED HOOK ORDER
 import { useState, useEffect } from 'react';
 import { NotificationService } from '../utils/notifications';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,7 @@ export interface InAppNotification {
 }
 
 export const useNotifications = () => {
+  // ALL HOOKS MUST BE CALLED AT THE TOP LEVEL, IN THE SAME ORDER
   const [isSupported, setIsSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isEnabled, setIsEnabled] = useState(false);
@@ -24,88 +25,113 @@ export const useNotifications = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-// Add this debug useEffect at the top of your hook, after state declarations
-useEffect(() => {
-  console.log('🔔 [HOOK STATE] Current state:', {
-    userId,
-    inAppNotificationsCount: inAppNotifications?.length,
-    unreadCount,
-    notificationsLoading,
-    queryEnabled: !!userId
-  });
-}, [userId, inAppNotifications, unreadCount, notificationsLoading]);
+  // Auth initialization - MOVED TO USE EFFECT
+  useEffect(() => {
+    let mounted = true;
 
-// Also update the query to log more details
-const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
-  queryKey: ['in-app-notifications', userId],
-  queryFn: async () => {
-    if (!userId) {
-      console.log('⚠️ [QUERY] No user ID, skipping notification fetch');
-      return [];
-    }
-    
-    console.log('🔔 [QUERY] Fetching notifications for user:', userId);
-    
-    try {
-      // Test the query with very simple parameters first
-      console.log('🔔 [QUERY] Testing simple query...');
-      
-      const { data, error, count } = await supabase
-        .from('notifications')
-        .select('id, title', { count: 'exact' }) // Start with minimal fields
-        .eq('user_id', userId)
-        .limit(5);
-
-      console.log('🔔 [QUERY] Simple test result:', {
-        success: !error,
-        dataLength: data?.length,
-        count,
-        error: error?.message,
-        userId
-      });
-
-      if (error) {
-        console.error('❌ [QUERY] Error in simple test:', error);
-        // Try without user_id filter to see if RLS is the issue
-        const { data: allData, error: allError } = await supabase
-          .from('notifications')
-          .select('id, user_id, title')
-          .limit(5);
+    const initNotifications = async () => {
+      try {
+        // Get current user from Supabase auth
+        console.log('🔔 [AUTH] Getting current user...');
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
         
-        console.log('🔔 [QUERY] All notifications test:', {
-          allDataLength: allData?.length,
-          allError: allError?.message
+        if (authError) {
+          console.error('❌ [AUTH] Error getting user:', authError);
+          return;
+        }
+        
+        console.log('👤 [AUTH] Current user:', {
+          id: user?.id,
+          email: user?.email,
+          hasId: !!user?.id
         });
         
-        throw error;
-      }
+        if (mounted) {
+          setUserId(user?.id || null);
+          console.log('👤 [AUTH] Set user ID in state:', user?.id);
+        }
 
-      // If simple query worked, get full data
-      console.log('🔔 [QUERY] Simple query successful, fetching full data...');
-      
-      const { data: fullData, error: fullError } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        // Check if notifications are supported
+        const supported = 'Notification' in window && 'serviceWorker' in navigator;
+        setIsSupported(supported);
+        console.log('🔔 [AUTH] Notifications supported:', supported);
 
-      if (fullError) {
-        console.error('❌ [QUERY] Error fetching full data:', fullError);
-        throw fullError;
+        if (supported) {
+          const service = NotificationService.getInstance();
+          setNotificationService(service);
+          
+          // Initialize notifications
+          await service.initialize();
+          
+          // Get current permission status
+          const currentPermission = Notification.permission;
+          setPermission(currentPermission);
+          setIsEnabled(currentPermission === 'granted');
+          console.log('🔔 [AUTH] Notification permission:', currentPermission);
+        }
+      } catch (error) {
+        console.error('❌ [AUTH] Error initializing notifications:', error);
+      }
+    };
+
+    initNotifications();
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('🔄 [AUTH] Auth state changed:', event, 'User ID:', session?.user?.id);
+        
+        if (mounted) {
+          setUserId(session?.user?.id || null);
+          console.log('🔄 [AUTH] Updated user ID in state:', session?.user?.id);
+          
+          // Invalidate queries when user changes
+          queryClient.invalidateQueries({ queryKey: ['in-app-notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [queryClient]); // Add queryClient to dependencies
+
+  // Fetch in-app notifications - MUST BE AFTER ALL useState calls
+  const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
+    queryKey: ['in-app-notifications', userId],
+    queryFn: async () => {
+      if (!userId) {
+        console.log('⚠️ [QUERY] No user ID, skipping notification fetch');
+        return [];
       }
       
-      console.log(`✅ [QUERY] Found ${fullData?.length || 0} notifications for user ${userId}`);
-      console.log('✅ [QUERY] First notification:', fullData?.[0]);
-      return fullData as InAppNotification[];
-    } catch (error) {
-      console.error('❌ [QUERY] Failed to fetch notifications:', error);
-      return [];
-    }
-  },
-  enabled: !!userId,
-  refetchInterval: 30000,
-});
+      console.log('🔔 [QUERY] Fetching notifications for user:', userId);
+      
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) {
+          console.error('❌ [QUERY] Error fetching notifications:', error);
+          throw error;
+        }
+        
+        console.log(`✅ [QUERY] Found ${data?.length || 0} notifications for user ${userId}`);
+        return data as InAppNotification[];
+      } catch (error) {
+        console.error('❌ [QUERY] Failed to fetch notifications:', error);
+        return [];
+      }
+    },
+    enabled: !!userId,
+    refetchInterval: 30000,
+  });
 
   // Fetch unread count
   const { data: unreadCount } = useQuery({
@@ -189,6 +215,7 @@ const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
     },
   });
 
+  // Helper functions
   const requestPermission = async (): Promise<boolean> => {
     if (!notificationService) return false;
 
@@ -220,6 +247,17 @@ const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
       notificationService.scheduleShiftReminder(shiftTime, shiftDetails);
     }
   };
+
+  // Debug useEffect - MUST BE AFTER ALL HOOKS
+  useEffect(() => {
+    console.log('🔔 [HOOK STATE] Current state:', {
+      userId,
+      inAppNotificationsCount: inAppNotifications?.length,
+      unreadCount,
+      notificationsLoading,
+      queryEnabled: !!userId
+    });
+  }, [userId, inAppNotifications, unreadCount, notificationsLoading]);
 
   return {
     // Browser notifications

@@ -114,6 +114,106 @@ All colors MUST be HSL.
   }
 }
 
+/* Enhanced Blur Effects for Mobile Navigation */
+@supports (backdrop-filter: blur(10px)) {
+  .backdrop-blur-xl {
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+  
+  .backdrop-blur-2xl {
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+  }
+
+  .backdrop-blur-lg {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+/* iOS-style Safe Area Support */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 1rem);
+}
+
+/* Smooth Touch Interactions */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Scrollbar Hiding for Mobile */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Menu Animation Keyframes */
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Animation Classes */
+.animate-in {
+  animation: slideInFromBottom 0.3s ease-out;
+}
+
+.animate-in-left {
+  animation: slideInFromLeft 0.3s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.fade-out {
+  animation: fadeOut 0.2s ease-out;
+}
+
 /* Mobile-Responsive Styles */
 @layer components {
   /* Horizontal scrolling with momentum */
@@ -121,6 +221,31 @@ All colors MUST be HSL.
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+  }
+
+  /* Mobile bottom navigation elevation */
+  .mobile-nav-elevation {
+    box-shadow: 
+      0 -4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 -2px 4px -1px rgba(0, 0, 0, 0.06),
+      0 -20px 25px -5px rgba(0, 0, 0, 0.05);
+  }
+
+  /* FAB (Floating Action Button) shadow */
+  .fab-shadow {
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05),
+      0 25px 50px -12px rgba(59, 130, 246, 0.25);
+  }
+
+  /* Frosted glass effect */
+  .frosted-glass {
+    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-white/20 dark:border-gray-800/50;
+  }
+
+  .frosted-glass-dark {
+    @apply bg-gray-900/80 backdrop-blur-xl border-gray-800/50;
   }
 
   /* Mobile breakpoint utilities */
@@ -139,6 +264,22 @@ All colors MUST be HSL.
 
     .mobile-full-width {
       width: 100%;
+    }
+
+    /* Enhanced mobile typography */
+    h1 {
+      font-size: 1.5rem;
+      line-height: 2rem;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      line-height: 1.75rem;
+    }
+
+    h3 {
+      font-size: 1.125rem;
+      line-height: 1.5rem;
     }
   }
 
@@ -160,6 +301,12 @@ All colors MUST be HSL.
   [role="button"] {
     min-height: 44px;
     touch-action: manipulation;
+  }
+
+  /* Mobile navigation specific */
+  .mobile-nav-button {
+    min-height: 44px;
+    min-width: 44px;
   }
 
   /* Full-width inputs */
@@ -228,19 +375,6 @@ All colors MUST be HSL.
     border-radius: 0;
   }
 
-  /* Responsive text */
-  h1 {
-    font-size: 1.5rem;
-  }
-
-  h2 {
-    font-size: 1.25rem;
-  }
-
-  h3 {
-    font-size: 1.125rem;
-  }
-
   /* Hide logo on very small screens */
   header img {
     width: 3rem;
@@ -255,6 +389,20 @@ All colors MUST be HSL.
   [role="dialog"] .flex.gap-2 > button {
     width: 100%;
   }
+
+  /* Mobile menu backdrop */
+  .mobile-menu-backdrop {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+  }
+
+  /* Prevent body scroll when menu is open */
+  body.menu-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 /* Tablet optimizations */
@@ -263,4 +411,84 @@ All colors MUST be HSL.
     padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
+}
+
+/* PWA Specific Styles */
+@media (display-mode: standalone) {
+  /* Hide browser UI elements in PWA mode */
+  body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Add safe area for iOS PWA */
+  .pwa-safe-area {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Enhanced touch feedback */
+  button:active, 
+  a:active, 
+  [role="button"]:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+    transition: opacity 0.1s, transform 0.1s;
+  }
+}
+
+/* Loading States */
+.loading-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Gradient Text Effects */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass Morphism Utilities */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive Image Containers */
+.responsive-img-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+}
+
+.responsive-img-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }

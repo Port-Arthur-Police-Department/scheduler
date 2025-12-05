@@ -25,7 +25,7 @@ export const NotificationsBell = () => {
     isEnabled,
     requestPermission,
     testNotification 
-  } = useNotifications(); /
+  } = useNotifications(); 
 
   const handleBellClick = async () => {
     if (!isEnabled) {

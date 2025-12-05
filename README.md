@@ -35,3 +35,5 @@ This solution integrates seamlessly with your existing PTO management system whi
 * PTO request to be applied to schedule after approved
 * mobile weekly and monthly not passing recurring schedules or exceptions. Update: its loading the schedule and assignments, just not graying out the days off
 
+* remove staffing overview from mobile
+

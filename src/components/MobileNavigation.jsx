@@ -36,14 +36,22 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
   // Combine visible tabs
   const visibleTabs = [...alwaysVisibleTabs, ...adminSupervisorTabs];
 
-  // Tabs for the "More" dropdown
-  const moreOptions = [
-    { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
-  ];
-
-  // Add Staff tab to More options if admin
+  // Tabs for the "More" dropdown - ONLY FOR ADMINS
+  const moreOptions = [];
+  
+  // Only add Staff and Settings to More options if user is an Admin
   if (isAdmin) {
-    moreOptions.unshift({ id: 'staff', label: 'Staff', icon: <UserPlus className="h-5 w-5" /> });
+    moreOptions.push(
+      { id: 'staff', label: 'Staff', icon: <UserPlus className="h-5 w-5" /> },
+      { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> }
+    );
+  }
+  
+  // If not admin but is supervisor, only add Staff (without Settings)
+  else if (isAdminOrSupervisor) {
+    moreOptions.push(
+      { id: 'staff', label: 'Staff', icon: <UserPlus className="h-5 w-5" /> }
+    );
   }
 
   const scrollTabs = (direction) => {
@@ -102,7 +110,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 </button>
               ))}
 
-              {/* More options dropdown - always show if we have moreOptions */}
+              {/* More options dropdown - only show if we have moreOptions */}
               {moreOptions.length > 0 && (
                 <Sheet>
                   <SheetTrigger asChild>

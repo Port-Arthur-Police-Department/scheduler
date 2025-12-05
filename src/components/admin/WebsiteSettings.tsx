@@ -1,4 +1,4 @@
-// components/settings/WebsiteSettings.tsx - UPDATED WITH PTO TYPE TOGGLES AND AUDIT LOGGING
+// components/settings/WebsiteSettings.tsx - UPDATED WITH IMPROVED NOTIFICATION CONTROLS
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Palette, Eye, EyeOff, Download, Filter, Search, Trash2, CalendarIcon } from "lucide-react";
+import { Loader2, Palette, Eye, EyeOff, Download, Filter, Search, Trash2, CalendarIcon, Bell, AlertCircle } from "lucide-react";
 import { PasswordResetManager } from "@/components/admin/PasswordResetManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +87,23 @@ const DEFAULT_PTO_VISIBILITY = {
   show_comp_pto: false,
 };
 
+// Default notification settings
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  // Global toggle
+  enable_notifications: false,
+  
+  // Specific notification types
+  enable_vacancy_alerts: true, // NEW: Controls vacancy alert buttons
+  enable_pto_request_notifications: true, // NEW: Notify supervisors/admin when PTO is requested
+  enable_pto_status_notifications: true, // NEW: Notify user when PTO request is approved/denied
+  enable_supervisor_pto_notifications: true, // NEW: Notify supervisors/admin of PTO requests
+  enable_schedule_change_notifications: true, // NEW: Notify users of schedule changes
+  
+  // Notification display settings
+  show_pto_balances: false,
+  pto_balances_visible: false,
+};
+
 // Add this interface
 interface AuditLog {
   id: string;
@@ -103,7 +120,7 @@ interface AuditLog {
 // Add this component inside your WebsiteSettings component
 const AuditLogViewer = () => {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 2), // CHANGED: 2 days instead of 30
+    from: subDays(new Date(), 2),
     to: new Date()
   });
   const [selectedActionTypes, setSelectedActionTypes] = useState<string[]>([]);
@@ -211,7 +228,7 @@ const AuditLogViewer = () => {
     setSelectedTables([]);
     setSearchQuery("");
     setDateRange({
-      from: subDays(new Date(), 2), // CHANGED: 2 days instead of 30
+      from: subDays(new Date(), 2),
       to: new Date()
     });
   };
@@ -449,9 +466,7 @@ export const WebsiteSettings = () => {
           const { data: newSettings, error: createError } = await supabase
             .from('website_settings')
             .insert({
-              enable_notifications: false,
-              show_pto_balances: false,
-              pto_balances_visible: false,
+              ...DEFAULT_NOTIFICATION_SETTINGS,
               color_settings: DEFAULT_COLORS,
               pto_type_visibility: DEFAULT_PTO_VISIBILITY
             })
@@ -487,6 +502,13 @@ export const WebsiteSettings = () => {
       } else {
         // Merge with defaults to ensure all properties exist
         data.pto_type_visibility = { ...DEFAULT_PTO_VISIBILITY, ...data.pto_type_visibility };
+      }
+      
+      // Ensure notification settings exist
+      for (const key in DEFAULT_NOTIFICATION_SETTINGS) {
+        if (data[key] === undefined) {
+          data[key] = DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS];
+        }
       }
       
       return data;
@@ -635,6 +657,7 @@ export const WebsiteSettings = () => {
       id: settings?.id,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+      ...DEFAULT_NOTIFICATION_SETTINGS,
     });
   };
 
@@ -651,22 +674,26 @@ export const WebsiteSettings = () => {
 
   return (
     <div className="space-y-6">
+      {/* Notification Settings Card - UPDATED */}
       <Card>
         <CardHeader>
-          <CardTitle>Website Settings</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notification Settings
+          </CardTitle>
           <CardDescription>
-            Manage global website settings and feature toggles
+            Control notification features and alerts for the entire system
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Existing toggles */}
+          {/* Global Notification Toggle */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="notifications-toggle" className="text-base">
-                Enable Notifications Feature
+                Enable All Notifications
               </Label>
               <div className="text-sm text-muted-foreground">
-                When disabled, the create notifications feature will be hidden from all users
+                Master switch for all notification features. When disabled, no notifications will be sent.
               </div>
             </div>
             <Switch
@@ -679,13 +706,109 @@ export const WebsiteSettings = () => {
             />
           </div>
 
+          {/* Individual Notification Types */}
+          {settings?.enable_notifications && (
+            <div className="space-y-4 pl-4 border-l-2">
+              {/* Vacancy Alerts */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="vacancy-alerts-toggle" className="text-base">
+                    Enable Vacancy Alerts
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    When disabled, vacancy alert buttons will be hidden from all users
+                  </div>
+                </div>
+                <Switch
+                  id="vacancy-alerts-toggle"
+                  checked={settings?.enable_vacancy_alerts || true}
+                  onCheckedChange={(checked) => 
+                    handleToggle('enable_vacancy_alerts', checked)
+                  }
+                  disabled={updateSettingsMutation.isPending}
+                />
+              </div>
+
+              {/* PTO Request Notifications */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="pto-request-notifications-toggle" className="text-base">
+                    PTO Request Notifications
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    Notify supervisors and admins when a new PTO request is submitted
+                  </div>
+                </div>
+                <Switch
+                  id="pto-request-notifications-toggle"
+                  checked={settings?.enable_pto_request_notifications || true}
+                  onCheckedChange={(checked) => 
+                    handleToggle('enable_pto_request_notifications', checked)
+                  }
+                  disabled={updateSettingsMutation.isPending}
+                />
+              </div>
+
+              {/* PTO Status Notifications */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="pto-status-notifications-toggle" className="text-base">
+                    PTO Status Notifications
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    Notify officers when their PTO request is approved or denied
+                  </div>
+                </div>
+                <Switch
+                  id="pto-status-notifications-toggle"
+                  checked={settings?.enable_pto_status_notifications || true}
+                  onCheckedChange={(checked) => 
+                    handleToggle('enable_pto_status_notifications', checked)
+                  }
+                  disabled={updateSettingsMutation.isPending}
+                />
+              </div>
+
+              {/* Schedule Change Notifications */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="schedule-change-notifications-toggle" className="text-base">
+                    Schedule Change Notifications
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    Notify users when their schedule is updated
+                  </div>
+                </div>
+                <Switch
+                  id="schedule-change-notifications-toggle"
+                  checked={settings?.enable_schedule_change_notifications || true}
+                  onCheckedChange={(checked) => 
+                    handleToggle('enable_schedule_change_notifications', checked)
+                  }
+                  disabled={updateSettingsMutation.isPending}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* PTO Settings Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>PTO Settings</CardTitle>
+          <CardDescription>
+            Manage PTO balance visibility and tracking
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="pto-toggle" className="text-base">
                 Enable PTO Balances
               </Label>
               <div className="text-sm text-muted-foreground">
-                When disabled, PTO balances will be hidden and treated as indefinite
+                When disabled, all PTO balance tracking is turned off and treated as indefinite
               </div>
             </div>
             <Switch
@@ -719,7 +842,7 @@ export const WebsiteSettings = () => {
         </CardContent>
       </Card>
 
-      {/* NEW: PTO Type Visibility Card */}
+      {/* PTO Type Visibility Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1055,21 +1178,37 @@ export const WebsiteSettings = () => {
         </CardContent>
       </Card>
 
-      {/* ADD THE PASSWORD RESET MANAGER HERE - THIS IS WHAT'S MISSING */}
+      {/* Password Reset Manager */}
       <PasswordResetManager />
 
-      {/* ADD THE AUDIT LOG VIEWER */}
+      {/* Audit Log Viewer */}
       <AuditLogViewer />
 
-      {/* Instructions Card - SINGLE UPDATED VERSION */}
+      {/* Instructions Card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">How These Settings Work</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <div>
-            <strong>Notifications Feature:</strong> When disabled, the ability to create new notifications 
-            will be hidden from the interface. Existing notifications will still be visible.
+            <strong>Global Notifications:</strong> Master switch for all notification features. 
+            When disabled, no notifications will be sent regardless of individual settings.
+          </div>
+          <div>
+            <strong>Vacancy Alerts:</strong> When disabled, vacancy alert buttons will be hidden 
+            from all users in the interface.
+          </div>
+          <div>
+            <strong>PTO Request Notifications:</strong> Supervisors and administrators will receive 
+            in-app notifications when officers submit new time off requests.
+          </div>
+          <div>
+            <strong>PTO Status Notifications:</strong> Officers will receive in-app notifications 
+            when their time off requests are approved or denied.
+          </div>
+          <div>
+            <strong>Schedule Change Notifications:</strong> Users will be notified when their 
+            schedule is modified by supervisors or administrators.
           </div>
           <div>
             <strong>PTO Balances:</strong> When disabled, all PTO balance tracking is turned off. 
@@ -1082,14 +1221,6 @@ export const WebsiteSettings = () => {
           <div>
             <strong>Color Customization:</strong> Changes to colors will affect both PDF exports and 
             the weekly schedule display. Changes are saved automatically.
-          </div>
-          <div>
-            <strong>Password Reset:</strong> Administrators can reset passwords for any officer or staff member. 
-            The new password takes effect immediately.
-          </div>
-          <div>
-            <strong>Audit Logs:</strong> View and export system activity and changes made by users. 
-            Filter by date range, action type, user, or search for specific events.
           </div>
         </CardContent>
       </Card>

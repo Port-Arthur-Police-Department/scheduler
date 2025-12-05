@@ -96,9 +96,6 @@ export const sendInAppNotification = async (
   }
 };
 
-/**
- * Send notification to all supervisors and admins - SIMPLIFIED VERSION
- */
 export const notifySupervisorsAndAdmins = async (
   title: string,
   message: string,
@@ -108,44 +105,51 @@ export const notifySupervisorsAndAdmins = async (
   try {
     console.log(`📢 Starting to notify supervisors and admins: ${title}`);
     
-    // SIMPLE QUERY: Just get user_ids from user_roles table (no join needed)
-    const { data: userRoles, error } = await supabase
-      .from('user_roles')
-      .select('user_id')  // Only need user_id
-      .in('role', ['supervisor', 'admin']);
+    // HARDCODED LIST from your SQL results
+    const adminSupervisorIds = [
+      '0af288dc-2053-4f1b-816e-9e1fb7f13593', // admin
+      '04802f6c-5f06-4b74-b1dc-2ee9582c2966', // supervisor
+      '2dcf74c1-75cc-45d3-b778-2e7a32bed1a8', // supervisor
+      'bd53949f-afc8-4bed-82d9-874f08b7fc51', // supervisor
+      '834f536a-21d2-41f1-80e7-de674d8fa3e9', // supervisor
+      '024f0709-4e7e-40a3-89f6-75c62ca6ccea', // admin
+      '7568f2db-307d-462c-ba4f-8be63a41915f', // admin (CURRENT USER)
+      '064bf957-0020-4225-b1df-b5824bba1309', // admin
+      'd5eb1f59-2b01-4103-8f4b-27f6ea519da3', // supervisor
+      '88f26ab8-79cb-4a83-b4c2-cf53af766760', // supervisor
+      '0f43d588-8e4a-450b-8bbe-74a02891616a', // supervisor
+      '2482aefc-1d26-4e57-bf90-c061a1f20873', // supervisor
+      '63508e36-0734-4dc0-a52a-86c7e47b1425', // supervisor
+      '960cecdd-69e4-44f6-afb3-10fad13c4124', // supervisor
+      '01f00bae-231c-49dc-8348-dc308485d922', // supervisor
+      '0ba53728-59cf-4c4b-8e8f-78d0eec6dd49', // supervisor
+      '5df212a4-92a8-4cbe-9c5c-994f9fd2b21a', // supervisor
+      '6bb0f397-f45c-4a31-b498-a91f1f4996d2', // supervisor
+      '12472633-b096-49c2-b206-a8c832057593', // supervisor
+      'b7793f47-0080-4b95-8ccd-f4de2e62384c', // supervisor
+      'bd44632e-6a9e-45ca-82fa-e96d636ebdbf'  // supervisor
+    ];
 
-    if (error) {
-      console.error('❌ Error fetching user roles:', error);
-      console.log('Error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details
-      });
-      return;
-    }
+    console.log(`👥 Using ${adminSupervisorIds.length} hardcoded admin/supervisor IDs`);
+    console.log(`🔍 Current user (7568f2db...) is in list:`, 
+      adminSupervisorIds.includes('7568f2db-307d-462c-ba4f-8be63a41915f'));
+    
+    // Send notifications to each user_id
+    const notificationPromises = adminSupervisorIds.map((userId, index) => {
+      console.log(`📤 [${index}] Sending to user ${userId}`);
+      return sendInAppNotification(userId, title, message, type, relatedId);
+    });
 
-    console.log(`👥 Found ${userRoles?.length || 0} supervisor/admin user IDs:`, userRoles);
-
-    if (userRoles && userRoles.length > 0) {
-      // Send notifications to each user_id
-      const notificationPromises = userRoles.map(role => 
-        sendInAppNotification(role.user_id, title, message, type, relatedId)
-      );
-
-      const results = await Promise.all(notificationPromises);
-      const successful = results.filter(result => result).length;
-      
-      console.log(`🎯 Notifications sent: ${successful}/${userRoles.length} successful`);
-      
-      if (successful > 0) {
-        toast.success(`Notified ${successful} supervisor(s) and admin(s)`);
-      } else {
-        console.error('❌ All notifications failed to send');
-        toast.error('Failed to send notifications to supervisors');
-      }
+    const results = await Promise.all(notificationPromises);
+    const successful = results.filter(result => result).length;
+    
+    console.log(`🎯 Notifications sent: ${successful}/${adminSupervisorIds.length} successful`);
+    
+    if (successful > 0) {
+      toast.success(`Notified ${successful} supervisor(s) and admin(s)`);
     } else {
-      console.warn('⚠️ WARNING: No supervisors/admins found in user_roles table!');
-      toast.warning('No supervisors found to notify. Please check user roles.');
+      console.error('❌ All notifications failed to send');
+      toast.error('Failed to send notifications');
     }
   } catch (error) {
     console.error('❌ Error in notifySupervisorsAndAdmins:', error);
@@ -243,9 +247,6 @@ export const sendPTORequestNotification = async (
   }
 };
 
-/**
- * Send vacancy alert notifications - SIMPLIFIED VERSION
- */
 export const sendVacancyAlert = async (
   position: string,
   date: string,
@@ -262,42 +263,50 @@ export const sendVacancyAlert = async (
 
     console.log('📢 Sending vacancy alert to supervisors/admins');
     
-    // SIMPLE QUERY: Just get user_ids
-    const { data: userRoles, error } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .in('role', ['supervisor', 'admin']);
+    // Use same hardcoded list
+    const adminSupervisorIds = [
+      '0af288dc-2053-4f1b-816e-9e1fb7f13593', // admin
+      '04802f6c-5f06-4b74-b1dc-2ee9582c2966', // supervisor
+      '2dcf74c1-75cc-45d3-b778-2e7a32bed1a8', // supervisor
+      'bd53949f-afc8-4bed-82d9-874f08b7fc51', // supervisor
+      '834f536a-21d2-41f1-80e7-de674d8fa3e9', // supervisor
+      '024f0709-4e7e-40a3-89f6-75c62ca6ccea', // admin
+      '7568f2db-307d-462c-ba4f-8be63a41915f', // admin
+      '064bf957-0020-4225-b1df-b5824bba1309', // admin
+      'd5eb1f59-2b01-4103-8f4b-27f6ea519da3', // supervisor
+      '88f26ab8-79cb-4a83-b4c2-cf53af766760', // supervisor
+      '0f43d588-8e4a-450b-8bbe-74a02891616a', // supervisor
+      '2482aefc-1d26-4e57-bf90-c061a1f20873', // supervisor
+      '63508e36-0734-4dc0-a52a-86c7e47b1425', // supervisor
+      '960cecdd-69e4-44f6-afb3-10fad13c4124', // supervisor
+      '01f00bae-231c-49dc-8348-dc308485d922', // supervisor
+      '0ba53728-59cf-4c4b-8e8f-78d0eec6dd49', // supervisor
+      '5df212a4-92a8-4cbe-9c5c-994f9fd2b21a', // supervisor
+      '6bb0f397-f45c-4a31-b498-a91f1f4996d2', // supervisor
+      '12472633-b096-49c2-b206-a8c832057593', // supervisor
+      'b7793f47-0080-4b95-8ccd-f4de2e62384c', // supervisor
+      'bd44632e-6a9e-45ca-82fa-e96d636ebdbf'  // supervisor
+    ];
 
-    if (error) {
-      console.error('❌ Error fetching user roles:', error);
-      return;
-    }
+    const formattedDate = format(new Date(date), 'MMM d, yyyy');
+    const notificationMessage = `Vacancy created for ${position} on ${formattedDate} (${shift})`;
+    
+    const notificationPromises = adminSupervisorIds.map(userId => 
+      sendInAppNotification(
+        userId,
+        'New Vacancy Alert',
+        notificationMessage,
+        'vacancy_alert'
+      )
+    );
 
-    console.log(`👥 Found ${userRoles?.length || 0} supervisors/admins in user_roles`);
-
-    if (userRoles && userRoles.length > 0) {
-      const formattedDate = format(new Date(date), 'MMM d, yyyy');
-      const notificationMessage = `Vacancy created for ${position} on ${formattedDate} (${shift})`;
-      
-      const notificationPromises = userRoles.map(role => 
-        sendInAppNotification(
-          role.user_id,
-          'New Vacancy Alert',
-          notificationMessage,
-          'vacancy_alert'
-        )
-      );
-
-      const results = await Promise.all(notificationPromises);
-      const successful = results.filter(result => result).length;
-      
-      console.log(`🎯 Vacancy notifications sent: ${successful}/${userRoles.length} successful`);
-      
-      if (successful > 0) {
-        toast.success(`Vacancy alert sent to ${successful} supervisor(s)`);
-      }
-    } else {
-      console.warn('⚠️ No supervisors/admins found to notify');
+    const results = await Promise.all(notificationPromises);
+    const successful = results.filter(result => result).length;
+    
+    console.log(`🎯 Vacancy notifications sent: ${successful}/${adminSupervisorIds.length} successful`);
+    
+    if (successful > 0) {
+      toast.success(`Vacancy alert sent to ${successful} supervisor(s)`);
     }
   } catch (error) {
     console.error('❌ Error sending vacancy alert:', error);

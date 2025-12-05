@@ -1,4 +1,4 @@
-// src/components/MobileNavigation.jsx - FAB Version with Blurred Bottom Bar
+// src/components/MobileNavigation.jsx - Final FAB version using your CSS classes
 import React, { useState } from 'react';
 import { 
   Plus, 
@@ -46,10 +46,22 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
     navigate("/auth");
   };
 
+  // Prevent body scroll when menu is open
+  React.useEffect(() => {
+    if (isMenuOpen) {
+      document.body.classList.add('menu-open');
+    } else {
+      document.body.classList.remove('menu-open');
+    }
+    return () => {
+      document.body.classList.remove('menu-open');
+    };
+  }, [isMenuOpen]);
+
   return (
     <>
-      {/* Blurred/Frosted Glass Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-t border-white/20 dark:border-gray-800/50 shadow-lg z-40 safe-area-bottom">
+      {/* Blurred Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 frosted-glass border-t shadow-lg z-40 safe-area-bottom mobile-nav-elevation">
         <div className="flex justify-around items-center h-16 px-2">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
@@ -64,7 +76,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full relative group transition-all duration-200",
+                  "flex flex-col items-center justify-center flex-1 h-full relative group transition-all duration-200 mobile-nav-button",
                   activeTab === tab.id
                     ? "text-primary"
                     : "text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
@@ -100,7 +112,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
       {/* Floating Action Button */}
       <button
         onClick={() => setIsMenuOpen(true)}
-        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/80 text-white shadow-2xl flex items-center justify-center hover:shadow-primary/25 hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95"
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-primary text-white fab-shadow flex items-center justify-center hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95 mobile-nav-button"
+        aria-label="Open menu"
       >
         <Plus className="h-6 w-6" />
       </button>
@@ -110,16 +123,16 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
         <>
           {/* Blurred Overlay */}
           <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 fade-in mobile-menu-backdrop"
             onClick={() => setIsMenuOpen(false)}
           />
           
           {/* Menu Sheet */}
-          <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom-full duration-300">
-            <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl rounded-t-3xl border-t border-white/20 dark:border-gray-800/50 shadow-2xl mx-auto max-w-lg">
+          <div className="fixed inset-x-0 bottom-0 z-50 animate-in">
+            <div className="frosted-glass rounded-t-3xl border-t shadow-2xl mx-auto max-w-lg">
               
               {/* Drag Handle */}
-              <div className="flex justify-center pt-3 pb-2">
+              <div className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing" onClick={() => setIsMenuOpen(false)}>
                 <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
               </div>
               
@@ -131,7 +144,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                   </h3>
                   <button
                     onClick={() => setIsMenuOpen(false)}
-                    className="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors"
+                    className="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors mobile-nav-button"
+                    aria-label="Close menu"
                   >
                     <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                   </button>
@@ -153,7 +167,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                       key={tab.id}
                       onClick={() => handleTabClick(tab.id)}
                       className={cn(
-                        "flex items-center w-full p-4 rounded-2xl hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-all duration-200 active:scale-95",
+                        "flex items-center w-full p-4 rounded-2xl hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-all duration-200 active:scale-95 mobile-nav-button",
                         activeTab === tab.id && "bg-primary/10 text-primary"
                       )}
                     >
@@ -168,7 +182,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 {/* Sign Out Button */}
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center w-full p-4 rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 mt-4"
+                  className="flex items-center w-full p-4 rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 mt-4 mobile-nav-button"
                 >
                   <div className="p-2 rounded-xl bg-red-100/50 dark:bg-red-900/20 mr-3">
                     <LogOut className="h-5 w-5" />

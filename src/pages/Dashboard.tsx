@@ -21,6 +21,7 @@ import { VacancyAlerts } from "@/components/vacancy/VacancyAlerts";
 import { parseISO, format } from "date-fns";
 import MobileNavigation from "@/components/MobileNavigation";
 import { WebsiteSettings } from '@/components/admin/WebsiteSettings';
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";
@@ -503,76 +504,8 @@ const renderTabContent = () => {
               )}
             </div>
 
-            {/* Notifications Bell */}
-            <div className="relative">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="relative"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <Bell className="h-5 w-5" />
-                {notifications && notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                  </span>
-                )}
-              </Button>
-              
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-card border rounded-lg shadow-lg z-20">
-                  <div className="p-3 border-b flex justify-between items-center">
-                    <p className="font-semibold">Notifications ({notifications?.length || 0})</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowNotifications(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {notifications && notifications.length > 0 ? (
-                      notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className="p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="font-medium text-sm">{notification.title}</p>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {notification.message}
-                              </p>
-                              {notification.vacancy_alerts && (
-                                <Badge variant="outline" className="mt-2 text-xs">
-                                  {formatDate(notification.vacancy_alerts.date)} - {notification.vacancy_alerts.shift_types?.name}
-                                </Badge>
-                              )}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => markAsReadMutation.mutate(notification.id)}
-                              className="ml-2 shrink-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-4 text-center text-muted-foreground">
-                        <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No new notifications</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Use the NotificationsBell component */}
+<NotificationsBell />
             
             <div className="text-right hidden sm:block">
               <p className="font-medium">{profile?.full_name || user?.email}</p>

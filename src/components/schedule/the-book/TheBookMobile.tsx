@@ -14,6 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth } from "date-fns";
+import MonthlyViewMobile from "./MonthlyViewMobile";
+import VacationListViewMobile from "./VacationListViewMobile";
+import BeatPreferencesViewMobile from "./BeatPreferencesViewMobile";
+import ForceListViewMobile from "./ForceListViewMobile";
 
 interface TheBookMobileProps {
   userRole?: string;

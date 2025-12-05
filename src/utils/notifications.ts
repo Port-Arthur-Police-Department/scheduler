@@ -41,9 +41,6 @@ export const isNotificationTypeEnabled = async (type: string): Promise<boolean> 
   }
 };
 
-/**
- * Send an in-app notification to a user using the database function
- */
 export const sendInAppNotification = async (
   userId: string,
   title: string,
@@ -52,21 +49,44 @@ export const sendInAppNotification = async (
   relatedId?: string
 ): Promise<boolean> => {
   try {
-    console.log(`📤 Attempting to send notification to user ${userId}: ${title}`);
+    console.log(`📤 [SEND DEBUG] ===== START =====`);
+    console.log(`📤 User: ${userId}, Title: "${title}"`);
     
-    // Use the database function we created
-    const { data: notificationId, error } = await supabase.rpc('create_pto_notification', {
+    // Step 1: Check if user exists
+    console.log(`🔍 Step 1: Checking if user ${userId} exists in profiles...`);
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, active')
+      .eq('id', userId)
+      .maybeSingle(); // Use maybeSingle instead of single to avoid throwing
+
+    if (profileError || !profile) {
+      console.error(`❌ Step 1 FAILED: User ${userId} not found or error:`, profileError?.message || 'No profile');
+      console.log(`📤 [SEND DEBUG] ===== END (User not found) =====`);
+      return false;
+    }
+    
+    console.log(`✅ Step 1 PASSED: User found - ${profile.full_name} (active: ${profile.active})`);
+    
+    // Step 2: Try database function
+    console.log(`🔍 Step 2: Calling create_pto_notification function...`);
+    const { data: notificationId, error: functionError } = await supabase.rpc('create_pto_notification', {
       p_user_id: userId,
       p_title: title,
       p_message: message,
       p_type: type
     });
 
-    if (error) {
-      console.error('❌ Database function error:', error);
+    if (functionError) {
+      console.error(`❌ Step 2 FAILED - Database function error:`, {
+        code: functionError.code,
+        message: functionError.message,
+        details: functionError.details
+      });
       
-      // Fallback: Try direct insert
-      const { error: fallbackError } = await supabase
+      // Step 3: Fallback to direct insert
+      console.log(`🔄 Step 3: Trying fallback direct insert...`);
+      const { error: insertError } = await supabase
         .from('notifications')
         .insert({
           user_id: userId,
@@ -75,23 +95,34 @@ export const sendInAppNotification = async (
           type,
           related_id: relatedId,
           is_read: false,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          metadata: {}
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error(`❌ Step 3 FAILED - Direct insert error:`, {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details
         });
-      
-      if (fallbackError) {
-        console.error('❌ Fallback insert error:', fallbackError);
+        console.log(`📤 [SEND DEBUG] ===== END (All methods failed) =====`);
         return false;
       }
       
-      console.log(`✅ Fallback notification sent to user ${userId}: ${title}`);
+      console.log(`✅ Step 3 PASSED: Notification created via fallback insert`);
+      console.log(`📤 [SEND DEBUG] ===== END (Success via fallback) =====`);
       return true;
     }
 
-    console.log(`✅ Notification sent to user ${userId} (ID: ${notificationId}): ${title}`);
+    console.log(`✅ Step 2 PASSED: Notification created via function, ID: ${notificationId}`);
+    console.log(`📤 [SEND DEBUG] ===== END (Success via function) =====`);
     return true;
     
   } catch (error) {
-    console.error('❌ Error in sendInAppNotification:', error);
+    console.error(`❌ [SEND DEBUG] Unexpected error for user ${userId}:`, error);
+    console.log(`📤 [SEND DEBUG] ===== END (Error) =====`);
     return false;
   }
 };

@@ -1,5 +1,5 @@
-// src/components/MobileNavigation.jsx - Final FAB version using your CSS classes
-import React, { useState } from 'react';
+// src/components/MobileNavigation.jsx - Fixed blur version
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Calendar, 
@@ -10,8 +10,7 @@ import {
   Clock,
   UserPlus,
   LogOut,
-  X,
-  ChevronUp
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,7 +46,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
   };
 
   // Prevent body scroll when menu is open
-  React.useEffect(() => {
+  useEffect(() => {
     if (isMenuOpen) {
       document.body.classList.add('menu-open');
     } else {
@@ -60,8 +59,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
 
   return (
     <>
-      {/* Blurred Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 frosted-glass border-t shadow-lg z-40 safe-area-bottom mobile-nav-elevation">
+      {/* Fixed Blurred Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 frosted-glass border-t border-white/20 dark:border-gray-800/50 shadow-lg z-40 safe-area-bottom mobile-nav-elevation">
         <div className="flex justify-around items-center h-16 px-2">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
@@ -112,27 +111,27 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
       {/* Floating Action Button */}
       <button
         onClick={() => setIsMenuOpen(true)}
-        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-primary text-white fab-shadow flex items-center justify-center hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95 mobile-nav-button"
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/80 text-white shadow-2xl flex items-center justify-center hover:shadow-primary/25 hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 mobile-nav-button"
         aria-label="Open menu"
       >
         <Plus className="h-6 w-6" />
       </button>
 
-      {/* Menu Overlay with Frosted Glass Effect */}
+      {/* Menu Overlay */}
       {isMenuOpen && (
         <>
           {/* Blurred Overlay */}
           <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 fade-in mobile-menu-backdrop"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 fade-in"
             onClick={() => setIsMenuOpen(false)}
           />
           
-          {/* Menu Sheet */}
+          {/* Menu Sheet with guaranteed blur */}
           <div className="fixed inset-x-0 bottom-0 z-50 animate-in">
-            <div className="frosted-glass rounded-t-3xl border-t shadow-2xl mx-auto max-w-lg">
+            <div className="frosted-glass rounded-t-3xl border-t border-white/20 dark:border-gray-800/50 shadow-2xl mx-auto max-w-lg">
               
               {/* Drag Handle */}
-              <div className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing" onClick={() => setIsMenuOpen(false)}>
+              <div className="flex justify-center pt-3 pb-2">
                 <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
               </div>
               
@@ -191,7 +190,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 </button>
               </div>
 
-              {/* Safe Area Padding for iPhone Notch */}
+              {/* Safe Area Padding */}
               <div className="h-4 safe-area-bottom" />
             </div>
           </div>

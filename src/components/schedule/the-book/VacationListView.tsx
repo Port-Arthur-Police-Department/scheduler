@@ -11,6 +11,7 @@ import { Plane, CalendarIcon, Filter, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation } from "./utils";
+import TheBookMobile from "./TheBookMobile";
 
 interface VacationListViewProps {
   selectedShiftId: string;

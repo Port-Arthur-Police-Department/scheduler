@@ -1,7 +1,7 @@
-// src/components/MobileHeader.jsx - Separate component for top header
+// src/components/MobileNavigation.jsx - FAB Version with Blurred Bottom Bar
 import React, { useState } from 'react';
 import { 
-  Menu, 
+  Plus, 
   Calendar, 
   CalendarDays, 
   Users, 
@@ -11,147 +11,136 @@ import {
   UserPlus,
   LogOut,
   X,
-  Home,
-  ChevronLeft
+  ChevronUp
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
-const MobileHeader = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin, profile }) => {
+const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin }) => {
   const navigate = useNavigate();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const allTabs = [
-    { id: 'daily', label: 'Riding List', icon: Calendar, roles: ['all'] },
-    { id: 'schedule', label: 'The Book', icon: CalendarDays, roles: ['all'] },
-    { id: 'requests', label: 'PTO', icon: Clock, roles: ['all'] },
+    { id: 'daily', label: 'Riding List', icon: Calendar, roles: ['all'], primary: true },
+    { id: 'schedule', label: 'The Book', icon: CalendarDays, roles: ['all'], primary: true },
+    { id: 'requests', label: 'PTO', icon: Clock, roles: ['all'], primary: true },
     { id: 'officers', label: 'Officers', icon: Users, roles: ['supervisor', 'admin'] },
     { id: 'vacancies', label: 'Vacancies', icon: AlertTriangle, roles: ['supervisor', 'admin'] },
     { id: 'staff', label: 'Staff', icon: UserPlus, roles: ['supervisor', 'admin'] },
     { id: 'settings', label: 'Settings', icon: Settings, roles: ['admin'] },
   ];
 
+  const primaryTabs = allTabs.filter(tab => tab.primary);
+  const secondaryTabs = allTabs.filter(tab => !tab.primary);
+
   const handleTabClick = (tabId) => {
     onTabChange(tabId);
-    setIsDrawerOpen(false);
+    setIsMenuOpen(false);
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     toast.success("Signed out successfully");
     navigate("/auth");
-    setIsDrawerOpen(false);
   };
 
   return (
     <>
-      {/* Top Header */}
-      <header className="sticky top-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b z-40 safe-area-top">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsDrawerOpen(true)}
-              className="p-2 rounded-lg hover:bg-muted"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+      {/* Blurred/Frosted Glass Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-t border-white/20 dark:border-gray-800/50 shadow-lg z-40 safe-area-bottom">
+        <div className="flex justify-around items-center h-16 px-2">
+          {primaryTabs.map((tab) => {
+            const Icon = tab.icon;
+            const hasAccess = tab.roles.includes('all') || 
+              (tab.roles.includes('supervisor') && isAdminOrSupervisor) ||
+              (tab.roles.includes('admin') && isAdmin);
             
-            <div className="flex items-center gap-2">
-              <img 
-                src="[LOGO_BASE64_PLACEHOLDER]" 
-                alt="Port Arthur PD Logo" 
-                className="w-8 h-8 object-contain"
-              />
-              <div>
-                <h1 className="text-sm font-semibold">Port Arthur PD</h1>
-                <p className="text-xs text-muted-foreground">Shift Scheduler</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="text-right">
-            <p className="text-sm font-medium truncate max-w-[120px]">
-              {profile?.full_name?.split(" ")[0] || "Officer"}
-            </p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {isAdmin ? 'Admin' : isAdminOrSupervisor ? 'Supervisor' : 'Officer'}
-            </p>
-          </div>
+            if (!hasAccess) return null;
+            
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full relative group transition-all duration-200",
+                  activeTab === tab.id
+                    ? "text-primary"
+                    : "text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+                )}
+              >
+                {/* Active indicator dot */}
+                <div className={cn(
+                  "absolute -top-1 w-8 h-1 bg-primary rounded-full transition-all duration-300",
+                  activeTab === tab.id 
+                    ? "opacity-100 scale-100" 
+                    : "opacity-0 scale-0"
+                )} />
+                
+                <div className={cn(
+                  "p-2 rounded-xl transition-all duration-200",
+                  activeTab === tab.id
+                    ? "bg-primary/10"
+                    : "group-hover:bg-gray-200/50 dark:group-hover:bg-gray-800/50"
+                )}>
+                  <Icon className={cn(
+                    "h-5 w-5 transition-transform duration-200",
+                    activeTab === tab.id && "scale-110"
+                  )} />
+                </div>
+                
+                <span className="text-xs font-medium mt-1">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
-        
-        {/* Tab Switcher - Horizontal Scroll */}
-        <div className="px-4 pb-2 overflow-x-auto scrollbar-hide">
-          <div className="flex space-x-2">
-            {allTabs.filter(tab => {
-              const hasAccess = tab.roles.includes('all') || 
-                (tab.roles.includes('supervisor') && isAdminOrSupervisor) ||
-                (tab.roles.includes('admin') && isAdmin);
-              return hasAccess;
-            }).map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabClick(tab.id)}
-                  className={`
-                    flex items-center gap-2 px-3 py-2 rounded-full whitespace-nowrap text-sm
-                    ${activeTab === tab.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }
-                  `}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </header>
+      </nav>
 
-      {/* Side Drawer */}
-      {isDrawerOpen && (
+      {/* Floating Action Button */}
+      <button
+        onClick={() => setIsMenuOpen(true)}
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/80 text-white shadow-2xl flex items-center justify-center hover:shadow-primary/25 hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
+      {/* Menu Overlay with Frosted Glass Effect */}
+      {isMenuOpen && (
         <>
+          {/* Blurred Overlay */}
           <div 
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={() => setIsDrawerOpen(false)}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            onClick={() => setIsMenuOpen(false)}
           />
           
-          <div className="fixed left-0 top-0 bottom-0 w-64 bg-background z-50 animate-in slide-in-from-left-full">
-            <div className="p-4 h-full flex flex-col">
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-2">
-                  <img 
-                    src="[LOGO_BASE64_PLACEHOLDER]" 
-                    alt="Logo" 
-                    className="w-8 h-8"
-                  />
-                  <span className="font-semibold">Menu</span>
+          {/* Menu Sheet */}
+          <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom-full duration-300">
+            <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl rounded-t-3xl border-t border-white/20 dark:border-gray-800/50 shadow-2xl mx-auto max-w-lg">
+              
+              {/* Drag Handle */}
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
+              
+              {/* Menu Header */}
+              <div className="px-6 pt-2 pb-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    More Options
+                  </h3>
+                  <button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="p-2 rounded-lg hover:bg-muted"
-                >
-                  <X className="h-5 w-5" />
-                </button>
               </div>
 
-              {/* User Info */}
-              <div className="px-4 py-3 bg-muted rounded-lg mb-6">
-                <p className="font-medium">{profile?.full_name || 'User'}</p>
-                <p className="text-sm text-muted-foreground">{profile?.email}</p>
-                <p className="text-xs text-muted-foreground capitalize mt-1">
-                  {isAdmin ? 'Administrator' : isAdminOrSupervisor ? 'Supervisor' : 'Officer'}
-                </p>
-              </div>
-
-              {/* Navigation Links */}
-              <div className="flex-1 space-y-1">
-                {allTabs.map((tab) => {
+              {/* Secondary Menu Items */}
+              <div className="px-4 pb-4 space-y-2">
+                {secondaryTabs.map((tab) => {
                   const Icon = tab.icon;
                   const hasAccess = tab.roles.includes('all') || 
                     (tab.roles.includes('supervisor') && isAdminOrSupervisor) ||
@@ -163,31 +152,33 @@ const MobileHeader = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin, pr
                     <button
                       key={tab.id}
                       onClick={() => handleTabClick(tab.id)}
-                      className={`
-                        flex items-center w-full p-3 rounded-lg text-left
-                        ${activeTab === tab.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
-                        }
-                      `}
+                      className={cn(
+                        "flex items-center w-full p-4 rounded-2xl hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-all duration-200 active:scale-95",
+                        activeTab === tab.id && "bg-primary/10 text-primary"
+                      )}
                     >
-                      <Icon className="h-5 w-5 mr-3" />
-                      <span>{tab.label}</span>
+                      <div className="p-2 rounded-xl bg-gray-100/50 dark:bg-gray-800/50 mr-3">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <span className="font-medium">{tab.label}</span>
                     </button>
                   );
                 })}
-              </div>
-
-              {/* Sign Out Button */}
-              <div className="pt-4 border-t">
+                
+                {/* Sign Out Button */}
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center w-full p-3 rounded-lg text-left text-destructive hover:bg-destructive/10"
+                  className="flex items-center w-full p-4 rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 mt-4"
                 >
-                  <LogOut className="h-5 w-5 mr-3" />
-                  <span>Sign Out</span>
+                  <div className="p-2 rounded-xl bg-red-100/50 dark:bg-red-900/20 mr-3">
+                    <LogOut className="h-5 w-5" />
+                  </div>
+                  <span className="font-medium">Sign Out</span>
                 </button>
               </div>
+
+              {/* Safe Area Padding for iPhone Notch */}
+              <div className="h-4 safe-area-bottom" />
             </div>
           </div>
         </>
@@ -196,4 +187,4 @@ const MobileHeader = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin, pr
   );
 };
 
-export default MobileHeader;
+export default MobileNavigation;

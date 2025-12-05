@@ -9,6 +9,7 @@ import { ScheduleCell } from "../ScheduleCell";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import TheBookMobile from "./TheBookMobile";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {

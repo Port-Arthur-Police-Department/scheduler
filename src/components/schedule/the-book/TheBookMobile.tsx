@@ -1,25 +1,27 @@
-// src/components/schedule/the-book/TheBookMobile.tsx
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin, MoreVertical, Edit, Trash2, Download } from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin, Download } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, isToday, parseISO } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 
-// Import your desktop components for data fetching and processing
-import { getLastName, getRankAbbreviation, isSupervisorByRank, categorizeAndSortOfficers } from "./utils";
-import { ForceListView } from "./ForceListView";
-import { VacationListView } from "./VacationListView";
-import { BeatPreferencesView } from "./BeatPreferencesView";
+// Import mobile view components
+import { WeeklyViewMobile } from "./WeeklyViewMobile";
+import { MonthlyViewMobile } from "./MonthlyViewMobile";
+import { ForceListViewMobile } from "./ForceListViewMobile";
+import { VacationListViewMobile } from "./VacationListViewMobile";
+import { BeatPreferencesViewMobile } from "./BeatPreferencesViewMobile";
+
+// Import utilities
+import { getLastName, getRankPriority, isSupervisorByRank } from "./utils";
 import type { TheBookView, ScheduleData } from "./types";
 
 interface TheBookMobileProps {
@@ -48,7 +50,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     },
   });
 
-  // Fetch schedule data for current view
+  // Fetch schedule data
   const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
     queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
     queryFn: async () => {
@@ -64,16 +66,13 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
       const startStr = format(startDate, "yyyy-MM-dd");
       const endStr = format(endDate, "yyyy-MM-dd");
 
-      // Fetch schedule exceptions for the date range
+      // Fetch schedule exceptions
       const { data: exceptions, error: exceptionsError } = await supabase
         .from("schedule_exceptions")
         .select(`
           *,
           profiles:officer_id (
             id, full_name, badge_number, rank, hire_date
-          ),
-          shift_types (
-            id, name, start_time, end_time
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -83,16 +82,13 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
 
       if (exceptionsError) throw exceptionsError;
 
-      // Fetch recurring schedules for the selected shift
+      // Fetch recurring schedules
       const { data: recurringSchedules, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
           *,
           profiles:officer_id (
             id, full_name, badge_number, rank, hire_date
-          ),
-          shift_types (
-            id, name, start_time, end_time
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -108,27 +104,24 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
         const dateStr = format(currentDate, "yyyy-MM-dd");
         const dayOfWeek = currentDate.getDay();
         
-        // Get exceptions for this date
         const dateExceptions = exceptions?.filter(e => e.date === dateStr) || [];
-        
-        // Get recurring schedules for this day of week
         const dateRecurring = recurringSchedules?.filter(r => r.day_of_week === dayOfWeek) || [];
         
-        // Combine and deduplicate officers
         const allOfficers = [...dateExceptions, ...dateRecurring];
         const officerMap = new Map();
         
         allOfficers.forEach(item => {
           const officerId = item.officer_id;
           if (!officerMap.has(officerId) || item.date === dateStr) {
-            // Prefer exceptions over recurring
             officerMap.set(officerId, {
               officerId: item.officer_id,
               officerName: item.profiles?.full_name || "Unknown",
               badgeNumber: item.profiles?.badge_number,
               rank: item.profiles?.rank || "Officer",
+              service_credit: 0, // You might want to fetch this
               date: dateStr,
               dayOfWeek,
+              isRegularRecurringDay: !item.date, // No date means recurring
               shiftInfo: {
                 scheduleId: item.id,
                 scheduleType: item.date ? "exception" : "recurring",
@@ -138,20 +131,38 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
                 ptoData: item.pto_type ? {
                   ptoType: item.pto_type,
                   isFullShift: item.pto_full_day || false
-                } : undefined
+                } : undefined,
+                reason: item.reason
               }
             });
           }
         });
 
         const officers = Array.from(officerMap.values());
-        const categorized = categorizeAndSortOfficers(officers);
+        
+        // Categorize officers
+        const supervisors = officers.filter(o => isSupervisorByRank(o));
+        const ppos = officers.filter(o => o.rank?.toLowerCase() === 'probationary');
+        const regularOfficers = officers.filter(o => {
+          const rank = o.rank?.toLowerCase() || '';
+          const isSup = isSupervisorByRank(o) || rank.includes('supervisor');
+          return !isSup && rank !== 'probationary';
+        });
 
         dailySchedules.push({
           date: dateStr,
           dayOfWeek,
           officers,
-          categorizedOfficers: categorized
+          categorizedOfficers: {
+            supervisors,
+            officers: regularOfficers,
+            ppos
+          },
+          staffing: {
+            supervisors: supervisors.length,
+            officers: regularOfficers.length,
+            total: officers.length
+          }
         });
 
         currentDate.setDate(currentDate.getDate() + 1);
@@ -168,6 +179,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
   });
 
+  // Navigation functions
   const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
   const goToPreviousMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
@@ -177,352 +189,108 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     setCurrentMonth(new Date());
   };
 
-  const renderWeeklyView = () => {
-    if (scheduleLoading) {
-      return (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-32 w-full" />
-          ))}
-        </div>
-      );
-    }
-
-    if (!scheduleData) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
-          <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No schedule data available</p>
-        </div>
-      );
-    }
-
-    const days = scheduleData.dailySchedules.slice(0, 7); // First week
-    
-    return (
-      <div className="space-y-3">
-        {days.map((day) => (
-          <Card key={day.date} className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">
-                    {format(parseISO(day.date), "EEEE")}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {format(parseISO(day.date), "MMM d, yyyy")}
-                    {isToday(parseISO(day.date)) && (
-                      <Badge variant="outline" className="ml-2">Today</Badge>
-                    )}
-                  </p>
-                </div>
-                <Badge variant="outline">
-                  {day.officers.length} officers
-                </Badge>
-              </div>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-2">
-                {/* Supervisors */}
-                {day.categorizedOfficers.supervisors.length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground mb-1">Supervisors</div>
-                    <div className="space-y-1">
-                      {day.categorizedOfficers.supervisors.map((officer) => (
-                        <div key={officer.officerId} className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                          <div>
-                            <div className="font-medium text-sm">
-                              {getLastName(officer.officerName)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {getRankAbbreviation(officer.rank)}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">
-                              {officer.shiftInfo.position || "Unassigned"}
-                            </div>
-                            {officer.shiftInfo.hasPTO && (
-                              <Badge variant="outline" className="text-xs">
-                                PTO
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Officers */}
-                {day.categorizedOfficers.officers.length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground mb-1">Officers</div>
-                    <div className="space-y-1">
-                      {day.categorizedOfficers.officers.slice(0, 3).map((officer) => (
-                        <div key={officer.officerId} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                          <div>
-                            <div className="font-medium text-sm">
-                              {getLastName(officer.officerName)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {officer.badgeNumber}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm">
-                              {officer.shiftInfo.position || "Unassigned"}
-                            </div>
-                            {officer.shiftInfo.hasPTO && (
-                              <Badge variant="outline" className="text-xs">
-                                PTO
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {day.categorizedOfficers.officers.length > 3 && (
-                        <div className="text-center text-sm text-muted-foreground pt-1">
-                          +{day.categorizedOfficers.officers.length - 3} more officers
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* PPOs */}
-                {day.categorizedOfficers.ppos.length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground mb-1">PPOs</div>
-                    <div className="space-y-1">
-                      {day.categorizedOfficers.ppos.map((officer) => (
-                        <div key={officer.officerId} className="flex items-center justify-between p-2 bg-green-50 rounded">
-                          <div>
-                            <div className="font-medium text-sm">
-                              {getLastName(officer.officerName)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {officer.badgeNumber}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm">
-                              {officer.shiftInfo.position || "Training"}
-                            </div>
-                            <Badge variant="outline" className="text-xs bg-green-100">
-                              PPO
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  };
-
-  const renderMonthlyView = () => {
-    if (scheduleLoading) {
-      return (
-        <div className="space-y-3">
-          <Skeleton className="h-8 w-3/4 mx-auto" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      );
-    }
-
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const daysInMonth = monthEnd.getDate();
-    
-    const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardContent className="p-4">
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {weekDays.map(day => (
-                <div key={day} className="text-center text-xs font-medium text-muted-foreground p-1">
-                  {day}
-                </div>
-              ))}
-              
-              {Array.from({ length: monthStart.getDay() }).map((_, index) => (
-                <div key={`empty-${index}`} className="h-10" />
-              ))}
-              
-              {Array.from({ length: daysInMonth }).map((_, index) => {
-                const day = index + 1;
-                const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-                const dateStr = format(date, "yyyy-MM-dd");
-                const daySchedule = scheduleData?.dailySchedules?.find(s => s.date === dateStr);
-                const isCurrentDay = isToday(date);
-                
-                return (
-                  <div
-                    key={day}
-                    className={`h-10 flex flex-col items-center justify-center rounded-lg text-sm cursor-pointer
-                      ${isCurrentDay 
-                        ? 'bg-primary text-primary-foreground font-semibold' 
-                        : 'bg-background hover:bg-muted'
-                      }`}
-                    onClick={() => {
-                      // Navigate to daily view
-                      toast.info(`Viewing schedule for ${format(date, "MMM d")}`);
-                    }}
-                  >
-                    <div>{day}</div>
-                    {daySchedule && daySchedule.officers.length > 0 && (
-                      <div className="text-[8px] opacity-75">
-                        {daySchedule.officers.length}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Month summary */}
-        {scheduleData && (
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 bg-blue-50 rounded">
-                  <div className="text-lg font-bold">
-                    {scheduleData.dailySchedules.reduce((sum, day) => 
-                      sum + day.categorizedOfficers.supervisors.length, 0
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Supervisors</div>
-                </div>
-                <div className="p-2 bg-gray-50 rounded">
-                  <div className="text-lg font-bold">
-                    {scheduleData.dailySchedules.reduce((sum, day) => 
-                      sum + day.categorizedOfficers.officers.length, 0
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Officers</div>
-                </div>
-                <div className="p-2 bg-green-50 rounded">
-                  <div className="text-lg font-bold">
-                    {scheduleData.dailySchedules.reduce((sum, day) => 
-                      sum + day.categorizedOfficers.ppos.length, 0
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">PPOs</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-  const renderForceListView = () => (
-    <div className="space-y-4">
-      <div className="text-center">
-        <h3 className="font-semibold mb-2">Force List</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          View force assignments and availability
-        </p>
-      </div>
-      {selectedShiftId ? (
-        <ForceListView
-          selectedShiftId={selectedShiftId}
-          setSelectedShiftId={setSelectedShiftId}
-          shiftTypes={shiftTypes || []}
-          isAdminOrSupervisor={isAdminOrSupervisor}
-        />
-      ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Please select a shift first</p>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderVacationListView = () => (
-    <div className="space-y-4">
-      <div className="text-center">
-        <h3 className="font-semibold mb-2">Vacation List</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          View and manage time-off requests
-        </p>
-      </div>
-      {selectedShiftId ? (
-        <VacationListView
-          selectedShiftId={selectedShiftId}
-          setSelectedShiftId={setSelectedShiftId}
-          shiftTypes={shiftTypes || []}
-        />
-      ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          <Plane className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Please select a shift first</p>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderBeatPreferencesView = () => (
-    <div className="space-y-4">
-      <div className="text-center">
-        <h3 className="font-semibold mb-2">Beat Preferences</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Officer preferences for assignments
-        </p>
-      </div>
-      {selectedShiftId ? (
-        <BeatPreferencesView
-          isAdminOrSupervisor={isAdminOrSupervisor}
-          selectedShiftId={selectedShiftId}
-          setSelectedShiftId={setSelectedShiftId}
-          shiftTypes={shiftTypes || []}
-        />
-      ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Please select a shift first</p>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderView = () => {
-    switch (activeView) {
-      case "weekly":
-        return renderWeeklyView();
-      case "monthly":
-        return renderMonthlyView();
-      case "force-list":
-        return renderForceListView();
-      case "vacation-list":
-        return renderVacationListView();
-      case "beat-preferences":
-        return renderBeatPreferencesView();
-      default:
-        return renderWeeklyView();
-    }
-  };
-
-  // Update the shift selection automatically if not set
+  // Initialize with first shift
   useEffect(() => {
     if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
       setSelectedShiftId(shiftTypes[0].id);
     }
   }, [shiftTypes]);
+
+  // Event handlers (simplified for mobile)
+  const onEventHandlers = {
+    onAssignPTO: () => {
+      toast.info("Use the desktop version for detailed PTO management");
+    },
+    onRemovePTO: () => {
+      toast.info("Use the desktop version for detailed PTO management");
+    },
+    onEditAssignment: () => {
+      toast.info("Use the desktop version for editing assignments");
+    },
+    onRemoveOfficer: () => {
+      toast.info("Use the desktop version for removing officers");
+    }
+  };
+
+  const mutations = {
+    removeOfficerMutation: { isPending: false },
+    removePTOMutation: { isPending: false }
+  };
+
+  const weeklyColors = {
+    supervisor: { bg: "bg-blue-50", text: "text-blue-900" },
+    officer: { bg: "bg-gray-50", text: "text-gray-900" },
+    ppo: { bg: "bg-green-50", text: "text-green-900" },
+    pto: { bg: "bg-yellow-50", text: "text-yellow-900" },
+    vacation: { bg: "bg-purple-50", text: "text-purple-900" },
+    holiday: { bg: "bg-red-50", text: "text-red-900" },
+    sick: { bg: "bg-orange-50", text: "text-orange-900" },
+    comp: { bg: "bg-pink-50", text: "text-pink-900" }
+  };
+
+  const renderContentView = () => {
+    switch (activeView) {
+      case "weekly":
+        return (
+          <WeeklyViewMobile
+            currentWeekStart={currentWeekStart}
+            schedules={scheduleData}
+            isAdminOrSupervisor={isAdminOrSupervisor}
+            weeklyColors={weeklyColors}
+            onEventHandlers={onEventHandlers}
+            mutations={mutations}
+            getLastName={getLastName}
+            onPreviousWeek={goToPreviousWeek}
+            onNextWeek={goToNextWeek}
+            onToday={goToToday}
+          />
+        );
+      
+      case "monthly":
+        return (
+          <MonthlyViewMobile
+            currentMonth={currentMonth}
+            schedules={scheduleData}
+            weeklyColors={weeklyColors}
+            onPreviousMonth={goToPreviousMonth}
+            onNextMonth={goToNextMonth}
+            onToday={goToToday}
+          />
+        );
+      
+      case "force-list":
+        return (
+          <ForceListViewMobile
+            selectedShiftId={selectedShiftId}
+            setSelectedShiftId={setSelectedShiftId}
+            shiftTypes={shiftTypes || []}
+            isAdminOrSupervisor={isAdminOrSupervisor}
+          />
+        );
+      
+      case "vacation-list":
+        return (
+          <VacationListViewMobile
+            selectedShiftId={selectedShiftId}
+            setSelectedShiftId={setSelectedShiftId}
+            shiftTypes={shiftTypes || []}
+          />
+        );
+      
+      case "beat-preferences":
+        return (
+          <BeatPreferencesViewMobile
+            isAdminOrSupervisor={isAdminOrSupervisor}
+            selectedShiftId={selectedShiftId}
+            setSelectedShiftId={setSelectedShiftId}
+            shiftTypes={shiftTypes || []}
+          />
+        );
+      
+      default:
+        return null;
+    }
+  };
 
   if (shiftsLoading) {
     return (
@@ -544,18 +312,18 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <CalendarIcon className="h-5 w-5" />
-              {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Schedule"}
+              The Book
             </CardTitle>
             
-            {selectedShiftId && (
+            {selectedShiftId && shiftTypes && (
               <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {shiftTypes?.map((shift) => (
+                  {shiftTypes.map((shift) => (
                     <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name}
+                      {shift.name} ({shift.start_time} - {shift.end_time})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -563,7 +331,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
             )}
           </div>
 
-          {/* Mobile tabs */}
+          {/* Main Tabs */}
           <Tabs value={activeView} onValueChange={(v: TheBookView) => setActiveView(v)} className="mt-3">
             <TabsList className="w-full grid grid-cols-3 h-auto p-1">
               <TabsTrigger value="weekly" className="flex-col h-auto py-2 text-xs">
@@ -582,9 +350,9 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
                     More
                   </TabsTrigger>
                 </SheetTrigger>
-                <SheetContent side="bottom" className="h-[60vh] rounded-t-xl">
+                <SheetContent side="bottom" className="h-[50vh] rounded-t-xl">
                   <div className="pt-6 space-y-4">
-                    <h3 className="font-semibold text-lg mb-4">Schedule Views</h3>
+                    <h3 className="font-semibold text-lg mb-4">Additional Views</h3>
                     <div className="space-y-2">
                       <Button
                         variant={activeView === "force-list" ? "default" : "ghost"}
@@ -592,7 +360,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
                         onClick={() => {
                           setActiveView("force-list");
                           const sheet = document.querySelector('[data-state="open"]');
-                          (sheet as any)?.click?.(); // Close sheet
+                          (sheet as any)?.click?.();
                         }}
                       >
                         <Users className="h-4 w-4 mr-2" />
@@ -623,8 +391,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
                         Beat Preferences
                       </Button>
                     </div>
-                    
-                    {/* Export option for admins */}
+
+                    {/* Admin actions */}
                     {isAdminOrSupervisor && (
                       <div className="pt-4 border-t">
                         <Button variant="outline" className="w-full justify-start">
@@ -637,50 +405,22 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
                 </SheetContent>
               </Sheet>
             </TabsList>
-            
-            <TabsContent value="weekly" className="mt-4">
-              <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg mb-4">
-                <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="text-center">
-                  <div className="font-semibold">
-                    Week of {format(currentWeekStart, "MMM d")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {format(currentWeekStart, "MMM d")} - {format(endOfWeek(currentWeekStart), "MMM d, yyyy")}
-                  </div>
-                </div>
-                <Button variant="outline" size="icon" onClick={goToNextWeek}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="monthly" className="mt-4">
-              <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg mb-4">
-                <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="text-center">
-                  <div className="font-semibold">
-                    {format(currentMonth, "MMMM yyyy")}
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={goToToday}>
-                    Today
-                  </Button>
-                </div>
-                <Button variant="outline" size="icon" onClick={goToNextMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </TabsContent>
           </Tabs>
         </CardHeader>
         
         <CardContent>
           {selectedShiftId ? (
-            renderView()
+            <div className="space-y-4">
+              {scheduleLoading && (activeView === "weekly" || activeView === "monthly") ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-32 w-full" />
+                  ))}
+                </div>
+              ) : (
+                renderContentView()
+              )}
+            </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />

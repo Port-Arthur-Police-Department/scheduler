@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar as CalendarIcon, AlertCircle, Clock, MapPin, Building, Users } from "lucide-react";
-import { format, differenceInDays, eachDayOfInterval, isWeekend, parseISO } from "date-fns";
+import { format, differenceInDays, eachDayOfInterval, isWeekend, parseISO, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -66,34 +66,41 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     enabled: open,
   });
 
-// Calculate hours required and fetch affected shifts when dates change
+// Fetch and calculate affected shifts when dates change or dialog opens
 useEffect(() => {
-  if (startDate && endDate && settings?.show_pto_balances && shiftTypes) {
-    const days = differenceInDays(endDate, startDate) + 1;
-    const hours = days * 8; // Default 8 hours per day
-    setHoursRequired(hours);
+  if (startDate && endDate && userId && shiftTypes) {
     fetchAffectedShifts();
   } else {
-    setHoursRequired(0);
     setAffectedShifts([]);
+    setHoursRequired(0);
   }
-}, [startDate, endDate, settings?.show_pto_balances, shiftTypes]);
+}, [startDate, endDate, userId, shiftTypes, open]); // Added 'open' to dependencies
 
 // Function to fetch affected shifts
 const fetchAffectedShifts = async () => {
-  if (!startDate || !endDate || !userId || !shiftTypes) return;
+  if (!startDate || !endDate || !userId || !shiftTypes) {
+    setAffectedShifts([]);
+    return;
+  }
   
   setCalculating(true);
   try {
     // Get all days in the date range
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    const days = eachDayOfInterval({ 
+      start: startOfDay(startDate), 
+      end: endOfDay(endDate) 
+    });
     
-    // Get officer's recurring schedules
+    // Format dates for Supabase query
+    const startDateStr = format(startDate, "yyyy-MM-dd");
+    
+    // Get officer's recurring schedules that are active during this period
     const { data: recurringSchedules, error: scheduleError } = await supabase
       .from("recurring_schedules")
-      .select("day_of_week, shift_type_id, unit_number, position_name")
+      .select("day_of_week, shift_type_id, unit_number, position_name, start_date, end_date")
       .eq("officer_id", userId)
-      .or(`end_date.is.null,end_date.gte.${format(startDate, "yyyy-MM-dd")}`);
+      .or(`end_date.is.null,end_date.gte.${startDateStr}`)
+      .lte("start_date", format(endDate, "yyyy-MM-dd"));
 
     if (scheduleError) throw scheduleError;
 
@@ -105,7 +112,21 @@ const fetchAffectedShifts = async () => {
       const dayName = format(day, "EEEE");
       
       // Check if officer has a recurring schedule for this day
-      const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
+      const daySchedules = recurringSchedules?.filter(s => {
+        // Check if schedule applies to this day of week
+        if (s.day_of_week !== dayOfWeek) return false;
+        
+        // Check if schedule is active on this specific date
+        const scheduleStart = new Date(s.start_date);
+        const scheduleEnd = s.end_date ? new Date(s.end_date) : null;
+        
+        const currentDate = new Date(dateStr);
+        
+        // Schedule is active if current date is on or after start date
+        // AND (no end date OR current date is on or before end date)
+        return currentDate >= scheduleStart && 
+               (!scheduleEnd || currentDate <= scheduleEnd);
+      }) || [];
       
       for (const schedule of daySchedules) {
         const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
@@ -173,22 +194,25 @@ const createRequestMutation = useMutation({
       throw new Error("Please select start and end dates");
     }
 
-    // Validate PTO balance if balances are enabled
-    if (settings?.show_pto_balances && !hasSufficientBalance()) {
-      const currentBalance = getCurrentBalance();
-      throw new Error(`Insufficient ${ptoType} hours. Required: ${hoursRequired}h, Available: ${currentBalance}h`);
-    }
+    // Use actual hours from affected shifts, or calculate if none found
+    const actualHours = affectedShifts.length > 0 
+      ? affectedShifts.reduce((sum, shift) => sum + shift.hours, 0)
+      : (differenceInDays(endDate, startDate) + 1) * 8;
 
-    // Calculate hours used (for tracking purposes)
-    const days = differenceInDays(endDate, startDate) + 1;
-    const hoursUsed = affectedShifts.reduce((sum, shift) => sum + shift.hours, 0);
+    // Validate PTO balance if balances are enabled
+    if (settings?.show_pto_balances) {
+      const currentBalance = getCurrentBalance();
+      if (currentBalance < actualHours) {
+        throw new Error(`Insufficient ${ptoType} hours. Required: ${actualHours.toFixed(1)}h, Available: ${currentBalance}h`);
+      }
+    }
 
     // Get affected shifts details for the request notes
     const affectedShiftDetails = affectedShifts.map(s => 
       `${s.date} (${s.dayName}): ${s.shiftName} ${s.shiftTime}`
     ).join('; ');
 
-    // Insert the request and get the created record
+    // Insert the request
     const { data: request, error } = await supabase
       .from("time_off_requests")
       .insert({
@@ -198,7 +222,7 @@ const createRequestMutation = useMutation({
         reason: reason || null,
         status: "pending",
         pto_type: ptoType,
-        hours_used: hoursUsed,
+        hours_used: actualHours,
         affected_shifts: affectedShifts.length > 0 ? affectedShiftDetails : null,
       })
       .select()
@@ -384,21 +408,6 @@ const createRequestMutation = useMutation({
   </div>
 )}
 
-          {startDate && endDate && affectedShifts.length === 0 && !calculating && (
-            <Alert className="bg-yellow-50 border-yellow-200">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-800 text-sm">
-                No regularly scheduled shifts found in this date range. Please verify your schedule.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {calculating && (
-            <div className="text-center py-2">
-              <p className="text-sm text-muted-foreground">Loading scheduled shifts...</p>
-            </div>
-          )}
-
           {/* PTO Balance Information */}
           {settings?.show_pto_balances && startDate && endDate && (
             <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
@@ -425,7 +434,7 @@ const createRequestMutation = useMutation({
             <Alert className="bg-blue-50 border-blue-200">
               <AlertCircle className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-800 text-sm">
-                PTO balances are currently managed as indefinite. All requests are allowed.
+                PTO balances are currently managed as indefinite. Verify your balance in Executime before making a request.
               </AlertDescription>
             </Alert>
           )}

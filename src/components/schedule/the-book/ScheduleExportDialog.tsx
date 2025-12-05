@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
+import TheBookMobile from "./TheBookMobile";
 
 interface ScheduleExportDialogProps {
   open: boolean;

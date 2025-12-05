@@ -1,15 +1,17 @@
+// components/TimeOffRequests.tsx
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Plus, Clock } from "lucide-react";
+import { Calendar, Plus, Clock, Bell } from "lucide-react";
 import { TimeOffRequestDialog } from "./TimeOffRequestDialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { sendPTORequestNotification } from "../utils/notifications"; // Updated import
 
 interface TimeOffRequestsProps {
   userId: string;
@@ -58,9 +60,18 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
       toast.success("Request updated successfully");
+      
+      // Send notification based on status
+      if (variables.status === 'approved' || variables.status === 'denied') {
+        sendPTORequestNotification(
+          variables.id, 
+          userId, 
+          variables.status === 'approved' ? 'approved' : 'denied'
+        );
+      }
     },
     onError: (error) => {
       toast.error("Failed to update request: " + error.message);
@@ -77,6 +88,9 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
         return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
     }
   };
+
+  // Check if vacancy alerts are enabled
+  const showVacancyAlerts = settings?.enable_vacancy_alerts !== false;
 
   return (
     <Card>
@@ -105,6 +119,27 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
             <Clock className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
               PTO balances are currently managed as indefinite. All time off requests are allowed.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Notification Status */}
+        {settings?.enable_notifications && (
+          <Alert className="mt-4 bg-green-50 border-green-200">
+            <Bell className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800">
+              {isAdminOrSupervisor 
+                ? "You will be notified when officers submit new time off requests"
+                : "You will be notified when your time off requests are approved or denied"}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Vacancy Alerts Status */}
+        {!showVacancyAlerts && isAdminOrSupervisor && (
+          <Alert className="mt-4 bg-yellow-50 border-yellow-200">
+            <AlertDescription className="text-yellow-800">
+              Vacancy alerts are currently disabled in system settings
             </AlertDescription>
           </Alert>
         )}
@@ -141,8 +176,18 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
                         <span className="font-medium">Review notes:</span> {request.review_notes}
                       </p>
                     )}
+                    {request.affected_shifts && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        <span className="font-medium">Affected shifts:</span> {request.affected_shifts}
+                      </p>
+                    )}
                   </div>
-                  <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(request.created_at), "MMM d, h:mm a")}
+                    </p>
+                  </div>
                 </div>
 
                 {isAdminOrSupervisor && request.status === "pending" && (

@@ -114,8 +114,22 @@ All colors MUST be HSL.
   }
 }
 
-/* ========== FIXED BLUR EFFECTS ========== */
-/* Custom backdrop blur classes that actually work */
+/* ========== MATCHING DASHBOARD BLUR EFFECTS ========== */
+/* Exact same as Dashboard header: bg-card/50 backdrop-blur-sm */
+.dashboard-blur {
+  background: hsl(var(--card) / 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* For darker backgrounds in dark mode */
+.dark .dashboard-blur {
+  background: hsl(var(--card) / 0.7); /* Slightly more opaque in dark mode */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Additional blur levels to match Dashboard */
 .backdrop-blur-sm {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -129,46 +143,6 @@ All colors MUST be HSL.
 .backdrop-blur-lg {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-}
-
-.backdrop-blur-xl {
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
-
-.backdrop-blur-2xl {
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-}
-
-/* Frosted glass effects */
-.frosted-glass-light {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.frosted-glass-dark {
-  background: rgba(17, 24, 39, 0.85); /* dark:bg-gray-900 with transparency */
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.frosted-glass {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.dark .frosted-glass {
-  background: rgba(17, 24, 39, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* iOS-style Safe Area Support */
@@ -262,12 +236,11 @@ All colors MUST be HSL.
     scrollbar-width: thin;
   }
 
-  /* Mobile bottom navigation elevation */
+  /* Mobile bottom navigation elevation - matches Dashboard header shadow */
   .mobile-nav-elevation {
     box-shadow: 
-      0 -4px 6px -1px rgba(0, 0, 0, 0.1),
-      0 -2px 4px -1px rgba(0, 0, 0, 0.06),
-      0 -20px 25px -5px rgba(0, 0, 0, 0.05);
+      0 -1px 3px 0 rgb(0 0 0 / 0.1),
+      0 -1px 2px -1px rgb(0 0 0 / 0.1);
   }
 
   /* FAB (Floating Action Button) shadow */

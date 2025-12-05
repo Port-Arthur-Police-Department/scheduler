@@ -8,12 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar as CalendarIcon, AlertCircle } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { Calendar as CalendarIcon, AlertCircle, Clock, MapPin, Building, Users } from "lucide-react";
+import { format, differenceInDays, eachDayOfInterval, isWeekend, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface TimeOffRequestDialogProps {
   open: boolean;
@@ -27,6 +28,8 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
   const [reason, setReason] = useState("");
   const [ptoType, setPtoType] = useState<string>("vacation");
   const [hoursRequired, setHoursRequired] = useState<number>(0);
+  const [affectedShifts, setAffectedShifts] = useState<any[]>([]);
+  const [calculating, setCalculating] = useState(false);
   const queryClient = useQueryClient();
 
   // Add website settings hook
@@ -38,26 +41,103 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("vacation_hours, sick_hours, comp_hours, holiday_hours")
+        .select("vacation_hours, sick_hours, comp_hours, holiday_hours, full_name")
         .eq("id", userId)
         .single();
 
       if (error) throw error;
       return data;
     },
-    enabled: open && settings?.show_pto_balances, // Only fetch if PTO is enabled and dialog is open
+    enabled: open && settings?.show_pto_balances,
   });
 
-  // Calculate hours required when dates change
+  // Fetch user's recurring schedules and shift types
+  const { data: shiftTypes } = useQuery({
+    queryKey: ["shift-types"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shift_types")
+        .select("*")
+        .order("start_time");
+      if (error) throw error;
+      return data;
+    },
+    enabled: open,
+  });
+
+  // Calculate hours required and fetch affected shifts when dates change
   useEffect(() => {
-    if (startDate && endDate && settings?.show_pto_balances) {
-      const days = differenceInDays(endDate, startDate) + 1; // Inclusive of both dates
-      const hours = days * 8; // Assuming 8-hour work days
+    if (startDate && endDate && settings?.show_pto_balances && shiftTypes) {
+      const days = differenceInDays(endDate, startDate) + 1;
+      const hours = days * 8;
       setHoursRequired(hours);
+      fetchAffectedShifts();
     } else {
       setHoursRequired(0);
+      setAffectedShifts([]);
     }
-  }, [startDate, endDate, settings?.show_pto_balances]);
+  }, [startDate, endDate, settings?.show_pto_balances, shiftTypes]);
+
+  // Function to fetch affected shifts
+  const fetchAffectedShifts = async () => {
+    if (!startDate || !endDate || !userId || !shiftTypes) return;
+    
+    setCalculating(true);
+    try {
+      // Get all days in the date range
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      
+      // Get officer's recurring schedules
+      const { data: recurringSchedules, error: scheduleError } = await supabase
+        .from("recurring_schedules")
+        .select("day_of_week, shift_type_id, unit_number, position_name")
+        .eq("officer_id", userId)
+        .or(`end_date.is.null,end_date.gte.${format(startDate, "yyyy-MM-dd")}`);
+
+      if (scheduleError) throw scheduleError;
+
+      const affectedShiftsData: any[] = [];
+
+      for (const day of days) {
+        const dayOfWeek = day.getDay();
+        const dateStr = format(day, "yyyy-MM-dd");
+        const dayName = format(day, "EEEE");
+        
+        // Check if officer has a recurring schedule for this day
+        const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
+        
+        for (const schedule of daySchedules) {
+          const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
+          if (shift) {
+            affectedShiftsData.push({
+              date: dateStr,
+              dayName: dayName,
+              shiftName: shift.name,
+              shiftTime: `${shift.start_time} - ${shift.end_time}`,
+              unitNumber: schedule.unit_number,
+              positionName: schedule.position_name,
+              hours: calculateShiftHours(shift.start_time, shift.end_time)
+            });
+          }
+        }
+      }
+
+      setAffectedShifts(affectedShiftsData);
+    } catch (error) {
+      console.error("Error fetching affected shifts:", error);
+      toast.error("Failed to load scheduled shifts");
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const calculateShiftHours = (start: string, end: string) => {
+    const [startHour, startMin] = start.split(":").map(Number);
+    const [endHour, endMin] = end.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    return (endMinutes - startMinutes) / 60;
+  };
 
   // Get current balance for selected PTO type
   const getCurrentBalance = () => {
@@ -102,6 +182,11 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
       const days = differenceInDays(endDate, startDate) + 1;
       const hoursUsed = days * 8;
 
+      // Get affected shifts details for the request notes
+      const affectedShiftDetails = affectedShifts.map(s => 
+        `${s.date} (${s.dayName}): ${s.shiftName} ${s.shiftTime}`
+      ).join('; ');
+
       const { error } = await supabase.from("time_off_requests").insert({
         officer_id: userId,
         start_date: format(startDate, "yyyy-MM-dd"),
@@ -110,6 +195,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
         status: "pending",
         pto_type: ptoType,
         hours_used: hoursUsed,
+        affected_shifts: affectedShifts.length > 0 ? affectedShiftDetails : null,
       });
 
       if (error) throw error;
@@ -123,6 +209,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
       setReason("");
       setPtoType("vacation");
       setHoursRequired(0);
+      setAffectedShifts([]);
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -131,10 +218,11 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
 
   const currentBalance = getCurrentBalance();
   const canSubmit = hasSufficientBalance();
+  const totalAffectedHours = affectedShifts.reduce((sum, shift) => sum + shift.hours, 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request Time Off</DialogTitle>
           <DialogDescription>
@@ -212,6 +300,76 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
             </Popover>
           </div>
 
+          {/* Affected Shifts Display */}
+          {startDate && endDate && affectedShifts.length > 0 && (
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Affected Scheduled Shifts ({affectedShifts.length})
+              </h4>
+              
+              <div className="text-sm space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total Shifts Affected:</span>
+                  <span>{affectedShifts.length}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total Hours Affected:</span>
+                  <span>{totalAffectedHours.toFixed(1)} hours</span>
+                </div>
+              </div>
+              
+              <div className="mt-2 max-h-40 overflow-y-auto">
+                <p className="font-medium mb-1 text-sm">Shift Details:</p>
+                {affectedShifts.map((shift, index) => (
+                  <div key={index} className="text-xs p-2 border-b last:border-b-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium">{shift.dayName}, {format(new Date(shift.date), "MMM d")}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {shift.shiftName}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>{shift.shiftTime}</span>
+                      {shift.unitNumber && (
+                        <>
+                          <MapPin className="h-3 w-3 ml-2" />
+                          <span>{shift.unitNumber}</span>
+                        </>
+                      )}
+                      {shift.positionName && (
+                        <>
+                          <Building className="h-3 w-3 ml-2" />
+                          <span>{shift.positionName}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <p className="text-xs text-muted-foreground mt-2">
+                These are your regularly scheduled shifts that will be affected by this time off request.
+              </p>
+            </div>
+          )}
+
+          {startDate && endDate && affectedShifts.length === 0 && !calculating && (
+            <Alert className="bg-yellow-50 border-yellow-200">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800 text-sm">
+                No regularly scheduled shifts found in this date range. Please verify your schedule.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {calculating && (
+            <div className="text-center py-2">
+              <p className="text-sm text-muted-foreground">Loading scheduled shifts...</p>
+            </div>
+          )}
+
           {/* PTO Balance Information */}
           {settings?.show_pto_balances && startDate && endDate && (
             <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
@@ -257,7 +415,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
           <Button
             className="w-full"
             onClick={() => createRequestMutation.mutate()}
-            disabled={createRequestMutation.isPending || (settings?.show_pto_balances && !canSubmit)}
+            disabled={createRequestMutation.isPending || (settings?.show_pto_balances && !canSubmit) || calculating}
           >
             {createRequestMutation.isPending ? "Submitting..." : "Submit Request"}
           </Button>

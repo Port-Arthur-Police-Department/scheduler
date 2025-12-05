@@ -47,20 +47,22 @@ export const useNotifications = () => {
   }, []);
 
   // Fetch in-app notifications
-  const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
-    queryKey: ['in-app-notifications'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
+  queryKey: ['in-app-notifications', userId], // Add userId to query key
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId) // Add this filter for current user
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-      if (error) throw error;
-      return data as InAppNotification[];
-    },
-    refetchInterval: 30000,
-  });
+    if (error) throw error;
+    return data as InAppNotification[];
+  },
+  enabled: !!userId, // Only run if userId exists
+  refetchInterval: 30000,
+});
 
   // Fetch unread count
   const { data: unreadCount } = useQuery({

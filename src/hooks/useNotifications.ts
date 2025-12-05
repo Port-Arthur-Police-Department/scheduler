@@ -59,7 +59,7 @@ export const useNotifications = () => {
       if (error) throw error;
       return data as InAppNotification[];
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Fetch unread count
@@ -74,7 +74,7 @@ export const useNotifications = () => {
       if (error) throw error;
       return data?.length || 0;
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Mark notification as read

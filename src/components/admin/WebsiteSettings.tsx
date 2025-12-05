@@ -106,7 +106,7 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   enable_notifications: false,
   
   // Specific notification types
-  enable_vacancy_alerts: true, // NEW: Controls vacancy alert buttons
+//  enable_vacancy_alerts: true, // NEW: Controls vacancy alert buttons
   enable_pto_request_notifications: true, // NEW: Notify supervisors/admin when PTO is requested
   enable_pto_status_notifications: true, // NEW: Notify user when PTO request is approved/denied
   enable_supervisor_pto_notifications: true, // NEW: Notify supervisors/admin of PTO requests

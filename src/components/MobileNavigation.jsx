@@ -1,36 +1,49 @@
 // src/components/MobileNavigation.jsx
 import React, { useRef, useState } from 'react';
-import { MoreVertical, ChevronLeft, ChevronRight, Home, Calendar, Users, AlertTriangle, Settings, LogOut, Clock } from 'lucide-react';
+import { 
+  MoreVertical, 
+  ChevronLeft, 
+  ChevronRight, 
+  Calendar, 
+  CalendarDays, 
+  Users, 
+  AlertTriangle, 
+  Settings, 
+  LogOut, 
+  Clock,
+  UserPlus,
+  FileText
+} from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin }) => {
   const tabsContainerRef = useRef(null);
   const [scrollPosition, setScrollPosition] = useState(0);
 
-  // Core tabs that are always visible for ALL users
-  const coreTabs = [
-    { id: 'daily', label: 'Daily', icon: <Home className="h-5 w-5" /> },
-    { id: 'schedule', label: 'The Book', icon: <Calendar className="h-5 w-5" /> },
-    { id: 'requests', label: 'PTO', icon: <Clock className="h-5 w-5" /> }, // Add PTO for all users
+  // Tabs based on user role - ALL USERS get these
+  const alwaysVisibleTabs = [
+    { id: 'daily', label: 'Daily', icon: <Calendar className="h-5 w-5" /> },
+    { id: 'schedule', label: 'The Book', icon: <CalendarDays className="h-5 w-5" /> },
+    { id: 'requests', label: 'PTO', icon: <Clock className="h-5 w-5" /> },
   ];
 
-  // Additional tabs for admin/supervisor
-  const additionalTabs = isAdminOrSupervisor ? [
+  // Admin/Supervisor only tabs
+  const adminSupervisorTabs = isAdminOrSupervisor ? [
     { id: 'officers', label: 'Officers', icon: <Users className="h-5 w-5" /> },
     { id: 'vacancies', label: 'Vacancies', icon: <AlertTriangle className="h-5 w-5" /> },
   ] : [];
 
-  // All visible tabs (core + additional)
-  const visibleTabs = [...coreTabs, ...additionalTabs];
+  // Combine visible tabs
+  const visibleTabs = [...alwaysVisibleTabs, ...adminSupervisorTabs];
 
-  // More options (for overflow) - include Settings for all users
+  // Tabs for the "More" dropdown
   const moreOptions = [
     { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
   ];
 
-  // Only show Staff tab in More options if admin
+  // Add Staff tab to More options if admin
   if (isAdmin) {
-    moreOptions.unshift({ id: 'staff', label: 'Staff', icon: <Users className="h-5 w-5" /> });
+    moreOptions.unshift({ id: 'staff', label: 'Staff', icon: <UserPlus className="h-5 w-5" /> });
   }
 
   const scrollTabs = (direction) => {
@@ -52,7 +65,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t z-50 safe-area-bottom">
       <div className="px-2 py-2">
         <div className="relative flex items-center">
-          {/* Left scroll button */}
+          {/* Left scroll button - only show if we can scroll left */}
           {scrollPosition > 0 && (
             <button
               onClick={() => scrollTabs('left')}
@@ -89,7 +102,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 </button>
               ))}
 
-              {/* More options dropdown */}
+              {/* More options dropdown - always show if we have moreOptions */}
               {moreOptions.length > 0 && (
                 <Sheet>
                   <SheetTrigger asChild>
@@ -107,6 +120,7 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                             key={option.id}
                             onClick={() => {
                               onTabChange(option.id);
+                              // Close the sheet
                               document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
                             }}
                             className={`
@@ -121,19 +135,6 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                             <span>{option.label}</span>
                           </button>
                         ))}
-                        <div className="pt-4 mt-4 border-t">
-                          <button
-                            onClick={() => {
-                              // This will be handled by the Dashboard header
-                              // Just close the sheet
-                              document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-                            }}
-                            className="flex items-center w-full p-3 rounded-lg text-left text-destructive hover:bg-destructive/10"
-                          >
-                            <LogOut className="h-5 w-5 mr-3" />
-                            <span>Sign Out</span>
-                          </button>
-                        </div>
                       </div>
                     </div>
                   </SheetContent>

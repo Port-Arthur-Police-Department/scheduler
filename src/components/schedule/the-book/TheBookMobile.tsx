@@ -1,9 +1,4 @@
 // src/components/schedule/the-book/TheBookMobile.tsx
-import MonthlyViewMobile from "./MonthlyViewMobile";
-import VacationListViewMobile from "./VacationListViewMobile";
-import BeatPreferencesViewMobile from "./BeatPreferencesViewMobile";
-import ForceListViewMobile from "./ForceListViewMobile";
-
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";

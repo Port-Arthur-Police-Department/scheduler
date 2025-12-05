@@ -114,22 +114,61 @@ All colors MUST be HSL.
   }
 }
 
-/* Enhanced Blur Effects for Mobile Navigation */
-@supports (backdrop-filter: blur(10px)) {
-  .backdrop-blur-xl {
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-  }
-  
-  .backdrop-blur-2xl {
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-  }
+/* ========== FIXED BLUR EFFECTS ========== */
+/* Custom backdrop blur classes that actually work */
+.backdrop-blur-sm {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 
-  .backdrop-blur-lg {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
+.backdrop-blur-md {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.backdrop-blur-lg {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.backdrop-blur-xl {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.backdrop-blur-2xl {
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+/* Frosted glass effects */
+.frosted-glass-light {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.frosted-glass-dark {
+  background: rgba(17, 24, 39, 0.85); /* dark:bg-gray-900 with transparency */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.frosted-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .frosted-glass {
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* iOS-style Safe Area Support */
@@ -237,15 +276,6 @@ All colors MUST be HSL.
       0 10px 15px -3px rgba(0, 0, 0, 0.1),
       0 4px 6px -2px rgba(0, 0, 0, 0.05),
       0 25px 50px -12px rgba(59, 130, 246, 0.25);
-  }
-
-  /* Frosted glass effect */
-  .frosted-glass {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-white/20 dark:border-gray-800/50;
-  }
-
-  .frosted-glass-dark {
-    @apply bg-gray-900/80 backdrop-blur-xl border-gray-800/50;
   }
 
   /* Mobile breakpoint utilities */
@@ -394,6 +424,7 @@ All colors MUST be HSL.
   .mobile-menu-backdrop {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
   }
 
   /* Prevent body scroll when menu is open */
@@ -460,21 +491,6 @@ All colors MUST be HSL.
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-/* Glass Morphism Utilities */
-.glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.glass-dark {
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Responsive Image Containers */

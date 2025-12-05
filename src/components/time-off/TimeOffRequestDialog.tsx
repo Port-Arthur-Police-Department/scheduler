@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { sendPTORequestNotification } from "../utils/notifications"; 
+import { sendPTORequestNotification } from "@/utils/notifications";
 
 interface TimeOffRequestDialogProps {
   open: boolean;

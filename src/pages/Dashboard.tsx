@@ -135,25 +135,33 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      const { data, error } = await supabase
-        .from("notifications")
-        .select(`
-          *,
-          vacancy_alerts(
-            date,
-            shift_types(name)
-          )
-        `)
-        .eq("officer_id", user.id)
-        .eq("is_read", false)
-        .order("created_at", { ascending: false })
-        .limit(10);
+// In your Dashboard.tsx, update the notifications query:
+const { data: recentNotifications, isLoading: notificationsLoading } = useQuery({
+  queryKey: ["dashboard-notifications"],
+  queryFn: async () => {
+    // Don't try to join with vacancy_alerts unless you actually have that relationship
+    const { data, error } = await supabase
+      .from("notifications")
+      .select(`
+        id,
+        title,
+        message,
+        type,
+        is_read,
+        created_at,
+        user_id
+      `)
+      .eq("user_id", userId) // Only show current user's notifications
+      .order("created_at", { ascending: false })
+      .limit(5);
 
-      if (error) {
-        console.error("Error fetching notifications:", error);
-        return [];
-      }
-      return data || [];
+    if (error) {
+      console.error("Error fetching notifications:", error);
+      throw error;
+    }
+    return data;
+  },
+});
     },
     enabled: !!user?.id,
   });

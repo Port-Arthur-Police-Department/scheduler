@@ -1,8 +1,9 @@
-// hooks/useNotifications.ts
+// hooks/useNotifications.ts - FIXED VERSION
 import { useState, useEffect } from 'react';
 import { NotificationService } from '../utils/notifications';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/use-auth'; // You need to import your auth hook
 
 export interface InAppNotification {
   id: string;
@@ -22,6 +23,10 @@ export const useNotifications = () => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [notificationService, setNotificationService] = useState<NotificationService | null>(null);
   const queryClient = useQueryClient();
+  
+  // ADD THIS: Get current user from auth
+  const { user } = useAuth(); // or however you get current user in your app
+  const userId = user?.id; // Get user ID
 
   useEffect(() => {
     const initNotifications = async () => {
@@ -46,74 +51,104 @@ export const useNotifications = () => {
     initNotifications();
   }, []);
 
-  // Fetch in-app notifications
-const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
-  queryKey: ['in-app-notifications', userId], // Add userId to query key
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId) // Add this filter for current user
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) throw error;
-    return data as InAppNotification[];
-  },
-  enabled: !!userId, // Only run if userId exists
-  refetchInterval: 30000,
-});
-
-  // Fetch unread count
-  const { data: unreadCount } = useQuery({
-    queryKey: ['unread-notifications-count'],
+  // Fetch in-app notifications - FIXED
+  const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
+    queryKey: ['in-app-notifications', userId], // Already correct
     queryFn: async () => {
+      if (!userId) {
+        console.log('No user ID, skipping notification fetch');
+        return [];
+      }
+      
+      console.log('🔔 Fetching notifications for user:', userId);
+      
       const { data, error } = await supabase
         .from('notifications')
-        .select('id', { count: 'exact' })
+        .select('*')
+        .eq('user_id', userId) // Filter by current user
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        throw error;
+      }
+      
+      console.log(`✅ Found ${data?.length || 0} notifications for user ${userId}`);
+      return data as InAppNotification[];
+    },
+    enabled: !!userId, // Only run if userId exists
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Fetch unread count - FIXED (ADDED USER FILTER)
+  const { data: unreadCount } = useQuery({
+    queryKey: ['unread-notifications-count', userId], // Add userId to query key
+    queryFn: async () => {
+      if (!userId) {
+        console.log('No user ID, skipping unread count');
+        return 0;
+      }
+      
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId) // CRITICAL: Filter by current user
         .eq('is_read', false);
 
-      if (error) throw error;
-      return data?.length || 0;
+      if (error) {
+        console.error('Error fetching unread count:', error);
+        return 0;
+      }
+      
+      console.log(`🔔 User ${userId} has ${count || 0} unread notifications`);
+      return count || 0;
     },
+    enabled: !!userId, // Only run if userId exists
     refetchInterval: 30000,
   });
 
-  // Mark notification as read
+  // Mark notification as read - FIXED (ADDED USER FILTER FOR SECURITY)
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
+      if (!userId) throw new Error('No user ID');
+      
       const { error } = await supabase
         .from('notifications')
         .update({
           is_read: true,
           read_at: new Date().toISOString(),
         })
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .eq('user_id', userId); // CRITICAL: Ensure user can only mark their own notifications as read
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['in-app-notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+      queryClient.invalidateQueries({ queryKey: ['in-app-notifications', userId] });
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count', userId] });
     },
   });
 
-  // Mark all as read
+  // Mark all as read - FIXED (ADDED USER FILTER)
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
+      if (!userId) throw new Error('No user ID');
+      
       const { error } = await supabase
         .from('notifications')
         .update({
           is_read: true,
           read_at: new Date().toISOString(),
         })
+        .eq('user_id', userId) // CRITICAL: Only mark current user's notifications
         .eq('is_read', false);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['in-app-notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+      queryClient.invalidateQueries({ queryKey: ['in-app-notifications', userId] });
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count', userId] });
     },
   });
 
@@ -161,9 +196,9 @@ const { data: inAppNotifications, isLoading: notificationsLoading } = useQuery({
     notificationService,
     
     // In-app notifications
-    inAppNotifications,
+    inAppNotifications: inAppNotifications || [],
     notificationsLoading,
-    unreadCount,
+    unreadCount: unreadCount || 0,
     markAsRead: (notificationId: string) => markAsReadMutation.mutate(notificationId),
     markAllAsRead: () => markAllAsReadMutation.mutate(),
   };

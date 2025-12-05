@@ -1,15 +1,21 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, CalendarDays, MoreVertical, Edit, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { format, addDays, isSameDay, startOfWeek, endOfWeek } from "date-fns";
-import { getLastName, getRankAbbreviation } from "./utils";
-import type { ViewProps } from "./types";
+import { supabase } from "@/integrations/supabase/client";
+import { format, addDays, isSameDay, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
-interface WeeklyViewMobileProps extends ViewProps {
+interface WeeklyViewMobileProps {
   currentWeekStart: Date;
+  selectedShiftId: string;
+  shiftTypes: any[];
+  isAdminOrSupervisor: boolean;
   onPreviousWeek: () => void;
   onNextWeek: () => void;
   onToday: () => void;
@@ -17,24 +23,13 @@ interface WeeklyViewMobileProps extends ViewProps {
 
 export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   currentWeekStart,
-  schedules,
+  selectedShiftId,
+  shiftTypes,
   isAdminOrSupervisor,
-  weeklyColors,
-  onEventHandlers,
-  mutations,
-  getLastName,
   onPreviousWeek,
   onNextWeek,
   onToday,
 }) => {
-  if (!schedules) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        No schedule data available
-      </div>
-    );
-  }
-
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentWeekStart, i);
     return {
@@ -47,14 +42,126 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     };
   });
 
-  // Group officers by date for easy lookup
-  const officersByDate = new Map();
-  schedules.dailySchedules?.forEach(day => {
-    officersByDate.set(day.date, day.officers);
+  // Fetch schedule data for the week
+  const { data: scheduleData, isLoading } = useQuery({
+    queryKey: ['mobile-weekly-schedule', selectedShiftId, currentWeekStart.toISOString()],
+    queryFn: async () => {
+      if (!selectedShiftId) return null;
+
+      const startStr = format(currentWeekStart, "yyyy-MM-dd");
+      const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
+
+      // Fetch schedule exceptions for the date range
+      const { data: exceptions, error: exceptionsError } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .gte("date", startStr)
+        .lte("date", endStr)
+        .order("date", { ascending: true });
+
+      if (exceptionsError) throw exceptionsError;
+
+      // Fetch recurring schedules for the selected shift
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${startStr}`);
+
+      if (recurringError) throw recurringError;
+
+      // Organize data by date
+      const scheduleByDate: Record<string, any[]> = {};
+
+      // Initialize each day
+      weekDays.forEach(day => {
+        scheduleByDate[day.dateStr] = [];
+      });
+
+      // Add recurring schedules
+      recurringSchedules?.forEach(schedule => {
+        weekDays.forEach(day => {
+          if (day.dayOfWeek === schedule.day_of_week) {
+            scheduleByDate[day.dateStr].push({
+              officerId: schedule.officer_id,
+              officerName: schedule.profiles?.full_name || "Unknown",
+              badgeNumber: schedule.profiles?.badge_number,
+              rank: schedule.profiles?.rank || "Officer",
+              shiftInfo: {
+                scheduleId: schedule.id,
+                scheduleType: "recurring",
+                position: schedule.position_name,
+                isOff: schedule.is_off || false,
+                hasPTO: schedule.pto_type ? true : false
+              }
+            });
+          }
+        });
+      });
+
+      // Add exceptions (override recurring)
+      exceptions?.forEach(exception => {
+        const dateStr = exception.date;
+        if (scheduleByDate[dateStr]) {
+          // Remove any recurring for this officer on this date
+          scheduleByDate[dateStr] = scheduleByDate[dateStr].filter(
+            o => o.officerId !== exception.officer_id
+          );
+          
+          // Add the exception
+          scheduleByDate[dateStr].push({
+            officerId: exception.officer_id,
+            officerName: exception.profiles?.full_name || "Unknown",
+            badgeNumber: exception.profiles?.badge_number,
+            rank: exception.profiles?.rank || "Officer",
+            shiftInfo: {
+              scheduleId: exception.id,
+              scheduleType: "exception",
+              position: exception.position_name,
+              isOff: exception.is_off || false,
+              hasPTO: exception.pto_type ? true : false
+            }
+          });
+        }
+      });
+
+      return scheduleByDate;
+    },
+    enabled: !!selectedShiftId,
   });
 
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!selectedShiftId) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>Please select a shift to view schedule</p>
+      </div>
+    );
+  }
+
   const currentDateStr = format(new Date(), "yyyy-MM-dd");
-  const todayOfficers = officersByDate.get(currentDateStr) || [];
+  const todayOfficers = scheduleData?.[currentDateStr] || [];
 
   return (
     <div className="space-y-4">
@@ -140,11 +247,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         <h3 className="font-semibold mb-2">Week Overview</h3>
         <div className="space-y-3">
           {weekDays.map((day) => {
-            const dayOfficers = officersByDate.get(day.dateStr) || [];
+            const dayOfficers = scheduleData?.[day.dateStr] || [];
             const supervisorCount = dayOfficers.filter((o: any) => 
-              o.rank?.toLowerCase().includes('sergeant') || 
-              o.rank?.toLowerCase().includes('lieutenant') ||
-              o.rank?.toLowerCase().includes('chief')
+              isSupervisorByRank(o)
             ).length;
             
             const officerCount = dayOfficers.length - supervisorCount;

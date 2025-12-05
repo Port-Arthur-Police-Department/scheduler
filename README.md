@@ -33,4 +33,5 @@ This solution integrates seamlessly with your existing PTO management system whi
 ## Need to implement:
 * push notifications
 * PTO request to be applied to schedule after approved
+* mobile weekly and monthly not passing recurring schedules or exceptions. 
 

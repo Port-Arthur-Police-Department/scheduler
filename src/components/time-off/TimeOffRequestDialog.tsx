@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { sendPTORequestNotification } from "../utils/notifications"; 
 
 interface TimeOffRequestDialogProps {
   open: boolean;
@@ -166,28 +167,34 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     return currentBalance >= hoursRequired;
   };
 
-  const createRequestMutation = useMutation({
-    mutationFn: async () => {
-      if (!startDate || !endDate) {
-        throw new Error("Please select start and end dates");
-      }
+// In your TimeOffRequestDialog.tsx, update the createRequestMutation
+import { sendPTORequestNotification } from "../utils/notifications"; // Add this import
 
-      // Validate PTO balance if balances are enabled
-      if (settings?.show_pto_balances && !hasSufficientBalance()) {
-        const currentBalance = getCurrentBalance();
-        throw new Error(`Insufficient ${ptoType} hours. Required: ${hoursRequired}h, Available: ${currentBalance}h`);
-      }
+const createRequestMutation = useMutation({
+  mutationFn: async () => {
+    if (!startDate || !endDate) {
+      throw new Error("Please select start and end dates");
+    }
 
-      // Calculate hours used (for tracking purposes)
-      const days = differenceInDays(endDate, startDate) + 1;
-      const hoursUsed = days * 8;
+    // Validate PTO balance if balances are enabled
+    if (settings?.show_pto_balances && !hasSufficientBalance()) {
+      const currentBalance = getCurrentBalance();
+      throw new Error(`Insufficient ${ptoType} hours. Required: ${hoursRequired}h, Available: ${currentBalance}h`);
+    }
 
-      // Get affected shifts details for the request notes
-      const affectedShiftDetails = affectedShifts.map(s => 
-        `${s.date} (${s.dayName}): ${s.shiftName} ${s.shiftTime}`
-      ).join('; ');
+    // Calculate hours used (for tracking purposes)
+    const days = differenceInDays(endDate, startDate) + 1;
+    const hoursUsed = days * 8;
 
-      const { error } = await supabase.from("time_off_requests").insert({
+    // Get affected shifts details for the request notes
+    const affectedShiftDetails = affectedShifts.map(s => 
+      `${s.date} (${s.dayName}): ${s.shiftName} ${s.shiftTime}`
+    ).join('; ');
+
+    // Insert the request and get the created record
+    const { data: request, error } = await supabase
+      .from("time_off_requests")
+      .insert({
         officer_id: userId,
         start_date: format(startDate, "yyyy-MM-dd"),
         end_date: format(endDate, "yyyy-MM-dd"),
@@ -196,25 +203,35 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
         pto_type: ptoType,
         hours_used: hoursUsed,
         affected_shifts: affectedShifts.length > 0 ? affectedShiftDetails : null,
-      });
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
-      toast.success("Time off request submitted");
-      onOpenChange(false);
-      setStartDate(undefined);
-      setEndDate(undefined);
-      setReason("");
-      setPtoType("vacation");
-      setHoursRequired(0);
-      setAffectedShifts([]);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    if (error) throw error;
+    
+    return request;
+  },
+  onSuccess: (request) => {
+    queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+    toast.success("Time off request submitted");
+    
+    // Send notification for new request
+    if (request?.id) {
+      sendPTORequestNotification(request.id, userId, 'created');
+    }
+    
+    onOpenChange(false);
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setReason("");
+    setPtoType("vacation");
+    setHoursRequired(0);
+    setAffectedShifts([]);
+  },
+  onError: (error: Error) => {
+    toast.error(error.message);
+  },
+});
 
   const currentBalance = getCurrentBalance();
   const canSubmit = hasSufficientBalance();

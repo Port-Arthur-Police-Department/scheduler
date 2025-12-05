@@ -66,79 +66,79 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     enabled: open,
   });
 
-  // Calculate hours required and fetch affected shifts when dates change
-  useEffect(() => {
-    if (startDate && endDate && settings?.show_pto_balances && shiftTypes) {
-      const days = differenceInDays(endDate, startDate) + 1;
-      const hours = days * 8;
-      setHoursRequired(hours);
-      fetchAffectedShifts();
-    } else {
-      setHoursRequired(0);
-      setAffectedShifts([]);
-    }
-  }, [startDate, endDate, settings?.show_pto_balances, shiftTypes]);
+// Calculate hours required and fetch affected shifts when dates change
+useEffect(() => {
+  if (startDate && endDate && settings?.show_pto_balances && shiftTypes) {
+    const days = differenceInDays(endDate, startDate) + 1;
+    const hours = days * 8; // Default 8 hours per day
+    setHoursRequired(hours);
+    fetchAffectedShifts();
+  } else {
+    setHoursRequired(0);
+    setAffectedShifts([]);
+  }
+}, [startDate, endDate, settings?.show_pto_balances, shiftTypes]);
 
-  // Function to fetch affected shifts
-  const fetchAffectedShifts = async () => {
-    if (!startDate || !endDate || !userId || !shiftTypes) return;
+// Function to fetch affected shifts
+const fetchAffectedShifts = async () => {
+  if (!startDate || !endDate || !userId || !shiftTypes) return;
+  
+  setCalculating(true);
+  try {
+    // Get all days in the date range
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
     
-    setCalculating(true);
-    try {
-      // Get all days in the date range
-      const days = eachDayOfInterval({ start: startDate, end: endDate });
+    // Get officer's recurring schedules
+    const { data: recurringSchedules, error: scheduleError } = await supabase
+      .from("recurring_schedules")
+      .select("day_of_week, shift_type_id, unit_number, position_name")
+      .eq("officer_id", userId)
+      .or(`end_date.is.null,end_date.gte.${format(startDate, "yyyy-MM-dd")}`);
+
+    if (scheduleError) throw scheduleError;
+
+    const affectedShiftsData: any[] = [];
+
+    for (const day of days) {
+      const dayOfWeek = day.getDay();
+      const dateStr = format(day, "yyyy-MM-dd");
+      const dayName = format(day, "EEEE");
       
-      // Get officer's recurring schedules
-      const { data: recurringSchedules, error: scheduleError } = await supabase
-        .from("recurring_schedules")
-        .select("day_of_week, shift_type_id, unit_number, position_name")
-        .eq("officer_id", userId)
-        .or(`end_date.is.null,end_date.gte.${format(startDate, "yyyy-MM-dd")}`);
-
-      if (scheduleError) throw scheduleError;
-
-      const affectedShiftsData: any[] = [];
-
-      for (const day of days) {
-        const dayOfWeek = day.getDay();
-        const dateStr = format(day, "yyyy-MM-dd");
-        const dayName = format(day, "EEEE");
-        
-        // Check if officer has a recurring schedule for this day
-        const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
-        
-        for (const schedule of daySchedules) {
-          const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
-          if (shift) {
-            affectedShiftsData.push({
-              date: dateStr,
-              dayName: dayName,
-              shiftName: shift.name,
-              shiftTime: `${shift.start_time} - ${shift.end_time}`,
-              unitNumber: schedule.unit_number,
-              positionName: schedule.position_name,
-              hours: calculateShiftHours(shift.start_time, shift.end_time)
-            });
-          }
+      // Check if officer has a recurring schedule for this day
+      const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
+      
+      for (const schedule of daySchedules) {
+        const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
+        if (shift) {
+          affectedShiftsData.push({
+            date: dateStr,
+            dayName: dayName,
+            shiftName: shift.name,
+            shiftTime: `${shift.start_time} - ${shift.end_time}`,
+            unitNumber: schedule.unit_number,
+            positionName: schedule.position_name,
+            hours: calculateShiftHours(shift.start_time, shift.end_time)
+          });
         }
       }
-
-      setAffectedShifts(affectedShiftsData);
-    } catch (error) {
-      console.error("Error fetching affected shifts:", error);
-      toast.error("Failed to load scheduled shifts");
-    } finally {
-      setCalculating(false);
     }
-  };
 
-  const calculateShiftHours = (start: string, end: string) => {
-    const [startHour, startMin] = start.split(":").map(Number);
-    const [endHour, endMin] = end.split(":").map(Number);
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-    return (endMinutes - startMinutes) / 60;
-  };
+    setAffectedShifts(affectedShiftsData);
+  } catch (error) {
+    console.error("Error fetching affected shifts:", error);
+    toast.error("Failed to load scheduled shifts");
+  } finally {
+    setCalculating(false);
+  }
+};
+
+const calculateShiftHours = (start: string, end: string) => {
+  const [startHour, startMin] = start.split(":").map(Number);
+  const [endHour, endMin] = end.split(":").map(Number);
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+  return (endMinutes - startMinutes) / 60;
+};
 
   // Get current balance for selected PTO type
   const getCurrentBalance = () => {
@@ -181,7 +181,7 @@ const createRequestMutation = useMutation({
 
     // Calculate hours used (for tracking purposes)
     const days = differenceInDays(endDate, startDate) + 1;
-    const hoursUsed = days * 8;
+    const hoursUsed = affectedShifts.reduce((sum, shift) => sum + shift.hours, 0);
 
     // Get affected shifts details for the request notes
     const affectedShiftDetails = affectedShifts.map(s => 
@@ -314,60 +314,75 @@ const createRequestMutation = useMutation({
             </Popover>
           </div>
 
-          {/* Affected Shifts Display */}
-          {startDate && endDate && affectedShifts.length > 0 && (
-            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-              <h4 className="font-semibold text-sm flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Affected Scheduled Shifts ({affectedShifts.length})
-              </h4>
-              
-              <div className="text-sm space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">Total Shifts Affected:</span>
-                  <span>{affectedShifts.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">Total Hours Affected:</span>
-                  <span>{totalAffectedHours.toFixed(1)} hours</span>
-                </div>
-              </div>
-              
-              <div className="mt-2 max-h-40 overflow-y-auto">
-                <p className="font-medium mb-1 text-sm">Shift Details:</p>
-                {affectedShifts.map((shift, index) => (
-                  <div key={index} className="text-xs p-2 border-b last:border-b-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-medium">{shift.dayName}, {format(new Date(shift.date), "MMM d")}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {shift.shiftName}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{shift.shiftTime}</span>
-                      {shift.unitNumber && (
-                        <>
-                          <MapPin className="h-3 w-3 ml-2" />
-                          <span>{shift.unitNumber}</span>
-                        </>
-                      )}
-                      {shift.positionName && (
-                        <>
-                          <Building className="h-3 w-3 ml-2" />
-                          <span>{shift.positionName}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <p className="text-xs text-muted-foreground mt-2">
-                These are your regularly scheduled shifts that will be affected by this time off request.
-              </p>
-            </div>
-          )}
+{/* Affected Shifts Display */}
+{startDate && endDate && affectedShifts.length > 0 && (
+  <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+    <h4 className="font-semibold text-sm flex items-center gap-2">
+      <Users className="h-4 w-4" />
+      Affected Scheduled Shifts ({affectedShifts.length})
+    </h4>
+    
+    <div className="text-sm space-y-2">
+      <div className="flex justify-between items-center">
+        <span className="font-medium">Total Shifts Affected:</span>
+        <span>{affectedShifts.length}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="font-medium">Total Hours Affected:</span>
+        <span>{affectedShifts.reduce((sum, shift) => sum + shift.hours, 0).toFixed(1)} hours</span>
+      </div>
+    </div>
+    
+    <div className="mt-2 max-h-40 overflow-y-auto">
+      <p className="font-medium mb-1 text-sm">Shift Details:</p>
+      {affectedShifts.map((shift, index) => (
+        <div key={index} className="text-xs p-2 border-b last:border-b-0">
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-medium">{shift.dayName}, {format(new Date(shift.date), "MMM d")}</span>
+            <Badge variant="outline" className="text-xs">
+              {shift.shiftName}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>{shift.shiftTime}</span>
+            {shift.unitNumber && (
+              <>
+                <MapPin className="h-3 w-3 ml-2" />
+                <span>{shift.unitNumber}</span>
+              </>
+            )}
+            {shift.positionName && (
+              <>
+                <Building className="h-3 w-3 ml-2" />
+                <span>{shift.positionName}</span>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+    
+    <p className="text-xs text-muted-foreground mt-2">
+      These are your regularly scheduled shifts that will be affected by this time off request.
+    </p>
+  </div>
+)}
+
+{startDate && endDate && affectedShifts.length === 0 && !calculating && (
+  <Alert className="bg-yellow-50 border-yellow-200">
+    <AlertCircle className="h-4 w-4 text-yellow-600" />
+    <AlertDescription className="text-yellow-800 text-sm">
+      No regularly scheduled shifts found in this date range. Please verify your schedule.
+    </AlertDescription>
+  </Alert>
+)}
+
+{calculating && (
+  <div className="text-center py-2">
+    <p className="text-sm text-muted-foreground">Loading scheduled shifts...</p>
+  </div>
+)}
 
           {startDate && endDate && affectedShifts.length === 0 && !calculating && (
             <Alert className="bg-yellow-50 border-yellow-200">

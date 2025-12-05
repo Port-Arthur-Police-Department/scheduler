@@ -60,17 +60,11 @@ const TheBook = ({
   isAdminOrSupervisor = false 
 }: TheBookProps) => {
   // ALL hooks must be declared first
-  const isMobile = useIsMobile(); // Add this
   const { userEmail } = useUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: websiteSettings } = useWebsiteSettings();
   const { weekly: weeklyColors } = useColorSettings();
-  
-  // THEN you can check for mobile and return early
-  if (isMobile) {
-    return <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />;
-  }
   
   // NOW continue with desktop-only state and logic
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -814,88 +808,91 @@ const renderView = () => {
     );
   }
 
-  return (
-    <>
+return (
+  <>
+    {/* DESKTOP VERSION - hidden on mobile */}
+    <div className="hidden md:block">
+      {/* Your existing desktop JSX - KEEP EVERYTHING EXACTLY AS IS */}
       <Card>
-       <CardHeader>
-  <div className="flex items-center justify-between">
-    <CardTitle className="flex items-center gap-2">
-      <CalendarIcon className="h-5 w-5" />
-      Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
-    </CardTitle>
-    <div className="flex items-center gap-3">
-      {isAdminOrSupervisor && (
-        <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder="Select Shift" />
-          </SelectTrigger>
-          <SelectContent>
-            {shiftTypes?.map((shift) => (
-              <SelectItem key={shift.id} value={shift.id}>
-                {shift.name} ({shift.start_time} - {shift.end_time})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      {(activeView === "weekly" || activeView === "monthly") && (
-        <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          Export PDF
-        </Button>
-      )}
-    </div>
-  </div>
-  
-  {!isAdminOrSupervisor && (
-    <div className="flex items-center gap-3 mt-3">
-      <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-        <SelectTrigger className="w-64">
-          <SelectValue placeholder="Select Shift" />
-        </SelectTrigger>
-        <SelectContent>
-          {shiftTypes?.map((shift) => (
-            <SelectItem key={shift.id} value={shift.id}>
-              {shift.name} ({shift.start_time} - {shift.end_time})
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )}
-  
-  {/* Tabs for different views */}
-  <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
-    <TabsList className="grid w-full max-w-2xl grid-cols-5">
-      <TabsTrigger value="weekly" className="flex items-center gap-2">
-        <CalendarIcon className="h-4 w-4" />
-        Weekly
-      </TabsTrigger>
-      <TabsTrigger value="monthly" className="flex items-center gap-2">
-        <CalendarDays className="h-4 w-4" />
-        Monthly
-      </TabsTrigger>
-      <TabsTrigger value="force-list" className="flex items-center gap-2">
-        <Users className="h-4 w-4" />
-        Force List
-      </TabsTrigger>
-      <TabsTrigger value="vacation-list" className="flex items-center gap-2">
-        <Plane className="h-4 w-4" />
-        Vacation List
-      </TabsTrigger>
-      <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
-        <MapPin className="h-4 w-4" />
-        Beat Preferences
-      </TabsTrigger>
-    </TabsList>
-  </Tabs>
-  
-  {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
-    <p className="text-sm text-muted-foreground mt-2">
-      Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
-    </p>
-  )}
-</CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              {isAdminOrSupervisor && (
+                <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Select Shift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shiftTypes?.map((shift) => (
+                      <SelectItem key={shift.id} value={shift.id}>
+                        {shift.name} ({shift.start_time} - {shift.end_time})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {(activeView === "weekly" || activeView === "monthly") && (
+                <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export PDF
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {!isAdminOrSupervisor && (
+            <div className="flex items-center gap-3 mt-3">
+              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Select Shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  {shiftTypes?.map((shift) => (
+                    <SelectItem key={shift.id} value={shift.id}>
+                      {shift.name} ({shift.start_time} - {shift.end_time})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {/* Tabs for different views */}
+          <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
+            <TabsList className="grid w-full max-w-2xl grid-cols-5">
+              <TabsTrigger value="weekly" className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4" />
+                Weekly
+              </TabsTrigger>
+              <TabsTrigger value="monthly" className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Monthly
+              </TabsTrigger>
+              <TabsTrigger value="force-list" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Force List
+              </TabsTrigger>
+              <TabsTrigger value="vacation-list" className="flex items-center gap-2">
+                <Plane className="h-4 w-4" />
+                Vacation List
+              </TabsTrigger>
+              <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Beat Preferences
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
+            </p>
+          )}
+        </CardHeader>
         <CardContent>
           {!selectedShiftId && (activeView === "weekly" || activeView === "monthly") ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -906,49 +903,52 @@ const renderView = () => {
           )}
         </CardContent>
       </Card>
+    </div>
 
-      {/* Dialogs */}
-      <AssignmentEditDialog
-        editingAssignment={editingAssignment}
-        onClose={() => setEditingAssignment(null)}
-        onSave={handleSaveAssignment}
-        updatePositionMutation={updatePositionMutation}
+    {/* MOBILE VERSION - hidden on desktop */}
+    <div className="block md:hidden">
+      <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />
+    </div>
+
+    {/* Dialogs - Keep these outside so they work for both */}
+    <AssignmentEditDialog
+      editingAssignment={editingAssignment}
+      onClose={() => setEditingAssignment(null)}
+      onSave={handleSaveAssignment}
+      updatePositionMutation={updatePositionMutation}
+    />
+
+    <ScheduleExportDialog
+      open={exportDialogOpen}
+      onOpenChange={setExportDialogOpen}
+      selectedShiftId={selectedShiftId}
+      shiftTypes={shiftTypes || []}
+      activeView={activeView}
+      userEmail={userEmail}
+    />
+
+    {/* PTO Assignment Dialog */}
+    {selectedSchedule && (
+      <PTOAssignmentDialog
+        open={ptoDialogOpen}
+        onOpenChange={(open) => {
+          setPtoDialogOpen(open);
+          if (!open) {
+            queryClient.invalidateQueries({ queryKey });
+            setSelectedSchedule(null);
+          }
+        }}
+        officer={{
+          officerId: selectedSchedule.officerId,
+          name: selectedSchedule.officerName,
+          scheduleId: selectedSchedule.scheduleId,
+          type: selectedSchedule.type,
+          ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
+        }}
+        shift={selectedSchedule.shift}
+        date={selectedSchedule.date}
+        ptoBalancesEnabled={websiteSettings?.show_pto_balances}
       />
-
-      <ScheduleExportDialog
-        open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        selectedShiftId={selectedShiftId}
-        shiftTypes={shiftTypes || []}
-        activeView={activeView}
-        userEmail={userEmail}
-      />
-
-      {/* PTO Assignment Dialog */}
-      {selectedSchedule && (
-        <PTOAssignmentDialog
-          open={ptoDialogOpen}
-          onOpenChange={(open) => {
-            setPtoDialogOpen(open);
-            if (!open) {
-              queryClient.invalidateQueries({ queryKey });
-              setSelectedSchedule(null);
-            }
-          }}
-          officer={{
-            officerId: selectedSchedule.officerId,
-            name: selectedSchedule.officerName,
-            scheduleId: selectedSchedule.scheduleId,
-            type: selectedSchedule.type,
-            ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
-          }}
-          shift={selectedSchedule.shift}
-          date={selectedSchedule.date}
-          ptoBalancesEnabled={websiteSettings?.show_pto_balances}
-        />
-      )}
-    </>
-  );
-};
-
-export default TheBook;
+    )}
+  </>
+);

@@ -37,9 +37,12 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
   const [selectedShiftForCustomMessage, setSelectedShiftForCustomMessage] = useState<any>(null);
   const [detectionCustomMessage, setDetectionCustomMessage] = useState("");
 
-  // Add website settings query
-  const { data: websiteSettings } = useWebsiteSettings();
-  const notificationsEnabled = websiteSettings?.enable_notifications || false;
+// Add website settings query
+const { data: websiteSettings } = useWebsiteSettings();
+// Check if mass alert sending is enabled (controls vacancy alert buttons)
+const massAlertSendingEnabled = websiteSettings?.enable_mass_alert_sending !== false;
+// Check if automated notifications are enabled
+const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
   // Add real-time subscription for vacancy alerts
   useEffect(() => {
@@ -806,9 +809,9 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
         </Button>
       </div>
 
-      {/* Only show Officer Responses card if notifications are enabled */}
-      {notificationsEnabled && (
-        <Card>
+      {/* Only show Officer Responses card if mass alert sending is enabled */}
+        {massAlertSendingEnabled && (
+          <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -959,8 +962,8 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
                 <RefreshCw className={`h-4 w-4 mr-2 ${understaffedLoading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              {/* Only show Create All Alerts button if notifications are enabled */}
-              {notificationsEnabled && (
+              {/* Only show Create All Alerts button if mass alert sending is enabled */}
+              {massAlertSendingEnabled && (
                 <Button
                   variant="outline"
                   onClick={handleCreateAllAlerts}
@@ -1066,8 +1069,8 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
                           )}
                         </div>
                       </div>
-                      {/* Only show Create Alert/Send Alert buttons if notifications are enabled */}
-                      {notificationsEnabled && (
+                      {/* Only show Create Alert/Send Alert buttons if mass alert sending is enabled */}
+                        {massAlertSendingEnabled && (
                         <div className="flex flex-col gap-2">
                           {!alertExists ? (
                             <Button
@@ -1098,9 +1101,9 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
         </CardContent>
       </Card>
 
-      {/* Only show Manual Vacancy Alert Creation card if notifications are enabled */}
-      {notificationsEnabled && (
-        <Card>
+      {/* Only show Manual Vacancy Alert Creation card if mass alert sending is enabled */}
+      {massAlertSendingEnabled && (
+         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>

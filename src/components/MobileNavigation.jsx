@@ -1,4 +1,4 @@
-// src/components/MobileNavigation.jsx - Fixed blur version
+// src/components/MobileNavigation.jsx - Matches Dashboard header blur
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -59,8 +59,8 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
 
   return (
     <>
-      {/* Fixed Blurred Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 frosted-glass border-t border-white/20 dark:border-gray-800/50 shadow-lg z-40 safe-area-bottom mobile-nav-elevation">
+      {/* Bottom Navigation Bar - MATCHES DASHBOARD HEADER BLUR */}
+      <nav className="fixed bottom-0 left-0 right-0 dashboard-blur border-t border-border/50 shadow-sm z-40 safe-area-bottom mobile-nav-elevation">
         <div className="flex justify-around items-center h-16 px-2">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
@@ -78,10 +78,10 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                   "flex flex-col items-center justify-center flex-1 h-full relative group transition-all duration-200 mobile-nav-button",
                   activeTab === tab.id
                     ? "text-primary"
-                    : "text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {/* Active indicator dot */}
+                {/* Active indicator dot - matches Dashboard active states */}
                 <div className={cn(
                   "absolute -top-1 w-8 h-1 bg-primary rounded-full transition-all duration-300",
                   activeTab === tab.id 
@@ -90,10 +90,10 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 )} />
                 
                 <div className={cn(
-                  "p-2 rounded-xl transition-all duration-200",
+                  "p-2 rounded-lg transition-all duration-200",
                   activeTab === tab.id
                     ? "bg-primary/10"
-                    : "group-hover:bg-gray-200/50 dark:group-hover:bg-gray-800/50"
+                    : "group-hover:bg-muted/50"
                 )}>
                   <Icon className={cn(
                     "h-5 w-5 transition-transform duration-200",
@@ -108,45 +108,43 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
         </div>
       </nav>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Matches Dashboard primary button style */}
       <button
         onClick={() => setIsMenuOpen(true)}
-        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/80 text-white shadow-2xl flex items-center justify-center hover:shadow-primary/25 hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 mobile-nav-button"
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-all duration-200 hover:scale-105 active:scale-95 mobile-nav-button"
         aria-label="Open menu"
       >
         <Plus className="h-6 w-6" />
       </button>
 
-      {/* Menu Overlay */}
+      {/* Menu Overlay - Also uses Dashboard blur style */}
       {isMenuOpen && (
         <>
-          {/* Blurred Overlay */}
+          {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 fade-in"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 fade-in"
             onClick={() => setIsMenuOpen(false)}
           />
           
-          {/* Menu Sheet with guaranteed blur */}
+          {/* Menu Sheet - Uses same blur as Dashboard */}
           <div className="fixed inset-x-0 bottom-0 z-50 animate-in">
-            <div className="frosted-glass rounded-t-3xl border-t border-white/20 dark:border-gray-800/50 shadow-2xl mx-auto max-w-lg">
+            <div className="dashboard-blur rounded-t-2xl border-t border-border/50 shadow-lg mx-auto max-w-lg">
               
               {/* Drag Handle */}
               <div className="flex justify-center pt-3 pb-2">
-                <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+                <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
               </div>
               
               {/* Menu Header */}
               <div className="px-6 pt-2 pb-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    More Options
-                  </h3>
+                  <h3 className="text-lg font-semibold">More Options</h3>
                   <button
                     onClick={() => setIsMenuOpen(false)}
-                    className="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors mobile-nav-button"
+                    className="p-2 rounded-lg hover:bg-muted/50 transition-colors mobile-nav-button"
                     aria-label="Close menu"
                   >
-                    <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                    <X className="h-5 w-5 text-muted-foreground" />
                   </button>
                 </div>
               </div>
@@ -166,11 +164,11 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                       key={tab.id}
                       onClick={() => handleTabClick(tab.id)}
                       className={cn(
-                        "flex items-center w-full p-4 rounded-2xl hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-all duration-200 active:scale-95 mobile-nav-button",
+                        "flex items-center w-full p-4 rounded-lg hover:bg-muted/50 transition-all duration-200 active:scale-95 mobile-nav-button",
                         activeTab === tab.id && "bg-primary/10 text-primary"
                       )}
                     >
-                      <div className="p-2 rounded-xl bg-gray-100/50 dark:bg-gray-800/50 mr-3">
+                      <div className="p-2 rounded-lg bg-muted/50 mr-3">
                         <Icon className="h-5 w-5" />
                       </div>
                       <span className="font-medium">{tab.label}</span>
@@ -181,9 +179,9 @@ const MobileNavigation = ({ activeTab, onTabChange, isAdminOrSupervisor, isAdmin
                 {/* Sign Out Button */}
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center w-full p-4 rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 mt-4 mobile-nav-button"
+                  className="flex items-center w-full p-4 rounded-lg text-destructive hover:bg-destructive/10 transition-all duration-200 active:scale-95 mt-4 mobile-nav-button"
                 >
-                  <div className="p-2 rounded-xl bg-red-100/50 dark:bg-red-900/20 mr-3">
+                  <div className="p-2 rounded-lg bg-destructive/10 mr-3">
                     <LogOut className="h-5 w-5" />
                   </div>
                   <span className="font-medium">Sign Out</span>

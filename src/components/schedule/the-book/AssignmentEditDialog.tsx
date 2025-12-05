@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import TheBookMobile from "./TheBookMobile";
 
 interface AssignmentEditDialogProps {
   editingAssignment: { officer: any; dateStr: string } | null;

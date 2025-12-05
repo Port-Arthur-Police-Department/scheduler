@@ -167,9 +167,6 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     return currentBalance >= hoursRequired;
   };
 
-// In your TimeOffRequestDialog.tsx, update the createRequestMutation
-import { sendPTORequestNotification } from "../utils/notifications"; // Add this import
-
 const createRequestMutation = useMutation({
   mutationFn: async () => {
     if (!startDate || !endDate) {

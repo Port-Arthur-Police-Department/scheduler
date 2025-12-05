@@ -19,8 +19,7 @@ import {
   Trash2, 
   CalendarIcon, 
   Bell, 
-  AlertCircle,
-  Alert // Add this
+  AlertCircle
 } from "lucide-react";
 import { PasswordResetManager } from "@/components/admin/PasswordResetManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { exportAuditToPDF } from "@/utils/auditPdfExport";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Update your DEFAULT_COLORS in WebsiteSettings.tsx
 const DEFAULT_COLORS = {

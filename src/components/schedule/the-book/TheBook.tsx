@@ -947,10 +947,11 @@ return (
         }}
         shift={selectedSchedule.shift}
         date={selectedSchedule.date}
-        ptoBalancesEnabled={websiteSettings?.show_pto_balances}
-      />
-    )}
-  </>
-);
+          ptoBalancesEnabled={websiteSettings?.show_pto_balances}
+        />
+      )}
+    </>
+  );
+};
 
-  export default TheBook;
+export default TheBook;

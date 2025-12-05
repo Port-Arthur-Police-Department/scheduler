@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
@@ -102,15 +103,21 @@ const DEFAULT_PTO_VISIBILITY = {
 
 // Default notification settings
 const DEFAULT_NOTIFICATION_SETTINGS = {
-  // Global toggle
+  // Global notification sending toggle (ONLY for sending notifications)
   enable_notifications: false,
   
+  // Mass alert sending feature (send to people + allow responses)
+  enable_mass_alert_sending: true,  // NEW: Controls the mass alert sending feature
+  
   // Specific notification types
-//  enable_vacancy_alerts: true, // NEW: Controls vacancy alert buttons
-  enable_pto_request_notifications: true, // NEW: Notify supervisors/admin when PTO is requested
-  enable_pto_status_notifications: true, // NEW: Notify user when PTO request is approved/denied
-  enable_supervisor_pto_notifications: true, // NEW: Notify supervisors/admin of PTO requests
-  enable_schedule_change_notifications: true, // NEW: Notify users of schedule changes
+  enable_vacancy_alerts: true,
+  enable_pto_request_notifications: true,
+  enable_pto_status_notifications: true,
+  enable_supervisor_pto_notifications: true,
+  enable_schedule_change_notifications: true,
+  
+  // Button visibility (always visible when mass alert sending is enabled)
+  show_vacancy_alert_buttons: true,
   
   // Notification display settings
   show_pto_balances: false,
@@ -688,144 +695,199 @@ export const WebsiteSettings = () => {
   return (
     <div className="space-y-6">
       {/* Notification Settings Card - UPDATED */}
+{/* NOTIFICATION SETTINGS CARD - RESTRUCTURED */}
 <Card>
   <CardHeader>
     <CardTitle className="flex items-center gap-2">
       <Bell className="h-5 w-5" />
-      Notification Settings
+      Notification & Alert Settings
     </CardTitle>
     <CardDescription>
-      Control notification features and alerts for the entire system
+      Control different notification features and alert systems
     </CardDescription>
   </CardHeader>
-  <CardContent className="space-y-6">
-    {/* Global Notification Toggle */}
-    <div className="flex items-center justify-between">
-      <div className="space-y-0.5">
-        <Label htmlFor="notifications-toggle" className="text-base">
-          Enable All Notifications
-        </Label>
-        <div className="text-sm text-muted-foreground">
-          Master switch for all notification features. When disabled, no notifications will be sent.
+  <CardContent className="space-y-8">
+    
+    {/* SECTION 1: Mass Alert Sending System */}
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Mass Alert System</h3>
+      <div className="pl-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="mass-alert-toggle" className="text-base">
+              Enable Mass Alert Sending
+            </Label>
+            <div className="text-sm text-muted-foreground">
+              Controls the "Create Manual Alert" and "Create All Alerts" buttons on the Vacancy Management page.
+              When disabled, users cannot send alerts to people or receive responses.
+            </div>
+          </div>
+          <Switch
+            id="mass-alert-toggle"
+            checked={settings?.enable_mass_alert_sending !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_mass_alert_sending', checked)
+            }
+            disabled={updateSettingsMutation.isPending}
+          />
+        </div>
+        
+        {/* Vacancy Alert Buttons (only shown when mass alerts are enabled) */}
+        <div className={`flex items-center justify-between ${!settings?.enable_mass_alert_sending ? 'opacity-60' : ''}`}>
+          <div className="space-y-0.5">
+            <Label 
+              htmlFor="vacancy-button-toggle" 
+              className={`text-base ${!settings?.enable_mass_alert_sending ? 'text-muted-foreground' : ''}`}
+            >
+              Show Vacancy Alert Subscription Buttons
+            </Label>
+            <div className={`text-sm ${!settings?.enable_mass_alert_sending ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+              Allow users to subscribe to vacancy alerts (requires Mass Alert System to be enabled)
+            </div>
+          </div>
+          <Switch
+            id="vacancy-button-toggle"
+            checked={settings?.show_vacancy_alert_buttons !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('show_vacancy_alert_buttons', checked)
+            }
+            disabled={updateSettingsMutation.isPending || !settings?.enable_mass_alert_sending}
+          />
         </div>
       </div>
-      <Switch
-        id="notifications-toggle"
-        checked={settings?.enable_notifications || false}
-        onCheckedChange={(checked) => 
-          handleToggle('enable_notifications', checked)
-        }
-        disabled={updateSettingsMutation.isPending}
-      />
     </div>
-
-    {/* Individual Notification Types - ALWAYS VISIBLE */}
-    <div className="space-y-4 pl-4 border-l-2">
-      {/* Show a message when notifications are disabled */}
-      {!settings?.enable_notifications && (
-        <Alert className="bg-gray-50 border-gray-200">
-          <AlertCircle className="h-4 w-4 text-gray-600" />
-          <AlertDescription className="text-gray-700">
-            All notifications are currently disabled. Enable notifications above to configure individual settings.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Vacancy Alerts */}
-      <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
-        <div className="space-y-0.5">
-          <Label 
-            htmlFor="vacancy-alerts-toggle" 
-            className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
-          >
-            Enable Vacancy Alerts
-          </Label>
-          <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-            When disabled, vacancy alert buttons will be hidden from all users
+    
+    <Separator />
+    
+    {/* SECTION 2: Automated Notifications */}
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Automated Notifications</h3>
+      <div className="pl-4 space-y-4">
+        {/* Global Notification Sending Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="notifications-toggle" className="text-base">
+              Enable All Automated Notifications
+            </Label>
+            <div className="text-sm text-muted-foreground">
+              Master switch for automated notifications (PTO requests, schedule changes, etc.)
+            </div>
           </div>
+          <Switch
+            id="notifications-toggle"
+            checked={settings?.enable_notifications || false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_notifications', checked)
+            }
+            disabled={updateSettingsMutation.isPending}
+          />
         </div>
-        <Switch
-          id="vacancy-alerts-toggle"
-          checked={settings?.enable_vacancy_alerts !== false}
-          onCheckedChange={(checked) => 
-            handleToggle('enable_vacancy_alerts', checked)
-          }
-          disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
-        />
-      </div>
 
-      {/* PTO Request Notifications */}
-      <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
-        <div className="space-y-0.5">
-          <Label 
-            htmlFor="pto-request-notifications-toggle" 
-            className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
-          >
-            PTO Request Notifications
-          </Label>
-          <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-            Notify supervisors and admins when a new PTO request is submitted
-          </div>
-        </div>
-        <Switch
-          id="pto-request-notifications-toggle"
-          checked={settings?.enable_pto_request_notifications !== false}
-          onCheckedChange={(checked) => 
-            handleToggle('enable_pto_request_notifications', checked)
-          }
-          disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
-        />
-      </div>
+        {/* Show a message when notifications are disabled */}
+        {!settings?.enable_notifications && (
+          <Alert className="bg-gray-50 border-gray-200">
+            <AlertCircle className="h-4 w-4 text-gray-600" />
+            <AlertDescription className="text-gray-700">
+              Automated notifications are currently disabled. Enable above to configure individual settings.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {/* PTO Status Notifications */}
-      <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
-        <div className="space-y-0.5">
-          <Label 
-            htmlFor="pto-status-notifications-toggle" 
-            className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
-          >
-            PTO Status Notifications
-          </Label>
-          <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-            Notify officers when their PTO request is approved or denied
+        {/* Vacancy Alert NOTIFICATIONS */}
+        <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
+          <div className="space-y-0.5">
+            <Label 
+              htmlFor="vacancy-alerts-toggle" 
+              className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
+            >
+              Send Vacancy Alert Notifications
+            </Label>
+            <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+              Automatically send notifications when vacancies occur to subscribed users
+            </div>
           </div>
+          <Switch
+            id="vacancy-alerts-toggle"
+            checked={settings?.enable_vacancy_alerts !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_vacancy_alerts', checked)
+            }
+            disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
+          />
         </div>
-        <Switch
-          id="pto-status-notifications-toggle"
-          checked={settings?.enable_pto_status_notifications !== false}
-          onCheckedChange={(checked) => 
-            handleToggle('enable_pto_status_notifications', checked)
-          }
-          disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
-        />
-      </div>
 
-      {/* Schedule Change Notifications */}
-      <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
-        <div className="space-y-0.5">
-          <Label 
-            htmlFor="schedule-change-notifications-toggle" 
-            className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
-          >
-            Schedule Change Notifications
-          </Label>
-          <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-            Notify users when their schedule is updated
+        {/* PTO Request Notifications */}
+        <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
+          <div className="space-y-0.5">
+            <Label 
+              htmlFor="pto-request-notifications-toggle" 
+              className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
+            >
+              PTO Request Notifications
+            </Label>
+            <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+              Notify supervisors and admins when a new PTO request is submitted
+            </div>
           </div>
+          <Switch
+            id="pto-request-notifications-toggle"
+            checked={settings?.enable_pto_request_notifications !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_pto_request_notifications', checked)
+            }
+            disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
+          />
         </div>
-        <Switch
-          id="schedule-change-notifications-toggle"
-          checked={settings?.enable_schedule_change_notifications !== false}
-          onCheckedChange={(checked) => 
-            handleToggle('enable_schedule_change_notifications', checked)
-          }
-          disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
-        />
+
+        {/* PTO Status Notifications */}
+        <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
+          <div className="space-y-0.5">
+            <Label 
+              htmlFor="pto-status-notifications-toggle" 
+              className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
+            >
+              PTO Status Notifications
+            </Label>
+            <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+              Notify officers when their PTO request is approved or denied
+            </div>
+          </div>
+          <Switch
+            id="pto-status-notifications-toggle"
+            checked={settings?.enable_pto_status_notifications !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_pto_status_notifications', checked)
+            }
+            disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
+          />
+        </div>
+
+        {/* Schedule Change Notifications */}
+        <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
+          <div className="space-y-0.5">
+            <Label 
+              htmlFor="schedule-change-notifications-toggle" 
+              className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
+            >
+              Schedule Change Notifications
+            </Label>
+            <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+              Notify users when their schedule is updated
+            </div>
+          </div>
+          <Switch
+            id="schedule-change-notifications-toggle"
+            checked={settings?.enable_schedule_change_notifications !== false}
+            onCheckedChange={(checked) => 
+              handleToggle('enable_schedule_change_notifications', checked)
+            }
+            disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
+          />
+        </div>
       </div>
     </div>
   </CardContent>
 </Card>
-
       {/* PTO Settings Card */}
       <Card>
         <CardHeader>

@@ -737,14 +737,14 @@ const renderTabContent = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      {isMobile && (
-        <MobileNavigation 
-          activeTab={activeTab} 
-          onTabChange={handleTabChange}
-          isAdminOrSupervisor={isAdminOrSupervisor}
-          isAdmin={isAdmin}
-        />
-      )}
+{isMobile && (
+  <MobileNavigation 
+    activeTab={activeTab} 
+    onTabChange={handleTabChange}
+    isAdminOrSupervisor={isAdminOrSupervisor}
+    isAdmin={isAdmin}
+  />
+)}
     </div>
   );
 };

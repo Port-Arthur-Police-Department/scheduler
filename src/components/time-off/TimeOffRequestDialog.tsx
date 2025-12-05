@@ -232,16 +232,22 @@ const createRequestMutation = useMutation({
     
     return request;
   },
-  onSuccess: (request) => {
-    queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
-    toast.success("Time off request submitted");
+onSuccess: (request) => {
+  queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+  toast.success("Time off request submitted");
+  
+  // Send notification for new request
+  if (request?.id) {
+    console.log('🔔 [DIALOG] PTO request submitted, calling sendPTORequestNotification');
+    console.log('🔔 [DIALOG] Request ID:', request.id);
+    console.log('🔔 [DIALOG] User ID:', userId);
     
-    // Send notification for new request
-    if (request?.id) {
-      sendPTORequestNotification(request.id, userId, 'created');
-    }
-    
-    onOpenChange(false);
+    sendPTORequestNotification(request.id, userId, 'created');
+  } else {
+    console.error('❌ [DIALOG] No request ID returned after submission');
+  }
+  
+  onOpenChange(false);;
     setStartDate(undefined);
     setEndDate(undefined);
     setReason("");

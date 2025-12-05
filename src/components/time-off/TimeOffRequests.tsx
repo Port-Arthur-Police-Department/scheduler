@@ -1,4 +1,4 @@
-// components/TimeOffRequests.tsx
+// components/time-off/TimeOffRequests.tsx
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { sendPTORequestNotification } from "../utils/notifications"; // Updated import
+import { sendPTORequestNotification } from "@/utils/notifications"; // CORRECTED IMPORT
 
 interface TimeOffRequestsProps {
   userId: string;

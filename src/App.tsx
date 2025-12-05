@@ -8,7 +8,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { useIsMobile } from "./hooks/use-mobile";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
-import { UserProvider } from "@/contexts/UserContext"; // ADD THIS IMPORT
+import { UserProvider } from "@/contexts/UserContext";
 
 const queryClient = new QueryClient();
 
@@ -21,7 +21,6 @@ const App = () => {
         <Toaster />
         <Sonner />
         <HashRouter>
-          {/* ADD UserProvider HERE - Wrap the entire app */}
           <UserProvider>
             <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
               <Routes>
@@ -41,7 +40,6 @@ const App = () => {
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
-              {/* PWA Install Prompt */}
               <PWAInstallPrompt />
             </div>
           </UserProvider>

@@ -1,7 +1,7 @@
-// components/NotificationsBell.tsx
+// components/NotificationsBell.tsx - CHECK HOOK ORDER
 import { useState } from "react";
 import { Bell, Check, X, Clock } from "lucide-react";
-import { useNotifications } from "@/hooks/useNotifications";
+import { useNotifications } from "@/hooks/useNotifications"; // Make sure this import is correct
 import { Button } from "@/components/ui/button";
 import { 
   Popover, 
@@ -14,6 +14,7 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export const NotificationsBell = () => {
+  // All hooks at top level
   const [open, setOpen] = useState(false);
   const { 
     inAppNotifications, 
@@ -24,7 +25,7 @@ export const NotificationsBell = () => {
     isEnabled,
     requestPermission,
     testNotification 
-  } = useNotifications();
+  } = useNotifications(); /
 
   const handleBellClick = async () => {
     if (!isEnabled) {

@@ -29,3 +29,8 @@
 * Bulk Creation: Creates all necessary schedule exceptions in one operation
 
 This solution integrates seamlessly with your existing PTO management system while providing the bulk assignment functionality you need for managing vacation schedules efficiently across your 129+ officers.
+
+## Need to implement:
+* push notifications
+* PTO request to be applied to schedule after approved
+

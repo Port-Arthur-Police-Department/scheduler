@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Star, Filter, Download, Save } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { MapPin, Star, Filter, Download, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
@@ -25,6 +27,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
 }) => {
   const [selectedOfficer, setSelectedOfficer] = useState<string | null>(null);
   const [editingPrefs, setEditingPrefs] = useState<any>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   // Fetch beat preferences
   const { data: beatData, isLoading, refetch } = useQuery({
@@ -134,6 +137,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
         notes: ''
       }
     });
+    setShowEditDialog(true);
   };
 
   const handleSavePreferences = async () => {
@@ -172,6 +176,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
       if (error) throw error;
 
       alert("Beat preferences saved successfully");
+      setShowEditDialog(false);
       setSelectedOfficer(null);
       setEditingPrefs(null);
       refetch();
@@ -308,17 +313,17 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
             </div>
           </div>
 
-          {/* Edit Preferences Modal */}
-          {editingPrefs && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-                <div className="p-4 border-b">
-                  <h3 className="font-semibold">
-                    Edit Preferences for {getLastName(editingPrefs.officer.full_name)}
-                  </h3>
-                </div>
-                
-                <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Edit Preferences Dialog - FIXED with proper DialogTitle */}
+          <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Edit Preferences for {editingPrefs ? getLastName(editingPrefs.officer.full_name) : ''}
+                </DialogTitle>
+              </DialogHeader>
+              
+              {editingPrefs && (
+                <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <Label className="text-sm">1st Choice</Label>
                     <Select 
@@ -393,30 +398,47 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div className="p-4 border-t flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={() => {
-                      setSelectedOfficer(null);
-                      setEditingPrefs(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    className="flex-1"
-                    onClick={handleSavePreferences}
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Notes</Label>
+                    <Textarea
+                      value={editingPrefs.preferences.notes || ''}
+                      onChange={(e) => setEditingPrefs({
+                        ...editingPrefs,
+                        preferences: {
+                          ...editingPrefs.preferences,
+                          notes: e.target.value
+                        }
+                      })}
+                      placeholder="Additional notes..."
+                      className="min-h-[80px]"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => {
+                        setShowEditDialog(false);
+                        setSelectedOfficer(null);
+                        setEditingPrefs(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      className="flex-1"
+                      onClick={handleSavePreferences}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

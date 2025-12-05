@@ -1,7 +1,7 @@
 import React from 'react';
-import { useMediaQuery } from '@/hooks/use-media-query';
 import TheBook from './TheBook';
 import TheBookMobile from './TheBookMobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ResponsiveTheBookProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
@@ -12,7 +12,7 @@ export const ResponsiveTheBook: React.FC<ResponsiveTheBookProps> = ({
   userRole,
   isAdminOrSupervisor
 }) => {
-  const isMobile = useMediaQuery('(max-width: 768px)');
+  const isMobile = useIsMobile();
 
   if (isMobile) {
     return (

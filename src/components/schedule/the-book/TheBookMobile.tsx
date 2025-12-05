@@ -60,32 +60,32 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     setCurrentMonth(new Date());
   };
 
-  const renderView = () => {
-    switch (activeView) {
-      case "weekly":
-        return (
-          <WeeklyViewMobile
-            currentWeekStart={currentWeekStart}
-            selectedShiftId={selectedShiftId}
-            shiftTypes={shiftTypes || []}
-            isAdminOrSupervisor={isAdminOrSupervisor}
-            onPreviousWeek={goToPreviousWeek}
-            onNextWeek={goToNextWeek}
-            onToday={goToToday}
-          />
-        );
-      
-      case "monthly":
-        return (
-          <MonthlyViewMobile
-            currentMonth={currentMonth}
-            selectedShiftId={selectedShiftId}
-            shiftTypes={shiftTypes || []}
-            onPreviousMonth={goToPreviousMonth}
-            onNextMonth={goToNextMonth}
-            onToday={goToToday}
-          />
-        );
+const renderView = () => {
+  switch (activeView) {
+    case "weekly":
+      return (
+        <WeeklyViewMobile
+          currentWeekStart={currentWeekStart}
+          selectedShiftId={selectedShiftId}
+          shiftTypes={shiftTypes || []}
+          isAdminOrSupervisor={isAdminOrSupervisor}
+          onPreviousWeek={goToPreviousWeek}
+          onNextWeek={goToNextWeek}
+          onToday={goToToday}
+        />
+      );
+    
+    case "monthly":
+      return (
+        <MonthlyViewMobile
+          currentMonth={currentMonth}
+          selectedShiftId={selectedShiftId}
+          shiftTypes={shiftTypes || []}
+          onPreviousMonth={goToPreviousMonth}
+          onNextMonth={goToNextMonth}
+          onToday={goToToday}
+        />
+      );
       
       case "force-list":
         return (

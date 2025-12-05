@@ -952,3 +952,5 @@ return (
     )}
   </>
 );
+
+  export default TheBook;

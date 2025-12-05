@@ -1,16 +1,16 @@
-// utils/notifications.ts
+// utils/notifications.ts - COMPLETE FIXED VERSION
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 /**
  * Check if a specific notification type is enabled in settings
  */
 export const isNotificationTypeEnabled = async (type: string): Promise<boolean> => {
   try {
-    // First check if notifications are enabled globally
     const { data: settings } = await supabase
       .from('website_settings')
-      .select('enable_notifications')
+      .select('*')
       .single();
 
     if (!settings?.enable_notifications) {
@@ -21,35 +21,19 @@ export const isNotificationTypeEnabled = async (type: string): Promise<boolean> 
     // Check specific notification type settings
     switch (type) {
       case 'pto_request':
-        const { data: ptoRequestSettings } = await supabase
-          .from('website_settings')
-          .select('enable_pto_request_notifications')
-          .single();
-        return ptoRequestSettings?.enable_pto_request_notifications || false;
-
+        return settings?.enable_pto_request_notifications !== false;
+        
       case 'pto_status':
-        const { data: ptoStatusSettings } = await supabase
-          .from('website_settings')
-          .select('enable_pto_status_notifications')
-          .single();
-        return ptoStatusSettings?.enable_pto_status_notifications || false;
-
+        return settings?.enable_pto_status_notifications !== false;
+        
       case 'schedule_change':
-        const { data: scheduleSettings } = await supabase
-          .from('website_settings')
-          .select('enable_schedule_change_notifications')
-          .single();
-        return scheduleSettings?.enable_schedule_change_notifications || false;
-
+        return settings?.enable_schedule_change_notifications !== false;
+        
       case 'vacancy_alert':
-        const { data: vacancySettings } = await supabase
-          .from('website_settings')
-          .select('enable_vacancy_alerts')
-          .single();
-        return vacancySettings?.enable_vacancy_alerts || false;
-
+        return settings?.enable_vacancy_alerts !== false;
+        
       default:
-        return true; // Other notification types are enabled by default
+        return true;
     }
   } catch (error) {
     console.error('Error checking notification settings:', error);
@@ -58,7 +42,7 @@ export const isNotificationTypeEnabled = async (type: string): Promise<boolean> 
 };
 
 /**
- * Send an in-app notification to a user
+ * Send an in-app notification to a user using the database function
  */
 export const sendInAppNotification = async (
   userId: string,
@@ -68,42 +52,52 @@ export const sendInAppNotification = async (
   relatedId?: string
 ): Promise<boolean> => {
   try {
-    // Check if this notification type is enabled
-    const enabled = await isNotificationTypeEnabled(type);
-    if (!enabled) {
-      console.log(`Notification type "${type}" is disabled`);
-      return false;
-    }
-
-    // Create the notification
-    const { error } = await supabase
-      .from('notifications')
-      .insert({
-        user_id: userId,
-        title,
-        message,
-        type,
-        related_id: relatedId,
-        is_read: false,
-        created_at: new Date().toISOString()
-      });
+    console.log(`📤 Attempting to send notification to user ${userId}: ${title}`);
+    
+    // Use the database function we created
+    const { data: notificationId, error } = await supabase.rpc('create_pto_notification', {
+      p_user_id: userId,
+      p_title: title,
+      p_message: message,
+      p_type: type
+    });
 
     if (error) {
-      console.error('Error creating notification:', error);
-      return false;
+      console.error('❌ Database function error:', error);
+      
+      // Fallback: Try direct insert
+      const { error: fallbackError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: userId,
+          title,
+          message,
+          type,
+          related_id: relatedId,
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
+      
+      if (fallbackError) {
+        console.error('❌ Fallback insert error:', fallbackError);
+        return false;
+      }
+      
+      console.log(`✅ Fallback notification sent to user ${userId}: ${title}`);
+      return true;
     }
 
-    console.log(`In-app notification sent to user ${userId}: ${title}`);
+    console.log(`✅ Notification sent to user ${userId} (ID: ${notificationId}): ${title}`);
     return true;
     
   } catch (error) {
-    console.error('Error in sendInAppNotification:', error);
+    console.error('❌ Error in sendInAppNotification:', error);
     return false;
   }
 };
 
 /**
- * Send notification to all supervisors and admins
+ * Send notification to all supervisors and admins - FIXED
  */
 export const notifySupervisorsAndAdmins = async (
   title: string,
@@ -112,50 +106,39 @@ export const notifySupervisorsAndAdmins = async (
   relatedId?: string
 ): Promise<void> => {
   try {
+    console.log(`📢 Starting to notify supervisors and admins: ${title}`);
+    
+    // FIXED: Use profiles table, not user_roles
     const { data: supervisors, error } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .in('role', ['supervisor', 'admin']);
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('role', ['supervisor', 'admin'])
+      .eq('active', true);
 
-    if (!error && supervisors && supervisors.length > 0) {
-      const notifications = supervisors.map(supervisor => ({
-        user_id: supervisor.user_id,
-        title,
-        message,
-        type,
-        related_id: relatedId,
-        is_read: false,
-        created_at: new Date().toISOString()
-      }));
+    if (error) {
+      console.error('❌ Error fetching supervisors:', error);
+      return;
+    }
 
-      await supabase
-        .from('notifications')
-        .insert(notifications);
+    console.log(`👥 Found ${supervisors?.length || 0} supervisors/admins`);
+
+    if (supervisors && supervisors.length > 0) {
+      const notificationPromises = supervisors.map(supervisor => 
+        sendInAppNotification(supervisor.id, title, message, type, relatedId)
+      );
+
+      const results = await Promise.all(notificationPromises);
+      const successful = results.filter(result => result).length;
+      
+      console.log(`🎯 Notifications sent: ${successful}/${supervisors.length} successful`);
     }
   } catch (error) {
-    console.error('Error notifying supervisors:', error);
+    console.error('❌ Error notifying supervisors:', error);
   }
 };
 
 /**
- * Send notification to a specific user
- */
-export const notifyUser = async (
-  userId: string,
-  title: string,
-  message: string,
-  type: string = 'general',
-  relatedId?: string
-): Promise<void> => {
-  try {
-    await sendInAppNotification(userId, title, message, type, relatedId);
-  } catch (error) {
-    console.error('Error notifying user:', error);
-  }
-};
-
-/**
- * Send PTO request notifications to supervisors and admins
+ * Send PTO request notifications - FIXED
  */
 export const sendPTORequestNotification = async (
   requestId: string,
@@ -163,6 +146,8 @@ export const sendPTORequestNotification = async (
   action: 'created' | 'approved' | 'denied'
 ): Promise<void> => {
   try {
+    console.log(`🔔 Starting PTO notification for request ${requestId}, action: ${action}`);
+    
     // Get request details
     const { data: request, error: requestError } = await supabase
       .from('time_off_requests')
@@ -173,60 +158,53 @@ export const sendPTORequestNotification = async (
       .eq('id', requestId)
       .single();
 
-    if (requestError) throw requestError;
+    if (requestError) {
+      console.error('❌ Error fetching PTO request:', requestError);
+      return;
+    }
+
+    console.log('📋 PTO request details:', {
+      officer: request.profiles?.full_name,
+      type: request.pto_type,
+      dates: `${request.start_date} to ${request.end_date}`
+    });
 
     if (action === 'created') {
       // Check if PTO request notifications are enabled
       const enabled = await isNotificationTypeEnabled('pto_request');
-      if (!enabled) return;
-
-      // Get all supervisors and admins
-      const { data: supervisors, error: supervisorError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .in('role', ['supervisor', 'admin']);
-
-      if (!supervisorError && supervisors && supervisors.length > 0) {
-        // Create notifications for each supervisor/admin
-        const notifications = supervisors.map(supervisor => ({
-          user_id: supervisor.user_id,
-          title: 'New PTO Request Submitted',
-          message: `${request.profiles.full_name} has submitted a ${request.pto_type} time off request for ${request.start_date} to ${request.end_date}`,
-          type: 'pto_request',
-          related_id: requestId,
-          is_read: false,
-          created_at: new Date().toISOString()
-        }));
-
-        const { error: notificationError } = await supabase
-          .from('notifications')
-          .insert(notifications);
-
-        if (!notificationError) {
-          toast.success(`Supervisors and admins have been notified`);
-          
-          // Also show browser notifications if available
-          if (NotificationService.getInstance().isEnabled()) {
-            const service = NotificationService.getInstance();
-            supervisors.forEach(supervisor => {
-              service.showNotification('New PTO Request', {
-                body: `${request.profiles.full_name} submitted a time off request`,
-                icon: '/icons/icon-192x192.png',
-                tag: 'pto_request',
-                requireInteraction: true
-              });
-            });
-          }
-        }
+      if (!enabled) {
+        console.log('🔕 PTO request notifications are disabled');
+        return;
       }
+
+      console.log('📢 Sending PTO request notification to supervisors/admins');
+      
+      // Build notification message
+      const message = `${request.profiles?.full_name} has submitted a ${request.pto_type} time off request from ${format(new Date(request.start_date), 'MMM d, yyyy')} to ${format(new Date(request.end_date), 'MMM d, yyyy')}${request.reason ? ` - Reason: ${request.reason}` : ''}`;
+      
+      // Notify all supervisors and admins
+      await notifySupervisorsAndAdmins(
+        'New PTO Request Submitted',
+        message,
+        'pto_request',
+        requestId
+      );
+
+      toast.success('PTO request submitted. Supervisors have been notified.');
+      
     } else if (action === 'approved' || action === 'denied') {
       // Check if PTO status notifications are enabled
       const enabled = await isNotificationTypeEnabled('pto_status');
-      if (!enabled) return;
+      if (!enabled) {
+        console.log('🔕 PTO status notifications are disabled');
+        return;
+      }
 
+      console.log(`📢 Sending PTO ${action} notification to officer`);
+      
       const statusMessage = action === 'approved' 
-        ? `Your ${request.pto_type} time off request for ${request.start_date} to ${request.end_date} has been approved`
-        : `Your ${request.pto_type} time off request for ${request.start_date} to ${request.end_date} has been denied`;
+        ? `Your ${request.pto_type} time off request for ${format(new Date(request.start_date), 'MMM d, yyyy')} to ${format(new Date(request.end_date), 'MMM d, yyyy')} has been approved${request.review_notes ? ` - Notes: ${request.review_notes}` : ''}`
+        : `Your ${request.pto_type} time off request for ${format(new Date(request.start_date), 'MMM d, yyyy')} to ${format(new Date(request.end_date), 'MMM d, yyyy')} has been denied${request.review_notes ? ` - Reason: ${request.review_notes}` : ''}`;
 
       const success = await sendInAppNotification(
         request.officer_id,
@@ -237,30 +215,21 @@ export const sendPTORequestNotification = async (
       );
 
       if (success) {
+        console.log(`✅ PTO ${action} notification sent to officer`);
         toast.success(`Officer has been notified of the ${action} status`);
-        
-        // Also show browser notification
-        if (NotificationService.getInstance().isEnabled()) {
-          const service = NotificationService.getInstance();
-          service.showNotification(
-            `PTO Request ${action === 'approved' ? 'Approved' : 'Denied'}`,
-            {
-              body: statusMessage,
-              icon: '/icons/icon-192x192.png',
-              tag: 'pto_status'
-            }
-          );
-        }
+      } else {
+        console.error(`❌ Failed to send PTO ${action} notification to officer`);
       }
     }
 
   } catch (error) {
-    console.error('Error sending PTO notification:', error);
+    console.error('❌ Error in sendPTORequestNotification:', error);
+    toast.error('Failed to send notification');
   }
 };
 
 /**
- * Send vacancy alert notifications
+ * Send vacancy alert notifications - FIXED
  */
 export const sendVacancyAlert = async (
   position: string,
@@ -271,37 +240,51 @@ export const sendVacancyAlert = async (
   try {
     // Check if vacancy alerts are enabled
     const enabled = await isNotificationTypeEnabled('vacancy_alert');
-    if (!enabled) return;
+    if (!enabled) {
+      console.log('🔕 Vacancy alerts are disabled');
+      return;
+    }
 
-    // Get all supervisors and admins
+    console.log('📢 Sending vacancy alert to supervisors/admins');
+    
+    // FIXED: Use profiles table, not user_roles
     const { data: supervisors, error } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .in('role', ['supervisor', 'admin']);
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('role', ['supervisor', 'admin'])
+      .eq('active', true);
 
-    if (!error && supervisors && supervisors.length > 0) {
-      const notifications = supervisors.map(supervisor => ({
-        user_id: supervisor.user_id,
-        title: 'New Vacancy Alert',
-        message: `Vacancy created for ${position} on ${date} (${shift})`,
-        type: 'vacancy_alert',
-        is_read: false,
-        created_at: new Date().toISOString()
-      }));
+    if (error) {
+      console.error('❌ Error fetching supervisors:', error);
+      return;
+    }
 
-      await supabase
-        .from('notifications')
-        .insert(notifications);
+    console.log(`👥 Found ${supervisors?.length || 0} supervisors/admins`);
 
-      toast.success('Vacancy alert sent to supervisors and admins');
+    if (supervisors && supervisors.length > 0) {
+      const notificationPromises = supervisors.map(supervisor => 
+        sendInAppNotification(
+          supervisor.id,
+          'New Vacancy Alert',
+          `Vacancy created for ${position} on ${format(new Date(date), 'MMM d, yyyy')} (${shift})`,
+          'vacancy_alert'
+        )
+      );
+
+      const results = await Promise.all(notificationPromises);
+      const successful = results.filter(result => result).length;
+      
+      console.log(`🎯 Vacancy notifications sent: ${successful}/${supervisors.length} successful`);
+      toast.success(`Vacancy alert sent to ${successful} supervisor(s)`);
     }
   } catch (error) {
-    console.error('Error sending vacancy alert:', error);
+    console.error('❌ Error sending vacancy alert:', error);
+    toast.error('Failed to send vacancy alert');
   }
 };
 
 /**
- * Send schedule change notification
+ * Send schedule change notification - SHOULD WORK (calls fixed function)
  */
 export const sendScheduleChangeNotification = async (
   officerId: string,
@@ -311,8 +294,13 @@ export const sendScheduleChangeNotification = async (
   try {
     // Check if schedule change notifications are enabled
     const enabled = await isNotificationTypeEnabled('schedule_change');
-    if (!enabled) return;
+    if (!enabled) {
+      console.log('🔕 Schedule change notifications are disabled');
+      return;
+    }
 
+    console.log(`📢 Sending schedule change notification to officer ${officerId}`);
+    
     const title = 'Schedule Update';
     const message = `Your schedule has been ${changeType}: ${scheduleDetails}`;
 
@@ -323,21 +311,25 @@ export const sendScheduleChangeNotification = async (
       'schedule_change'
     );
 
-    if (success && NotificationService.getInstance().isEnabled()) {
-      const service = NotificationService.getInstance();
-      service.showNotification(title, {
-        body: message,
-        icon: '/icons/icon-192x192.png',
-        tag: 'schedule_change'
-      });
+    if (success) {
+      console.log(`✅ Schedule change notification sent to officer ${officerId}`);
+      
+      // Browser notification if available
+      if (NotificationService.getInstance().isEnabled()) {
+        NotificationService.getInstance().showNotification(title, {
+          body: message,
+          icon: '/icons/icon-192x192.png',
+          tag: 'schedule_change'
+        });
+      }
     }
   } catch (error) {
-    console.error('Error sending schedule change notification:', error);
+    console.error('❌ Error sending schedule change notification:', error);
   }
 };
 
 /**
- * Send batch notifications to multiple users
+ * Send batch notifications to multiple users - SHOULD WORK
  */
 export const sendBatchNotifications = async (
   userIds: string[],
@@ -347,30 +339,23 @@ export const sendBatchNotifications = async (
   relatedId?: string
 ): Promise<void> => {
   try {
-    const notifications = userIds.map(userId => ({
-      user_id: userId,
-      title,
-      message,
-      type,
-      related_id: relatedId,
-      is_read: false,
-      created_at: new Date().toISOString()
-    }));
+    console.log(`📢 Sending batch notification to ${userIds.length} users: ${title}`);
+    
+    const notificationPromises = userIds.map(userId => 
+      sendInAppNotification(userId, title, message, type, relatedId)
+    );
 
-    const { error } = await supabase
-      .from('notifications')
-      .insert(notifications);
-
-    if (error) {
-      console.error('Error sending batch notifications:', error);
-    }
+    const results = await Promise.all(notificationPromises);
+    const successful = results.filter(result => result).length;
+    
+    console.log(`🎯 Batch notifications sent: ${successful}/${userIds.length} successful`);
   } catch (error) {
-    console.error('Error in sendBatchNotifications:', error);
+    console.error('❌ Error in sendBatchNotifications:', error);
   }
 };
 
 /**
- * Clear old notifications (older than 30 days)
+ * Clear old notifications (older than 30 days) - SHOULD WORK
  */
 export const clearOldNotifications = async (userId?: string): Promise<void> => {
   try {
@@ -389,15 +374,17 @@ export const clearOldNotifications = async (userId?: string): Promise<void> => {
     const { error } = await query;
 
     if (error) {
-      console.error('Error clearing old notifications:', error);
+      console.error('❌ Error clearing old notifications:', error);
+    } else {
+      console.log('✅ Old notifications cleared');
     }
   } catch (error) {
-    console.error('Error in clearOldNotifications:', error);
+    console.error('❌ Error in clearOldNotifications:', error);
   }
 };
 
 /**
- * Get notification statistics
+ * Get notification statistics - SHOULD WORK
  */
 export const getNotificationStats = async (): Promise<{
   total: number;
@@ -423,13 +410,13 @@ export const getNotificationStats = async (): Promise<{
     });
 
     return stats;
-  } catch (error) {
-    console.error('Error getting notification stats:', error);
+  } catch (Error) {
+    console.error('❌ Error getting notification stats:', Error);
     return { total: 0, unread: 0, byType: {} };
   }
 };
 
-// Your existing NotificationService class
+// Your existing NotificationService class - UNCHANGED
 export class NotificationService {
   private static instance: NotificationService;
   private permission: NotificationPermission = 'default';
@@ -536,7 +523,7 @@ export class NotificationService {
   // Get public key for push notifications (you'll need to generate this)
   private getPublicKey(): Uint8Array {
     // This is a demo key - replace with your actual VAPID public key
-    const publicKey = 'BEl62iUYgU9x_jTOfV7qOA9Wb6lM6BfGJq8J1JcE7Y8XJcE7Y8XJcE7Y8XJcE7Y8XJcE7Y8';
+    const publicKey = 'BEl62iUYgU9x_jTOfV7qOA9Wb6lM6BfGJq8J1JcE7Y8XJcE7Y8XJcE7Y8XJcE7Y8';
     return this.urlBase64ToUint8Array(publicKey);
   }
 

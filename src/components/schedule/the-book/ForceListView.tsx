@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getLastName, getRankAbbreviation } from "./utils";
 import { auditLogger } from "@/lib/auditLogger";
+import TheBookMobile from "./TheBookMobile";
 
 interface ForcedDate {
   id?: string;

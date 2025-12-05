@@ -118,7 +118,7 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
           <Alert className="mt-4 bg-blue-50 border-blue-200">
             <Clock className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
-              PTO balances are currently managed as indefinite. All time off requests are allowed.
+              PTO balances are currently managed as indefinite. Verify your balance in Executime before making a request
             </AlertDescription>
           </Alert>
         )}

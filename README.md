@@ -40,3 +40,4 @@ This solution integrates seamlessly with your existing PTO management system whi
 * add notification system for officer birthday and anniversary 
 * add supervisor message viz to send out notifications 
 
+* make mobile version of daily schedule 

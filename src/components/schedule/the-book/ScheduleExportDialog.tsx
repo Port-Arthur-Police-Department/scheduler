@@ -11,7 +11,8 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isBefore, add
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
-import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
+import { exportWeeklyPDF } from "@/utils/pdfExportUtils";
+import { exportMonthlyPDF } from "@/utils/pdfExportUtils";
 import { useColorSettings } from "@/hooks/useColorSettings";
 
 interface ScheduleExportDialogProps {

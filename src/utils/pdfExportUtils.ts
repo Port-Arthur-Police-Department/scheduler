@@ -449,4 +449,3 @@ export const exportWeeklyPDF = async (options: WeeklyExportOptions) => {
   }
 };
 
-export { exportWeeklyPDF, exportMonthlyPDF };

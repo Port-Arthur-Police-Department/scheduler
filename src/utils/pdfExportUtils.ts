@@ -692,38 +692,59 @@ export const exportMonthlyPDF = async (options: MonthlyExportOptions) => {
           const officersToShow = ptoOfficers.slice(0, maxOfficersToShow);
           
           officersToShow.forEach((officer: any, index: number) => {
-            const isSupervisor = isSupervisorByRank(officer);
-            const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
-            const rankAbbreviation = getRankAbbreviation(officer.rank);
-            
-            // GET COLOR BASED ON PTO TYPE AND RANK using customizable colors
-            const colors = getPTOColor(ptoType, isSupervisor, pdfColors);
-            
-            // Background for each PTO entry
-            pdf.setFillColor(...colors.backgroundColor);
-            pdf.rect(xPos + 2, listY, cellWidth - 4, 2.5, "F");
-            
-            // Border
-            pdf.setDrawColor(...colors.borderColor);
-            pdf.rect(xPos + 2, listY, cellWidth - 4, 2.5, "S");
-            
-            // Officer NAME (last name only) with rank badge for supervisors
-            pdf.setTextColor(...colors.textColor);
-            const lastName = getLastName(officer.officerName);
-            
-            // Show rank badge for supervisors in monthly view
-            if (isSupervisor) {
-              pdf.text(`${lastName} (${rankAbbreviation})`, xPos + 3, listY + 1.8);
-            } else {
-              pdf.text(lastName, xPos + 3, listY + 1.8);
-            }
-            
-            // PTO type (abbreviated)
-            const shortPtoType = ptoType.length > 6 ? ptoType.substring(0, 6) : ptoType;
-            pdf.text(shortPtoType, xPos + cellWidth - 10, listY + 1.8);
-            
-            listY += 3;
-          });
+  const isSupervisor = isSupervisorByRank(officer);
+  const ptoType = officer.shiftInfo?.ptoData?.ptoType || 'PTO';
+  const rankAbbreviation = getRankAbbreviation(officer.rank);
+  const badgeNumber = officer.badgeNumber || '';
+  
+  // GET COLOR BASED ON PTO TYPE AND RANK using customizable colors
+  const colors = getPTOColor(ptoType, isSupervisor, pdfColors);
+  
+  // Background for each PTO entry
+  pdf.setFillColor(...colors.backgroundColor);
+  pdf.rect(xPos + 2, listY, cellWidth - 4, 2.5, "F");
+  
+  // Border
+  pdf.setDrawColor(...colors.borderColor);
+  pdf.rect(xPos + 2, listY, cellWidth - 4, 2.5, "S");
+  
+  // Officer NAME with BADGE NUMBER and rank badge for supervisors
+  pdf.setTextColor(...colors.textColor);
+  const lastName = getLastName(officer.officerName);
+  
+  // Build display text with badge number
+  let displayText = `${lastName} #${badgeNumber}`;
+  
+  // Show rank badge for supervisors in monthly view
+  if (isSupervisor) {
+    displayText += ` (${rankAbbreviation})`;
+  }
+  
+  pdf.text(displayText, xPos + 3, listY + 1.8);
+  
+  // PTO type (abbreviated) - UPDATED WITH VAC/HOL ABBREVIATIONS
+  const getAbbreviatedPTOType = (ptoType: string): string => {
+    const ptoTypeLower = ptoType.toLowerCase();
+    
+    if (ptoTypeLower.includes('vacation') || ptoTypeLower === 'vacation') {
+      return 'vac';
+    } else if (ptoTypeLower.includes('holiday') || ptoTypeLower === 'holiday') {
+      return 'hol';
+    } else if (ptoTypeLower.includes('sick') || ptoTypeLower === 'sick') {
+      return 'sick';
+    } else if (ptoTypeLower.includes('comp') || ptoTypeLower === 'comp') {
+      return 'comp';
+    } else {
+      // Default abbreviation for other types
+      return ptoType.length > 6 ? ptoType.substring(0, 6) : ptoType;
+    }
+  };
+  
+  const shortPtoType = getAbbreviatedPTOType(ptoType);
+  pdf.text(shortPtoType, xPos + cellWidth - 10, listY + 1.8);
+  
+  listY += 3;
+});
 
           // Show "..." if more officers than can fit
           if (ptoOfficers.length > maxOfficersToShow) {

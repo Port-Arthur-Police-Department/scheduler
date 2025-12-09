@@ -460,8 +460,8 @@ const renderTabContent = () => {
       return <StaffManagement />;
    case "requests":
      return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
-    case "settings":
-      return <WebsiteSettings />;
+case "settings":
+  return <WebsiteSettings isAdmin={isAdmin} isSupervisor={isSupervisor} />;
     default:
       return (
         <Card>

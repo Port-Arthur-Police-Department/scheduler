@@ -290,17 +290,33 @@ export const exportWeeklyPDF = async (options: WeeklyExportOptions) => {
 
       let yPosition = 10;
 
-      // Header
-      pdf.setFontSize(14);
+     // Main heading with shift name and date range
+      pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(41, 128, 185);
+      
+      // Shift name
       pdf.text(
-        `${format(week.start, "MMM d, yyyy")} - ${format(week.end, "MMM d, yyyy")}`,
+        shiftName.toUpperCase(),
         pageWidth / 2,
         yPosition,
         { align: "center" }
       );
+      
       yPosition += 8;
+      
+      // Date range in larger font
+      pdf.setFontSize(14);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(
+        `${format(week.start, "MM/dd/yy")} - ${format(week.end, "MM/dd/yy")}`,
+        pageWidth / 2,
+        yPosition,
+        { align: "center" }
+      );
+      
+      yPosition += 10;
+      // ============ END OF HEADING SECTION ============
 
       const weekDays = Array.from({ length: 7 }, (_, i) => {
         const date = addDays(week.start, i);

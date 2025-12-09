@@ -35,20 +35,33 @@ export const isSupervisorByRank = (officer: any): boolean => {
 export const isSpecialAssignment = (position: string | undefined): boolean => {
   if (!position) return false;
   
-  return position.toLowerCase().includes('other') ||
+  const positionLower = position.toLowerCase();
+  return positionLower.includes('other') ||
          !PREDEFINED_POSITIONS.includes(position);
 };
 
 export const calculateStaffingCounts = (categorizedOfficers: any) => {
   if (!categorizedOfficers) return { supervisorCount: 0, officerCount: 0 };
   
-  const supervisorCount = categorizedOfficers.supervisors?.filter(
-    (officer: any) => !officer.shiftInfo?.hasPTO
-  ).length || 0;
+  // Count supervisors EXCLUDING those on special assignments AND PTO
+  const supervisorCount = categorizedOfficers.supervisors?.filter((officer: any) => {
+    const position = officer.shiftInfo?.position;
+    const hasPTO = officer.shiftInfo?.hasPTO;
+    const isOff = officer.shiftInfo?.isOff;
+    
+    // Don't count if: on PTO, is off duty, or on special assignment
+    return !hasPTO && !isOff && !isSpecialAssignment(position);
+  }).length || 0;
 
+  // Count officers EXCLUDING those on special assignments, PTO, and PPOs
   const officerCount = categorizedOfficers.officers?.filter((officer: any) => {
     const position = officer.shiftInfo?.position;
-    return !officer.shiftInfo?.hasPTO && !isSpecialAssignment(position);
+    const hasPTO = officer.shiftInfo?.hasPTO;
+    const isOff = officer.shiftInfo?.isOff;
+    const isPPO = officer.rank?.toLowerCase() === 'probationary';
+    
+    // Don't count if: on PTO, is off duty, on special assignment, or is PPO
+    return !hasPTO && !isOff && !isSpecialAssignment(position) && !isPPO;
   }).length || 0;
 
   return { supervisorCount, officerCount };

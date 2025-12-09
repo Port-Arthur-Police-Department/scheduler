@@ -41,6 +41,13 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     setSelectedWeekDate(initialDate);
   }, [initialDate]);
 
+  // Add this useEffect to sync when popover opens
+useEffect(() => {
+  if (weekPickerOpen) {
+    setSelectedWeekDate(currentWeekStart);
+  }
+}, [weekPickerOpen, currentWeekStart]);
+
   // Call onDateChange when component mounts with initial date
   useEffect(() => {
     if (onDateChange) {

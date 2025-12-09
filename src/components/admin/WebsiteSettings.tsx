@@ -125,6 +125,11 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   pto_balances_visible: false,
 };
 
+interface WebsiteSettingsProps {
+  isAdmin?: boolean;
+  isSupervisor?: boolean;
+}
+
 // Add this interface
 interface AuditLog {
   id: string;
@@ -463,7 +468,7 @@ const AuditLogViewer = () => {
   );
 };
 
-export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: { isAdmin?: boolean; isSupervisor?: boolean }) => {
+export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: WebsiteSettingsProps) => {
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);

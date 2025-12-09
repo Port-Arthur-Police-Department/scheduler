@@ -34,17 +34,24 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthDate, setSelectedMonthDate] = useState(currentDate);
 
-  // Sync with parent when date changes
-  useEffect(() => {
-    setSelectedMonthDate(currentDate);
-  }, [currentDate]);
+// Sync with parent when date changes
+useEffect(() => {
+  setSelectedMonthDate(currentDate);
+}, [currentDate]);
 
-  // Call onDateChange when component mounts with initial date
-  useEffect(() => {
-    if (onDateChange) {
-      onDateChange(currentDate);
-    }
-  }, []);
+// Call onDateChange when component mounts with initial date
+useEffect(() => {
+  if (onDateChange) {
+    onDateChange(currentDate);
+  }
+}, []);
+
+// ADD THIS NEW USEEFFECT: Sync selected date when popover opens
+useEffect(() => {
+  if (monthPickerOpen) {
+    setSelectedMonthDate(currentDate);
+  }
+}, [monthPickerOpen, currentDate]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);

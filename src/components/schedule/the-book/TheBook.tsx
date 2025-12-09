@@ -919,7 +919,6 @@ return (
       updatePositionMutation={updatePositionMutation}
     />
 
-// In TheBook.tsx, update the ScheduleExportDialog component call:
 <ScheduleExportDialog
   open={exportDialogOpen}
   onOpenChange={setExportDialogOpen}
@@ -927,9 +926,6 @@ return (
   shiftTypes={shiftTypes || []}
   activeView={activeView}
   userEmail={userEmail}
-  // ADD THESE TWO PROPS:
-  scheduleData={schedules}
-  currentDate={activeView === "weekly" ? currentWeekStart : currentMonth}
 />
 
     {/* PTO Assignment Dialog */}

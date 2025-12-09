@@ -1273,11 +1273,11 @@ export const WebsiteSettings = () => {
         </CardContent>
       </Card>
 
-      {/* Password Reset Manager */}
-      <PasswordResetManager />
+{/* Password Reset Manager - Only for Admin/Supervisor */}
+{(isAdmin || isSupervisor) && <PasswordResetManager />}
 
       {/* Audit Log Viewer */}
-      <AuditLogViewer />
+      {(isAdmin) && <AuditLogViewer />}
 
       {/* Instructions Card */}
 <Card>

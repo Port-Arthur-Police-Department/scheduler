@@ -207,67 +207,100 @@ export const exportWeeklyPDF = async (options: WeeklyExportOptions) => {
     const pageHeight = pdf.internal.pageSize.getHeight();
 
     // CORRECTED cell display logic
-    const getCellDisplay = (officer: any) => {
-      if (!officer) {
-        return { 
-          text: "", 
-          color: pdfColors.offDay.text, 
-          fillColor: pdfColors.offDay.bg 
-        };
-      }
 
-      if (officer.shiftInfo?.isOff) {
-        return { 
-          text: "OFF", 
-          color: [100, 100, 100], 
-          fillColor: pdfColors.offDay.bg 
-        };
-      } else if (officer.shiftInfo?.hasPTO) {
-        if (officer.shiftInfo?.ptoData?.isFullShift) {
-          const ptoType = officer.shiftInfo.ptoData.ptoType || "PTO";
-          const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
-          const ptoColors = isSupervisor ? pdfColors.supervisorPTO : pdfColors.officerPTO;
-          const isSickTime = ptoType.toLowerCase().includes('sick');
-          const finalColors = isSickTime ? pdfColors.sickTime : ptoColors;
-          
-          return { 
-            text: ptoType, 
-            color: finalColors.text, 
-            fillColor: finalColors.bg 
-          };
-        } else {
-          const position = officer.shiftInfo.position || "";
-          const simplifiedPosition = simplifyPosition(position);
-          const displayText = simplifiedPosition ? simplifiedPosition + "*" : "PTO*";
-          const partialBg = [255, 255, 224];
-          
-          return { 
-            text: displayText, 
-            color: [0, 100, 0], 
-            fillColor: partialBg 
-          };
-        }
-      } else if (officer.shiftInfo?.position) {
-        const position = officer.shiftInfo.position;
-        const simplifiedPosition = simplifyPosition(position);
-        const isSpecial = isSpecialAssignment(position);
-        let displayText = simplifiedPosition;
-        if (simplifiedPosition.length > 8) {
-          displayText = simplifiedPosition.substring(0, 8);
-        }
-        return { 
-          text: displayText, 
-          color: isSpecial ? [139, 69, 19] : [0, 100, 0], 
-          fillColor: isSpecial ? [255, 248, 220] : [255, 255, 255]
-        };
-      } else {
-        return { 
-          text: " ", 
-          color: [0, 0, 150], 
-          fillColor: [255, 255, 255]
-        };
-      }
+const getCellDisplay = (officer: any) => {
+  console.log("getCellDisplay officer:", officer);
+  
+  if (!officer) {
+    return { 
+      text: "", 
+      color: pdfColors.offDay.text, 
+      fillColor: pdfColors.offDay.bg 
     };
+  }
+
+  // Check if officer has shiftInfo
+  const shiftInfo = officer.shiftInfo;
+  if (!shiftInfo) {
+    return { 
+      text: " ", 
+      color: [0, 0, 150], 
+      fillColor: [255, 255, 255]
+    };
+  }
+
+  // FIX: Check for PTO first, before checking if isOff
+  if (shiftInfo.hasPTO) {
+    const ptoType = shiftInfo.ptoData?.ptoType || "PTO";
+    const isSupervisor = isSupervisorByRank({ rank: officer.rank } as OfficerWeeklyData);
+    
+    // Get the correct color for the PTO type
+    const ptoColors = getPTOColor(ptoType, isSupervisor, pdfColors);
+    
+    // Determine what text to show based on PTO type and whether it's full shift
+    let displayText = ptoType;
+    
+    // If it's a full shift PTO, show the PTO type (like "VACATION")
+    if (shiftInfo.ptoData?.isFullShift) {
+      // Shorten long PTO types for display
+      if (ptoType.length > 8) {
+        displayText = ptoType.substring(0, 8);
+      }
+      return { 
+        text: displayText.toUpperCase(), 
+        color: ptoColors.textColor, 
+        fillColor: ptoColors.backgroundColor 
+      };
+    } else {
+      // For partial PTO, show position with asterisk
+      const position = shiftInfo.position || "";
+      const simplifiedPosition = simplifyPosition(position);
+      displayText = simplifiedPosition ? simplifiedPosition + "*" : "PTO*";
+      const partialBg = [255, 255, 224]; // Light yellow for partial PTO
+      
+      return { 
+        text: displayText, 
+        color: [0, 100, 0], 
+        fillColor: partialBg 
+      };
+    }
+  } else if (shiftInfo.isOff) {
+    // Only show "OFF" if they're actually off (no shift, no PTO)
+    return { 
+      text: "OFF", 
+      color: [100, 100, 100], 
+      fillColor: pdfColors.offDay.bg 
+    };
+  } else if (shiftInfo.position) {
+    const position = shiftInfo.position;
+    const simplifiedPosition = simplifyPosition(position);
+    const isSpecial = isSpecialAssignment(position);
+    let displayText = simplifiedPosition;
+    
+    // Shorten long positions
+    if (simplifiedPosition.length > 8) {
+      // Try to keep meaningful parts
+      if (simplifiedPosition.includes('/')) {
+        // For positions like "1/2", keep the numbers
+        displayText = simplifiedPosition.replace(/[^0-9/]/g, '');
+      } else {
+        displayText = simplifiedPosition.substring(0, 8);
+      }
+    }
+    
+    return { 
+      text: displayText, 
+      color: isSpecial ? [139, 69, 19] : [0, 100, 0], 
+      fillColor: isSpecial ? [255, 248, 220] : [255, 255, 255]
+    };
+  } else {
+    return { 
+      text: " ", 
+      color: [0, 0, 150], 
+      fillColor: [255, 255, 255]
+    };
+  }
+};
 
     // Build weeks array for the entire date range
     const weeks = [];

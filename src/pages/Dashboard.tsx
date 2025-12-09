@@ -540,7 +540,7 @@ case "settings":
             {/* Use the NotificationsBell component */}
 <NotificationsBell />
             
-            {/* With this dropdown version: */}
+{/* User Profile Dropdown */}
 <DropdownMenu>
   <DropdownMenuTrigger asChild>
     <Button variant="ghost" className="flex items-center gap-2">
@@ -554,27 +554,20 @@ case "settings":
   <DropdownMenuContent align="end" className="w-56">
     <DropdownMenuLabel>My Account</DropdownMenuLabel>
     <DropdownMenuSeparator />
-    <DropdownMenuItem className="cursor-pointer">
-      <Dialog>
-        <DialogTrigger asChild>
-          <div className="flex items-center gap-2 w-full">
-            <Lock className="h-4 w-4" />
-            Change Password
-          </div>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
-          </DialogHeader>
-          {user && (
-            <ChangePassword 
-              userId={user.id} 
-              userEmail={user.email!} 
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </DropdownMenuItem>
+    
+    {/* Change Password - Using the fixed component */}
+    {user && (
+      <ChangePassword userId={user.id} userEmail={user.email!}>
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onSelect={(e) => e.preventDefault()}
+        >
+          <Lock className="h-4 w-4 mr-2" />
+          Change Password
+        </DropdownMenuItem>
+      </ChangePassword>
+    )}
+    
     <DropdownMenuSeparator />
     <DropdownMenuItem 
       className="cursor-pointer text-red-600 focus:text-red-600"

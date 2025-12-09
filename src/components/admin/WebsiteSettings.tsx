@@ -109,6 +109,9 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   
   // Mass alert sending feature (send to people + allow responses)
   enable_mass_alert_sending: true,  // NEW: Controls the mass alert sending feature
+
+  // Staffing Overview toggle
+  show_staffing_overview: true, // NEW: Controls the Staffing Overview section
   
   // Specific notification types
   enable_vacancy_alerts: true,
@@ -701,7 +704,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
   return (
     <div className="space-y-6">
-      {/* Notification Settings Card - UPDATED */}
+      
 {/* NOTIFICATION SETTINGS CARD - RESTRUCTURED */}
 <Card>
   <CardHeader>
@@ -763,6 +766,33 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         </div>
       </div>
     </div>
+
+    <Separator />
+
+<div className="space-y-4">
+  <h3 className="text-lg font-semibold">Dashboard Display Settings</h3>
+  <div className="pl-4 space-y-4">
+    {/* Staffing Overview Toggle */}
+    <div className="flex items-center justify-between">
+      <div className="space-y-0.5">
+        <Label htmlFor="staffing-overview-toggle" className="text-base">
+          Show Staffing Overview
+        </Label>
+        <div className="text-sm text-muted-foreground">
+          Display the Staffing Overview section on the dashboard for admin/supervisor users
+        </div>
+      </div>
+      <Switch
+        id="staffing-overview-toggle"
+        checked={settings?.show_staffing_overview !== false}
+        onCheckedChange={(checked) => 
+          handleToggle('show_staffing_overview', checked)
+        }
+        disabled={updateSettingsMutation.isPending}
+      />
+    </div>
+  </div>
+</div>
     
     <Separator />
     
@@ -1322,6 +1352,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     <div>
       <strong>Schedule Change Notifications:</strong> Users will be notified when their 
       schedule is modified by supervisors or administrators.
+    </div>
+      <div>
+      <strong>Show Staffing Overview:</strong> When enabled, admin and supervisor users 
+      will see the Staffing Overview section on their dashboard showing current shift 
+      staffing levels. When disabled, this section is hidden.
     </div>
     <div>
       <strong>PTO Balances:</strong> When disabled, all PTO balance tracking is turned off. 

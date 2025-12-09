@@ -1,4 +1,4 @@
-// src/components/schedule/the-book/ScheduleExportDialog.tsx - UPDATED
+// Update ScheduleExportDialog.tsx to fetch data for the selected date range
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarRange, Download } from "lucide-react";
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isBefore, addDays } from "date-fns";
+import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
 import { useColorSettings } from "@/hooks/useColorSettings";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 interface ScheduleExportDialogProps {
   open: boolean;
@@ -21,8 +23,6 @@ interface ScheduleExportDialogProps {
   shiftTypes: any[];
   activeView: string;
   userEmail: string;
-  scheduleData: any; // Add this prop
-  currentDate: Date; // Add this prop
 }
 
 export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
@@ -32,29 +32,162 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
   shiftTypes,
   activeView,
   userEmail,
-  scheduleData, // Destructure new prop
-  currentDate, // Destructure new prop
 }) => {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { pdf: pdfColorSettings } = useColorSettings();
 
-  // Set default date range based on active view
-  useEffect(() => {
-    if (open) {
-      const today = new Date();
-      if (activeView === "weekly") {
-        const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
-        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
-        setDateRange({ from: weekStart, to: weekEnd });
-      } else if (activeView === "monthly") {
-        const monthStart = startOfMonth(currentDate);
-        const monthEnd = endOfMonth(currentDate);
-        setDateRange({ from: monthStart, to: monthEnd });
+  // Fetch schedule data for the selected date range
+  const { data: exportScheduleData, isLoading: isFetchingData } = useQuery({
+    queryKey: ['export-schedule-data', selectedShiftId, dateRange?.from, dateRange?.to],
+    queryFn: async () => {
+      if (!selectedShiftId || !dateRange?.from || !dateRange?.to) {
+        return null;
       }
-    }
-  }, [open, activeView, currentDate]);
+
+      const dates = eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).map(date => 
+        format(date, "yyyy-MM-dd")
+      );
+
+      console.log("📊 Fetching export data for:", {
+        dates: dates.length,
+        from: dateRange.from,
+        to: dateRange.to,
+        shiftId: selectedShiftId
+      });
+
+      // Fetch recurring schedules
+      const { data: recurringData, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date
+          ),
+          shift_types (
+            id, name, start_time, end_time
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${format(dateRange.from, "yyyy-MM-dd")}`);
+
+      if (recurringError) {
+        console.error("Error fetching recurring schedules:", recurringError);
+        throw recurringError;
+      }
+
+      // Fetch schedule exceptions
+      const { data: exceptionsData, error: exceptionsError } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .gte("date", format(dateRange.from, "yyyy-MM-dd"))
+        .lte("date", format(dateRange.to, "yyyy-MM-dd"))
+        .eq("shift_type_id", selectedShiftId);
+
+      if (exceptionsError) {
+        console.error("Error fetching exceptions:", exceptionsError);
+        throw exceptionsError;
+      }
+
+      // Get officer profiles for exceptions
+      const officerIds = [...new Set(exceptionsData?.map(e => e.officer_id).filter(Boolean))];
+      let officerProfiles = [];
+      if (officerIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, full_name, badge_number, rank, hire_date")
+          .in("id", officerIds);
+        officerProfiles = profilesData || [];
+      }
+
+      // Process data into daily schedules format
+      const dailySchedules = dates.map(date => {
+        const dateObj = parseISO(date);
+        const dayOfWeek = dateObj.getDay();
+        
+        // Find recurring schedules for this day of week
+        const dayRecurring = recurringData?.filter(recurring => 
+          recurring.day_of_week === dayOfWeek
+        ) || [];
+
+        // Find exceptions for this date
+        const dayExceptions = exceptionsData?.filter(exception => 
+          exception.date === date
+        ) || [];
+
+        // Combine officers from recurring and exceptions
+        const officers = [
+          ...dayRecurring.map(recurring => ({
+            officerId: recurring.officer_id,
+            officerName: recurring.profiles?.full_name || "Unknown",
+            badgeNumber: recurring.profiles?.badge_number,
+            rank: recurring.profiles?.rank,
+            shiftInfo: {
+              type: recurring.shift_types?.name,
+              time: `${recurring.shift_types?.start_time} - ${recurring.shift_types?.end_time}`,
+              position: recurring.position_name,
+              scheduleId: recurring.id,
+              scheduleType: "recurring" as const,
+              isOff: false,
+              hasPTO: false
+            }
+          })),
+          ...dayExceptions.map(exception => ({
+            officerId: exception.officer_id,
+            officerName: officerProfiles.find(p => p.id === exception.officer_id)?.full_name || "Unknown",
+            badgeNumber: officerProfiles.find(p => p.id === exception.officer_id)?.badge_number,
+            rank: officerProfiles.find(p => p.id === exception.officer_id)?.rank,
+            shiftInfo: {
+              type: exception.is_off ? "Off" : "Custom",
+              time: exception.custom_start_time && exception.custom_end_time
+                ? `${exception.custom_start_time} - ${exception.custom_end_time}`
+                : "",
+              position: exception.position_name || "",
+              scheduleId: exception.id,
+              scheduleType: "exception" as const,
+              isOff: exception.is_off,
+              hasPTO: exception.is_off,
+              ptoData: exception.is_off ? {
+                id: exception.id,
+                ptoType: exception.reason,
+                isFullShift: !exception.custom_start_time && !exception.custom_end_time
+              } : undefined
+            }
+          }))
+        ];
+
+        // Remove duplicates (if an officer has both recurring and exception, keep exception)
+        const uniqueOfficers = officers.reduce((acc: any[], current) => {
+          const existingIndex = acc.findIndex(o => o.officerId === current.officerId);
+          if (existingIndex === -1) {
+            acc.push(current);
+          } else {
+            // If this is an exception, replace the recurring entry
+            if (current.shiftInfo.scheduleType === "exception") {
+              acc[existingIndex] = current;
+            }
+          }
+          return acc;
+        }, []);
+
+        return {
+          date,
+          dayOfWeek,
+          officers: uniqueOfficers
+        };
+      });
+
+      console.log("✅ Processed export data:", {
+        dailySchedules: dailySchedules.length,
+        firstDayOfficers: dailySchedules[0]?.officers?.length || 0
+      });
+
+      return { dailySchedules };
+    },
+    enabled: !!selectedShiftId && !!dateRange?.from && !!dateRange?.to && open,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
   const handleExportPDF = async () => {
     if (!dateRange?.from || !dateRange?.to) {
@@ -67,16 +200,16 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
       return;
     }
 
-    if (!scheduleData || !scheduleData.dailySchedules) {
+    if (!exportScheduleData || !exportScheduleData.dailySchedules) {
       toast.error("No schedule data available to export");
       return;
     }
 
-    // Validate date range
-    if (isBefore(dateRange.to, dateRange.from)) {
-      toast.error("End date must be after start date");
-      return;
-    }
+    console.log("📤 Exporting with:", {
+      dateRange,
+      scheduleDataCount: exportScheduleData.dailySchedules.length,
+      firstDay: exportScheduleData.dailySchedules[0]
+    });
 
     try {
       setIsExporting(true);
@@ -84,14 +217,6 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
 
       const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
       
-      console.log("Starting export with:", {
-        activeView,
-        shiftName,
-        dateRange: `${format(dateRange.from, 'yyyy-MM-dd')} to ${format(dateRange.to, 'yyyy-MM-dd')}`,
-        scheduleDataCount: scheduleData.dailySchedules?.length || 0,
-        selectedShiftId
-      });
-
       let result;
       
       if (activeView === "weekly") {
@@ -99,24 +224,23 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
           startDate: dateRange.from,
           endDate: dateRange.to,
           shiftName: shiftName,
-          scheduleData: scheduleData.dailySchedules || [],
-          minimumStaffing: scheduleData.minimumStaffing,
+          scheduleData: exportScheduleData.dailySchedules,
           selectedShiftId: selectedShiftId,
           colorSettings: pdfColorSettings
         };
         
-        console.log("Weekly export options:", exportOptions);
+        console.log("📋 Weekly export options:", exportOptions);
         result = await exportWeeklyPDF(exportOptions);
       } else if (activeView === "monthly") {
         const exportOptions = {
           startDate: dateRange.from,
           endDate: dateRange.to,
           shiftName: shiftName,
-          scheduleData: scheduleData.dailySchedules || [],
+          scheduleData: exportScheduleData.dailySchedules,
           colorSettings: pdfColorSettings
         };
         
-        console.log("Monthly export options:", exportOptions);
+        console.log("📋 Monthly export options:", exportOptions);
         result = await exportMonthlyPDF(exportOptions);
       } else {
         toast.error(`Export not supported for ${activeView} view`);
@@ -124,7 +248,7 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
         return;
       }
 
-      console.log("Export result:", result);
+      console.log("✅ Export result:", result);
 
       if (result.success) {
         // Log audit trail
@@ -142,11 +266,11 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
         toast.success("PDF exported successfully");
         onOpenChange(false);
       } else {
-        console.error("Export failed with error:", result.error);
-        toast.error(`Export failed: ${result.error?.message || "Please check console for details"}`);
+        console.error("❌ Export failed with error:", result.error);
+        toast.error(`Export failed: ${result.error?.message || "Unknown error"}`);
       }
     } catch (error: any) {
-      console.error("Export error:", error);
+      console.error("❌ Export error:", error);
       toast.error(`Failed to export PDF: ${error.message || "Unknown error"}`);
     } finally {
       setIsExporting(false);

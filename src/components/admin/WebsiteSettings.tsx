@@ -1277,7 +1277,7 @@ export const WebsiteSettings = () => {
 {(isAdmin || isSupervisor) && <PasswordResetManager />}
 
       {/* Audit Log Viewer */}
-      {(isAdmin) && <AuditLogViewer />}
+          <AuditLogViewer />
 
       {/* Instructions Card */}
 <Card>

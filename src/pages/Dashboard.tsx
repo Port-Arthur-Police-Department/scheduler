@@ -49,6 +49,21 @@ interface DashboardProps {
 
 type Theme = "dark" | "light" | "system";
 
+// Add default notification settings for fallback
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  enable_notifications: false,
+  enable_mass_alert_sending: true,
+  enable_vacancy_alerts: true,
+  enable_pto_request_notifications: true,
+  enable_pto_status_notifications: true,
+  enable_supervisor_pto_notifications: true,
+  enable_schedule_change_notifications: true,
+  show_vacancy_alert_buttons: true,
+  show_pto_balances: false,
+  pto_balances_visible: false,
+  show_staffing_overview: true, // Added this
+};
+
 const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,8 +83,6 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     loading: roleLoading 
   } = useUserRole(user?.id);
   const queryClient = useQueryClient();
-
-  
 
   // Theme state
   const [theme, setTheme] = useState<Theme>(() => {
@@ -145,62 +158,70 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   // Use the notifications subscription hook
   useNotificationsSubscription(user?.id || "");
 
+  // Fetch website settings
+  const { data: websiteSettings } = useQuery({
+    queryKey: ['website-settings-dashboard'],
+    queryFn: async () => {
+      console.log('Fetching website settings for dashboard...');
+      
+      const { data, error } = await supabase
+        .from('website_settings')
+        .select('*')
+        .single();
+
+      if (error) {
+        console.log('Error fetching website settings:', error);
+        return DEFAULT_NOTIFICATION_SETTINGS;
+      }
+
+      console.log('Website settings fetched for dashboard:', data);
+      return data;
+    },
+  });
+
+  // Helper function to get settings with fallback
+  const getSetting = (key: string, defaultValue: boolean = true): boolean => {
+    if (!websiteSettings) return defaultValue;
+    
+    // If the key exists in websiteSettings, use it
+    if (websiteSettings[key] !== undefined) {
+      return websiteSettings[key];
+    }
+    
+    // Otherwise check DEFAULT_NOTIFICATION_SETTINGS
+    if (DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] !== undefined) {
+      return DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] as boolean;
+    }
+    
+    return defaultValue;
+  };
+
   // Fetch notifications
-  const { data: notifications } = useQuery({
-    queryKey: ["notifications", user?.id],
+  const { data: notifications, isLoading: notificationsLoading } = useQuery({
+    queryKey: ["dashboard-notifications", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-
-      // Add this query after your other queries in Dashboard.tsx
-const { data: websiteSettings } = useQuery({
-  queryKey: ['website-settings'],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('website_settings')
-      .select('*')
-      .single();
-
-    if (error) {
-      console.log('Error fetching website settings:', error);
-      return null;
-    }
-
-    return data;
-  },
-});
-
-// Create a helper to get settings value with fallback
-const getSetting = (key: string, defaultValue: boolean = true) => {
-  return websiteSettings?.[key] !== undefined ? websiteSettings[key] : defaultValue;
-};
       
-// In your Dashboard.tsx, update the notifications query:
-const { data: recentNotifications, isLoading: notificationsLoading } = useQuery({
-  queryKey: ["dashboard-notifications"],
-  queryFn: async () => {
-    // Don't try to join with vacancy_alerts unless you actually have that relationship
-    const { data, error } = await supabase
-      .from("notifications")
-      .select(`
-        id,
-        title,
-        message,
-        type,
-        is_read,
-        created_at,
-        user_id
-      `)
-      .eq("user_id", userId) // Only show current user's notifications
-      .order("created_at", { ascending: false })
-      .limit(5);
+      const { data, error } = await supabase
+        .from("notifications")
+        .select(`
+          id,
+          title,
+          message,
+          type,
+          is_read,
+          created_at,
+          user_id
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    if (error) {
-      console.error("Error fetching notifications:", error);
-      throw error;
-    }
-    return data;
-  },
-});
+      if (error) {
+        console.error("Error fetching notifications:", error);
+        throw error;
+      }
+      return data;
     },
     enabled: !!user?.id,
   });
@@ -617,107 +638,106 @@ case "settings":
           <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
         </div>
 
-// In the Main Content section, update the Enhanced Staffing Overview:
-{/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
-{isAdminOrSupervisor && !isMobile && settings?.show_staffing_overview !== false && (
-  <Card className="mb-8">
-    <CardHeader>
-      <div className="flex items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Staffing Overview - {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </CardTitle>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleRefreshStats}
-          disabled={statsLoading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${statsLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
-      <CardDescription>
-        Current staffing counts using the same calculation as Daily Schedule View
-      </CardDescription>
-    </CardHeader>
-    <CardContent>
-      {statsLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading staffing data...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stats?.staffingBreakdown && Object.entries(stats.staffingBreakdown).map(([shiftName, data]) => (
-            <div key={shiftName} className="border rounded-lg p-4">
-              <h3 className="font-semibold text-lg mb-3">{shiftName}</h3>
-              
-              {/* Supervisors */}
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-muted-foreground">Supervisors:</span>
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant={data.supervisors >= data.minRequired.supervisors ? "default" : "destructive"}
-                    className="text-xs"
-                  >
-                    {data.supervisors} / {data.minRequired.supervisors}
-                  </Badge>
+        {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
+        {isAdminOrSupervisor && !isMobile && getSetting('show_staffing_overview', true) && (
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Staffing Overview - {new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRefreshStats}
+                  disabled={statsLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${statsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+              <CardDescription>
+                Current staffing counts using the same calculation as Daily Schedule View
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-2 text-muted-foreground">Loading staffing data...</p>
                 </div>
-              </div>
-              
-              {/* Officers */}
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-sm text-muted-foreground">Officers:</span>
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant={data.officers >= data.minRequired.officers ? "default" : "destructive"}
-                    className="text-xs"
-                  >
-                    {data.officers} / {data.minRequired.officers}
-                  </Badge>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {stats?.staffingBreakdown && Object.entries(stats.staffingBreakdown).map(([shiftName, data]) => (
+                    <div key={shiftName} className="border rounded-lg p-4">
+                      <h3 className="font-semibold text-lg mb-3">{shiftName}</h3>
+                      
+                      {/* Supervisors */}
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-muted-foreground">Supervisors:</span>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={data.supervisors >= data.minRequired.supervisors ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {data.supervisors} / {data.minRequired.supervisors}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {/* Officers */}
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm text-muted-foreground">Officers:</span>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={data.officers >= data.minRequired.officers ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {data.officers} / {data.minRequired.officers}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {/* Total and Status */}
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="text-sm font-medium">Total:</span>
+                        <span className="text-sm font-bold">{data.total}</span>
+                      </div>
+                      
+                      {/* Status Indicator */}
+                      <div className="mt-2">
+                        {data.supervisors >= data.minRequired.supervisors && 
+                         data.officers >= data.minRequired.officers ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Fully Staffed
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                            Understaffed
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Fallback if no data */}
+                  {(!stats?.staffingBreakdown || Object.keys(stats.staffingBreakdown).length === 0) && (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No staffing data available for today</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-              
-              {/* Total and Status */}
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="text-sm font-medium">Total:</span>
-                <span className="text-sm font-bold">{data.total}</span>
-              </div>
-              
-              {/* Status Indicator */}
-              <div className="mt-2">
-                {data.supervisors >= data.minRequired.supervisors && 
-                 data.officers >= data.minRequired.officers ? (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                    Fully Staffed
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                    Understaffed
-                  </Badge>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          {/* Fallback if no data */}
-          {(!stats?.staffingBreakdown || Object.keys(stats.staffingBreakdown).length === 0) && (
-            <div className="col-span-full text-center py-8 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No staffing data available for today</p>
-            </div>
-          )}
-        </div>
-      )}
-    </CardContent>
-  </Card>
-)}
+              )}
+            </CardContent>
+          </Card>
+        )}
 
  {/* Desktop Navigation */}
 {!isMobile && (

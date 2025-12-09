@@ -548,7 +548,7 @@ const renderTabContent = () => {
         </div>
 
         {/* Enhanced Staffing Overview - Only for Admin/Supervisor */}
-        {isAdminOrSupervisor && (
+        {isAdminOrSupervisor && !isMobile && (
           <Card className="mb-8">
             <CardHeader>
               <div className="flex items-center justify-between">

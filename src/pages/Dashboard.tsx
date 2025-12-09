@@ -23,6 +23,17 @@ import { parseISO, format } from "date-fns";
 import MobileNavigation from "@/components/MobileNavigation";
 import { WebsiteSettings } from '@/components/admin/WebsiteSettings';
 import { NotificationsBell } from "@/components/NotificationsBell";
+import { ChangePassword } from "@/components/profile/ChangePassword";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { User as UserIcon, Lock } from "lucide-react";
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";
@@ -529,10 +540,51 @@ const renderTabContent = () => {
             {/* Use the NotificationsBell component */}
 <NotificationsBell />
             
-            <div className="text-right hidden sm:block">
-              <p className="font-medium">{profile?.full_name || user?.email}</p>
-              <p className="text-sm text-muted-foreground capitalize">{primaryRole}</p>
-            </div>
+            {/* With this dropdown version: */}
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button variant="ghost" className="flex items-center gap-2">
+      <div className="text-right hidden sm:block">
+        <p className="font-medium">{profile?.full_name || user?.email}</p>
+        <p className="text-sm text-muted-foreground capitalize">{primaryRole}</p>
+      </div>
+      <UserIcon className="h-4 w-4 md:h-5 md:w-5" />
+    </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="end" className="w-56">
+    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem className="cursor-pointer">
+      <Dialog>
+        <DialogTrigger asChild>
+          <div className="flex items-center gap-2 w-full">
+            <Lock className="h-4 w-4" />
+            Change Password
+          </div>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          {user && (
+            <ChangePassword 
+              userId={user.id} 
+              userEmail={user.email!} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem 
+      className="cursor-pointer text-red-600 focus:text-red-600"
+      onClick={handleSignOut}
+    >
+      <LogOut className="h-4 w-4 mr-2" />
+      Logout
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
             <Button variant="ghost" size="icon" onClick={handleSignOut} title="Logout">
               <LogOut className="h-4 w-4 md:h-5 md:w-5" />
             </Button>

@@ -355,6 +355,7 @@ export const DailyScheduleViewMobile = ({
                         onToggleOfficer={toggleOfficerDetails}
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
+                        sectionType="supervisor"
                       />
                     )}
 
@@ -367,6 +368,7 @@ export const DailyScheduleViewMobile = ({
                         onToggleOfficer={toggleOfficerDetails}
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
+                        sectionType="regular"
                       />
                     )}
 
@@ -379,7 +381,7 @@ export const DailyScheduleViewMobile = ({
                         onToggleOfficer={toggleOfficerDetails}
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
-                        isSpecial={true}
+                        sectionType="special"
                       />
                     )}
 
@@ -438,7 +440,7 @@ export const DailyScheduleViewMobile = ({
   );
 };
 
-// Mobile Officer Section Component
+// Mobile Officer Section Component - UPDATED with background colors
 interface OfficerSectionMobileProps {
   title: string;
   officers: any[];
@@ -446,7 +448,7 @@ interface OfficerSectionMobileProps {
   onToggleOfficer: (officerId: string, scheduleId: string) => void;
   onOfficerAction: (officer: any, action: string) => void;
   canEdit: boolean;
-  isSpecial?: boolean;
+  sectionType?: "regular" | "supervisor" | "special" | "pto";
 }
 
 const OfficerSectionMobile = ({
@@ -456,21 +458,52 @@ const OfficerSectionMobile = ({
   onToggleOfficer,
   onOfficerAction,
   canEdit,
-  isSpecial = false
+  sectionType = "regular"
 }: OfficerSectionMobileProps) => {
+  // Define background colors based on section type
+  const getSectionStyle = () => {
+    switch (sectionType) {
+      case "special":
+        return {
+          headerBg: "bg-purple-50 dark:bg-purple-900/20",
+          headerBorder: "border-purple-200 dark:border-purple-800",
+          cardBg: "bg-purple-50/50 dark:bg-purple-900/10",
+          cardBorder: "border-purple-200 dark:border-purple-800"
+        };
+      case "supervisor":
+        return {
+          headerBg: "bg-blue-50 dark:bg-blue-900/20",
+          headerBorder: "border-blue-200 dark:border-blue-800",
+          cardBg: "bg-blue-50/50 dark:bg-blue-900/10",
+          cardBorder: "border-blue-200 dark:border-blue-800"
+        };
+      default: // regular
+        return {
+          headerBg: "bg-gray-50 dark:bg-gray-900/20",
+          headerBorder: "border-gray-200 dark:border-gray-800",
+          cardBg: "bg-white dark:bg-gray-900",
+          cardBorder: "border-gray-200 dark:border-gray-800"
+        };
+    }
+  };
+
+  const sectionStyle = getSectionStyle();
+
   return (
     <div className="space-y-2">
-      <h4 className="font-semibold text-sm border-b pb-1">{title}</h4>
+      <h4 className={`font-semibold text-sm border-b pb-1 ${sectionStyle.headerBg} ${sectionStyle.headerBorder} p-2 rounded-t-lg`}>
+        {title}
+      </h4>
       {officers.map((officer) => {
         const key = `${officer.officerId}-${officer.scheduleId}`;
         const isExpanded = expandedOfficers.has(key);
         const isProbationary = officer.rank === 'Probationary';
 
         return (
-          <div key={key} className="border rounded-lg overflow-hidden">
+          <div key={key} className={`border rounded-lg overflow-hidden ${sectionStyle.cardBg} ${sectionStyle.cardBorder}`}>
             {/* Officer Header */}
             <div 
-              className="p-3 flex items-center justify-between active:bg-muted/50 transition-colors"
+              className={`p-3 flex items-center justify-between transition-colors ${isExpanded ? sectionStyle.headerBg : 'active:bg-muted/50'}`}
               onClick={() => onToggleOfficer(officer.officerId, officer.scheduleId)}
             >
               <div className="flex-1">
@@ -503,7 +536,7 @@ const OfficerSectionMobile = ({
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="secondary" className="text-xs">
-                    {officer.position || (isSpecial ? "Special Assignment" : "No Position")}
+                    {officer.position || (sectionType === "special" ? "Special Assignment" : "No Position")}
                   </Badge>
                   {officer.type === "exception" && (
                     <Badge variant="outline" className="text-xs bg-orange-50">
@@ -611,7 +644,7 @@ const OfficerSectionMobile = ({
   );
 };
 
-// Mobile PTO Section Component
+// Mobile PTO Section Component - UPDATED with background color
 interface PTOSectionMobileProps {
   title: string;
   ptoRecords: any[];
@@ -621,9 +654,11 @@ interface PTOSectionMobileProps {
 const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps) => {
   return (
     <div className="space-y-2">
-      <h4 className="font-semibold text-sm border-b pb-1">{title}</h4>
+      <h4 className="font-semibold text-sm border-b pb-1 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 p-2 rounded-t-lg">
+        {title}
+      </h4>
       {ptoRecords.map((ptoRecord) => (
-        <div key={ptoRecord.id} className="border rounded-lg p-3 bg-muted/30">
+        <div key={ptoRecord.id} className="border rounded-lg p-3 bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="font-medium">{ptoRecord.name}</p>

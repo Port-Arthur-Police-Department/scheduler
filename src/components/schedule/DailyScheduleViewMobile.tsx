@@ -15,8 +15,17 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { usePDFExport } from "@/hooks/usePDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { getScheduleData } from "./DailyScheduleView";
@@ -42,14 +51,41 @@ export const DailyScheduleViewMobile = ({
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<any>(null);
+  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+  const [isLoadingShifts, setIsLoadingShifts] = useState(false);
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-  const { data: scheduleData, isLoading } = useQuery({
-    queryKey: ["daily-schedule-mobile", dateStr, filterShiftId],
-    queryFn: () => getScheduleData(selectedDate, filterShiftId),
+  // Fetch all available shifts first
+  const { data: allShifts, isLoading: shiftsLoading } = useQuery({
+    queryKey: ["shift-types-mobile"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shift_types")
+        .select("*")
+        .order("start_time");
+      
+      if (error) throw error;
+      
+      // Set default selected shift to first one if not already set
+      if (data && data.length > 0 && !selectedShiftId) {
+        setSelectedShiftId(data[0].id);
+      }
+      
+      return data || [];
+    },
+  });
+
+  // Fetch schedule data only for the selected shift
+  const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
+    queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
+    queryFn: () => {
+      if (!selectedShiftId) return Promise.resolve([]);
+      return getScheduleData(selectedDate, selectedShiftId);
+    },
+    enabled: !!selectedShiftId, // Only fetch when a shift is selected
   });
 
   const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
@@ -77,6 +113,13 @@ export const DailyScheduleViewMobile = ({
     setExpandedOfficers(newExpanded);
   };
 
+  // Handle shift selection change
+  const handleShiftChange = (shiftId: string) => {
+    setSelectedShiftId(shiftId);
+    setExpandedShifts(new Set()); // Reset expanded shifts
+    setExpandedOfficers(new Set()); // Reset expanded officers
+  };
+
   // Handle officer action
   const handleOfficerAction = (officer: any, action: string) => {
     setSelectedOfficer(officer);
@@ -91,7 +134,11 @@ export const DailyScheduleViewMobile = ({
         break;
       case 'remove':
         if (confirm(`Remove ${officer.name} from this shift?`)) {
-          removeOfficerMutation.mutate(officer);
+          removeOfficerMutation.mutate(officer, {
+            onSuccess: () => {
+              refetchSchedule(); // Refresh the schedule after removal
+            }
+          });
         }
         break;
     }
@@ -112,6 +159,11 @@ export const DailyScheduleViewMobile = ({
         currentPosition: selectedOfficer.position,
         unitNumber: selectedOfficer.unitNumber,
         notes: selectedOfficer.notes
+      }, {
+        onSuccess: () => {
+          refetchSchedule(); // Refresh the schedule after edit
+          setEditSheetOpen(false);
+        }
       });
     } else if (field === 'unit') {
       updateScheduleMutation.mutate({
@@ -124,6 +176,11 @@ export const DailyScheduleViewMobile = ({
         currentPosition: selectedOfficer.position,
         unitNumber: value,
         notes: selectedOfficer.notes
+      }, {
+        onSuccess: () => {
+          refetchSchedule(); // Refresh the schedule after edit
+          setEditSheetOpen(false);
+        }
       });
     } else if (field === 'notes') {
       updateScheduleMutation.mutate({
@@ -136,10 +193,13 @@ export const DailyScheduleViewMobile = ({
         currentPosition: selectedOfficer.position,
         unitNumber: selectedOfficer.unitNumber,
         notes: value
+      }, {
+        onSuccess: () => {
+          refetchSchedule(); // Refresh the schedule after edit
+          setEditSheetOpen(false);
+        }
       });
     }
-
-    setEditSheetOpen(false);
   };
 
   // Export shift to PDF
@@ -162,7 +222,7 @@ export const DailyScheduleViewMobile = ({
     }
   };
 
-  if (isLoading) {
+  if (shiftsLoading) {
     return (
       <Card className="mx-4 mt-4">
         <CardHeader>
@@ -172,8 +232,8 @@ export const DailyScheduleViewMobile = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <Skeleton className="h-12 w-full rounded-lg mb-4" />
           <Skeleton className="h-64 w-full rounded-lg" />
-          <Skeleton className="h-64 w-full rounded-lg mt-4" />
         </CardContent>
       </Card>
     );
@@ -189,7 +249,37 @@ export const DailyScheduleViewMobile = ({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {scheduleData?.map((shiftData) => {
+          {/* Shift Selector */}
+          <div className="mb-4">
+            <Select value={selectedShiftId} onValueChange={handleShiftChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a shift">
+                  {allShifts?.find(s => s.id === selectedShiftId)?.name || "Select a shift"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {allShifts?.map((shift) => (
+                  <SelectItem key={shift.id} value={shift.id}>
+                    {shift.name} ({shift.start_time} - {shift.end_time})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedShiftId && allShifts?.find(s => s.id === selectedShiftId) && (
+              <p className="text-sm text-muted-foreground mt-2 text-center">
+                {allShifts.find(s => s.id === selectedShiftId)?.start_time} - {allShifts.find(s => s.id === selectedShiftId)?.end_time}
+              </p>
+            )}
+          </div>
+
+          {/* Loading state for schedule */}
+          {scheduleLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-32 w-full rounded-lg" />
+              <Skeleton className="h-32 w-full rounded-lg" />
+            </div>
+          ) : scheduleData?.map((shiftData) => {
             const shiftId = shiftData.shift.id;
             const isExpanded = expandedShifts.has(shiftId);
             const supervisorsUnderstaffed = shiftData.currentSupervisors < shiftData.minSupervisors;
@@ -210,9 +300,6 @@ export const DailyScheduleViewMobile = ({
                         {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {shiftData.shift.start_time} - {shiftData.shift.end_time}
-                    </p>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant={isAnyUnderstaffed ? "destructive" : "default"} className="gap-1">
                         {isAnyUnderstaffed ? (
@@ -310,9 +397,18 @@ export const DailyScheduleViewMobile = ({
             );
           })}
 
-          {scheduleData?.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No schedule data available
+          {selectedShiftId && scheduleData?.length === 0 && !scheduleLoading && (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No schedule data available for selected shift</p>
+              <p className="text-sm mt-2">Select a different shift or date</p>
+            </div>
+          )}
+
+          {!selectedShiftId && (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Please select a shift to view schedule</p>
             </div>
           )}
         </CardContent>
@@ -336,6 +432,7 @@ export const DailyScheduleViewMobile = ({
         officer={selectedOfficer}
         onSave={handleSaveEdit}
         isLoading={updateScheduleMutation.isPending}
+        allShifts={allShifts}
       />
     </div>
   );
@@ -563,16 +660,17 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps)
   );
 };
 
-// Edit Officer Sheet Component
+// Edit Officer Sheet Component - UPDATED with shift selector
 interface EditOfficerSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   officer: any;
   onSave: (field: 'position' | 'unit' | 'notes', value: string) => void;
   isLoading: boolean;
+  allShifts?: any[];
 }
 
-const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading }: EditOfficerSheetProps) => {
+const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allShifts }: EditOfficerSheetProps) => {
   const [position, setPosition] = useState(officer?.position || "");
   const [unitNumber, setUnitNumber] = useState(officer?.unitNumber || "");
   const [notes, setNotes] = useState(officer?.notes || "");
@@ -584,7 +682,10 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading }: Ed
     let value = "";
     if (field === 'position') {
       value = position === "Other (Custom)" ? customPosition : position;
-      if (!value) return;
+      if (!value) {
+        toast.error("Please select or enter a position");
+        return;
+      }
     } else if (field === 'unit') {
       value = unitNumber;
     } else if (field === 'notes') {
@@ -673,6 +774,27 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading }: Ed
                 {isLoading ? "Saving..." : "Save Notes"}
               </Button>
             </div>
+
+            {/* Current Shift Info */}
+            {allShifts && officer?.shift && (
+              <div className="space-y-3 p-3 bg-muted rounded-lg">
+                <h3 className="font-medium">Current Assignment</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shift:</span>
+                    <span className="font-medium">{officer.shift.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Time:</span>
+                    <span className="font-medium">{officer.shift.start_time} - {officer.shift.end_time}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span className="font-medium">{format(new Date(officer.date || new Date()), "MMM d, yyyy")}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </SheetContent>

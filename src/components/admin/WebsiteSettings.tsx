@@ -31,6 +31,7 @@ import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { exportAuditToPDF } from "@/utils/auditPdfExport";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useUserRole } from "@/hooks/useUserRole";
 
 // Update your DEFAULT_COLORS in WebsiteSettings.tsx
 const DEFAULT_COLORS = {
@@ -136,6 +137,7 @@ interface AuditLog {
   old_values?: any;
   new_values?: any;
 }
+const { isAdmin, isSupervisor } = useUserRole();
 
 // Add this component inside your WebsiteSettings component
 const AuditLogViewer = () => {
@@ -1274,7 +1276,7 @@ export const WebsiteSettings = () => {
       </Card>
 
 {/* Password Reset Manager - Only for Admin/Supervisor */}
-{(isAdmin || isSupervisor) && <PasswordResetManager />}
+    {(isAdmin || isSupervisor) && <PasswordResetManager />}
 
       {/* Audit Log Viewer */}
           <AuditLogViewer />

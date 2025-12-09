@@ -7,15 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarRange, Download } from "lucide-react";
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isBefore, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
-
-// Import your PDF export utilities
 import { exportWeeklyPDF, exportMonthlyPDF } from "@/utils/pdfExportUtils";
+import { useColorSettings } from "@/hooks/useColorSettings";
 
 interface ScheduleExportDialogProps {
   open: boolean;
@@ -24,6 +21,8 @@ interface ScheduleExportDialogProps {
   shiftTypes: any[];
   activeView: string;
   userEmail: string;
+  scheduleData: any; // Add this prop
+  currentDate: Date; // Add this prop
 }
 
 export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
@@ -33,146 +32,29 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
   shiftTypes,
   activeView,
   userEmail,
+  scheduleData, // Destructure new prop
+  currentDate, // Destructure new prop
 }) => {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const { pdf: pdfColorSettings } = useColorSettings();
 
   // Set default date range based on active view
   useEffect(() => {
-    const today = new Date();
-    if (activeView === "weekly") {
-      const weekStart = startOfWeek(today, { weekStartsOn: 0 });
-      const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
-      setDateRange({ from: weekStart, to: weekEnd });
-    } else if (activeView === "monthly") {
-      const monthStart = startOfMonth(today);
-      const monthEnd = endOfMonth(today);
-      setDateRange({ from: monthStart, to: monthEnd });
+    if (open) {
+      const today = new Date();
+      if (activeView === "weekly") {
+        const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+        setDateRange({ from: weekStart, to: weekEnd });
+      } else if (activeView === "monthly") {
+        const monthStart = startOfMonth(currentDate);
+        const monthEnd = endOfMonth(currentDate);
+        setDateRange({ from: monthStart, to: monthEnd });
+      }
     }
-  }, [activeView, open]);
-
-  // Fetch schedule data for the selected date range
-  const { data: scheduleData, isLoading } = useQuery({
-    queryKey: ['export-schedule-data', selectedShiftId, dateRange?.from, dateRange?.to],
-    queryFn: async () => {
-      if (!selectedShiftId || !dateRange?.from || !dateRange?.to) {
-        return null;
-      }
-
-      const dates = eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).map(date => 
-        format(date, "yyyy-MM-dd")
-      );
-
-      // Fetch all schedule data for the date range
-      const { data: recurringData, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          *,
-          profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date
-          ),
-          shift_types (
-            id, name, start_time, end_time
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .or(`end_date.is.null,end_date.gte.${format(dateRange.from, "yyyy-MM-dd")}`);
-
-      if (recurringError) throw recurringError;
-
-      const { data: exceptionsData, error: exceptionsError } = await supabase
-        .from("schedule_exceptions")
-        .select("*")
-        .gte("date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("date", format(dateRange.to, "yyyy-MM-dd"))
-        .eq("shift_type_id", selectedShiftId);
-
-      if (exceptionsError) throw exceptionsError;
-
-      // Get officer profiles for exceptions
-      const officerIds = [...new Set(exceptionsData?.map(e => e.officer_id).filter(Boolean))];
-      let officerProfiles = [];
-      if (officerIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, full_name, badge_number, rank, hire_date")
-          .in("id", officerIds);
-        officerProfiles = profilesData || [];
-      }
-
-      // Combine and organize data
-      const dailySchedules = dates.map(date => {
-        const dateObj = new Date(date);
-        const dayOfWeek = dateObj.getDay();
-        
-        // Filter recurring schedules for this day
-        const recurringOfficers = recurringData?.filter(recurring => 
-          recurring.day_of_week === dayOfWeek && 
-          (!recurring.end_date || new Date(recurring.end_date) >= dateObj)
-        ) || [];
-
-        // Filter exceptions for this date
-        const dateExceptions = exceptionsData?.filter(exception => 
-          exception.date === date
-        ) || [];
-
-        // Combine officers for this day
-        const officers = [
-          ...recurringOfficers.map(recurring => ({
-            officerId: recurring.officer_id,
-            officerName: recurring.profiles?.full_name || "Unknown",
-            badgeNumber: recurring.profiles?.badge_number,
-            rank: recurring.profiles?.rank,
-            shiftInfo: {
-              type: recurring.shift_types?.name,
-              time: `${recurring.shift_types?.start_time} - ${recurring.shift_types?.end_time}`,
-              position: recurring.position_name,
-              scheduleId: recurring.id,
-              scheduleType: "recurring" as const,
-              isOff: false,
-              hasPTO: false
-            }
-          })),
-          ...dateExceptions.map(exception => ({
-            officerId: exception.officer_id,
-            officerName: officerProfiles.find(p => p.id === exception.officer_id)?.full_name || "Unknown",
-            badgeNumber: officerProfiles.find(p => p.id === exception.officer_id)?.badge_number,
-            rank: officerProfiles.find(p => p.id === exception.officer_id)?.rank,
-            shiftInfo: {
-              type: exception.is_off ? "Off" : "Custom",
-              time: exception.custom_start_time && exception.custom_end_time
-                ? `${exception.custom_start_time} - ${exception.custom_end_time}`
-                : "",
-              position: exception.position_name || "",
-              scheduleId: exception.id,
-              scheduleType: "exception" as const,
-              isOff: exception.is_off,
-              hasPTO: exception.is_off,
-              ptoData: exception.is_off ? {
-                id: exception.id,
-                ptoType: exception.reason,
-                isFullShift: !exception.custom_start_time && !exception.custom_end_time
-              } : undefined
-            }
-          }))
-        ];
-
-        return {
-          date,
-          dayOfWeek,
-          officers
-        };
-      });
-
-      return {
-        dailySchedules,
-        startDate: format(dateRange.from, "yyyy-MM-dd"),
-        endDate: format(dateRange.to, "yyyy-MM-dd")
-      };
-    },
-    enabled: !!selectedShiftId && !!dateRange?.from && !!dateRange?.to && open,
-  });
+  }, [open, activeView, currentDate]);
 
   const handleExportPDF = async () => {
     if (!dateRange?.from || !dateRange?.to) {
@@ -185,8 +67,14 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
       return;
     }
 
-    if (!scheduleData) {
+    if (!scheduleData || !scheduleData.dailySchedules) {
       toast.error("No schedule data available to export");
+      return;
+    }
+
+    // Validate date range
+    if (isBefore(dateRange.to, dateRange.from)) {
+      toast.error("End date must be after start date");
       return;
     }
 
@@ -196,18 +84,39 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
 
       const shiftName = shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Unknown Shift";
       
-      const exportOptions = {
-        startDate: dateRange.from,
-        endDate: dateRange.to,
-        shiftName: shiftName,
-        scheduleData: scheduleData.dailySchedules || []
-      };
+      console.log("Starting export with:", {
+        activeView,
+        shiftName,
+        dateRange: `${format(dateRange.from, 'yyyy-MM-dd')} to ${format(dateRange.to, 'yyyy-MM-dd')}`,
+        scheduleDataCount: scheduleData.dailySchedules?.length || 0,
+        selectedShiftId
+      });
 
       let result;
       
       if (activeView === "weekly") {
+        const exportOptions = {
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+          shiftName: shiftName,
+          scheduleData: scheduleData.dailySchedules || [],
+          minimumStaffing: scheduleData.minimumStaffing,
+          selectedShiftId: selectedShiftId,
+          colorSettings: pdfColorSettings
+        };
+        
+        console.log("Weekly export options:", exportOptions);
         result = await exportWeeklyPDF(exportOptions);
       } else if (activeView === "monthly") {
+        const exportOptions = {
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+          shiftName: shiftName,
+          scheduleData: scheduleData.dailySchedules || [],
+          colorSettings: pdfColorSettings
+        };
+        
+        console.log("Monthly export options:", exportOptions);
         result = await exportMonthlyPDF(exportOptions);
       } else {
         toast.error(`Export not supported for ${activeView} view`);
@@ -215,26 +124,56 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
         return;
       }
 
+      console.log("Export result:", result);
+
       if (result.success) {
         // Log audit trail
-        auditLogger.logExport(
-          userEmail,
-          `${activeView.toUpperCase()} Schedule`,
-          `${format(dateRange.from, "yyyy-MM-dd")} to ${format(dateRange.to, "yyyy-MM-dd")}`,
-          `Exported ${shiftName} ${activeView} schedule`
-        );
+        try {
+          auditLogger.logExport(
+            userEmail,
+            `${activeView.toUpperCase()} Schedule`,
+            `${format(dateRange.from, "yyyy-MM-dd")} to ${format(dateRange.to, "yyyy-MM-dd")}`,
+            `Exported ${shiftName} ${activeView} schedule`
+          );
+        } catch (auditError) {
+          console.error("Audit logging failed:", auditError);
+        }
         
         toast.success("PDF exported successfully");
         onOpenChange(false);
       } else {
-        toast.error(`Export failed: ${result.error?.message || "Unknown error"}`);
+        console.error("Export failed with error:", result.error);
+        toast.error(`Export failed: ${result.error?.message || "Please check console for details"}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Export error:", error);
-      toast.error("Failed to export PDF. Please try again.");
+      toast.error(`Failed to export PDF: ${error.message || "Unknown error"}`);
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleQuickSelect = (type: 'week' | 'month' | 'year') => {
+    const today = new Date();
+    
+    switch (type) {
+      case 'week':
+        const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+        const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
+        setDateRange({ from: weekStart, to: weekEnd });
+        break;
+      case 'month':
+        const monthStart = startOfMonth(today);
+        const monthEnd = endOfMonth(today);
+        setDateRange({ from: monthStart, to: monthEnd });
+        break;
+      case 'year':
+        const yearStart = new Date(today.getFullYear(), 0, 1);
+        const yearEnd = new Date(today.getFullYear(), 11, 31);
+        setDateRange({ from: yearStart, to: yearEnd });
+        break;
+    }
+    setCalendarOpen(false);
   };
 
   return (
@@ -253,6 +192,33 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="date-range">Date Range</Label>
+            <div className="flex gap-2 mb-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleQuickSelect('week')}
+                className="text-xs"
+              >
+                This Week
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleQuickSelect('month')}
+                className="text-xs"
+              >
+                This Month
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleQuickSelect('year')}
+                className="text-xs"
+              >
+                This Year
+              </Button>
+            </div>
+            
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -265,11 +231,11 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
                   {dateRange?.from ? (
                     dateRange.to ? (
                       <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
+                        {format(dateRange.from, "MMM d, yyyy")} -{" "}
+                        {format(dateRange.to, "MMM d, yyyy")}
                       </>
                     ) : (
-                      format(dateRange.from, "LLL dd, y")
+                      format(dateRange.from, "MMM d, yyyy")
                     )
                   ) : (
                     <span>Pick a date range</span>
@@ -289,6 +255,7 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
                     }
                   }}
                   numberOfMonths={2}
+                  disabled={{ before: new Date(2020, 0, 1) }}
                 />
               </PopoverContent>
             </Popover>
@@ -310,14 +277,31 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
             </Select>
           </div>
 
-          <div className="p-3 bg-muted/50 rounded-md">
-            <div className="text-sm font-medium">Export Summary:</div>
-            {dateRange?.from && dateRange?.to && (
-              <div className="text-sm text-muted-foreground mt-1">
-                {activeView === "weekly" ? "Weekly" : "Monthly"} view for {format(dateRange.from, "MMM d, yyyy")} to {format(dateRange.to, "MMM d, yyyy")}
-              </div>
-            )}
+          <div className="space-y-2">
+            <Label htmlFor="export-view">View Type</Label>
+            <div className="p-2 border rounded-md bg-muted/50">
+              {activeView === "weekly" ? "Weekly Schedule" : "Monthly PTO Schedule"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {activeView === "weekly" 
+                ? "Exports complete schedule with assignments" 
+                : "Exports only Holiday & Vacation PTO schedule"}
+            </p>
           </div>
+
+          {dateRange?.from && dateRange?.to && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <div className="text-sm font-medium">Export Summary:</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Exporting {activeView} view for {format(dateRange.from, "MMM d, yyyy")} to {format(dateRange.to, "MMM d, yyyy")}
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {activeView === "weekly" 
+                  ? "File will include: Employee numbers, names, daily assignments, PTO, and staffing counts"
+                  : "File will include: Officer names with badge numbers, Holiday/Vacation PTO only with rank badges for supervisors"}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button 
@@ -329,10 +313,14 @@ export const ScheduleExportDialog: React.FC<ScheduleExportDialogProps> = ({
             </Button>
             <Button 
               onClick={handleExportPDF} 
-              disabled={!dateRange?.from || !dateRange?.to || !selectedShiftId || isExporting || isLoading}
+              disabled={!dateRange?.from || !dateRange?.to || !selectedShiftId || isExporting}
+              className="min-w-[120px]"
             >
               {isExporting ? (
-                "Exporting..."
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Exporting...
+                </div>
               ) : (
                 <>
                   <Download className="h-4 w-4 mr-2" />

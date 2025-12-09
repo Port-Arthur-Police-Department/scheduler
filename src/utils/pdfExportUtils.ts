@@ -1,3 +1,6 @@
+import { useWeeklyPDFExport } from "@/hooks/useWeeklyPDFExport";
+import { useMonthlyPDFExport } from "@/hooks/useMonthlyPDFExport";
+
 // Add this helper function at the top of pdfExportUtils.ts:
 const processScheduleDataForExport = (scheduleData: any[], dateRange: { from: Date; to: Date }) => {
   // Filter to only include days within the date range

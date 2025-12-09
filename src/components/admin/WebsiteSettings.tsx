@@ -463,7 +463,7 @@ const AuditLogViewer = () => {
   );
 };
 
-export const WebsiteSettings = () => {
+export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: { isAdmin?: boolean; isSupervisor?: boolean }) => {
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);

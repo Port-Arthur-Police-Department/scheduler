@@ -7,22 +7,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { KeyRound, Loader2, Eye, EyeOff } from "lucide-react";
+import { KeyRound, Loader2, Eye, EyeOff, X } from "lucide-react";
 import { auditLogger } from "@/lib/auditLogger";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface ChangePasswordProps {
   userId: string;
   userEmail: string;
   onSuccess?: () => void;
+  children?: React.ReactNode;
 }
 
-export const ChangePassword = ({ userId, userEmail, onSuccess }: ChangePasswordProps) => {
+export const ChangePassword = ({ userId, userEmail, onSuccess, children }: ChangePasswordProps) => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [open, setOpen] = useState(false);
 
   // Change password mutation
   const changePasswordMutation = useMutation({
@@ -92,6 +102,7 @@ export const ChangePassword = ({ userId, userEmail, onSuccess }: ChangePasswordP
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setOpen(false);
       if (onSuccess) onSuccess();
     },
     onError: (error: any) => {
@@ -103,138 +114,151 @@ export const ChangePassword = ({ userId, userEmail, onSuccess }: ChangePasswordP
     changePasswordMutation.mutate();
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="h-5 w-5" />
-          Change Your Password
-        </CardTitle>
-        <CardDescription>
-          Update your account password. You'll need to enter your current password first.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Current Password */}
-        <div className="space-y-2">
-          <Label htmlFor="current-password">Current Password</Label>
-          <div className="relative">
-            <Input
-              id="current-password"
-              type={showCurrentPassword ? "text" : "password"}
-              placeholder="Enter current password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="pr-10"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-            >
-              {showCurrentPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5" />
+            Change Your Password
+          </DialogTitle>
+          <DialogDescription>
+            Update your account password. You'll need to enter your current password first.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          {/* Current Password */}
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current Password</Label>
+            <div className="relative">
+              <Input
+                id="current-password"
+                type={showCurrentPassword ? "text" : "password"}
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* New Password */}
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showNewPassword ? "text" : "password"}
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+              >
+                {showNewPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Password must be at least 6 characters long
+            </p>
+          </div>
+
+          {/* Confirm New Password */}
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <div className="relative">
+              <Input
+                id="confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Change Button */}
+          <Button
+            onClick={handleChangePassword}
+            disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword}
+            className="w-full"
+          >
+            {changePasswordMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Changing Password...
+              </>
+            ) : (
+              <>
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </>
+            )}
+          </Button>
+
+          {/* Security Notice */}
+          <div className="p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
+            <h4 className="font-medium text-sm text-amber-800 dark:text-amber-300">
+              Security Notice
+            </h4>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+              • Your password will be updated immediately
+              <br />
+              • You'll need to use the new password on your next login
+              <br />
+              • Make sure to remember your new password
+            </p>
           </div>
         </div>
-
-        {/* New Password */}
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <div className="relative">
-            <Input
-              id="new-password"
-              type={showNewPassword ? "text" : "password"}
-              placeholder="Enter new password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="pr-10"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowNewPassword(!showNewPassword)}
-            >
-              {showNewPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Password must be at least 6 characters long
-          </p>
-        </div>
-
-        {/* Confirm New Password */}
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <div className="relative">
-            <Input
-              id="confirm-password"
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="pr-10"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Change Button */}
-        <Button
-          onClick={handleChangePassword}
-          disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword}
-          className="w-full"
-        >
-          {changePasswordMutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Changing Password...
-            </>
-          ) : (
-            <>
-              <KeyRound className="h-4 w-4 mr-2" />
-              Change Password
-            </>
-          )}
-        </Button>
-
-        {/* Security Notice */}
-        <div className="p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
-          <h4 className="font-medium text-sm text-amber-800 dark:text-amber-300">
-            Security Notice
-          </h4>
-          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-            • Your password will be updated immediately
-            <br />
-            • You'll need to use the new password on your next login
-            <br />
-            • Make sure to remember your new password
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 };

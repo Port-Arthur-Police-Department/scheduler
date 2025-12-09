@@ -35,25 +35,29 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
 
-  // Sync with parent when date changes
-  useEffect(() => {
-    setCurrentWeekStart(initialDate);
-    setSelectedWeekDate(initialDate);
-  }, [initialDate]);
+// Sync with parent when date changes
+useEffect(() => {
+  setCurrentWeekStart(initialDate);
+  setSelectedWeekDate(initialDate);
+}, [initialDate]);
 
-  // Add this useEffect to sync when popover opens
+// Call onDateChange when component mounts with initial date
+useEffect(() => {
+  if (onDateChange) {
+    onDateChange(currentWeekStart);
+  }
+}, []);
+
+// ADD THIS NEW USEEFFECT: Sync selected date when popover opens
 useEffect(() => {
   if (weekPickerOpen) {
     setSelectedWeekDate(currentWeekStart);
   }
 }, [weekPickerOpen, currentWeekStart]);
 
-  // Call onDateChange when component mounts with initial date
-  useEffect(() => {
-    if (onDateChange) {
-      onDateChange(currentWeekStart);
-    }
-  }, []);
+if (!schedules) {
+  return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
+}
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;

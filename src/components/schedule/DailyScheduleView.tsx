@@ -1229,32 +1229,40 @@ recurringData
       notes: e.notes
     })) || [];
 
-    // Categorize officers
-    const supervisors = sortSupervisorsByRank(
-      processedOfficers.filter(o => 
-        o.position?.toLowerCase().includes('supervisor')
-      )
-    );
+// Categorize officers
+const supervisors = sortSupervisorsByRank(
+  processedOfficers.filter(o => {
+    // ALWAYS include officers with supervisor positions in supervisors section
+    return o.position?.toLowerCase().includes('supervisor');
+  })
+);
 
-    const specialAssignmentOfficers = processedOfficers.filter(o => {
-      const position = o.position?.toLowerCase() || '';
-      return position.includes('other') || 
-             (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+const specialAssignmentOfficers = processedOfficers.filter(o => {
+  const position = o.position?.toLowerCase() || '';
+  const isSpecialAssignment = position.includes('other') || 
+         (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+  
+  // Don't include supervisors in special assignments
+  const isSupervisor = o.position?.toLowerCase().includes('supervisor');
+  
+  return isSpecialAssignment && !isSupervisor;
+}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-    const regularOfficers = processedOfficers.filter(o => 
-      !o.position?.toLowerCase().includes('supervisor') && 
-      !specialAssignmentOfficers.includes(o)
-    ).sort((a, b) => {
-      const aMatch = a.position?.match(/district\s*(\d+)/i);
-      const bMatch = b.position?.match(/district\s*(\d+)/i);
-      
-      if (aMatch && bMatch) {
-        return parseInt(aMatch[1]) - parseInt(bMatch[1]);
-      }
-      
-      return (a.position || '').localeCompare(b.position || '');
-    });
+const regularOfficers = processedOfficers.filter(o => {
+  // Exclude supervisors and special assignments
+  const isSupervisor = o.position?.toLowerCase().includes('supervisor');
+  
+  return !isSupervisor && !specialAssignmentOfficers.includes(o);
+}).sort((a, b) => {
+  const aMatch = a.position?.match(/district\s*(\d+)/i);
+  const bMatch = b.position?.match(/district\s*(\d+)/i);
+  
+  if (aMatch && bMatch) {
+    return parseInt(aMatch[1]) - parseInt(bMatch[1]);
+  }
+  
+  return (a.position || '').localeCompare(b.position || '');
+});
 
     // Calculate staffing counts
     const countedSupervisors = supervisors.filter(supervisor => {

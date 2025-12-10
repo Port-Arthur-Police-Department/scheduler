@@ -92,6 +92,22 @@ const DEFAULT_COLORS = {
   
   weekly_off_bg: "240,240,240",
   weekly_off_text: "100,100,100",
+
+    // NEW: Schedule Section Colors for both Desktop and Mobile
+  schedule_supervisor_bg: "240,248,255", // Light blue (AliceBlue)
+  schedule_supervisor_text: "25,25,112", // Dark blue text
+  
+  schedule_officer_bg: "248,249,250", // Light gray
+  schedule_officer_text: "33,37,41", // Dark gray text
+  
+  schedule_special_bg: "243,229,245", // Light purple
+  schedule_special_text: "102,51,153", // Dark purple text (RebeccaPurple)
+  
+  schedule_pto_bg: "230,255,242", // Light green (MintCream variant)
+  schedule_pto_text: "0,100,0", // Dark green text (DarkGreen)
+  
+  schedule_pto_bg_mobile: "230,255,242", // Mobile-specific green
+  schedule_pto_text_mobile: "0,100,0", // Mobile-specific green text
 };
 
 // Default PTO type visibility settings
@@ -1063,6 +1079,220 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           </div>
         </CardContent>
       </Card>
+
+      {/* Schedule Section Colors Card */}
+<Card>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <Palette className="h-5 w-5" />
+      Schedule Section Colors
+    </CardTitle>
+    <CardDescription>
+      Customize the background colors for different sections in daily schedule view
+    </CardDescription>
+  </CardHeader>
+  <CardContent className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      {/* Supervisor Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: `rgb(${colorSettings.schedule_supervisor_bg})` }} />
+          <Label className="font-medium">Supervisor Section</Label>
+        </div>
+        <div className="space-y-2">
+          <Label>Background Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_supervisor_bg)}
+              onChange={(e) => handleColorChange('schedule_supervisor_bg', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_supervisor_bg}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_supervisor_bg)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Text Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_supervisor_text)}
+              onChange={(e) => handleColorChange('schedule_supervisor_text', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_supervisor_text}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_supervisor_text)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Officer Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: `rgb(${colorSettings.schedule_officer_bg})` }} />
+          <Label className="font-medium">Officer Section</Label>
+        </div>
+        <div className="space-y-2">
+          <Label>Background Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_officer_bg)}
+              onChange={(e) => handleColorChange('schedule_officer_bg', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_officer_bg}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_officer_bg)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Text Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_officer_text)}
+              onChange={(e) => handleColorChange('schedule_officer_text', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_officer_text}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_officer_text)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Special Assignment Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: `rgb(${colorSettings.schedule_special_bg})` }} />
+          <Label className="font-medium">Special Assignment Section</Label>
+        </div>
+        <div className="space-y-2">
+          <Label>Background Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_special_bg)}
+              onChange={(e) => handleColorChange('schedule_special_bg', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_special_bg}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_special_bg)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Text Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_special_text)}
+              onChange={(e) => handleColorChange('schedule_special_text', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_special_text}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_special_text)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PTO Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: `rgb(${colorSettings.schedule_pto_bg})` }} />
+          <Label className="font-medium">PTO Section</Label>
+        </div>
+        <div className="space-y-2">
+          <Label>Background Color (Desktop)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_pto_bg)}
+              onChange={(e) => handleColorChange('schedule_pto_bg', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_bg}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_bg)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Background Color (Mobile)</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_pto_bg_mobile)}
+              onChange={(e) => handleColorChange('schedule_pto_bg_mobile', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_bg_mobile}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_bg_mobile)}</div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Text Color</Label>
+          <div className="flex gap-2">
+            <Input
+              type="color"
+              value={rgbStringToHex(colorSettings.schedule_pto_text)}
+              onChange={(e) => handleColorChange('schedule_pto_text', e.target.value)}
+              className="w-12 h-10 p-1"
+            />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_text}</div>
+              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_text)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {/* Reset Button for Schedule Colors */}
+    <div className="flex justify-end pt-4 border-t">
+      <Button 
+        variant="outline" 
+        onClick={() => {
+          const defaultScheduleColors = {
+            schedule_supervisor_bg: "240,248,255",
+            schedule_supervisor_text: "25,25,112",
+            schedule_officer_bg: "248,249,250",
+            schedule_officer_text: "33,37,41",
+            schedule_special_bg: "243,229,245",
+            schedule_special_text: "102,51,153",
+            schedule_pto_bg: "230,255,242",
+            schedule_pto_text: "0,100,0",
+            schedule_pto_bg_mobile: "230,255,242"
+          };
+          setColorSettings({...colorSettings, ...defaultScheduleColors});
+          updateSettingsMutation.mutate({
+            id: settings?.id,
+            color_settings: {...colorSettings, ...defaultScheduleColors},
+            pto_type_visibility: ptoVisibility,
+          });
+        }}
+        disabled={updateSettingsMutation.isPending}
+      >
+        Reset Schedule Colors to Defaults
+      </Button>
+    </div>
+  </CardContent>
+</Card>
 
       {/* Color Customization Card */}
       <Card>

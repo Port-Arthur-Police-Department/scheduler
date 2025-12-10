@@ -105,9 +105,6 @@ const DEFAULT_COLORS = {
   
   schedule_pto_bg: "230,255,242", // Light green (MintCream variant)
   schedule_pto_text: "0,100,0", // Dark green text (DarkGreen)
-  
-  schedule_pto_bg_mobile: "230,255,242", // Mobile-specific green
-  schedule_pto_text_mobile: "0,100,0", // Mobile-specific green text
 };
 
 // Default PTO type visibility settings
@@ -1238,36 +1235,21 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           <div className="w-4 h-4 rounded" style={{ backgroundColor: `rgb(${colorSettings.schedule_pto_bg})` }} />
           <Label className="font-medium">PTO Section</Label>
         </div>
-        <div className="space-y-2">
-          <Label>Background Color (Desktop)</Label>
-          <div className="flex gap-2">
-            <Input
-              type="color"
-              value={rgbStringToHex(colorSettings.schedule_pto_bg)}
-              onChange={(e) => handleColorChange('schedule_pto_bg', e.target.value)}
-              className="w-12 h-10 p-1"
-            />
-            <div className="flex-1">
-              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_bg}</div>
-              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_bg)}</div>
-            </div>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label>Background Color (Mobile)</Label>
-          <div className="flex gap-2">
-            <Input
-              type="color"
-              value={rgbStringToHex(colorSettings.schedule_pto_bg_mobile)}
-              onChange={(e) => handleColorChange('schedule_pto_bg_mobile', e.target.value)}
-              className="w-12 h-10 p-1"
-            />
-            <div className="flex-1">
-              <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_bg_mobile}</div>
-              <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_bg_mobile)}</div>
-            </div>
-          </div>
-        </div>
+       <div className="space-y-2">
+  <Label>Background Color</Label>
+  <div className="flex gap-2">
+    <Input
+      type="color"
+      value={rgbStringToHex(colorSettings.schedule_pto_bg)}
+      onChange={(e) => handleColorChange('schedule_pto_bg', e.target.value)}
+      className="w-12 h-10 p-1"
+    />
+    <div className="flex-1">
+      <div className="text-xs text-muted-foreground">RGB: {colorSettings.schedule_pto_bg}</div>
+      <div className="text-sm">{rgbStringToHex(colorSettings.schedule_pto_bg)}</div>
+    </div>
+  </div>
+</div>
         <div className="space-y-2">
           <Label>Text Color</Label>
           <div className="flex gap-2">

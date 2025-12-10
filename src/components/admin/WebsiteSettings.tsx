@@ -1106,7 +1106,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   <CardHeader>
     <CardTitle className="flex items-center gap-2">
       <Palette className="h-5 w-5" />
-      Schedule Section Colors
+      Riding List - Schedule Section Colors
     </CardTitle>
     <CardDescription>
       Customize the background colors for different sections in daily schedule view

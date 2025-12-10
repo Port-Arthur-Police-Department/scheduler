@@ -21,6 +21,7 @@ interface OfficerCardProps {
 	onPartnershipChange?: (officer: any, partnerOfficerId?: string) => void;
 	isUpdating: boolean;
 	sectionType?: "regular" | "special" | "pto";
+	backgroundColor?: string; // ADD THIS LINE
 }
 
 export const OfficerCard = ({
@@ -33,7 +34,8 @@ export const OfficerCard = ({
 	onRemove,
 	onPartnershipChange,
 	isUpdating,
-	sectionType = "regular"
+	sectionType = "regular",
+	backgroundColor // ADD THIS LINE
 }: OfficerCardProps) => {
 	const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
 	const [editPosition, setEditPosition] = useState("");
@@ -102,7 +104,10 @@ export const OfficerCard = ({
 	}
 
 	return (
-		<div className={`flex items-center justify-between p-3 rounded-md ${officer.isPartnership ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'}`}>
+		<div 
+			className={`flex items-center justify-between p-3 rounded-md border ${officer.isPartnership ? 'border-blue-200' : 'border-transparent'}`}
+			style={backgroundColor ? { backgroundColor } : {}} // ADD THIS LINE
+		>
 			{/* Officer Info - Left Side */}
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-3 mb-1">

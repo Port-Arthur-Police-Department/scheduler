@@ -452,15 +452,6 @@ interface OfficerSectionMobileProps {
   sectionType?: "regular" | "supervisor" | "special" | "pto";
 }
 
-const OfficerSectionMobile = ({
-  title,
-  officers,
-  expandedOfficers,
-  onToggleOfficer,
-  onOfficerAction,
-  canEdit,
-  sectionType = "regular"
-}: OfficerSectionMobileProps) => {
   // Define background colors based on section type
 const OfficerSectionMobile = ({
   title,

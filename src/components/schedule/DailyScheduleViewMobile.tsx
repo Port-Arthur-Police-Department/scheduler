@@ -466,45 +466,45 @@ const OfficerSectionMobile = ({
   const { data: websiteSettings } = useWebsiteSettings();
   
   // Define background colors based on section type
-  const getSectionStyle = () => {
-    // Get colors from settings or use defaults
-    const colors = websiteSettings?.color_settings || {};
-    
-    switch (sectionType) {
-      case "special":
-        return {
-          headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-          headerBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-          cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
-          cardBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-          textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
-        };
-      case "supervisor":
-        return {
-          headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-          headerBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-          cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
-          cardBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-          textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
-        };
-      case "pto":
-        return {
-          headerBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
-          headerBorder: `border-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
-          cardBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]/50`,
-          cardBorder: `border-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
-          textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
-        };
-      default: // regular (officers)
-        return {
-          headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-          headerBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-          cardBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]/50`,
-          cardBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-          textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
-        };
-    }
-  };
+const getSectionStyle = () => {
+  // Get colors from settings or use defaults
+  const colors = websiteSettings?.color_settings || {};
+  
+  switch (sectionType) {
+    case "special":
+      return {
+        headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+        headerBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+        cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
+        cardBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+        textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
+      };
+    case "supervisor":
+      return {
+        headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+        headerBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+        cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
+        cardBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+        textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
+      };
+    case "pto":
+      return {
+        headerBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+        headerBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+        cardBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]/50`,
+        cardBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+        textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
+      };
+    default: // regular (officers)
+      return {
+        headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+        headerBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+        cardBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]/50`,
+        cardBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+        textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
+      };
+  }
+};
 
   const sectionStyle = getSectionStyle();
 
@@ -686,7 +686,6 @@ interface PTOSectionMobileProps {
 // In DailyScheduleViewMobile.tsx, update the PTOSectionMobile component:
 
 const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps) => {
-  // Add this hook to get website settings
   const { data: websiteSettings } = useWebsiteSettings();
   
   const colors = websiteSettings?.color_settings || {};
@@ -696,8 +695,8 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps)
       <h4 
         className="font-semibold text-sm border-b pb-1 p-2 rounded-t-lg"
         style={{
-          backgroundColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
-          borderColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
+          backgroundColor: `rgb(${colors.schedule_pto_bg || '230,255,242'})`,
+          borderColor: `rgb(${colors.schedule_pto_bg || '230,255,242'})`,
           color: `rgb(${colors.schedule_pto_text || '0,100,0'})`
         }}
       >
@@ -708,8 +707,8 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps)
           key={ptoRecord.id} 
           className="border rounded-lg p-3"
           style={{
-            backgroundColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})/0.5`,
-            borderColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
+            backgroundColor: `rgb(${colors.schedule_pto_bg || '230,255,242'})/0.5`,
+            borderColor: `rgb(${colors.schedule_pto_bg || '230,255,242'})`,
           }}
         >
           <div className="flex items-start justify-between">

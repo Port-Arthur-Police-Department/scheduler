@@ -679,14 +679,35 @@ interface PTOSectionMobileProps {
   canEdit: boolean;
 }
 
+// In DailyScheduleViewMobile.tsx, update the PTOSectionMobile component:
+
 const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps) => {
+  // Add this hook to get website settings
+  const { data: websiteSettings } = useWebsiteSettings();
+  
+  const colors = websiteSettings?.color_settings || {};
+  
   return (
     <div className="space-y-2">
-      <h4 className="font-semibold text-sm border-b pb-1 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 p-2 rounded-t-lg">
+      <h4 
+        className="font-semibold text-sm border-b pb-1 p-2 rounded-t-lg"
+        style={{
+          backgroundColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
+          borderColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
+          color: `rgb(${colors.schedule_pto_text || '0,100,0'})`
+        }}
+      >
         {title}
       </h4>
       {ptoRecords.map((ptoRecord) => (
-        <div key={ptoRecord.id} className="border rounded-lg p-3 bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+        <div 
+          key={ptoRecord.id} 
+          className="border rounded-lg p-3"
+          style={{
+            backgroundColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})/0.5`,
+            borderColor: `rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})`,
+          }}
+        >
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="font-medium">{ptoRecord.name}</p>

@@ -1232,8 +1232,18 @@ recurringData
 // Categorize officers
 const supervisors = sortSupervisorsByRank(
   processedOfficers.filter(o => {
-    // ALWAYS include officers with supervisor positions in supervisors section
-    return o.position?.toLowerCase().includes('supervisor');
+    // Check by position OR by rank
+    const position = o.position?.toLowerCase() || '';
+    const rank = o.rank?.toLowerCase() || '';
+    
+    return (
+      position.includes('supervisor') ||
+      rank.includes('sergeant') ||
+      rank.includes('lieutenant') ||
+      rank.includes('captain') ||
+      rank.includes('chief') ||
+      rank.includes('commander')
+    );
   })
 );
 

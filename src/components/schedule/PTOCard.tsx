@@ -55,8 +55,6 @@ export const PTOCard = ({
     setEditNotesValue("");
   };
 
-  return (
-    // CHANGE THIS LINE: Remove bg-gray-50 and add style prop
 return (
   <div 
     className="flex items-center justify-between p-3"

@@ -141,20 +141,20 @@ export const OfficerSection = ({
         <div className={`space-y-2 p-2 ${sectionStyle.sectionBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
           {officers
             .map((officer) => (
-              <OfficerCard
-                key={`${officer.scheduleId}-${officer.type}`}
-                officer={officer}
-                canEdit={canEdit}
-                onSavePosition={onSavePosition}
-                onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
-                onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
-                onAssignPTO={onAssignPTO}
-                onRemove={onRemoveOfficer}
-                onPartnershipChange={onPartnershipChange}
-                isUpdating={isUpdating}
-                sectionType={sectionType}
-                backgroundColor={sectionStyle.sectionBg} // Pass the background color
-              />
+<OfficerCard
+	key={`${officer.scheduleId}-${officer.type}`}
+	officer={officer}
+	canEdit={canEdit}
+	onSavePosition={onSavePosition}
+	onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
+	onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
+	onAssignPTO={onAssignPTO}
+	onRemove={onRemoveOfficer}
+	onPartnershipChange={onPartnershipChange}
+	isUpdating={isUpdating}
+	sectionType={sectionType}
+	backgroundColor={`rgb(${sectionStyle.contentStyle.backgroundColor?.replace('rgb(', '').replace(')', '') || '248,249,250'})`} // PASS BACKGROUND COLOR
+/>
             ))
             .filter(Boolean)}
         </div>

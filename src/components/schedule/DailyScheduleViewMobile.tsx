@@ -474,33 +474,33 @@ const OfficerSectionMobile = ({
       case "special":
         return {
           headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-          headerBorder: "border-purple-200 dark:border-purple-800",
+          headerBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
           cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
-          cardBorder: "border-purple-200 dark:border-purple-800",
+          cardBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
           textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
         };
       case "supervisor":
         return {
           headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-          headerBorder: "border-blue-200 dark:border-blue-800",
+          headerBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
           cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
-          cardBorder: "border-blue-200 dark:border-blue-800",
+          cardBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
           textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
         };
       case "pto":
         return {
           headerBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
-          headerBorder: "border-green-200 dark:border-green-800",
+          headerBorder: `border-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
           cardBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]/50`,
-          cardBorder: "border-green-200 dark:border-green-800",
+          cardBorder: `border-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
           textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
         };
-      default: // regular
+      default: // regular (officers)
         return {
           headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-          headerBorder: "border-gray-200 dark:border-gray-800",
-          cardBg: "bg-white dark:bg-gray-900",
-          cardBorder: "border-gray-200 dark:border-gray-800",
+          headerBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+          cardBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]/50`,
+          cardBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
           textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
         };
     }
@@ -510,7 +510,13 @@ const OfficerSectionMobile = ({
 
   return (
     <div className="space-y-2">
-      <h4 className={`font-semibold text-sm border-b pb-1 ${sectionStyle.headerBg} ${sectionStyle.headerBorder} p-2 rounded-t-lg`}>
+      <h4 
+        className={`font-semibold text-sm border-b pb-1 p-2 rounded-t-lg ${sectionStyle.textColor}`}
+        style={{
+          backgroundColor: `rgb(${sectionStyle.headerBg.replace('bg-[rgb(', '').replace(')]', '')})`,
+          borderColor: `rgb(${sectionStyle.headerBorder.replace('border-[rgb(', '').replace(')]', '')})`
+        }}
+      >
         {title}
       </h4>
       {officers.map((officer) => {
@@ -519,7 +525,14 @@ const OfficerSectionMobile = ({
         const isProbationary = officer.rank === 'Probationary';
 
         return (
-          <div key={key} className={`border rounded-lg overflow-hidden ${sectionStyle.cardBg} ${sectionStyle.cardBorder}`}>
+          <div 
+            key={key} 
+            className="border rounded-lg overflow-hidden"
+            style={{
+              backgroundColor: `rgb(${sectionStyle.cardBg.replace('bg-[rgb(', '').replace('/50', '').replace(')]', '').trim()})`,
+              borderColor: `rgb(${sectionStyle.cardBorder.replace('border-[rgb(', '').replace(')]', '')})`
+            }}
+          >
             {/* Officer Header */}
             <div 
               className={`p-3 flex items-center justify-between transition-colors ${isExpanded ? sectionStyle.headerBg : 'active:bg-muted/50'}`}

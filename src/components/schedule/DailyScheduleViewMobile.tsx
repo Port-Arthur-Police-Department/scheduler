@@ -31,6 +31,7 @@ import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { getScheduleData } from "./DailyScheduleView";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
 interface DailyScheduleViewMobileProps {
   selectedDate: Date;
@@ -461,28 +462,55 @@ const OfficerSectionMobile = ({
   sectionType = "regular"
 }: OfficerSectionMobileProps) => {
   // Define background colors based on section type
+const OfficerSectionMobile = ({
+  title,
+  officers,
+  expandedOfficers,
+  onToggleOfficer,
+  onOfficerAction,
+  canEdit,
+  sectionType = "regular"
+}: OfficerSectionMobileProps) => {
+  // Add this hook to get website settings
+  const { data: websiteSettings } = useWebsiteSettings();
+  
+  // Define background colors based on section type
   const getSectionStyle = () => {
+    // Get colors from settings or use defaults
+    const colors = websiteSettings?.color_settings || {};
+    
     switch (sectionType) {
       case "special":
         return {
-          headerBg: "bg-purple-50 dark:bg-purple-900/20",
+          headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
           headerBorder: "border-purple-200 dark:border-purple-800",
-          cardBg: "bg-purple-50/50 dark:bg-purple-900/10",
-          cardBorder: "border-purple-200 dark:border-purple-800"
+          cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
+          cardBorder: "border-purple-200 dark:border-purple-800",
+          textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
         };
       case "supervisor":
         return {
-          headerBg: "bg-blue-50 dark:bg-blue-900/20",
+          headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
           headerBorder: "border-blue-200 dark:border-blue-800",
-          cardBg: "bg-blue-50/50 dark:bg-blue-900/10",
-          cardBorder: "border-blue-200 dark:border-blue-800"
+          cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
+          cardBorder: "border-blue-200 dark:border-blue-800",
+          textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
+        };
+      case "pto":
+        return {
+          headerBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]`,
+          headerBorder: "border-green-200 dark:border-green-800",
+          cardBg: `bg-[rgb(${colors.schedule_pto_bg_mobile || colors.schedule_pto_bg || '230,255,242'})]/50`,
+          cardBorder: "border-green-200 dark:border-green-800",
+          textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
         };
       default: // regular
         return {
-          headerBg: "bg-gray-50 dark:bg-gray-900/20",
+          headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
           headerBorder: "border-gray-200 dark:border-gray-800",
           cardBg: "bg-white dark:bg-gray-900",
-          cardBorder: "border-gray-200 dark:border-gray-800"
+          cardBorder: "border-gray-200 dark:border-gray-800",
+          textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
         };
     }
   };

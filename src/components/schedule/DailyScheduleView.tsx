@@ -1211,23 +1211,6 @@ recurringData
       }
     }
 
-    // Get PTO records for this shift
-    const shiftPTORecords = ptoExceptions?.filter(e => 
-      e.shift_type_id === shift.id
-    ).map(e => ({
-      id: e.id,
-      officerId: e.officer_id,
-      name: e.profiles?.full_name || "Unknown",
-      badge: e.profiles?.badge_number,
-      rank: e.profiles?.rank,
-      ptoType: e.reason || "PTO",
-      startTime: e.custom_start_time || shift.start_time,
-      endTime: e.custom_end_time || shift.end_time,
-      isFullShift: !e.custom_start_time && !e.custom_end_time,
-      shiftTypeId: shift.id,
-      unitNumber: e.unit_number,
-      notes: e.notes
-    })) || [];
 
 // Function to check if officer is a supervisor by rank
 const isSupervisorByRank = (rank: string | undefined | null) => {

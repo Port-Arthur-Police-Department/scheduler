@@ -19,6 +19,8 @@ import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
+import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -35,6 +37,7 @@ export const DailyScheduleView = ({
   userRole = 'officer'
 }: DailyScheduleViewProps) => {
   console.log("🔄 DailyScheduleView RENDERED - User Role:", userRole, "Filter Shift:", filterShiftId);
+  const { data: websiteSettings } = useWebsiteSettings();
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
@@ -504,6 +507,7 @@ const handleEditPTO = (ptoRecord: any) => {
                 onPartnershipChange={handlePartnershipChange} // NEW: Added partnership handler
                 isUpdating={updateScheduleMutation.isPending}
                 sectionType="regular"
+                colorSettings={websiteSettings?.color_settings}
               />
 
               <OfficerSection
@@ -530,6 +534,7 @@ const handleEditPTO = (ptoRecord: any) => {
                 onPartnershipChange={handlePartnershipChange} // NEW: Added partnership handler
                 isUpdating={updateScheduleMutation.isPending}
                 sectionType="regular"
+                colorSettings={websiteSettings?.color_settings}
               />
 
 {/* Special Assignment Section */}
@@ -558,6 +563,7 @@ const handleEditPTO = (ptoRecord: any) => {
     onPartnershipChange={handlePartnershipChange}
     isUpdating={updateScheduleMutation.isPending}
     sectionType="special"
+    colorSettings={websiteSettings?.color_settings}
   />
 )}
 
@@ -573,6 +579,7 @@ const handleEditPTO = (ptoRecord: any) => {
     onRemovePTO={removePTOMutation.mutate}
     isUpdating={updatePTODetailsMutation.isPending}
     sectionType="pto"
+    colorSettings={websiteSettings?.color_settings}
   />
 )}
             </div>

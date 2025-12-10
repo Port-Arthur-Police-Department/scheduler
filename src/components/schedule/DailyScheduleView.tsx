@@ -37,9 +37,11 @@ export const DailyScheduleView = ({
   userRole = 'officer'
 }: DailyScheduleViewProps) => {
   console.log("🔄 DailyScheduleView RENDERED - User Role:", userRole, "Filter Shift:", filterShiftId);
-  const { data: websiteSettings } = useWebsiteSettings();
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
+  
+  // ADD THIS LINE:
+  const { data: websiteSettings } = useWebsiteSettings();
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editPosition, setEditPosition] = useState("");
   const [customPosition, setCustomPosition] = useState("");

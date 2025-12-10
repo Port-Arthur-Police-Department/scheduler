@@ -142,6 +142,8 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   // Notification display settings
   show_pto_balances: false,
   pto_balances_visible: false,
+
+  enable_supervisor_pto_notifications: true, // Add this line
 };
 
 interface WebsiteSettingsProps {
@@ -835,6 +837,28 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             disabled={updateSettingsMutation.isPending}
           />
         </div>
+{/* Supervisor PTO Notification Settings */}
+        <div className={`flex items-center justify-between ${!settings?.enable_notifications ? 'opacity-60' : ''}`}>
+  <div className="space-y-0.5">
+    <Label 
+      htmlFor="supervisor-pto-notifications-toggle" 
+      className={`text-base ${!settings?.enable_notifications ? 'text-muted-foreground' : ''}`}
+    >
+      Supervisor PTO Notifications
+    </Label>
+    <div className={`text-sm ${!settings?.enable_notifications ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
+      Notify supervisors when other supervisors request PTO
+    </div>
+  </div>
+  <Switch
+    id="supervisor-pto-notifications-toggle"
+    checked={settings?.enable_supervisor_pto_notifications !== false}
+    onCheckedChange={(checked) => 
+      handleToggle('enable_supervisor_pto_notifications', checked)
+    }
+    disabled={updateSettingsMutation.isPending || !settings?.enable_notifications}
+  />
+</div>
 
         {/* Show a message when notifications are disabled */}
         {!settings?.enable_notifications && (

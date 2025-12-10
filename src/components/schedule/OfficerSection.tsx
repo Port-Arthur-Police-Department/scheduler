@@ -49,72 +49,72 @@ export const OfficerSection = ({
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
 
   // Function to get section style based on type and settings
-  const getSectionStyle = () => {
-    // Default colors if no settings
-    const defaultColors = {
-      schedule_supervisor_bg: "240,248,255",
-      schedule_supervisor_text: "25,25,112",
-      schedule_officer_bg: "248,249,250",
-      schedule_officer_text: "33,37,41",
-      schedule_special_bg: "243,229,245",
-      schedule_special_text: "102,51,153",
-      schedule_pto_bg: "230,255,242",
-      schedule_pto_text: "0,100,0"
-    };
-
-    const colors = colorSettings || defaultColors;
-    
-    switch (sectionType) {
-      case "special":
-        return {
-          headerStyle: {
-            backgroundColor: `rgb(${colors.schedule_special_bg})`,
-            color: `rgb(${colors.schedule_special_text})`,
-            borderColor: `rgb(${colors.schedule_special_bg})`
-          },
-          contentStyle: {
-            backgroundColor: `rgb(${colors.schedule_special_bg})`
-          }
-        };
-      case "pto":
-        return {
-          headerStyle: {
-            backgroundColor: `rgb(${colors.schedule_pto_bg})`,
-            color: `rgb(${colors.schedule_pto_text})`,
-            borderColor: `rgb(${colors.schedule_pto_bg})`
-          },
-          contentStyle: {
-            backgroundColor: `rgb(${colors.schedule_pto_bg})`
-          }
-        };
-      case "regular":
-      default:
-        // Check if this is likely a supervisor section by title
-        if (title.toLowerCase().includes('supervisor')) {
-          return {
-            headerStyle: {
-              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`,
-              color: `rgb(${colors.schedule_supervisor_text})`,
-              borderColor: `rgb(${colors.schedule_supervisor_bg})`
-            },
-            contentStyle: {
-              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`
-            }
-          };
-        } else {
-          return {
-            headerStyle: {
-              backgroundColor: `rgb(${colors.schedule_officer_bg})`,
-              color: `rgb(${colors.schedule_officer_text})`,
-              borderColor: `rgb(${colors.schedule_officer_bg})`
-            },
-            contentStyle: {
-              backgroundColor: `rgb(${colors.schedule_officer_bg})`
-            }
-          };
-        }
-    }
+const getSectionStyle = () => {
+  // Default colors if no settings
+  const defaultColors = {
+    schedule_supervisor_bg: "240,248,255",
+    schedule_supervisor_text: "25,25,112",
+    schedule_officer_bg: "248,249,250",
+    schedule_officer_text: "33,37,41",
+    schedule_special_bg: "243,229,245",
+    schedule_special_text: "102,51,153",
+    schedule_pto_bg: "230,255,242",
+    schedule_pto_text: "0,100,0"
   };
+
+  const colors = colorSettings || defaultColors;
+  
+  switch (sectionType) {
+    case "special":
+      return {
+        headerStyle: {
+          backgroundColor: `rgb(${colors.schedule_special_bg})`,
+          color: `rgb(${colors.schedule_special_text})`,
+          borderColor: `rgb(${colors.schedule_special_bg})`
+        },
+        contentStyle: {
+          backgroundColor: `rgb(${colors.schedule_special_bg})`
+        }
+      };
+    case "pto":
+      return {
+        headerStyle: {
+          backgroundColor: `rgb(${colors.schedule_pto_bg})`,
+          color: `rgb(${colors.schedule_pto_text})`,
+          borderColor: `rgb(${colors.schedule_pto_bg})`
+        },
+        contentStyle: {
+          backgroundColor: `rgb(${colors.schedule_pto_bg})`
+        }
+      };
+    case "regular":
+    default:
+      // Check if this is likely a supervisor section by title
+      if (title.toLowerCase().includes('supervisor')) {
+        return {
+          headerStyle: {
+            backgroundColor: `rgb(${colors.schedule_supervisor_bg})`,
+            color: `rgb(${colors.schedule_supervisor_text})`,
+            borderColor: `rgb(${colors.schedule_supervisor_bg})`
+          },
+          contentStyle: {
+            backgroundColor: `rgb(${colors.schedule_supervisor_bg})`
+          }
+        };
+      } else {
+        return {
+          headerStyle: {
+            backgroundColor: `rgb(${colors.schedule_officer_bg})`,
+            color: `rgb(${colors.schedule_officer_text})`,
+            borderColor: `rgb(${colors.schedule_officer_bg})`
+          },
+          contentStyle: {
+            backgroundColor: `rgb(${colors.schedule_officer_bg})`
+          }
+        };
+      }
+  }
+};
 
   const sectionStyle = getSectionStyle();
 

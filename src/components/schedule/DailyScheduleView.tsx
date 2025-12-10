@@ -532,49 +532,49 @@ const handleEditPTO = (ptoRecord: any) => {
                 sectionType="regular"
               />
 
-              {/* Special Assignment Section */}
-              {shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
-                <OfficerSection
-                  title="Special Assignments"
-                  officers={shiftData.specialAssignmentOfficers}
-                  minCount={0}
-                  currentCount={shiftData.specialAssignmentOfficers.length}
-                  isUnderstaffed={false}
-                  canEdit={canEdit}
-                  onSavePosition={handleSavePosition}
-                  onSaveUnitNumber={handleSaveUnitNumber}
-                  onSaveNotes={handleSaveNotes}
-                  onAssignPTO={(officer) => {
-                    setSelectedOfficer({
-                      officerId: officer.officerId,
-                      name: officer.name,
-                      scheduleId: officer.scheduleId,
-                      type: officer.type,
-                    });
-                    setSelectedShift(officer.shift);
-                    setPtoDialogOpen(true);
-                  }}
-                  onRemoveOfficer={removeOfficerMutation.mutate}
-                  onPartnershipChange={handlePartnershipChange} // NEW: Added partnership handler
-                  isUpdating={updateScheduleMutation.isPending}
-                  sectionType="special"
-                />
-              )}
+{/* Special Assignment Section */}
+{shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
+  <OfficerSection
+    title="Special Assignments"
+    officers={shiftData.specialAssignmentOfficers}
+    minCount={0}
+    currentCount={shiftData.specialAssignmentOfficers.length}
+    isUnderstaffed={false}
+    canEdit={canEdit}
+    onSavePosition={handleSavePosition}
+    onSaveUnitNumber={handleSaveUnitNumber}
+    onSaveNotes={handleSaveNotes}
+    onAssignPTO={(officer) => {
+      setSelectedOfficer({
+        officerId: officer.officerId,
+        name: officer.name,
+        scheduleId: officer.scheduleId,
+        type: officer.type,
+      });
+      setSelectedShift(officer.shift);
+      setPtoDialogOpen(true);
+    }}
+    onRemoveOfficer={removeOfficerMutation.mutate}
+    onPartnershipChange={handlePartnershipChange}
+    isUpdating={updateScheduleMutation.isPending}
+    sectionType="special"
+  />
+)}
 
-              {/* PTO Section */}
-              {shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
-                <OfficerSection
-                  title="Time Off"
-                  ptoRecords={shiftData.ptoRecords}
-                  canEdit={canEdit}
-                  onSaveUnitNumber={handleSavePTOUnitNumber}
-                  onSaveNotes={handleSavePTONotes}
-                  onEditPTO={handleEditPTO}
-                  onRemovePTO={removePTOMutation.mutate}
-                  isUpdating={updatePTODetailsMutation.isPending}
-                  sectionType="pto"
-                />
-              )}
+{/* PTO Section */}
+{shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
+  <OfficerSection
+    title="Time Off"
+    ptoRecords={shiftData.ptoRecords}
+    canEdit={canEdit}
+    onSaveUnitNumber={handleSavePTOUnitNumber}
+    onSaveNotes={handleSavePTONotes}
+    onEditPTO={handleEditPTO}
+    onRemovePTO={removePTOMutation.mutate}
+    isUpdating={updatePTODetailsMutation.isPending}
+    sectionType="pto"
+  />
+)}
             </div>
           );
         })}
@@ -1229,84 +1229,128 @@ recurringData
       notes: e.notes
     })) || [];
 
-    // Function to check if officer is a supervisor by rank
-    const isSupervisorByRank = (rank: string | undefined | null) => {
-      if (!rank) return false;
-      const rankLower = rank.toLowerCase();
-      return (
-        rankLower.includes('sergeant') ||
-        rankLower.includes('lieutenant') ||
-        rankLower.includes('captain') ||
-        rankLower.includes('chief') ||
-        rankLower.includes('commander') ||
-        rankLower.includes('supervisor') // Some might have "Supervisor" in rank
-      );
-    };
+// Function to check if officer is a supervisor by rank
+const isSupervisorByRank = (rank: string | undefined | null) => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  return (
+    rankLower.includes('sergeant') ||
+    rankLower.includes('lieutenant') ||
+    rankLower.includes('captain') ||
+    rankLower.includes('chief') ||
+    rankLower.includes('commander') ||
+    rankLower.includes('supervisor') // Some might have "Supervisor" in rank
+  );
+};
 
-    // First, identify special assignment officers (excluding those with full day PTO)
-    const specialAssignmentOfficers = processedOfficers.filter(o => {
-      // Skip officers with full day PTO (they go to PTO section)
-      if (o.hasPTO && o.ptoData?.isFullShift) return false;
-      
-      const position = o.position?.toLowerCase() || '';
-      const isSpecialAssignment = position.includes('other') || 
-             (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-      
-      // Don't include supervisors in special assignments
-      const hasSupervisorPosition = position.includes('supervisor');
-      const hasSupervisorRank = isSupervisorByRank(o.rank);
-      const isSupervisor = hasSupervisorPosition || hasSupervisorRank;
-      
-      return isSpecialAssignment && !isSupervisor;
-    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+// FIRST: Get all officers with full day PTO for the PTO section
+const shiftPTORecords = ptoExceptions?.filter(e => 
+  e.shift_type_id === shift.id
+).map(e => ({
+  id: e.id,
+  officerId: e.officer_id,
+  name: e.profiles?.full_name || "Unknown",
+  badge: e.profiles?.badge_number,
+  rank: e.profiles?.rank,
+  ptoType: e.reason || "PTO",
+  startTime: e.custom_start_time || shift.start_time,
+  endTime: e.custom_end_time || shift.end_time,
+  isFullShift: !e.custom_start_time && !e.custom_end_time,
+  shiftTypeId: shift.id,
+  unitNumber: e.unit_number,
+  notes: e.notes
+})) || [];
 
-    // Next, identify supervisors (excluding those with full day PTO or special assignments)
-    const supervisors = sortSupervisorsByRank(
-      processedOfficers.filter(o => {
-        // Skip officers with full day PTO
-        if (o.hasPTO && o.ptoData?.isFullShift) return false;
-        
-        // Skip special assignment officers
-        const position = o.position?.toLowerCase() || '';
-        const isSpecialAssignment = position.includes('other') || 
-               (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-        if (isSpecialAssignment) return false;
-        
-        // Check by position OR by rank
-        const hasSupervisorPosition = position.includes('supervisor');
-        const hasSupervisorRank = isSupervisorByRank(o.rank);
-        
-        return hasSupervisorPosition || hasSupervisorRank;
-      })
-    );
+// SECOND: Identify special assignment officers (INCLUDING supervisors with special assignments)
+const specialAssignmentOfficers = processedOfficers.filter(o => {
+  // Skip officers with full day PTO (they go to PTO section)
+  if (o.hasPTO && o.ptoData?.isFullShift) return false;
+  
+  const position = o.position?.toLowerCase() || '';
+  const isSpecialAssignment = position.includes('other') || 
+         (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+  
+  // Include ALL officers with special assignments, including supervisors
+  return isSpecialAssignment;
+}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-    // Finally, regular officers (everyone else who's not in the above categories)
-    const regularOfficers = processedOfficers.filter(o => {
-      // Skip officers with full day PTO
-      if (o.hasPTO && o.ptoData?.isFullShift) return false;
-      
-      // Skip special assignment officers
-      const position = o.position?.toLowerCase() || '';
-      const isSpecialAssignment = position.includes('other') || 
-             (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-      if (isSpecialAssignment) return false;
-      
-      // Skip supervisors
-      const hasSupervisorPosition = position.includes('supervisor');
-      const hasSupervisorRank = isSupervisorByRank(o.rank);
-      if (hasSupervisorPosition || hasSupervisorRank) return false;
-      
-      return true;
-    }).sort((a, b) => {
-      const aMatch = a.position?.match(/district\s*(\d+)/i);
-      const bMatch = b.position?.match(/district\s*(\d+)/i);
-      
-      if (aMatch && bMatch) {
-        return parseInt(aMatch[1]) - parseInt(bMatch[1]);
-      }
-      
-      return (a.position || '').localeCompare(b.position || '');
-    });
+// THIRD: Identify supervisors (excluding those with full day PTO or special assignments)
+const supervisors = sortSupervisorsByRank(
+  processedOfficers.filter(o => {
+    // Skip officers with full day PTO
+    if (o.hasPTO && o.ptoData?.isFullShift) return false;
+    
+    // Skip special assignment officers
+    const position = o.position?.toLowerCase() || '';
+    const isSpecialAssignment = position.includes('other') || 
+           (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+    if (isSpecialAssignment) return false;
+    
+    // Check by position OR by rank
+    const hasSupervisorPosition = position.includes('supervisor');
+    const hasSupervisorRank = isSupervisorByRank(o.rank);
+    
+    return hasSupervisorPosition || hasSupervisorRank;
+  })
+);
+
+// FINALLY: Regular officers (everyone else who's not in the above categories)
+const regularOfficers = processedOfficers.filter(o => {
+  // Skip officers with full day PTO
+  if (o.hasPTO && o.ptoData?.isFullShift) return false;
+  
+  // Skip special assignment officers
+  const position = o.position?.toLowerCase() || '';
+  const isSpecialAssignment = position.includes('other') || 
+         (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+  if (isSpecialAssignment) return false;
+  
+  // Skip supervisors
+  const hasSupervisorPosition = position.includes('supervisor');
+  const hasSupervisorRank = isSupervisorByRank(o.rank);
+  if (hasSupervisorPosition || hasSupervisorRank) return false;
+  
+  return true;
+}).sort((a, b) => {
+  const aMatch = a.position?.match(/district\s*(\d+)/i);
+  const bMatch = b.position?.match(/district\s*(\d+)/i);
+  
+  if (aMatch && bMatch) {
+    return parseInt(aMatch[1]) - parseInt(bMatch[1]);
+  }
+  
+  return (a.position || '').localeCompare(b.position || '');
+});
+
+// Debug logging
+console.log("🔍 DEBUG - Officer categorization results:", {
+  shiftName: shift.name,
+  totalProcessedOfficers: processedOfficers.length,
+  specialAssignmentCount: specialAssignmentOfficers.length,
+  supervisorCount: supervisors.length,
+  regularOfficerCount: regularOfficers.length,
+  ptoRecordCount: shiftPTORecords.length,
+  specialAssignmentOfficers: specialAssignmentOfficers.map(o => ({
+    name: o.name,
+    position: o.position,
+    rank: o.rank,
+    isSupervisor: isSupervisorByRank(o.rank) || o.position?.toLowerCase().includes('supervisor')
+  })),
+  supervisorsWithSpecialAssignments: processedOfficers.filter(o => {
+    const position = o.position?.toLowerCase() || '';
+    const isSpecialAssignment = position.includes('other') || 
+           (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+    const hasSupervisorPosition = position.includes('supervisor');
+    const hasSupervisorRank = isSupervisorByRank(o.rank);
+    return (hasSupervisorPosition || hasSupervisorRank) && isSpecialAssignment;
+  }).map(o => ({ 
+    name: o.name, 
+    position: o.position, 
+    rank: o.rank,
+    hasPTO: o.hasPTO,
+    isFullShiftPTO: o.ptoData?.isFullShift 
+  }))
+});
 
     // Calculate staffing counts
     const countedSupervisors = supervisors.filter(supervisor => {

@@ -13,6 +13,7 @@ interface PTOCardProps {
   onEdit: (ptoRecord: any) => void;
   onRemove: (ptoRecord: any) => void;
   isUpdating: boolean;
+  backgroundColor?: string; // ADD THIS LINE
 }
 
 export const PTOCard = ({
@@ -22,7 +23,8 @@ export const PTOCard = ({
   onSaveNotes,
   onEdit,
   onRemove,
-  isUpdating
+  isUpdating,
+  backgroundColor // ADD THIS LINE
 }: PTOCardProps) => {
   const [editingUnitNumber, setEditingUnitNumber] = useState<string | null>(null);
   const [editUnitValue, setEditUnitValue] = useState("");
@@ -54,7 +56,11 @@ export const PTOCard = ({
   };
 
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md">
+    // CHANGE THIS LINE: Remove bg-gray-50 and add style prop
+    <div 
+      className="flex items-center justify-between p-3 border border-gray-200 rounded-md"
+      style={backgroundColor ? { backgroundColor } : {}}
+    >
       {/* Officer Info - Left Side */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1">

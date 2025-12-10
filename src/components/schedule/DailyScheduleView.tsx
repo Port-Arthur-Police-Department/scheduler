@@ -1229,50 +1229,84 @@ recurringData
       notes: e.notes
     })) || [];
 
-// Categorize officers
-const supervisors = sortSupervisorsByRank(
-  processedOfficers.filter(o => {
-    // Check by position OR by rank
-    const position = o.position?.toLowerCase() || '';
-    const rank = o.rank?.toLowerCase() || '';
-    
-    return (
-      position.includes('supervisor') ||
-      rank.includes('sergeant') ||
-      rank.includes('lieutenant') ||
-      rank.includes('captain') ||
-      rank.includes('chief') ||
-      rank.includes('commander')
+    // Function to check if officer is a supervisor by rank
+    const isSupervisorByRank = (rank: string | undefined | null) => {
+      if (!rank) return false;
+      const rankLower = rank.toLowerCase();
+      return (
+        rankLower.includes('sergeant') ||
+        rankLower.includes('lieutenant') ||
+        rankLower.includes('captain') ||
+        rankLower.includes('chief') ||
+        rankLower.includes('commander') ||
+        rankLower.includes('supervisor') // Some might have "Supervisor" in rank
+      );
+    };
+
+    // First, identify special assignment officers (excluding those with full day PTO)
+    const specialAssignmentOfficers = processedOfficers.filter(o => {
+      // Skip officers with full day PTO (they go to PTO section)
+      if (o.hasPTO && o.ptoData?.isFullShift) return false;
+      
+      const position = o.position?.toLowerCase() || '';
+      const isSpecialAssignment = position.includes('other') || 
+             (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+      
+      // Don't include supervisors in special assignments
+      const hasSupervisorPosition = position.includes('supervisor');
+      const hasSupervisorRank = isSupervisorByRank(o.rank);
+      const isSupervisor = hasSupervisorPosition || hasSupervisorRank;
+      
+      return isSpecialAssignment && !isSupervisor;
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // Next, identify supervisors (excluding those with full day PTO or special assignments)
+    const supervisors = sortSupervisorsByRank(
+      processedOfficers.filter(o => {
+        // Skip officers with full day PTO
+        if (o.hasPTO && o.ptoData?.isFullShift) return false;
+        
+        // Skip special assignment officers
+        const position = o.position?.toLowerCase() || '';
+        const isSpecialAssignment = position.includes('other') || 
+               (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+        if (isSpecialAssignment) return false;
+        
+        // Check by position OR by rank
+        const hasSupervisorPosition = position.includes('supervisor');
+        const hasSupervisorRank = isSupervisorByRank(o.rank);
+        
+        return hasSupervisorPosition || hasSupervisorRank;
+      })
     );
-  })
-);
 
-const specialAssignmentOfficers = processedOfficers.filter(o => {
-  const position = o.position?.toLowerCase() || '';
-  const isSpecialAssignment = position.includes('other') || 
-         (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-  
-  // Don't include supervisors in special assignments
-  const isSupervisor = o.position?.toLowerCase().includes('supervisor');
-  
-  return isSpecialAssignment && !isSupervisor;
-}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-const regularOfficers = processedOfficers.filter(o => {
-  // Exclude supervisors and special assignments
-  const isSupervisor = o.position?.toLowerCase().includes('supervisor');
-  
-  return !isSupervisor && !specialAssignmentOfficers.includes(o);
-}).sort((a, b) => {
-  const aMatch = a.position?.match(/district\s*(\d+)/i);
-  const bMatch = b.position?.match(/district\s*(\d+)/i);
-  
-  if (aMatch && bMatch) {
-    return parseInt(aMatch[1]) - parseInt(bMatch[1]);
-  }
-  
-  return (a.position || '').localeCompare(b.position || '');
-});
+    // Finally, regular officers (everyone else who's not in the above categories)
+    const regularOfficers = processedOfficers.filter(o => {
+      // Skip officers with full day PTO
+      if (o.hasPTO && o.ptoData?.isFullShift) return false;
+      
+      // Skip special assignment officers
+      const position = o.position?.toLowerCase() || '';
+      const isSpecialAssignment = position.includes('other') || 
+             (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+      if (isSpecialAssignment) return false;
+      
+      // Skip supervisors
+      const hasSupervisorPosition = position.includes('supervisor');
+      const hasSupervisorRank = isSupervisorByRank(o.rank);
+      if (hasSupervisorPosition || hasSupervisorRank) return false;
+      
+      return true;
+    }).sort((a, b) => {
+      const aMatch = a.position?.match(/district\s*(\d+)/i);
+      const bMatch = b.position?.match(/district\s*(\d+)/i);
+      
+      if (aMatch && bMatch) {
+        return parseInt(aMatch[1]) - parseInt(bMatch[1]);
+      }
+      
+      return (a.position || '').localeCompare(b.position || '');
+    });
 
     // Calculate staffing counts
     const countedSupervisors = supervisors.filter(supervisor => {
@@ -1293,7 +1327,8 @@ const regularOfficers = processedOfficers.filter(o => {
       countedOfficers: countedOfficers.length,
       ppos: regularOfficers.filter(o => o.isPPO).length,
       fullDayPTOs: processedOfficers.filter(o => o.hasPTO && o.ptoData?.isFullShift).length,
-      partnerships: processedOfficers.filter(o => o.isCombinedPartnership).length
+      partnerships: processedOfficers.filter(o => o.isCombinedPartnership).length,
+      specialAssignments: specialAssignmentOfficers.length
     });
 
     return {

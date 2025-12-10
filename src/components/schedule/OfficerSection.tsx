@@ -43,7 +43,7 @@ export const OfficerSection = ({
   onPartnershipChange,
   isUpdating = false,
   sectionType = "regular",
-  colorSettings // Add this
+  colorSettings
 }: OfficerSectionProps) => {
   const isPTOSection = sectionType === "pto";
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
@@ -59,8 +59,7 @@ export const OfficerSection = ({
       schedule_special_bg: "243,229,245",
       schedule_special_text: "102,51,153",
       schedule_pto_bg: "230,255,242",
-      schedule_pto_text: "0,100,0",
-      schedule_pto_bg_mobile: "230,255,242"
+      schedule_pto_text: "0,100,0"
     };
 
     const colors = colorSettings || defaultColors;
@@ -68,34 +67,50 @@ export const OfficerSection = ({
     switch (sectionType) {
       case "special":
         return {
-          headerBg: `bg-[rgb(${colors.schedule_special_bg})]`,
-          headerText: `text-[rgb(${colors.schedule_special_text})]`,
-          borderColor: "border-purple-200 dark:border-purple-800",
-          sectionBg: `bg-[rgb(${colors.schedule_special_bg})]`
+          headerStyle: {
+            backgroundColor: `rgb(${colors.schedule_special_bg})`,
+            color: `rgb(${colors.schedule_special_text})`,
+            borderColor: `rgb(${colors.schedule_special_bg})`
+          },
+          contentStyle: {
+            backgroundColor: `rgb(${colors.schedule_special_bg})`
+          }
         };
       case "pto":
         return {
-          headerBg: `bg-[rgb(${colors.schedule_pto_bg})]`,
-          headerText: `text-[rgb(${colors.schedule_pto_text})]`,
-          borderColor: "border-green-200 dark:border-green-800",
-          sectionBg: `bg-[rgb(${colors.schedule_pto_bg})]`
+          headerStyle: {
+            backgroundColor: `rgb(${colors.schedule_pto_bg})`,
+            color: `rgb(${colors.schedule_pto_text})`,
+            borderColor: `rgb(${colors.schedule_pto_bg})`
+          },
+          contentStyle: {
+            backgroundColor: `rgb(${colors.schedule_pto_bg})`
+          }
         };
       case "regular":
       default:
         // Check if this is likely a supervisor section by title
         if (title.toLowerCase().includes('supervisor')) {
           return {
-            headerBg: `bg-[rgb(${colors.schedule_supervisor_bg})]`,
-            headerText: `text-[rgb(${colors.schedule_supervisor_text})]`,
-            borderColor: "border-blue-200 dark:border-blue-800",
-            sectionBg: `bg-[rgb(${colors.schedule_supervisor_bg})]`
+            headerStyle: {
+              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`,
+              color: `rgb(${colors.schedule_supervisor_text})`,
+              borderColor: `rgb(${colors.schedule_supervisor_bg})`
+            },
+            contentStyle: {
+              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`
+            }
           };
         } else {
           return {
-            headerBg: `bg-[rgb(${colors.schedule_officer_bg})]`,
-            headerText: `text-[rgb(${colors.schedule_officer_text})]`,
-            borderColor: "border-gray-200 dark:border-gray-800",
-            sectionBg: `bg-[rgb(${colors.schedule_officer_bg})]`
+            headerStyle: {
+              backgroundColor: `rgb(${colors.schedule_officer_bg})`,
+              color: `rgb(${colors.schedule_officer_text})`,
+              borderColor: `rgb(${colors.schedule_officer_bg})`
+            },
+            contentStyle: {
+              backgroundColor: `rgb(${colors.schedule_officer_bg})`
+            }
           };
         }
     }
@@ -103,10 +118,30 @@ export const OfficerSection = ({
 
   const sectionStyle = getSectionStyle();
 
+  // Get the background color safely
+  const getBackgroundColor = () => {
+    if (!sectionStyle.contentStyle || !sectionStyle.contentStyle.backgroundColor) {
+      // Return default based on section type
+      const colors = colorSettings || defaultColors;
+      if (sectionType === "special") return `rgb(${colors.schedule_special_bg})`;
+      if (sectionType === "pto") return `rgb(${colors.schedule_pto_bg})`;
+      if (title.toLowerCase().includes('supervisor')) return `rgb(${colors.schedule_supervisor_bg})`;
+      return `rgb(${colors.schedule_officer_bg})`;
+    }
+    return sectionStyle.contentStyle.backgroundColor;
+  };
+
+  const backgroundColor = getBackgroundColor();
+
   return (
     <div className="space-y-2">
-      <div className={`flex items-center justify-between border-b pb-2 ${sectionStyle.headerBg} ${sectionStyle.borderColor} px-3 py-2 rounded-t-lg`}>
-        <h4 className={`font-semibold text-sm ${sectionStyle.headerText}`}>{title}</h4>
+      <div 
+        className="flex items-center justify-between border-b pb-2 px-3 py-2 rounded-t-lg"
+        style={sectionStyle.headerStyle}
+      >
+        <h4 className="font-semibold text-sm" style={{ color: sectionStyle.headerStyle?.color || 'inherit' }}>
+          {title}
+        </h4>
         {minCount !== undefined && currentCount !== undefined ? (
           <Badge variant={isUnderstaffed ? "destructive" : "outline"}>
             {currentCount} / {minCount}
@@ -123,7 +158,10 @@ export const OfficerSection = ({
           No {title.toLowerCase()} scheduled
         </p>
       ) : isPTOSection ? (
-        <div className={`space-y-2 p-2 ${sectionStyle.sectionBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
+        <div 
+          className="space-y-2 p-2 rounded-b-lg border"
+          style={{ backgroundColor, borderColor: sectionStyle.headerStyle?.borderColor }}
+        >
           {ptoRecords.map((ptoRecord) => (
             <PTOCard
               key={ptoRecord.id}
@@ -138,23 +176,26 @@ export const OfficerSection = ({
           ))}
         </div>
       ) : (
-        <div className={`space-y-2 p-2 ${sectionStyle.sectionBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
+        <div 
+          className="space-y-2 p-2 rounded-b-lg border"
+          style={{ backgroundColor, borderColor: sectionStyle.headerStyle?.borderColor }}
+        >
           {officers
             .map((officer) => (
-<OfficerCard
-	key={`${officer.scheduleId}-${officer.type}`}
-	officer={officer}
-	canEdit={canEdit}
-	onSavePosition={onSavePosition}
-	onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
-	onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
-	onAssignPTO={onAssignPTO}
-	onRemove={onRemoveOfficer}
-	onPartnershipChange={onPartnershipChange}
-	isUpdating={isUpdating}
-	sectionType={sectionType}
-	backgroundColor={`rgb(${sectionStyle.contentStyle.backgroundColor?.replace('rgb(', '').replace(')', '') || '248,249,250'})`} // PASS BACKGROUND COLOR
-/>
+              <OfficerCard
+                key={`${officer.scheduleId}-${officer.type}`}
+                officer={officer}
+                canEdit={canEdit}
+                onSavePosition={onSavePosition}
+                onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
+                onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
+                onAssignPTO={onAssignPTO}
+                onRemove={onRemoveOfficer}
+                onPartnershipChange={onPartnershipChange}
+                isUpdating={isUpdating}
+                sectionType={sectionType}
+                backgroundColor={backgroundColor}
+              />
             ))
             .filter(Boolean)}
         </div>

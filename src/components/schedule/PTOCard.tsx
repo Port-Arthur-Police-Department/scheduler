@@ -57,10 +57,11 @@ export const PTOCard = ({
 
   return (
     // CHANGE THIS LINE: Remove bg-gray-50 and add style prop
-    <div 
-      className="flex items-center justify-between p-3 border border-gray-200 rounded-md"
-      style={backgroundColor ? { backgroundColor } : {}}
-    >
+return (
+  <div 
+    className="flex items-center justify-between p-3"
+    style={backgroundColor ? { backgroundColor } : {}}
+  >
       {/* Officer Info - Left Side */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1">

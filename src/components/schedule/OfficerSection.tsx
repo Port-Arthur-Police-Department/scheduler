@@ -2,9 +2,8 @@
 import { Badge } from "@/components/ui/badge";
 import { OfficerCard } from "./OfficerCard";
 import { PTOCard } from "./PTOCard";
-import { PartnershipManager } from "./PartnershipManager"; // We'll create this
+import { PartnershipManager } from "./PartnershipManager";
 
-// Update the OfficerSectionProps interface
 interface OfficerSectionProps {
   title: string;
   officers?: any[];
@@ -23,7 +22,7 @@ interface OfficerSectionProps {
   onPartnershipChange?: (officer: any, partnerOfficerId?: string) => void;
   isUpdating?: boolean;
   sectionType?: "regular" | "special" | "pto";
-  colorSettings?: any; // Add this line
+  colorSettings?: any; // Add this
 }
 
 export const OfficerSection = ({
@@ -44,7 +43,7 @@ export const OfficerSection = ({
   onPartnershipChange,
   isUpdating = false,
   sectionType = "regular",
-  colorSettings // Add this line
+  colorSettings // Add this
 }: OfficerSectionProps) => {
   const isPTOSection = sectionType === "pto";
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
@@ -61,6 +60,7 @@ export const OfficerSection = ({
       schedule_special_text: "102,51,153",
       schedule_pto_bg: "230,255,242",
       schedule_pto_text: "0,100,0",
+      schedule_pto_bg_mobile: "230,255,242"
     };
 
     const colors = colorSettings || defaultColors;
@@ -70,13 +70,15 @@ export const OfficerSection = ({
         return {
           headerBg: `bg-[rgb(${colors.schedule_special_bg})]`,
           headerText: `text-[rgb(${colors.schedule_special_text})]`,
-          borderColor: "border-purple-200 dark:border-purple-800"
+          borderColor: "border-purple-200 dark:border-purple-800",
+          sectionBg: `bg-[rgb(${colors.schedule_special_bg})]`
         };
       case "pto":
         return {
           headerBg: `bg-[rgb(${colors.schedule_pto_bg})]`,
           headerText: `text-[rgb(${colors.schedule_pto_text})]`,
-          borderColor: "border-green-200 dark:border-green-800"
+          borderColor: "border-green-200 dark:border-green-800",
+          sectionBg: `bg-[rgb(${colors.schedule_pto_bg})]`
         };
       case "regular":
       default:
@@ -85,13 +87,15 @@ export const OfficerSection = ({
           return {
             headerBg: `bg-[rgb(${colors.schedule_supervisor_bg})]`,
             headerText: `text-[rgb(${colors.schedule_supervisor_text})]`,
-            borderColor: "border-blue-200 dark:border-blue-800"
+            borderColor: "border-blue-200 dark:border-blue-800",
+            sectionBg: `bg-[rgb(${colors.schedule_supervisor_bg})]`
           };
         } else {
           return {
             headerBg: `bg-[rgb(${colors.schedule_officer_bg})]`,
             headerText: `text-[rgb(${colors.schedule_officer_text})]`,
-            borderColor: "border-gray-200 dark:border-gray-800"
+            borderColor: "border-gray-200 dark:border-gray-800",
+            sectionBg: `bg-[rgb(${colors.schedule_officer_bg})]`
           };
         }
     }
@@ -119,7 +123,7 @@ export const OfficerSection = ({
           No {title.toLowerCase()} scheduled
         </p>
       ) : isPTOSection ? (
-        <div className={`space-y-2 p-2 ${sectionStyle.headerBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
+        <div className={`space-y-2 p-2 ${sectionStyle.sectionBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
           {ptoRecords.map((ptoRecord) => (
             <PTOCard
               key={ptoRecord.id}
@@ -134,7 +138,7 @@ export const OfficerSection = ({
           ))}
         </div>
       ) : (
-        <div className={`space-y-2 p-2 ${sectionStyle.headerBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
+        <div className={`space-y-2 p-2 ${sectionStyle.sectionBg} rounded-b-lg border ${sectionStyle.borderColor}`}>
           {officers
             .map((officer) => (
               <OfficerCard
@@ -149,6 +153,7 @@ export const OfficerSection = ({
                 onPartnershipChange={onPartnershipChange}
                 isUpdating={isUpdating}
                 sectionType={sectionType}
+                backgroundColor={sectionStyle.sectionBg} // Pass the background color
               />
             ))
             .filter(Boolean)}

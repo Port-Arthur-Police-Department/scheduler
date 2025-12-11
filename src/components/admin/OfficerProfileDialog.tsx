@@ -32,6 +32,7 @@ interface OfficerProfileDialogProps {
     comp_hours?: number | null;
     holiday_hours?: number | null;
     rank?: string | null;
+    shift_type_id?: string | null; // ADD THIS LINE
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,6 +45,20 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
+  
+  // ADD THIS QUERY FOR SHIFT TYPES
+  const { data: shiftTypes } = useQuery({
+    queryKey: ['shift-types'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shift_types')
+        .select('id, name, start_time, end_time')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
   
   // Helper function to parse dates without timezone issues
   const parseDateWithoutTimezone = (dateString: string | null): Date | undefined => {
@@ -103,6 +118,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     sick_hours: officer?.sick_hours?.toString() || "0",
     comp_hours: officer?.comp_hours?.toString() || "0",
     holiday_hours: officer?.holiday_hours?.toString() || "0",
+    shift_type_id: officer?.shift_type_id || "", // ADD THIS LINE
   });
 
   // Reset form when dialog opens/closes or officer changes
@@ -133,6 +149,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         sick_hours: officer?.sick_hours?.toString() || "0",
         comp_hours: officer?.comp_hours?.toString() || "0",
         holiday_hours: officer?.holiday_hours?.toString() || "0",
+        shift_type_id: officer?.shift_type_id || "", // ADD THIS LINE
       });
       
       // Only fetch service credit for existing officers
@@ -176,6 +193,7 @@ mutationFn: async (data: typeof formData) => {
     badge_number: data.badge_number || null,
     rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
     service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+    shift_type_id: data.shift_type_id || null, // ADD THIS LINE
   };
 
   // Add dates using the input values to avoid timezone conversion
@@ -510,6 +528,30 @@ const createProfileMutation = useMutation({
                     <SelectItem value="Chief">Chief</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* ADD SHIFT DROPDOWN HERE */}
+              <div className="space-y-2">
+                <Label htmlFor="shift_type">Assigned Shift</Label>
+                <Select
+                  value={formData.shift_type_id}
+                  onValueChange={(value) => setFormData({ ...formData, shift_type_id: value })}
+                >
+                  <SelectTrigger id="shift_type">
+                    <SelectValue placeholder="Select shift type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No shift assigned</SelectItem>
+                    {shiftTypes?.map((shift) => (
+                      <SelectItem key={shift.id} value={shift.id}>
+                        {shift.name} ({shift.start_time} - {shift.end_time})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This determines which shift the officer is assigned to for scheduling
+                </p>
               </div>
 
               <div className="space-y-2">

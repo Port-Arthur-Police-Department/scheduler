@@ -606,8 +606,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       },
     });
 
-          console.log(`✅ Found ${data?.length || 0} officers scheduled today`);
-
           // Transform the data
           const processedOfficers = data?.map(item => ({
             id: item.profiles.id,

@@ -12,37 +12,31 @@ import { DailyScheduleView } from "./DailyScheduleView";
 
 interface DailyScheduleManagementProps {
   isAdminOrSupervisor: boolean;
-  userCurrentShift?: string; // NEW: Add this prop
+  userCurrentShift?: string;
 }
 
 export const DailyScheduleManagement = ({ 
   isAdminOrSupervisor,
-  userCurrentShift = "all" // NEW: Default to "all"
+  userCurrentShift = "all"
 }: DailyScheduleManagementProps) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift); // UPDATED: Use userCurrentShift as default
+  const [selectedShiftId, setSelectedShiftId] = useState<string>("all");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  // Force close the calendar when component mounts
+  // Initialize with userCurrentShift when component mounts
   useEffect(() => {
-    console.log("📅 DailyScheduleManagement mounted - forcing calendar closed");
-    setIsCalendarOpen(false);
-  }, []);
-
-  // Update selected shift when userCurrentShift prop changes
-  useEffect(() => {
-    console.log("🔄 User current shift updated:", userCurrentShift);
-    setSelectedShiftId(userCurrentShift);
+    console.log("📅 DailyScheduleManagement mounted - userCurrentShift:", userCurrentShift);
+    if (userCurrentShift) {
+      setSelectedShiftId(userCurrentShift);
+    }
   }, [userCurrentShift]);
 
-  // Debug logging for shift determination
-  useEffect(() => {
-    console.log("🎯 DailyScheduleManagement - User shift:", {
-      userCurrentShift,
-      selectedShiftId,
-      shiftTypesCount: shiftTypes?.length
-    });
-  }, [userCurrentShift, selectedShiftId, shiftTypes]);
+  // Debug logging
+  console.log("🎯 DailyScheduleManagement - Current state:", {
+    userCurrentShift,
+    selectedShiftId,
+    isCalendarOpen
+  });
 
   const { data: shiftTypes } = useQuery({
     queryKey: ["shift-types"],
@@ -59,7 +53,7 @@ export const DailyScheduleManagement = ({
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date);
-      setIsCalendarOpen(false); // Close the calendar when a date is selected
+      setIsCalendarOpen(false);
     }
   };
 
@@ -92,7 +86,7 @@ export const DailyScheduleManagement = ({
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
                   <Calendar
-                    key="daily-schedule-calendar" // Unique key to prevent conflicts
+                    key="daily-schedule-calendar"
                     mode="single"
                     selected={selectedDate}
                     onSelect={handleDateSelect}
@@ -108,7 +102,6 @@ export const DailyScheduleManagement = ({
             View and manage officer assignments by shift. Assign officers to specific positions
             and monitor staffing levels for each shift.
           </p>
-          {/* NEW: Show which shift is being displayed */}
           {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
             <div className="mt-2 p-2 bg-primary/10 rounded text-xs text-primary">
               📍 Showing your assigned shift by default. You can change the shift filter above.

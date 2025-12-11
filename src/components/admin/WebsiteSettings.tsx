@@ -633,6 +633,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       }
     }, [shiftTypes]);
 
+
     // Filter officers by selected shifts
     const filteredOfficers = officersWithShifts?.filter(officer => {
       // If officer has no shift, skip

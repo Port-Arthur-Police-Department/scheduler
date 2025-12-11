@@ -176,9 +176,13 @@ interface Officer {
   id: string;
   full_name: string;
   badge_number?: string;
-  shift?: string;
-  phone?: string;  // Changed from phone_number to phone
+  shift_type_id?: string;
+  phone?: string;
   email?: string;
+  shift_types?: {
+    id: string;
+    name: string;
+  };
 }
 
 
@@ -525,12 +529,20 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       queryFn: async () => {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, full_name, badge_number, shift, phone, email')  // Changed phone_number to phone
+          .select(`
+            id, 
+            full_name, 
+            badge_number, 
+            shift_type_id, 
+            phone, 
+            email,
+            shift_types (id, name)  // ADD THIS LINE to join shift_types
+          `)
           .eq('active', true)
           .order('full_name', { ascending: true });
 
         if (error) throw error;
-        return data as Officer[];
+        return data as any[]; // Temporarily use any[]
       },
     });
 

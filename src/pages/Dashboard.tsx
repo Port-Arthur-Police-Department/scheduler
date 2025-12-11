@@ -980,6 +980,7 @@ const renderTabContent = () => {
     onTabChange={handleTabChange}
     isAdminOrSupervisor={isAdminOrSupervisor}
     isAdmin={isAdmin}
+    showPtoTab={showPtoTab}
   />
 )}
     </div>

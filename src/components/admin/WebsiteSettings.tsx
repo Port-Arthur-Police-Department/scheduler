@@ -20,8 +20,18 @@ import {
   Trash2, 
   CalendarIcon, 
   Bell, 
-  AlertCircle
+  AlertCircle // Make sure AlertCircle is here
 } from "lucide-react";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { PasswordResetManager } from "@/components/admin/PasswordResetManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -159,6 +169,16 @@ interface AuditLog {
   ip_address?: string;
   old_values?: any;
   new_values?: any;
+}
+
+// Add this interface for officer data
+interface Officer {
+  id: string;
+  full_name: string;
+  badge_number?: string;
+  shift?: string;
+  phone?: string;  // Changed from phone_number to phone
+  email?: string;
 }
 
 
@@ -490,6 +510,313 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
+
+  // ========== MANUAL ALERT SENDER COMPONENT ==========
+  const ManualAlertSender = () => {
+    const [open, setOpen] = useState(false);
+    const [message, setMessage] = useState("");
+    const [selectedShifts, setSelectedShifts] = useState<string[]>(['Days', 'Evenings', 'Nights']);
+    const [isSending, setIsSending] = useState(false);
+    const [sendMethod, setSendMethod] = useState<'email' | 'sms' | 'both'>('both');
+
+    // Fetch officers for filtering
+    const { data: officers, isLoading } = useQuery({
+      queryKey: ['officers-for-alerts'],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, badge_number, shift, phone, email')  // Changed phone_number to phone
+          .eq('active', true)
+          .order('full_name', { ascending: true });
+
+        if (error) throw error;
+        return data as Officer[];
+      },
+    });
+
+    // Filter officers by selected shifts
+    const filteredOfficers = officers?.filter(officer => 
+      officer.shift && selectedShifts.includes(officer.shift)
+    ) || [];
+
+    const handleShiftToggle = (shift: string) => {
+      if (selectedShifts.includes(shift)) {
+        setSelectedShifts(selectedShifts.filter(s => s !== shift));
+      } else {
+        setSelectedShifts([...selectedShifts, shift]);
+      }
+    };
+
+    const handleSendAlert = async () => {
+      if (!message.trim()) {
+        toast.error("Please enter a message");
+        return;
+      }
+
+      if (filteredOfficers.length === 0) {
+        toast.error("No officers match the selected shifts");
+        return;
+      }
+
+      setIsSending(true);
+
+      try {
+        const results = {
+          email: { sent: 0, failed: 0 },
+          sms: { sent: 0, failed: 0 }
+        };
+
+        // Process each officer
+        for (const officer of filteredOfficers) {
+          try {
+            // Send email if selected
+            if (sendMethod === 'email' || sendMethod === 'both') {
+              if (officer.email) {
+                const emailResponse = await fetch('/api/send-vacancy-alert', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    to: officer.email,
+                    subject: 'Department Alert',
+                    message: message,
+                    customMessage: message
+                  })
+                });
+
+                if (emailResponse.ok) {
+                  results.email.sent++;
+                } else {
+                  results.email.failed++;
+                }
+              } else {
+                results.email.failed++; // No email address
+              }
+            }
+
+            // Send SMS if selected
+            if (sendMethod === 'sms' || sendMethod === 'both') {
+              if (officer.phone) {  // Changed from phone_number to phone
+                const smsResponse = await fetch('/api/send-text-alert', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    to: officer.phone,  // Changed from phone_number to phone
+                    message: `Department Alert: ${message}`
+                  })
+                });
+
+                if (smsResponse.ok) {
+                  results.sms.sent++;
+                } else {
+                  results.sms.failed++;
+                }
+              } else {
+                results.sms.failed++; // No phone number
+              }
+            }
+
+            // Also send in-app notification
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: officer.id,
+                title: 'Department Alert',
+                message: message,
+                type: 'manual_alert',
+                is_read: false,
+                created_at: new Date().toISOString()
+              });
+
+          } catch (error) {
+            console.error(`Error sending alert to ${officer.full_name}:`, error);
+          }
+        }
+
+        // Show results summary
+        const summary = [];
+        if (sendMethod === 'email' || sendMethod === 'both') {
+          summary.push(`Email: ${results.email.sent} sent, ${results.email.failed} failed`);
+        }
+        if (sendMethod === 'sms' || sendMethod === 'both') {
+          summary.push(`SMS: ${results.sms.sent} sent, ${results.sms.failed} failed`);
+        }
+
+        toast.success(`Alert sent to ${filteredOfficers.length} officers. ${summary.join('; ')}`);
+        
+        // Log to audit
+        const { data: userData } = await supabase.auth.getUser();
+        await supabase.from('audit_logs').insert({
+          user_email: userData.user?.email,
+          action_type: 'manual_alert_sent',
+          table_name: 'notifications',
+          description: `Sent manual alert to ${filteredOfficers.length} officers on ${selectedShifts.join(', ')} shifts. Message: ${message.substring(0, 100)}...`
+        });
+
+        setOpen(false);
+        setMessage("");
+
+      } catch (error) {
+        console.error('Error sending manual alert:', error);
+        toast.error('Failed to send alert');
+      } finally {
+        setIsSending(false);
+      }
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Manual Alert System
+          </CardTitle>
+          <CardDescription>
+            Send a custom alert message to officers on specific shifts
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            {/* Shift Filter */}
+            <div>
+              <Label className="text-base mb-2 block">Filter by Shift</Label>
+              <div className="flex flex-wrap gap-2">
+                {['Days', 'Evenings', 'Nights'].map((shift) => (
+                  <Button
+                    key={shift}
+                    type="button"
+                    variant={selectedShifts.includes(shift) ? "default" : "outline"}
+                    onClick={() => handleShiftToggle(shift)}
+                    className="flex-1 min-w-[100px]"
+                  >
+                    {shift}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Selected shifts: {selectedShifts.length > 0 ? selectedShifts.join(', ') : 'None'}
+              </p>
+            </div>
+
+            {/* Affected Officers Count */}
+            <div className="bg-muted p-4 rounded-lg">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Affected Officers:</span>
+                <span className="text-lg font-bold">
+                  {isLoading ? 'Loading...' : filteredOfficers.length}
+                </span>
+              </div>
+              {!isLoading && (
+                <div className="text-sm text-muted-foreground mt-2">
+                  {selectedShifts.length === 0 ? 'No shifts selected' : 
+                   filteredOfficers.length === 0 ? 'No officers found on selected shifts' :
+                   'These officers will receive the alert'}
+                </div>
+              )}
+            </div>
+
+            {/* Send Method Selection */}
+            <div>
+              <Label className="text-base mb-2 block">Send Method</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={sendMethod === 'both' ? "default" : "outline"}
+                  onClick={() => setSendMethod('both')}
+                  className="flex-1 min-w-[100px]"
+                >
+                  Email & SMS
+                </Button>
+                <Button
+                  type="button"
+                  variant={sendMethod === 'email' ? "default" : "outline"}
+                  onClick={() => setSendMethod('email')}
+                  className="flex-1 min-w-[100px]"
+                >
+                  Email Only
+                </Button>
+                <Button
+                  type="button"
+                  variant={sendMethod === 'sms' ? "default" : "outline"}
+                  onClick={() => setSendMethod('sms')}
+                  className="flex-1 min-w-[100px]"
+                >
+                  SMS Only
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Send Button Dialog */}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                className="w-full" 
+                size="lg"
+                disabled={isLoading || selectedShifts.length === 0}
+              >
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Create Manual Alert
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Send Manual Alert</DialogTitle>
+                <DialogDescription>
+                  This alert will be sent to {filteredOfficers.length} officers on {selectedShifts.join(', ')} shifts via {sendMethod === 'both' ? 'Email & SMS' : sendMethod === 'email' ? 'Email only' : 'SMS only'}.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="alert-message">Alert Message</Label>
+                  <Textarea
+                    id="alert-message"
+                    placeholder="Enter your alert message here..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={6}
+                    className="resize-none"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {message.length}/1000 characters
+                  </p>
+                </div>
+                
+                <div className="bg-muted p-3 rounded-lg">
+                  <h4 className="font-medium mb-2">Preview:</h4>
+                  <p className="text-sm whitespace-pre-wrap">{message || 'Your message will appear here...'}</p>
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  disabled={isSending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendAlert}
+                  disabled={!message.trim() || isSending}
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Alert'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+    );
+  };
+  // ========== END OF MANUAL ALERT SENDER ==========
 
   // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({
@@ -1551,6 +1878,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
       {/* Audit Log Viewer */}
           <AuditLogViewer />
+
+  {/* Manual Alert System Card - Only for Admin/Supervisor */}
+      {(isAdmin || isSupervisor) && <ManualAlertSender />}
 
       {/* Instructions Card */}
 <Card>

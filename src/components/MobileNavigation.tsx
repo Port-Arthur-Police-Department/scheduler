@@ -1,4 +1,5 @@
-import { Calendar, Users, AlertTriangle, Clock, Settings, Home, User, LogOut, Bell } from "lucide-react";
+// Save this as MobileNavigation.tsx
+import { Calendar, Users, AlertTriangle, Clock, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";

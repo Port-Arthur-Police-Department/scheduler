@@ -553,13 +553,14 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         
         try {
           // Get officers who have schedules for TODAY
+          // Use the specific foreign key relationship: profiles!recurring_schedules_officer_id_fkey
           const { data, error } = await supabase
             .from('recurring_schedules')
             .select(`
               officer_id,
               shift_type_id,
               shift_types!inner(id, name),
-              profiles!inner(id, full_name, badge_number, phone, email)
+              profiles:profiles!recurring_schedules_officer_id_fkey(id, full_name, badge_number, phone, email)
             `)
             .eq('day_of_week', todayDayOfWeek)
             .eq('is_active', true)
@@ -569,8 +570,41 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
           if (error) {
             console.error('❌ Error fetching officers with schedules:', error);
-            return [];
+            
+            // Alternative simpler query if the above fails
+            console.log('🔄 Trying alternative query...');
+            return await getOfficersAlternativeQuery(todayDayOfWeek, todayDate);
           }
+
+          console.log(`✅ Found ${data?.length || 0} officers scheduled today`);
+
+          // Transform the data
+          const processedOfficers = data?.map(item => ({
+            id: item.profiles.id,
+            full_name: item.profiles.full_name,
+            badge_number: item.profiles.badge_number,
+            phone: item.profiles.phone,
+            email: item.profiles.email,
+            current_shift: item.shift_types ? {
+              id: item.shift_type_id,
+              name: item.shift_types.name
+            } : null
+          })) || [];
+
+          // Log who was found
+          if (processedOfficers.length > 0) {
+            console.log('👮 Officers scheduled today:', 
+              processedOfficers.map(o => `${o.full_name}: ${o.current_shift?.name}`)
+            );
+          }
+
+          return processedOfficers;
+        } catch (error) {
+          console.error('❌ Error in officers query:', error);
+          return [];
+        }
+      },
+    });
 
           console.log(`✅ Found ${data?.length || 0} officers scheduled today`);
 

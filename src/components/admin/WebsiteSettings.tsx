@@ -545,100 +545,54 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     
     console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
 
-    // SIMPLE QUERY: Get officers with their schedules for TODAY
+     // EVEN SIMPLER: Just get all officers for now (we'll filter by shift later)
     const { data: officersWithShifts, isLoading } = useQuery({
-      queryKey: ['officers-today-schedules-simple', todayDayOfWeek, todayDate],
+      queryKey: ['all-officers-for-alerts'],
       queryFn: async () => {
-        console.log(`🔍 SIMPLE QUERY: Fetching officers scheduled for TODAY...`);
+        console.log('🔍 Fetching all active officers...');
         
         try {
-          // STEP 1: Get all schedules for today
-          const { data: todaysSchedules, error: schedulesError } = await supabase
-            .from('recurring_schedules')
-            .select('officer_id, shift_type_id')
-            .eq('day_of_week', todayDayOfWeek)
-            .eq('is_active', true)
-            .lte('start_date', todayDate)
-            .or(`end_date.is.null,end_date.gte.${todayDate}`);
-
-          if (schedulesError) {
-            console.error('❌ Error fetching schedules:', schedulesError);
-            return [];
-          }
-
-          console.log(`📅 Found ${todaysSchedules?.length || 0} schedules for today`);
-
-          // If no schedules for today, return empty array
-          if (!todaysSchedules || todaysSchedules.length === 0) {
-            console.log('⚠️ No schedules found for today');
-            return [];
-          }
-
-          // STEP 2: Get the officer IDs from schedules
-          const officerIds = todaysSchedules.map(schedule => schedule.officer_id);
-          
-          // STEP 3: Get those officers
-          const { data: officers, error: officersError } = await supabase
+          // Get all active officers
+          const { data: officers, error } = await supabase
             .from('profiles')
             .select('id, full_name, badge_number, phone, email')
-            .in('id', officerIds)
             .eq('active', true)
             .order('full_name', { ascending: true });
 
-          if (officersError) {
-            console.error('❌ Error fetching officers:', officersError);
+          if (error) {
+            console.error('❌ Error fetching officers:', error);
             return [];
           }
 
-          console.log(`👮 Found ${officers?.length || 0} officers with schedules today`);
+          console.log(`✅ Found ${officers?.length || 0} active officers`);
 
-          // STEP 4: Get shift types
-          const shiftTypeIds = todaysSchedules.map(s => s.shift_type_id);
-          const { data: shiftTypesData } = await supabase
-            .from('shift_types')
-            .select('id, name')
-            .in('id', shiftTypeIds);
-
-          // Create a map of shift_type_id to shift name
-          const shiftMap = new Map();
-          shiftTypesData?.forEach(shift => {
-            shiftMap.set(shift.id, shift.name);
-          });
-
-          // Create a map of officer_id to shift_type_id
-          const officerShiftMap = new Map();
-          todaysSchedules.forEach(schedule => {
-            officerShiftMap.set(schedule.officer_id, schedule.shift_type_id);
-          });
-
-          // STEP 5: Combine officers with their shifts
-          const result = officers?.map(officer => {
-            const shiftTypeId = officerShiftMap.get(officer.id);
-            const shiftName = shiftMap.get(shiftTypeId);
+          // For testing, assign dummy shifts
+          const shiftTypesList = shiftTypes || [];
+          const result = officers?.map((officer, index) => {
+            // Assign a shift for testing (rotate through available shifts)
+            const shiftIndex = index % (shiftTypesList.length || 1);
+            const shift = shiftTypesList[shiftIndex];
             
             return {
               ...officer,
-              current_shift: shiftTypeId && shiftName ? {
-                id: shiftTypeId,
-                name: shiftName
+              current_shift: shift ? {
+                id: shift.id,
+                name: shift.name
               } : null
             };
           }) || [];
 
-          // Log the results
-          console.log('📊 Final results:', 
-            result.map(o => ({
-              name: o.full_name,
-              shift: o.current_shift?.name || 'Unknown'
-            }))
+          console.log('📊 Officers with test shifts:', 
+            result.slice(0, 3).map(o => `${o.full_name}: ${o.current_shift?.name}`)
           );
 
           return result;
         } catch (error) {
-          console.error('❌ Error in simple query:', error);
+          console.error('❌ Error fetching officers:', error);
           return [];
         }
       },
+      enabled: !!shiftTypes, // Only run when shiftTypes are loaded
     });
 
           // Transform the data

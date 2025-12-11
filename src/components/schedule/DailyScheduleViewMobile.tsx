@@ -101,26 +101,6 @@ export const DailyScheduleViewMobile = ({
     },
   });
 
-  // Fetch all available shifts first
-  const { data: allShifts, isLoading: shiftsLoading } = useQuery({
-    queryKey: ["shift-types-mobile"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shift_types")
-        .select("*")
-        .order("start_time");
-      
-      if (error) throw error;
-      
-      // Set default selected shift to first one if not already set
-      if (data && data.length > 0 && !selectedShiftId) {
-        setSelectedShiftId(data[0].id);
-      }
-      
-      return data || [];
-    },
-  });
-
   // Fetch schedule data only for the selected shift
   const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
     queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],

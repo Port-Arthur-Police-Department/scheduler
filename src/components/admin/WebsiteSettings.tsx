@@ -521,13 +521,13 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
     const [isSending, setIsSending] = useState(false);
     const [sendMethod, setSendMethod] = useState<'in_app' | 'all'>('in_app');
+    const [useActiveSchedulePeriod, setUseActiveSchedulePeriod] = useState(true); // New toggle
 
     // ========== HELPER FUNCTIONS ==========
     // Helper function to parse time string to minutes since midnight
     const parseTimeToMinutes = (timeStr: string): number => {
       if (!timeStr) return 0;
       
-      // Handle formats like "06:30:00" or "14:30:00"
       const parts = timeStr.split(':').map(Number);
       const hours = parts[0];
       const minutes = parts[1] || 0;
@@ -542,7 +542,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       const mins = minutes % 60;
       
       const period = hours24 >= 12 ? 'PM' : 'AM';
-      const hours12 = hours24 % 12 || 12; // Convert 0 to 12
+      const hours12 = hours24 % 12 || 12;
       
       return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
     };
@@ -559,12 +559,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       const crossesMidnight = shiftType.crosses_midnight || endMinutes < startMinutes;
       
       if (crossesMidnight) {
-        // Shift crosses midnight (e.g., 14:30 to 00:30)
-        // Active if: current time >= start time (today) OR current time < end time (tomorrow)
         return currentMinutes >= startMinutes || currentMinutes < endMinutes;
       } else {
-        // Normal shift (same day, e.g., 06:30 to 16:30)
-        // Active if: start time <= current time < end time
         return currentMinutes >= startMinutes && currentMinutes < endMinutes;
       }
     };
@@ -582,6 +578,21 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       });
       
       return activeShifts;
+    };
+
+    // Check if a date is within schedule period
+    const isDateWithinSchedulePeriod = (startDate: string, endDate: string | null, checkDate: string): boolean => {
+      const check = new Date(checkDate);
+      const start = new Date(startDate);
+      
+      if (check < start) return false;
+      
+      if (endDate) {
+        const end = new Date(endDate);
+        return check <= end;
+      }
+      
+      return true; // No end date means indefinite
     };
     // ========== END HELPER FUNCTIONS ==========
 
@@ -602,17 +613,17 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       },
     });
 
-    // Get today's day of week
-    const todayDayOfWeek = new Date().getDay();
+    // Get today's date info
     const todayDate = new Date().toISOString().split('T')[0];
+    const todayDayOfWeek = new Date().getDay();
     
     console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
 
-    // SIMPLE: Get all active officers and manually calculate their shift
+    // Get ALL officers and their current assigned shift (based on ANY active schedule)
     const { data: officersWithShifts, isLoading } = useQuery({
-      queryKey: ['officers-manual-alerts', todayDayOfWeek],
+      queryKey: ['officers-active-schedules', todayDate],
       queryFn: async () => {
-        console.log('🔍 Fetching officers for manual alerts...');
+        console.log('🔍 Fetching officers with active schedules...');
         
         try {
           // 1. Get all active officers
@@ -627,30 +638,46 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             return [];
           }
 
-          // 2. For each officer, check their schedule for TODAY
+          console.log(`✅ Found ${officers?.length || 0} active officers`);
+
+          // 2. For each officer, find their MOST RECENT active schedule
           const officersWithCurrentShifts = await Promise.all(
             officers.map(async (officer) => {
               try {
-                // Get officer's schedules for today
-                const { data: todaysSchedules } = await supabase
+                let query = supabase
                   .from('recurring_schedules')
-                  .select('shift_type_id')
+                  .select(`
+                    shift_type_id,
+                    start_date,
+                    end_date,
+                    day_of_week,
+                    shift_types!inner(id, name, start_time, end_time, crosses_midnight)
+                  `)
                   .eq('officer_id', officer.id)
-                  .eq('day_of_week', todayDayOfWeek)
                   .eq('is_active', true)
                   .lte('start_date', todayDate)
                   .or(`end_date.is.null,end_date.gte.${todayDate}`)
+                  .order('created_at', { ascending: false })
                   .limit(1);
 
-                // If officer has a schedule today, find the shift
-                if (todaysSchedules && todaysSchedules.length > 0) {
-                  const schedule = todaysSchedules[0];
-                  
-                  // Find the shift type
-                  const shiftType = shiftTypes?.find(st => st.id === schedule.shift_type_id);
+                // If using active schedule period only (not specific day of week)
+                if (useActiveSchedulePeriod) {
+                  // Don't filter by day_of_week - include all schedules in period
+                  // Just get the most recent schedule
+                } else {
+                  // Original logic: filter by today's day of week
+                  query = query.eq('day_of_week', todayDayOfWeek);
+                }
+
+                const { data: activeSchedules } = await query;
+
+                // If officer has an active schedule within period
+                if (activeSchedules && activeSchedules.length > 0) {
+                  const schedule = activeSchedules[0];
+                  const shiftType = schedule.shift_types;
                   
                   if (shiftType) {
-                    // Check if this shift is currently active
+                    // Check if this shift is currently active based on time
                     const isCurrentlyOnShift = isOfficerCurrentlyOnShift(shiftType);
                     
                     return {
@@ -658,40 +685,49 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                       current_shift: {
                         id: shiftType.id,
                         name: shiftType.name,
-                        is_active_now: isCurrentlyOnShift
+                        is_active_now: isCurrentlyOnShift,
+                        schedule_type: useActiveSchedulePeriod ? 'period' : 'specific_day'
                       },
-                      shift_details: shiftType
+                      shift_details: shiftType,
+                      schedule_info: {
+                        start_date: schedule.start_date,
+                        end_date: schedule.end_date,
+                        day_of_week: schedule.day_of_week
+                      }
                     };
                   }
                 }
 
-                // No schedule or shift found
+                // No active schedule found
                 return {
                   ...officer,
-                  current_shift: null
+                  current_shift: null,
+                  schedule_info: null
                 };
               } catch (error) {
                 console.error(`❌ Error processing ${officer.full_name}:`, error);
                 return {
                   ...officer,
-                  current_shift: null
+                  current_shift: null,
+                  schedule_info: null
                 };
               }
             })
           );
 
           // Log results
-          const withShifts = officersWithCurrentShifts.filter(o => o.current_shift).length;
+          const withSchedules = officersWithCurrentShifts.filter(o => o.current_shift).length;
           const activeNow = officersWithCurrentShifts.filter(o => o.current_shift?.is_active_now).length;
           
-          console.log(`📊 Results: ${withShifts} officers with shifts, ${activeNow} currently on shift`);
+          console.log(`📊 Results: ${withSchedules} officers with active schedules, ${activeNow} currently on shift`);
+          console.log(`⚙️ Using schedule type: ${useActiveSchedulePeriod ? 'Active Period Only' : 'Specific Day of Week'}`);
           
-          if (withShifts > 0) {
-            console.log('👮 Officers with shifts today:',
+          if (withSchedules > 0) {
+            console.log('👮 Officers with active schedules:',
               officersWithCurrentShifts
                 .filter(o => o.current_shift)
                 .slice(0, 5)
-                .map(o => `${o.full_name} (${o.current_shift?.name}${o.current_shift?.is_active_now ? ' - ACTIVE NOW' : ''})`)
+                .map(o => `${o.full_name} (${o.current_shift?.name})`)
             );
           }
 
@@ -701,13 +737,12 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           return [];
         }
       },
-      enabled: !!shiftTypes, // Only run when shiftTypes are loaded
+      enabled: !!shiftTypes,
     });
 
     // Set default selected shifts when shiftTypes are loaded
     useEffect(() => {
       if (shiftTypes && shiftTypes.length > 0 && selectedShifts.length === 0) {
-        // Select ALL shifts by default
         const allShiftNames = shiftTypes.map(st => st.name);
         setSelectedShifts(allShiftNames);
         console.log('✅ Default shifts selected:', allShiftNames);
@@ -850,15 +885,16 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     // Debug logging
     useEffect(() => {
       console.log('🔍 DEBUG - Manual Alert System:', {
-        todayDayOfWeek,
         todayDate,
+        todayDayOfWeek,
         shiftTypesCount: shiftTypes?.length,
         officersCount: officersWithShifts?.length,
         filteredCount: filteredOfficers.length,
         selectedShifts,
-        activeShiftsNow
+        activeShiftsNow,
+        useActiveSchedulePeriod
       });
-    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts, todayDayOfWeek, todayDate, activeShiftsNow]);
+    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts, todayDate, todayDayOfWeek, activeShiftsNow, useActiveSchedulePeriod]);
 
     return (
       <Card>
@@ -868,23 +904,54 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             Manual Alert System
           </CardTitle>
           <CardDescription>
-            Send a custom alert message to officers on specific shifts TODAY
+            Send alerts to officers based on their assigned shifts during active schedule periods
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
-            {/* Current Time Info */}
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+            {/* Schedule Type Toggle */}
+            <div className="p-3 border rounded-lg bg-blue-50">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-medium text-blue-800">Current Time</h4>
+                  <Label className="font-medium text-blue-800">Schedule Filtering</Label>
                   <p className="text-sm text-blue-700">
+                    {useActiveSchedulePeriod 
+                      ? 'Include all officers with active schedules (any day of week)' 
+                      : 'Only officers scheduled for today\'s specific day of week'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Day of Week</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={useActiveSchedulePeriod}
+                      onChange={(e) => setUseActiveSchedulePeriod(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                  <span className="text-sm text-gray-600">Active Period</span>
+                </div>
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                <strong>Active Period:</strong> Includes officers with ANY schedule between {todayDate} (even if not working today)<br/>
+                <strong>Day of Week:</strong> Only includes officers scheduled for {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayDayOfWeek]}
+              </p>
+            </div>
+
+            {/* Current Time Info */}
+            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-green-800">Current Status</h4>
+                  <p className="text-sm text-green-700">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br/>
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-blue-800">
+                  <p className="text-sm font-medium text-green-800">
                     Active shifts: {activeShiftsNow.length > 0 ? activeShiftsNow.join(', ') : 'None'}
                   </p>
                 </div>
@@ -942,7 +1009,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             {/* Affected Officers Count */}
             <div className="bg-muted p-4 rounded-lg">
               <div className="flex justify-between items-center">
-                <span className="font-medium">Officers with Shifts Today:</span>
+                <span className="font-medium">Officers with Active Schedules:</span>
                 <span className="text-lg font-bold">
                   {isLoading ? 'Loading...' : filteredOfficers.length}
                 </span>
@@ -951,12 +1018,12 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                 {selectedShifts.length === 0 
                   ? 'Select shifts to see affected officers' 
                   : filteredOfficers.length === 0 
-                    ? 'No officers on selected shifts today' 
+                    ? 'No officers on selected shifts' 
                     : `${filteredOfficers.length} officer(s) will receive the alert`}
               </div>
-              {!isLoading && officersWithShifts && officersWithShifts.filter(o => o.current_shift).length === 0 && (
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
-                  ⚠️ No officers have schedules for today. Create schedules in Schedule Management first.
+              {!isLoading && officersWithShifts && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  Total officers with schedules: {officersWithShifts.filter(o => o.current_shift).length}
                 </div>
               )}
             </div>
@@ -1032,7 +1099,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                 </div>
                 
                 <div className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> This alert will be sent to officers scheduled on {selectedShifts.join(', ')} shifts today.
+                  <strong>Schedule Filter:</strong> {useActiveSchedulePeriod ? 'Active Period' : 'Specific Day'} mode<br/>
+                  <strong>Recipients:</strong> Officers assigned to {selectedShifts.join(', ')} shifts
                 </div>
               </div>
               
@@ -1065,7 +1133,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     );
   };
   // ========== END OF MANUAL ALERT SENDER ==========
-
   
   // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({

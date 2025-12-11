@@ -151,6 +151,7 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   pto_balances_visible: false,
 
   enable_supervisor_pto_notifications: true, // Add this line
+  show_pto_tab: true,
 };
 
 interface WebsiteSettingsProps {
@@ -1445,6 +1446,32 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         checked={settings?.show_staffing_overview !== false}
         onCheckedChange={(checked) => 
           handleToggle('show_staffing_overview', checked)
+        }
+        disabled={updateSettingsMutation.isPending}
+      />
+    </div>
+  </div>
+</div>
+
+    {/* PTO Tab Visibility */}
+<div className="space-y-4">
+  <h3 className="text-lg font-semibold">Tab Visibility Settings</h3>
+  <div className="pl-4 space-y-4">
+    {/* PTO Tab Toggle */}
+    <div className="flex items-center justify-between">
+      <div className="space-y-0.5">
+        <Label htmlFor="pto-tab-toggle" className="text-base">
+          Show PTO Tab
+        </Label>
+        <div className="text-sm text-muted-foreground">
+          When enabled, all users can see and access the PTO tab. When disabled, the PTO tab is hidden from all users.
+        </div>
+      </div>
+      <Switch
+        id="pto-tab-toggle"
+        checked={settings?.show_pto_tab !== false}
+        onCheckedChange={(checked) => 
+          handleToggle('show_pto_tab', checked)
         }
         disabled={updateSettingsMutation.isPending}
       />

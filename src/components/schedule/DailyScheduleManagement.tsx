@@ -12,11 +12,15 @@ import { DailyScheduleView } from "./DailyScheduleView";
 
 interface DailyScheduleManagementProps {
   isAdminOrSupervisor: boolean;
+  userCurrentShift?: string; // NEW: Add this prop
 }
 
-export const DailyScheduleManagement = ({ isAdminOrSupervisor }: DailyScheduleManagementProps) => {
+export const DailyScheduleManagement = ({ 
+  isAdminOrSupervisor,
+  userCurrentShift = "all" // NEW: Default to "all"
+}: DailyScheduleManagementProps) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedShiftId, setSelectedShiftId] = useState<string>("all");
+  const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift); // UPDATED: Use userCurrentShift as default
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Force close the calendar when component mounts
@@ -24,6 +28,21 @@ export const DailyScheduleManagement = ({ isAdminOrSupervisor }: DailyScheduleMa
     console.log("📅 DailyScheduleManagement mounted - forcing calendar closed");
     setIsCalendarOpen(false);
   }, []);
+
+  // Update selected shift when userCurrentShift prop changes
+  useEffect(() => {
+    console.log("🔄 User current shift updated:", userCurrentShift);
+    setSelectedShiftId(userCurrentShift);
+  }, [userCurrentShift]);
+
+  // Debug logging for shift determination
+  useEffect(() => {
+    console.log("🎯 DailyScheduleManagement - User shift:", {
+      userCurrentShift,
+      selectedShiftId,
+      shiftTypesCount: shiftTypes?.length
+    });
+  }, [userCurrentShift, selectedShiftId, shiftTypes]);
 
   const { data: shiftTypes } = useQuery({
     queryKey: ["shift-types"],
@@ -89,6 +108,12 @@ export const DailyScheduleManagement = ({ isAdminOrSupervisor }: DailyScheduleMa
             View and manage officer assignments by shift. Assign officers to specific positions
             and monitor staffing levels for each shift.
           </p>
+          {/* NEW: Show which shift is being displayed */}
+          {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
+            <div className="mt-2 p-2 bg-primary/10 rounded text-xs text-primary">
+              📍 Showing your assigned shift by default. You can change the shift filter above.
+            </div>
+          )}
         </CardContent>
       </Card>
 

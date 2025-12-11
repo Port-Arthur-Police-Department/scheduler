@@ -517,25 +517,29 @@ const renderTabContent = () => {
         isMobile ? (
           <DailyScheduleViewMobile
             selectedDate={new Date()}
-            filterShiftId="all"
+            filterShiftId={userCurrentShift} // Use user's determined shift
             isAdminOrSupervisor={isAdminOrSupervisor}
             userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
           />
         ) : (
-          <DailyScheduleManagement isAdminOrSupervisor={isAdminOrSupervisor} />
+          <DailyScheduleManagement 
+            isAdminOrSupervisor={isAdminOrSupervisor}
+            userCurrentShift={userCurrentShift} // Pass user's shift to management
+          />
         )
       ) : (
         // For regular officers
         isMobile ? (
           <DailyScheduleViewMobile
             selectedDate={new Date()}
-            filterShiftId="all"
+            filterShiftId={userCurrentShift} // Use user's determined shift
             isAdminOrSupervisor={false}
             userRole="officer"
           />
         ) : (
           <DailyScheduleView 
             selectedDate={new Date()} 
+            filterShiftId={userCurrentShift} // Use user's determined shift
             isAdminOrSupervisor={false} 
             userRole="officer" 
           />

@@ -535,91 +535,64 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           console.error('Error fetching shift types:', error);
           return [];
         }
-        console.log('Shift types loaded:', data);
         return data;
       },
     });
 
-    // Query to get officers with their CURRENT shift based on TODAY'S schedule
+    // Get today's day of week (0 = Sunday, 1 = Monday, etc.)
+    const todayDayOfWeek = new Date().getDay();
+    const todayDate = new Date().toISOString().split('T')[0];
+    
+    console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
+
+    // Query to get officers with their schedules for TODAY
     const { data: officersWithShifts, isLoading } = useQuery({
-      queryKey: ['officers-with-current-shifts', new Date().toISOString().split('T')[0]],
+      queryKey: ['officers-today-schedules', todayDayOfWeek, todayDate],
       queryFn: async () => {
-        console.log('🔍 Fetching officers with current shifts...');
-        
-        // Today's day of week (0 = Sunday, 1 = Monday, etc.)
-        const todayDayOfWeek = new Date().getDay();
-        const todayDate = new Date().toISOString().split('T')[0];
-        
-        console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
+        console.log(`🔍 Fetching officers scheduled for TODAY (day ${todayDayOfWeek})...`);
         
         try {
-          // Query to get officers with their current schedule for TODAY
+          // Get officers who have schedules for TODAY
           const { data, error } = await supabase
-            .from('profiles')
+            .from('recurring_schedules')
             .select(`
-              id, 
-              full_name, 
-              badge_number, 
-              phone, 
-              email,
-              recurring_schedules!inner(
-                shift_type_id,
-                shift_types!inner(
-                  id,
-                  name
-                ),
-                start_date,
-                end_date,
-                is_active
-              )
+              officer_id,
+              shift_type_id,
+              shift_types!inner(id, name),
+              profiles!inner(id, full_name, badge_number, phone, email)
             `)
-            .eq('active', true)
-            .eq('recurring_schedules.day_of_week', todayDayOfWeek)
-            .eq('recurring_schedules.is_active', true)
-            .lte('recurring_schedules.start_date', todayDate)
-            .or(`recurring_schedules.end_date.is.null,recurring_schedules.end_date.gte.${todayDate}`)
-            .order('full_name', { ascending: true });
+            .eq('day_of_week', todayDayOfWeek)
+            .eq('is_active', true)
+            .lte('start_date', todayDate)
+            .or(`end_date.is.null,end_date.gte.${todayDate}`)
+            .eq('profiles.active', true);
 
           if (error) {
-            console.error('❌ Error fetching officers with shifts:', error);
-            
-            // Fallback: Try a simpler query without the complex join
-            console.log('🔄 Trying fallback query...');
-            const { data: simpleData, error: simpleError } = await supabase
-              .from('profiles')
-              .select('id, full_name, badge_number, phone, email')
-              .eq('active', true)
-              .order('full_name', { ascending: true });
-            
-            if (simpleError) throw simpleError;
-            
-            // Return officers without shift info for now
-            return simpleData.map(officer => ({
-              ...officer,
-              current_shift: null
-            }));
+            console.error('❌ Error fetching officers with schedules:', error);
+            return [];
           }
 
-          console.log(`✅ Found ${data?.length || 0} officers with schedules today`);
+          console.log(`✅ Found ${data?.length || 0} officers scheduled today`);
 
-          // Process the data to extract shift information
-          const processedOfficers = data?.map(officer => {
-            // Get the first schedule (should be only one for today)
-            const schedule = officer.recurring_schedules?.[0];
-            const shiftType = schedule?.shift_types;
-            
-            return {
-              id: officer.id,
-              full_name: officer.full_name,
-              badge_number: officer.badge_number,
-              phone: officer.phone,
-              email: officer.email,
-              current_shift: shiftType ? {
-                id: shiftType.id,
-                name: shiftType.name
-              } : null
-            };
-          }) || [];
+          // Transform the data
+          const processedOfficers = data?.map(item => ({
+            id: item.profiles.id,
+            full_name: item.profiles.full_name,
+            badge_number: item.profiles.badge_number,
+            phone: item.profiles.phone,
+            email: item.profiles.email,
+            current_shift: item.shift_types ? {
+              id: item.shift_type_id,
+              name: item.shift_types.name
+            } : null
+          })) || [];
+
+          // Log who was found
+          if (processedOfficers.length > 0) {
+            console.log('👮 Officers scheduled today:', 
+              processedOfficers.map(o => `${o.full_name}: ${o.current_shift?.name}`)
+            );
+          }
 
           return processedOfficers;
         } catch (error) {
@@ -641,9 +614,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
     // Filter officers by selected shifts
     const filteredOfficers = officersWithShifts?.filter(officer => {
-      // If officer has no shift, they won't be included unless we have a "No Shift" option
+      // If officer has no shift, skip
       if (!officer.current_shift) {
-        return false; // Skip officers without a current shift
+        return false;
       }
       
       // Check if officer's shift is in selected shifts
@@ -695,7 +668,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               });
 
             if (notificationError) {
-              console.error(`❌ Failed to send in-app notification to ${officer.full_name}:`, notificationError);
+              console.error(`❌ Failed to send in-app notification:`, notificationError);
               failed++;
             } else {
               console.log(`✅ In-app notification sent to ${officer.full_name}`);
@@ -722,7 +695,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                   console.log(`✅ Email sent to ${officer.full_name}`);
                 }
               } catch (emailError) {
-                console.warn(`⚠️ Email error for ${officer.full_name}:`, emailError);
+                console.warn(`⚠️ Email error:`, emailError);
               }
             }
 
@@ -744,12 +717,12 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                   console.log(`✅ SMS sent to ${officer.full_name}`);
                 }
               } catch (smsError) {
-                console.warn(`⚠️ SMS error for ${officer.full_name}:`, smsError);
+                console.warn(`⚠️ SMS error:`, smsError);
               }
             }
 
           } catch (error) {
-            console.error(`❌ Error sending alert to ${officer.full_name}:`, error);
+            console.error(`❌ Error sending to ${officer.full_name}:`, error);
             failed++;
           }
         }
@@ -775,24 +748,18 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       }
     };
 
-    // Debug: Log what we're getting
+    // Debug logging
     useEffect(() => {
       console.log('🔍 DEBUG - Manual Alert System:', {
+        todayDayOfWeek,
+        todayDate,
         shiftTypesCount: shiftTypes?.length,
         officersCount: officersWithShifts?.length,
         filteredCount: filteredOfficers.length,
         selectedShifts,
-        today: new Date().toLocaleDateString(),
-        dayOfWeek: new Date().getDay()
+        hasSchedules: officersWithShifts?.length > 0
       });
-      
-      if (officersWithShifts && officersWithShifts.length > 0) {
-        console.log('Sample officers:', officersWithShifts.slice(0, 3).map(o => ({
-          name: o.full_name,
-          shift: o.current_shift?.name || 'No shift'
-        })));
-      }
-    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts]);
+    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts, todayDayOfWeek, todayDate]);
 
     return (
       <Card>
@@ -802,11 +769,26 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             Manual Alert System
           </CardTitle>
           <CardDescription>
-            Send a custom alert message to officers on specific shifts
+            Send a custom alert message to officers on specific shifts TODAY
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
+            {/* Today's Info */}
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-blue-800">Today's Schedule</h4>
+                  <p className="text-sm text-blue-700">
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                </div>
+                <Badge variant="outline" className="bg-white">
+                  Day {todayDayOfWeek}
+                </Badge>
+              </div>
+            </div>
+
             {/* Shift Filter */}
             <div>
               <Label className="text-base mb-2 block">Filter by Shift</Label>
@@ -826,26 +808,26 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               <p className="text-sm text-muted-foreground mt-2">
                 Selected: {selectedShifts.length > 0 ? selectedShifts.join(', ') : 'None'}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Based on TODAY'S schedule ({new Date().toLocaleDateString()})
-              </p>
             </div>
 
             {/* Affected Officers Count */}
             <div className="bg-muted p-4 rounded-lg">
               <div className="flex justify-between items-center">
-                <span className="font-medium">Affected Officers:</span>
+                <span className="font-medium">Officers Scheduled Today:</span>
                 <span className="text-lg font-bold">
-                  {isLoading ? 'Loading...' : filteredOfficers.length}
+                  {isLoading ? 'Loading...' : officersWithShifts?.length || 0}
                 </span>
               </div>
-              {!isLoading && (
-                <div className="text-sm text-muted-foreground mt-2">
-                  {selectedShifts.length === 0 
-                    ? 'Select shifts to see affected officers' 
-                    : filteredOfficers.length === 0 
-                      ? 'No officers scheduled on selected shifts today' 
-                      : `${filteredOfficers.length} officer(s) will receive the alert`}
+              <div className="text-sm text-muted-foreground mt-2">
+                {selectedShifts.length === 0 
+                  ? 'Select shifts to filter officers' 
+                  : filteredOfficers.length === 0 
+                    ? 'No officers on selected shifts today' 
+                    : `${filteredOfficers.length} officer(s) will receive the alert`}
+              </div>
+              {!isLoading && officersWithShifts && officersWithShifts.length === 0 && (
+                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
+                  ⚠️ No officers are scheduled for today. Create schedules first.
                 </div>
               )}
             </div>
@@ -954,6 +936,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     );
   };
   // ========== END OF MANUAL ALERT SENDER ==========
+
+  
   // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({
     queryKey: ['website-settings'],

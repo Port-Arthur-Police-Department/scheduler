@@ -171,18 +171,17 @@ interface AuditLog {
   new_values?: any;
 }
 
-// Add this interface for officer data
+
 interface Officer {
   id: string;
   full_name: string;
   badge_number?: string;
-  shift_type_id?: string;
   phone?: string;
   email?: string;
-  shift_types?: {
+  current_shift?: {
     id: string;
     name: string;
-  };
+  } | null;
 }
 
 
@@ -523,33 +522,46 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     const [isSending, setIsSending] = useState(false);
     const [sendMethod, setSendMethod] = useState<'email' | 'sms' | 'both'>('both');
 
-    // Fetch officers for filtering
+    // Fetch officers with their CURRENT shift assignments
     const { data: officers, isLoading } = useQuery({
       queryKey: ['officers-for-alerts'],
       queryFn: async () => {
-        const { data, error } = await supabase
+        // First, get all active officers
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
-          .select(`
-            id, 
-            full_name, 
-            badge_number, 
-            shift_type_id, 
-            phone, 
-            email,
-            shift_types (id, name)  // ADD THIS LINE to join shift_types
-          `)
+          .select('id, full_name, badge_number, phone, email')
           .eq('active', true)
           .order('full_name', { ascending: true });
 
-        if (error) throw error;
-        return data as any[]; // Temporarily use any[]
+        if (profilesError) throw profilesError;
+
+        // For each officer, get their current shift
+        const officersWithShifts = await Promise.all(
+          profiles.map(async (officer) => {
+            const { data: currentShift } = await supabase
+              .rpc('get_current_officer_shift', {
+                officer_id_param: officer.id
+              });
+
+            return {
+              ...officer,
+              current_shift: currentShift && currentShift[0] ? {
+                id: currentShift[0].shift_type_id,
+                name: currentShift[0].shift_name
+              } : null
+            };
+          })
+        );
+
+        return officersWithShifts;
       },
     });
 
     // Filter officers by selected shifts
-    const filteredOfficers = officers?.filter(officer => 
-      officer.shift && selectedShifts.includes(officer.shift)
-    ) || [];
+    const filteredOfficers = officers?.filter(officer => {
+      const shiftName = officer.current_shift?.name;
+      return shiftName && selectedShifts.includes(shiftName);
+    }) || [];
 
     const handleShiftToggle = (shift: string) => {
       if (selectedShifts.includes(shift)) {

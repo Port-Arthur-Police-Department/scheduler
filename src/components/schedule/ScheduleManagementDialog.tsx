@@ -31,13 +31,14 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
   const [selectedPosition, setSelectedPosition] = useState("none");
   const [selectedDay, setSelectedDay] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
+  const [updateOfficerShift, setUpdateOfficerShift] = useState(true); // New toggle
 
   const { data: officers } = useQuery({
     queryKey: ["officers"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, badge_number")
+        .select("id, full_name, badge_number, shift_type_id")
         .order("full_name");
       if (error) throw error;
       return data;
@@ -70,7 +71,15 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
 
   const createScheduleMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      // Get the officer's name for logging
+      const officer = officers?.find(o => o.id === selectedOfficer);
+      const shift = shiftTypes?.find(s => s.id === selectedShift);
+      
+      console.log(`Creating schedule for officer: ${officer?.full_name}, shift: ${shift?.name}`);
+      
+      // Start a transaction for atomic operations
+      // 1. Create the recurring schedule
+      const { error: scheduleError } = await supabase
         .from("recurring_schedules")
         .insert({
           officer_id: selectedOfficer,
@@ -80,23 +89,70 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
           day_of_week: parseInt(selectedDay),
           start_date: new Date().toISOString().split("T")[0],
         });
-      if (error) throw error;
+      
+      if (scheduleError) throw scheduleError;
+      
+      console.log('Schedule created successfully');
+      
+      // 2. Update officer's shift_type_id if toggle is enabled
+      if (updateOfficerShift && selectedShift) {
+        console.log(`Updating officer's shift_type_id to: ${selectedShift}`);
+        
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ shift_type_id: selectedShift })
+          .eq("id", selectedOfficer);
+        
+        if (profileError) {
+          console.error('Failed to update officer shift:', profileError);
+          // Don't throw - the schedule was created successfully
+          toast.warning("Schedule created but failed to update officer's shift assignment");
+        } else {
+          console.log('Officer shift assignment updated successfully');
+        }
+      }
+      
+      // Log to audit
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        await supabase.from('audit_logs').insert({
+          user_email: currentUser.email,
+          action_type: 'recurring_schedule_created',
+          table_name: 'recurring_schedules',
+          description: `Created recurring schedule for ${officer?.full_name} on ${daysOfWeek.find(d => d.value === parseInt(selectedDay))?.label} shift (${shift?.name}). ${updateOfficerShift ? 'Also updated officer shift assignment.' : 'Officer shift assignment not updated.'}`
+        });
+      }
     },
     onSuccess: () => {
-      toast.success("Recurring schedule created");
+      toast.success("Recurring schedule created successfully");
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["officers"] }); // Refresh officers list
+      queryClient.invalidateQueries({ queryKey: ["officers-for-alerts"] }); // Refresh for manual alerts
       onOpenChange(false);
       setSelectedOfficer("");
       setSelectedShift("");
       setSelectedPosition("none");
       setSelectedDay("");
       setUnitNumber("");
+      setUpdateOfficerShift(true); // Reset to default
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create schedule");
     },
   });
+
+  // Get current officer's assigned shift for display
+  const getCurrentOfficerShift = () => {
+    if (!selectedOfficer || !officers || !shiftTypes) return null;
+    
+    const officer = officers.find(o => o.id === selectedOfficer);
+    if (!officer?.shift_type_id) return null;
+    
+    return shiftTypes.find(s => s.id === officer.shift_type_id);
+  };
+
+  const currentOfficerShift = getCurrentOfficerShift();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,10 +171,18 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
                 {officers?.map((officer) => (
                   <SelectItem key={officer.id} value={officer.id}>
                     {officer.full_name} ({officer.badge_number})
+                    {officer.shift_type_id && " ✓"}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Show current assigned shift if officer has one */}
+            {currentOfficerShift && (
+              <div className="text-sm text-muted-foreground p-2 bg-blue-50 rounded">
+                Currently assigned to: <span className="font-medium">{currentOfficerShift.name}</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -153,7 +217,28 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
             </Select>
           </div>
 
-          {/* NEW: Assignment Details Section */}
+          {/* NEW: Shift Assignment Toggle */}
+          <div className="space-y-2 p-3 border rounded-lg bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="font-medium">Update Officer's Assigned Shift</Label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, this will also update the officer's profile to be assigned to this shift
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={updateOfficerShift}
+                  onChange={(e) => setUpdateOfficerShift(e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Assignment Details Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-blue-50/30">
             <h4 className="font-medium text-sm flex items-center gap-2">
               <Building className="h-4 w-4" />

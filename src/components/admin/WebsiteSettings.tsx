@@ -518,49 +518,136 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const ManualAlertSender = () => {
     const [open, setOpen] = useState(false);
     const [message, setMessage] = useState("");
-    const [selectedShifts, setSelectedShifts] = useState<string[]>(['Days', 'Evenings', 'Nights']);
+    const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
     const [isSending, setIsSending] = useState(false);
-    const [sendMethod, setSendMethod] = useState<'email' | 'sms' | 'both'>('both');
+    const [sendMethod, setSendMethod] = useState<'in_app' | 'all'>('in_app');
 
-    // Fetch officers with their CURRENT shift assignments
-    const { data: officers, isLoading } = useQuery({
-      queryKey: ['officers-for-alerts'],
+    // Get shift types from database
+    const { data: shiftTypes } = useQuery({
+      queryKey: ['shift-types'],
       queryFn: async () => {
-        // First, get all active officers
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, full_name, badge_number, phone, email')
-          .eq('active', true)
-          .order('full_name', { ascending: true });
-
-        if (profilesError) throw profilesError;
-
-        // For each officer, get their current shift
-        const officersWithShifts = await Promise.all(
-          profiles.map(async (officer) => {
-            const { data: currentShift } = await supabase
-              .rpc('get_current_officer_shift', {
-                officer_id_param: officer.id
-              });
-
-            return {
-              ...officer,
-              current_shift: currentShift && currentShift[0] ? {
-                id: currentShift[0].shift_type_id,
-                name: currentShift[0].shift_name
-              } : null
-            };
-          })
-        );
-
-        return officersWithShifts;
+        const { data, error } = await supabase
+          .from('shift_types')
+          .select('id, name')
+          .order('name', { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching shift types:', error);
+          return [];
+        }
+        console.log('Shift types loaded:', data);
+        return data;
       },
     });
 
+    // Query to get officers with their CURRENT shift based on TODAY'S schedule
+    const { data: officersWithShifts, isLoading } = useQuery({
+      queryKey: ['officers-with-current-shifts', new Date().toISOString().split('T')[0]],
+      queryFn: async () => {
+        console.log('🔍 Fetching officers with current shifts...');
+        
+        // Today's day of week (0 = Sunday, 1 = Monday, etc.)
+        const todayDayOfWeek = new Date().getDay();
+        const todayDate = new Date().toISOString().split('T')[0];
+        
+        console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
+        
+        try {
+          // Query to get officers with their current schedule for TODAY
+          const { data, error } = await supabase
+            .from('profiles')
+            .select(`
+              id, 
+              full_name, 
+              badge_number, 
+              phone, 
+              email,
+              recurring_schedules!inner(
+                shift_type_id,
+                shift_types!inner(
+                  id,
+                  name
+                ),
+                start_date,
+                end_date,
+                is_active
+              )
+            `)
+            .eq('active', true)
+            .eq('recurring_schedules.day_of_week', todayDayOfWeek)
+            .eq('recurring_schedules.is_active', true)
+            .lte('recurring_schedules.start_date', todayDate)
+            .or(`recurring_schedules.end_date.is.null,recurring_schedules.end_date.gte.${todayDate}`)
+            .order('full_name', { ascending: true });
+
+          if (error) {
+            console.error('❌ Error fetching officers with shifts:', error);
+            
+            // Fallback: Try a simpler query without the complex join
+            console.log('🔄 Trying fallback query...');
+            const { data: simpleData, error: simpleError } = await supabase
+              .from('profiles')
+              .select('id, full_name, badge_number, phone, email')
+              .eq('active', true)
+              .order('full_name', { ascending: true });
+            
+            if (simpleError) throw simpleError;
+            
+            // Return officers without shift info for now
+            return simpleData.map(officer => ({
+              ...officer,
+              current_shift: null
+            }));
+          }
+
+          console.log(`✅ Found ${data?.length || 0} officers with schedules today`);
+
+          // Process the data to extract shift information
+          const processedOfficers = data?.map(officer => {
+            // Get the first schedule (should be only one for today)
+            const schedule = officer.recurring_schedules?.[0];
+            const shiftType = schedule?.shift_types;
+            
+            return {
+              id: officer.id,
+              full_name: officer.full_name,
+              badge_number: officer.badge_number,
+              phone: officer.phone,
+              email: officer.email,
+              current_shift: shiftType ? {
+                id: shiftType.id,
+                name: shiftType.name
+              } : null
+            };
+          }) || [];
+
+          return processedOfficers;
+        } catch (error) {
+          console.error('❌ Error in officers query:', error);
+          return [];
+        }
+      },
+    });
+
+    // Set default selected shifts when shiftTypes are loaded
+    useEffect(() => {
+      if (shiftTypes && shiftTypes.length > 0 && selectedShifts.length === 0) {
+        // Select ALL shifts by default
+        const allShiftNames = shiftTypes.map(st => st.name);
+        setSelectedShifts(allShiftNames);
+        console.log('✅ Default shifts selected:', allShiftNames);
+      }
+    }, [shiftTypes]);
+
     // Filter officers by selected shifts
-    const filteredOfficers = officers?.filter(officer => {
-      const shiftName = officer.current_shift?.name;
-      return shiftName && selectedShifts.includes(shiftName);
+    const filteredOfficers = officersWithShifts?.filter(officer => {
+      // If officer has no shift, they won't be included unless we have a "No Shift" option
+      if (!officer.current_shift) {
+        return false; // Skip officers without a current shift
+      }
+      
+      // Check if officer's shift is in selected shifts
+      return selectedShifts.includes(officer.current_shift.name);
     }) || [];
 
     const handleShiftToggle = (shift: string) => {
@@ -569,6 +656,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       } else {
         setSelectedShifts([...selectedShifts, shift]);
       }
+      console.log('Selected shifts:', selectedShifts);
     };
 
     const handleSendAlert = async () => {
@@ -583,19 +671,40 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       }
 
       setIsSending(true);
+      console.log(`📤 Starting to send alert to ${filteredOfficers.length} officers...`);
 
       try {
-        const results = {
-          email: { sent: 0, failed: 0 },
-          sms: { sent: 0, failed: 0 }
-        };
+        let successful = 0;
+        let failed = 0;
 
         // Process each officer
         for (const officer of filteredOfficers) {
           try {
-            // Send email if selected
-            if (sendMethod === 'email' || sendMethod === 'both') {
-              if (officer.email) {
+            console.log(`📤 Sending to ${officer.full_name} (${officer.current_shift?.name})...`);
+            
+            // Send in-app notification
+            const { error: notificationError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: officer.id,
+                title: 'Department Alert',
+                message: message,
+                type: 'manual_alert',
+                is_read: false,
+                created_at: new Date().toISOString()
+              });
+
+            if (notificationError) {
+              console.error(`❌ Failed to send in-app notification to ${officer.full_name}:`, notificationError);
+              failed++;
+            } else {
+              console.log(`✅ In-app notification sent to ${officer.full_name}`);
+              successful++;
+            }
+
+            // Optional: Send email if selected
+            if (sendMethod === 'all' && officer.email) {
+              try {
                 const emailResponse = await fetch('/api/send-vacancy-alert', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -607,85 +716,83 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                   })
                 });
 
-                if (emailResponse.ok) {
-                  results.email.sent++;
+                if (!emailResponse.ok) {
+                  console.warn(`⚠️ Email failed for ${officer.full_name}`);
                 } else {
-                  results.email.failed++;
+                  console.log(`✅ Email sent to ${officer.full_name}`);
                 }
-              } else {
-                results.email.failed++; // No email address
+              } catch (emailError) {
+                console.warn(`⚠️ Email error for ${officer.full_name}:`, emailError);
               }
             }
 
-            // Send SMS if selected
-            if (sendMethod === 'sms' || sendMethod === 'both') {
-              if (officer.phone) {  // Changed from phone_number to phone
+            // Optional: Send SMS if selected  
+            if (sendMethod === 'all' && officer.phone) {
+              try {
                 const smsResponse = await fetch('/api/send-text-alert', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    to: officer.phone,  // Changed from phone_number to phone
+                    to: officer.phone,
                     message: `Department Alert: ${message}`
                   })
                 });
 
-                if (smsResponse.ok) {
-                  results.sms.sent++;
+                if (!smsResponse.ok) {
+                  console.warn(`⚠️ SMS failed for ${officer.full_name}`);
                 } else {
-                  results.sms.failed++;
+                  console.log(`✅ SMS sent to ${officer.full_name}`);
                 }
-              } else {
-                results.sms.failed++; // No phone number
+              } catch (smsError) {
+                console.warn(`⚠️ SMS error for ${officer.full_name}:`, smsError);
               }
             }
 
-            // Also send in-app notification
-            await supabase
-              .from('notifications')
-              .insert({
-                user_id: officer.id,
-                title: 'Department Alert',
-                message: message,
-                type: 'manual_alert',
-                is_read: false,
-                created_at: new Date().toISOString()
-              });
-
           } catch (error) {
-            console.error(`Error sending alert to ${officer.full_name}:`, error);
+            console.error(`❌ Error sending alert to ${officer.full_name}:`, error);
+            failed++;
           }
         }
 
-        // Show results summary
-        const summary = [];
-        if (sendMethod === 'email' || sendMethod === 'both') {
-          summary.push(`Email: ${results.email.sent} sent, ${results.email.failed} failed`);
-        }
-        if (sendMethod === 'sms' || sendMethod === 'both') {
-          summary.push(`SMS: ${results.sms.sent} sent, ${results.sms.failed} failed`);
-        }
-
-        toast.success(`Alert sent to ${filteredOfficers.length} officers. ${summary.join('; ')}`);
-        
         // Log to audit
         const { data: userData } = await supabase.auth.getUser();
         await supabase.from('audit_logs').insert({
           user_email: userData.user?.email,
           action_type: 'manual_alert_sent',
           table_name: 'notifications',
-          description: `Sent manual alert to ${filteredOfficers.length} officers on ${selectedShifts.join(', ')} shifts. Message: ${message.substring(0, 100)}...`
+          description: `Sent manual alert to ${successful} officers on shifts: ${selectedShifts.join(', ')}. Message: ${message.substring(0, 100)}...`
         });
 
+        toast.success(`Alert sent to ${successful} officers on ${selectedShifts.length} shift(s)`);
         setOpen(false);
         setMessage("");
 
       } catch (error) {
-        console.error('Error sending manual alert:', error);
+        console.error('❌ Error sending manual alert:', error);
         toast.error('Failed to send alert');
       } finally {
         setIsSending(false);
       }
     };
+
+    // Debug: Log what we're getting
+    useEffect(() => {
+      console.log('🔍 DEBUG - Manual Alert System:', {
+        shiftTypesCount: shiftTypes?.length,
+        officersCount: officersWithShifts?.length,
+        filteredCount: filteredOfficers.length,
+        selectedShifts,
+        today: new Date().toLocaleDateString(),
+        dayOfWeek: new Date().getDay()
+      });
+      
+      if (officersWithShifts && officersWithShifts.length > 0) {
+        console.log('Sample officers:', officersWithShifts.slice(0, 3).map(o => ({
+          name: o.full_name,
+          shift: o.current_shift?.name || 'No shift'
+        })));
+      }
+    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts]);
 
     return (
       <Card>
@@ -704,20 +811,23 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             <div>
               <Label className="text-base mb-2 block">Filter by Shift</Label>
               <div className="flex flex-wrap gap-2">
-                {['Days', 'Evenings', 'Nights'].map((shift) => (
+                {shiftTypes?.map((shift) => (
                   <Button
-                    key={shift}
+                    key={shift.id}
                     type="button"
-                    variant={selectedShifts.includes(shift) ? "default" : "outline"}
-                    onClick={() => handleShiftToggle(shift)}
+                    variant={selectedShifts.includes(shift.name) ? "default" : "outline"}
+                    onClick={() => handleShiftToggle(shift.name)}
                     className="flex-1 min-w-[100px]"
                   >
-                    {shift}
+                    {shift.name}
                   </Button>
                 ))}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                Selected shifts: {selectedShifts.length > 0 ? selectedShifts.join(', ') : 'None'}
+                Selected: {selectedShifts.length > 0 ? selectedShifts.join(', ') : 'None'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Based on TODAY'S schedule ({new Date().toLocaleDateString()})
               </p>
             </div>
 
@@ -731,9 +841,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               </div>
               {!isLoading && (
                 <div className="text-sm text-muted-foreground mt-2">
-                  {selectedShifts.length === 0 ? 'No shifts selected' : 
-                   filteredOfficers.length === 0 ? 'No officers found on selected shifts' :
-                   'These officers will receive the alert'}
+                  {selectedShifts.length === 0 
+                    ? 'Select shifts to see affected officers' 
+                    : filteredOfficers.length === 0 
+                      ? 'No officers scheduled on selected shifts today' 
+                      : `${filteredOfficers.length} officer(s) will receive the alert`}
                 </div>
               )}
             </div>
@@ -744,29 +856,25 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant={sendMethod === 'both' ? "default" : "outline"}
-                  onClick={() => setSendMethod('both')}
+                  variant={sendMethod === 'in_app' ? "default" : "outline"}
+                  onClick={() => setSendMethod('in_app')}
                   className="flex-1 min-w-[100px]"
                 >
-                  Email & SMS
+                  In-App Only
                 </Button>
                 <Button
                   type="button"
-                  variant={sendMethod === 'email' ? "default" : "outline"}
-                  onClick={() => setSendMethod('email')}
+                  variant={sendMethod === 'all' ? "default" : "outline"}
+                  onClick={() => setSendMethod('all')}
                   className="flex-1 min-w-[100px]"
                 >
-                  Email Only
-                </Button>
-                <Button
-                  type="button"
-                  variant={sendMethod === 'sms' ? "default" : "outline"}
-                  onClick={() => setSendMethod('sms')}
-                  className="flex-1 min-w-[100px]"
-                >
-                  SMS Only
+                  All Methods
                 </Button>
               </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                <strong>In-App Only:</strong> Send only in-app notifications (always works)<br/>
+                <strong>All Methods:</strong> Also try email/SMS (requires contact info)
+              </p>
             </div>
           </div>
 
@@ -776,7 +884,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               <Button 
                 className="w-full" 
                 size="lg"
-                disabled={isLoading || selectedShifts.length === 0}
+                disabled={isLoading || filteredOfficers.length === 0 || selectedShifts.length === 0}
               >
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Create Manual Alert
@@ -786,13 +894,13 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               <DialogHeader>
                 <DialogTitle>Send Manual Alert</DialogTitle>
                 <DialogDescription>
-                  This alert will be sent to {filteredOfficers.length} officers on {selectedShifts.join(', ')} shifts via {sendMethod === 'both' ? 'Email & SMS' : sendMethod === 'email' ? 'Email only' : 'SMS only'}.
+                  This alert will be sent to {filteredOfficers.length} officer(s) on {selectedShifts.join(', ')} shifts via {sendMethod === 'in_app' ? 'in-app notifications only' : 'in-app, email, and SMS'}.
                 </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="alert-message">Alert Message</Label>
+                  <Label htmlFor="alert-message">Alert Message *</Label>
                   <Textarea
                     id="alert-message"
                     placeholder="Enter your alert message here..."
@@ -800,15 +908,20 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
                     onChange={(e) => setMessage(e.target.value)}
                     rows={6}
                     className="resize-none"
+                    required
                   />
                   <p className="text-sm text-muted-foreground">
-                    {message.length}/1000 characters
+                    {message.length}/500 characters
                   </p>
                 </div>
                 
                 <div className="bg-muted p-3 rounded-lg">
                   <h4 className="font-medium mb-2">Preview:</h4>
                   <p className="text-sm whitespace-pre-wrap">{message || 'Your message will appear here...'}</p>
+                </div>
+                
+                <div className="text-sm text-muted-foreground">
+                  <strong>Note:</strong> This alert will be sent to officers scheduled on {selectedShifts.join(', ')} shifts today.
                 </div>
               </div>
               
@@ -841,7 +954,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     );
   };
   // ========== END OF MANUAL ALERT SENDER ==========
-
   // Fetch current settings with better error handling
   const { data: settings, isLoading } = useQuery({
     queryKey: ['website-settings'],

@@ -1,4 +1,3 @@
-// Save this as MobileNavigation.tsx
 import { Calendar, Users, AlertTriangle, Clock, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,8 +72,15 @@ const MobileNavigation = ({
     navigate("/auth");
   };
 
+  // Define types for navigation items
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }
+
   // Navigation items for regular officers
-  const officerItems = [
+  const officerItems: NavItem[] = [
     { id: 'daily', label: 'Riding List', icon: Calendar },
     { id: 'schedule', label: 'The Book', icon: Calendar },
   ];
@@ -85,7 +91,7 @@ const MobileNavigation = ({
   }
 
   // Navigation items for admin/supervisor
-  const adminSupervisorItems = [
+  const adminSupervisorItems: NavItem[] = [
     { id: 'daily', label: 'Riding List', icon: Calendar },
     { id: 'schedule', label: 'The Book', icon: Calendar },
     { id: 'officers', label: 'Officers', icon: Users },
@@ -109,27 +115,30 @@ const MobileNavigation = ({
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 md:hidden">
       <div className="flex items-center justify-around h-16">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full transition-colors",
-              activeTab === item.id
-                ? "text-primary bg-primary/5"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            <item.icon className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">{item.label}</span>
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onTabChange(item.id)}
+              className={cn(
+                "flex flex-col items-center justify-center h-full transition-colors flex-1",
+                activeTab === item.id
+                  ? "text-primary bg-primary/5"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              <Icon className="h-5 w-5 mb-1" />
+              <span className="text-xs font-medium">{item.label}</span>
+            </button>
+          );
+        })}
         
         {/* Logout button as a separate item */}
         <Button
           variant="ghost"
           onClick={handleSignOut}
-          className="flex flex-col items-center justify-center flex-1 h-full text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          className="flex flex-col items-center justify-center h-full text-muted-foreground hover:text-foreground hover:bg-muted/50 flex-1"
           size="sm"
         >
           <LogOut className="h-5 w-5 mb-1" />

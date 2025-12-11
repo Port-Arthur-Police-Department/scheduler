@@ -73,15 +73,15 @@ const determineUserCurrentShift = async (userId: string): Promise<string> => {
       
       if (shiftType) {
         console.log(`✅ User ${userId} is assigned to shift: ${shiftType.name} (ID: ${shiftType.id})`);
-        return shiftType.id; // Return the shift ID
+        return shiftType.id;
       }
     }
 
     console.log(`⚠️ User ${userId} has no active schedule found, will use default`);
-    return "all"; // Default to "all" if no schedule found
+    return "all";
   } catch (error) {
     console.error('❌ Error determining user shift:', error);
-    return "all"; // Default to "all" on error
+    return "all";
   }
 };
 
@@ -451,14 +451,16 @@ const fetchProfile = async (userId: string) => {
     
     // Determine user's current shift based on their schedule
     setDeterminingShift(true);
+    console.log(`🎯 Starting shift determination for user ${userId}`);
     const shiftId = await determineUserCurrentShift(userId);
     setUserCurrentShift(shiftId);
     setDeterminingShift(false);
     
-    console.log(`🎯 User's determined shift ID: ${shiftId}`);
+    console.log(`✅ User's determined shift ID: ${shiftId}`);
   } catch (error: any) {
     console.error("Error fetching profile:", error);
     setDeterminingShift(false);
+    setUserCurrentShift("all"); // Set default on error
   } finally {
     setLoading(false);
   }

@@ -545,7 +545,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     
     console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
 
-     // EVEN SIMPLER: Just get all officers for now (we'll filter by shift later)
+    // EVEN SIMPLER: Just get all officers for now (we'll filter by shift later)
     const { data: officersWithShifts, isLoading } = useQuery({
       queryKey: ['all-officers-for-alerts'],
       queryFn: async () => {
@@ -594,35 +594,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       },
       enabled: !!shiftTypes, // Only run when shiftTypes are loaded
     });
-
-          // Transform the data
-          const processedOfficers = data?.map(item => ({
-            id: item.profiles.id,
-            full_name: item.profiles.full_name,
-            badge_number: item.profiles.badge_number,
-            phone: item.profiles.phone,
-            email: item.profiles.email,
-            current_shift: item.shift_types ? {
-              id: item.shift_type_id,
-              name: item.shift_types.name
-            } : null
-          })) || [];
-
-          // Log who was found
-          if (processedOfficers.length > 0) {
-            console.log('👮 Officers scheduled today:', 
-              processedOfficers.map(o => `${o.full_name}: ${o.current_shift?.name}`)
-            );
-          }
-
-          return processedOfficers;
-        } catch (error) {
-          console.error('❌ Error in officers query:', error);
-          return [];
-        }
-      },
-    });
-
     // Set default selected shifts when shiftTypes are loaded
     useEffect(() => {
       if (shiftTypes && shiftTypes.length > 0 && selectedShifts.length === 0) {

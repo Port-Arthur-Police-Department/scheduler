@@ -33,18 +33,21 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 
+// In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {
   selectedDate: Date;
   filterShiftId?: string;
   isAdminOrSupervisor?: boolean;
   userRole?: 'officer' | 'supervisor' | 'admin';
+  userCurrentShift?: string; // NEW: Add this prop
 }
 
 export const DailyScheduleViewMobile = ({ 
   selectedDate, 
   filterShiftId = "all", 
   isAdminOrSupervisor = false,
-  userRole = 'officer'
+  userRole = 'officer',
+  userCurrentShift = "all" // NEW: Default parameter
 }: DailyScheduleViewMobileProps) => {
   const [expandedShifts, setExpandedShifts] = useState<Set<string>>(new Set());
   const [expandedOfficers, setExpandedOfficers] = useState<Set<string>>(new Set());
@@ -52,12 +55,51 @@ export const DailyScheduleViewMobile = ({
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<any>(null);
-  const [selectedShiftId, setSelectedShiftId] = useState<string>("");
+  const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift); // Initialize with userCurrentShift
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
   const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+  // Add useEffect to update selectedShiftId when userCurrentShift changes
+  useEffect(() => {
+    if (userCurrentShift && userCurrentShift !== selectedShiftId) {
+      console.log("🔄 Mobile: Updating selected shift from prop:", userCurrentShift);
+      setSelectedShiftId(userCurrentShift);
+    }
+  }, [userCurrentShift]);
+
+  // Fetch all available shifts first
+  const { data: allShifts, isLoading: shiftsLoading } = useQuery({
+    queryKey: ["shift-types-mobile"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shift_types")
+        .select("*")
+        .order("start_time");
+      
+      if (error) throw error;
+      
+      // Set default selected shift to userCurrentShift if provided, otherwise first shift
+      if (data && data.length > 0) {
+        if (userCurrentShift && userCurrentShift !== "all") {
+          // Check if userCurrentShift exists in available shifts
+          const userShiftExists = data.some(shift => shift.id === userCurrentShift);
+          if (userShiftExists) {
+            console.log("🎯 Mobile: Setting user's assigned shift:", userCurrentShift);
+          } else {
+            console.log("⚠️ Mobile: User's assigned shift not found, using first shift");
+            setSelectedShiftId(data[0].id);
+          }
+        } else if (!selectedShiftId) {
+          setSelectedShiftId(data[0].id);
+        }
+      }
+      
+      return data || [];
+    },
+  });
 
   // Fetch all available shifts first
   const { data: allShifts, isLoading: shiftsLoading } = useQuery({
@@ -240,18 +282,25 @@ export const DailyScheduleViewMobile = ({
     );
   }
 
-  return (
-    <div className="pb-20">
-      <Card className="mx-4 mt-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
-            <Calendar className="h-5 w-5 inline mr-2" />
-            Schedule for {format(selectedDate, "MMM d, yyyy")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Shift Selector */}
-          <div className="mb-4">
+return (
+  <div className="pb-20">
+    <Card className="mx-4 mt-4">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">
+          <Calendar className="h-5 w-5 inline mr-2" />
+          Schedule for {format(selectedDate, "MMM d, yyyy")}
+          {/* Add indicator for assigned shift */}
+          {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
+            <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
+              Your Shift
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Shift Selector */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
             <Select value={selectedShiftId} onValueChange={handleShiftChange}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a shift">
@@ -259,6 +308,7 @@ export const DailyScheduleViewMobile = ({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Shifts</SelectItem>
                 {allShifts?.map((shift) => (
                   <SelectItem key={shift.id} value={shift.id}>
                     {shift.name} ({shift.start_time} - {shift.end_time})
@@ -266,12 +316,24 @@ export const DailyScheduleViewMobile = ({
                 ))}
               </SelectContent>
             </Select>
-            {selectedShiftId && allShifts?.find(s => s.id === selectedShiftId) && (
-              <p className="text-sm text-muted-foreground mt-2 text-center">
+          </div>
+          {selectedShiftId && allShifts?.find(s => s.id === selectedShiftId) ? (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
                 {allShifts.find(s => s.id === selectedShiftId)?.start_time} - {allShifts.find(s => s.id === selectedShiftId)?.end_time}
               </p>
-            )}
-          </div>
+              {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
+                <Badge variant="secondary" className="text-xs">
+                  Your Assigned Shift
+                </Badge>
+              )}
+            </div>
+          ) : selectedShiftId === "all" ? (
+            <p className="text-sm text-muted-foreground mt-2 text-center">
+              Viewing all shifts
+            </p>
+          ) : null}
+        </div>
 
           {/* Loading state for schedule */}
           {scheduleLoading ? (

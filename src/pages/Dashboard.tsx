@@ -196,6 +196,20 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     });
   }, [user, profile, primaryRole, isAdminOrSupervisor, roleLoading, isMobile, activeTab]);
 
+  // Add this near your other useEffect hooks (around line 200-250 in your code):
+useEffect(() => {
+  console.log("🎯 Dashboard userCurrentShift state update:", {
+    userCurrentShift,
+    determiningShift,
+    hasUser: !!user?.id,
+    userEmail: user?.email
+  });
+  
+  if (userCurrentShift && userCurrentShift !== "all") {
+    console.log("✅ User's current shift ID determined:", userCurrentShift);
+  }
+}, [userCurrentShift, user?.id, user?.email]);
+
   useEffect(() => {
   console.log("🔍 Shift Determination Debug:", {
     userId: user?.id,
@@ -533,8 +547,15 @@ if (loading || roleLoading || determiningShift) {
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <p className="mt-4 text-muted-foreground">
-          {determiningShift ? "Determining your shift assignment..." : "Loading..."}
+          {determiningShift ? "Determining your shift assignment..." : 
+           loading ? "Loading your profile..." : 
+           "Checking your permissions..."}
         </p>
+        {determiningShift && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Looking up your scheduled shift...
+          </p>
+        )}
       </div>
     </div>
   );
@@ -553,6 +574,7 @@ const renderTabContent = () => {
             filterShiftId={userCurrentShift} // Use user's determined shift
             isAdminOrSupervisor={isAdminOrSupervisor}
             userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+            userCurrentShift={userCurrentShift} // ADD THIS LINE: Pass user's current shift
           />
         ) : (
           <DailyScheduleManagement 
@@ -568,6 +590,7 @@ const renderTabContent = () => {
             filterShiftId={userCurrentShift} // Use user's determined shift
             isAdminOrSupervisor={false}
             userRole="officer"
+            userCurrentShift={userCurrentShift} // ADD THIS LINE: Pass user's current shift
           />
         ) : (
           <DailyScheduleView 
@@ -596,10 +619,10 @@ const renderTabContent = () => {
       return isAdminOrSupervisor ? <VacancyManagement /> : <VacancyAlerts userId={user!.id} isAdminOrSupervisor={false} />;
     case "staff":
       return <StaffManagement />;
-   case "requests":
-     return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
-case "settings":
-  return <WebsiteSettings isAdmin={isAdmin} isSupervisor={isSupervisor} />;
+    case "requests":
+      return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
+    case "settings":
+      return <WebsiteSettings isAdmin={isAdmin} isSupervisor={isSupervisor} />;
     default:
       return (
         <Card>

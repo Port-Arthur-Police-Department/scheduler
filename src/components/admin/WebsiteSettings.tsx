@@ -522,13 +522,76 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     const [isSending, setIsSending] = useState(false);
     const [sendMethod, setSendMethod] = useState<'in_app' | 'all'>('in_app');
 
+    // ========== HELPER FUNCTIONS ==========
+    // Helper function to parse time string to minutes since midnight
+    const parseTimeToMinutes = (timeStr: string): number => {
+      if (!timeStr) return 0;
+      
+      // Handle formats like "06:30:00" or "14:30:00"
+      const parts = timeStr.split(':').map(Number);
+      const hours = parts[0];
+      const minutes = parts[1] || 0;
+      
+      return hours * 60 + minutes;
+    };
+
+    // Helper to format time for display (24h to 12h)
+    const formatTimeForDisplay = (timeStr: string): string => {
+      const minutes = parseTimeToMinutes(timeStr);
+      const hours24 = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      
+      const period = hours24 >= 12 ? 'PM' : 'AM';
+      const hours12 = hours24 % 12 || 12; // Convert 0 to 12
+      
+      return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+    };
+
+    // Main function to check if officer is on shift NOW
+    const isOfficerCurrentlyOnShift = (shiftType: any): boolean => {
+      if (!shiftType) return false;
+      
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      
+      const startMinutes = parseTimeToMinutes(shiftType.start_time);
+      const endMinutes = parseTimeToMinutes(shiftType.end_time);
+      const crossesMidnight = shiftType.crosses_midnight || endMinutes < startMinutes;
+      
+      if (crossesMidnight) {
+        // Shift crosses midnight (e.g., 14:30 to 00:30)
+        // Active if: current time >= start time (today) OR current time < end time (tomorrow)
+        return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+      } else {
+        // Normal shift (same day, e.g., 06:30 to 16:30)
+        // Active if: start time <= current time < end time
+        return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+      }
+    };
+
+    // Get which shifts are currently active based on time
+    const getCurrentlyActiveShifts = (shiftTypes: any[]): string[] => {
+      const activeShifts: string[] = [];
+      const currentTime = new Date();
+      const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+      
+      shiftTypes?.forEach(shift => {
+        if (isOfficerCurrentlyOnShift(shift)) {
+          activeShifts.push(shift.name);
+        }
+      });
+      
+      return activeShifts;
+    };
+    // ========== END HELPER FUNCTIONS ==========
+
     // Get shift types from database
     const { data: shiftTypes } = useQuery({
       queryKey: ['shift-types'],
       queryFn: async () => {
         const { data, error } = await supabase
           .from('shift_types')
-          .select('id, name')
+          .select('id, name, start_time, end_time, crosses_midnight')
           .order('name', { ascending: true });
         
         if (error) {
@@ -539,54 +602,100 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       },
     });
 
-    // Get today's day of week (0 = Sunday, 1 = Monday, etc.)
+    // Get today's day of week
     const todayDayOfWeek = new Date().getDay();
     const todayDate = new Date().toISOString().split('T')[0];
     
     console.log(`📅 Today: ${todayDate}, Day of week: ${todayDayOfWeek}`);
 
-    // EVEN SIMPLER: Just get all officers for now (we'll filter by shift later)
+    // SIMPLE: Get all active officers and manually calculate their shift
     const { data: officersWithShifts, isLoading } = useQuery({
-      queryKey: ['all-officers-for-alerts'],
+      queryKey: ['officers-manual-alerts', todayDayOfWeek],
       queryFn: async () => {
-        console.log('🔍 Fetching all active officers...');
+        console.log('🔍 Fetching officers for manual alerts...');
         
         try {
-          // Get all active officers
-          const { data: officers, error } = await supabase
+          // 1. Get all active officers
+          const { data: officers, error: officersError } = await supabase
             .from('profiles')
             .select('id, full_name, badge_number, phone, email')
             .eq('active', true)
             .order('full_name', { ascending: true });
 
-          if (error) {
-            console.error('❌ Error fetching officers:', error);
+          if (officersError) {
+            console.error('❌ Error fetching officers:', officersError);
             return [];
           }
 
-          console.log(`✅ Found ${officers?.length || 0} active officers`);
+          // 2. For each officer, check their schedule for TODAY
+          const officersWithCurrentShifts = await Promise.all(
+            officers.map(async (officer) => {
+              try {
+                // Get officer's schedules for today
+                const { data: todaysSchedules } = await supabase
+                  .from('recurring_schedules')
+                  .select('shift_type_id')
+                  .eq('officer_id', officer.id)
+                  .eq('day_of_week', todayDayOfWeek)
+                  .eq('is_active', true)
+                  .lte('start_date', todayDate)
+                  .or(`end_date.is.null,end_date.gte.${todayDate}`)
+                  .limit(1);
 
-          // For testing, assign dummy shifts
-          const shiftTypesList = shiftTypes || [];
-          const result = officers?.map((officer, index) => {
-            // Assign a shift for testing (rotate through available shifts)
-            const shiftIndex = index % (shiftTypesList.length || 1);
-            const shift = shiftTypesList[shiftIndex];
-            
-            return {
-              ...officer,
-              current_shift: shift ? {
-                id: shift.id,
-                name: shift.name
-              } : null
-            };
-          }) || [];
+                // If officer has a schedule today, find the shift
+                if (todaysSchedules && todaysSchedules.length > 0) {
+                  const schedule = todaysSchedules[0];
+                  
+                  // Find the shift type
+                  const shiftType = shiftTypes?.find(st => st.id === schedule.shift_type_id);
+                  
+                  if (shiftType) {
+                    // Check if this shift is currently active
+                    const isCurrentlyOnShift = isOfficerCurrentlyOnShift(shiftType);
+                    
+                    return {
+                      ...officer,
+                      current_shift: {
+                        id: shiftType.id,
+                        name: shiftType.name,
+                        is_active_now: isCurrentlyOnShift
+                      },
+                      shift_details: shiftType
+                    };
+                  }
+                }
 
-          console.log('📊 Officers with test shifts:', 
-            result.slice(0, 3).map(o => `${o.full_name}: ${o.current_shift?.name}`)
+                // No schedule or shift found
+                return {
+                  ...officer,
+                  current_shift: null
+                };
+              } catch (error) {
+                console.error(`❌ Error processing ${officer.full_name}:`, error);
+                return {
+                  ...officer,
+                  current_shift: null
+                };
+              }
+            })
           );
 
-          return result;
+          // Log results
+          const withShifts = officersWithCurrentShifts.filter(o => o.current_shift).length;
+          const activeNow = officersWithCurrentShifts.filter(o => o.current_shift?.is_active_now).length;
+          
+          console.log(`📊 Results: ${withShifts} officers with shifts, ${activeNow} currently on shift`);
+          
+          if (withShifts > 0) {
+            console.log('👮 Officers with shifts today:',
+              officersWithCurrentShifts
+                .filter(o => o.current_shift)
+                .slice(0, 5)
+                .map(o => `${o.full_name} (${o.current_shift?.name}${o.current_shift?.is_active_now ? ' - ACTIVE NOW' : ''})`)
+            );
+          }
+
+          return officersWithCurrentShifts;
         } catch (error) {
           console.error('❌ Error fetching officers:', error);
           return [];
@@ -594,6 +703,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       },
       enabled: !!shiftTypes, // Only run when shiftTypes are loaded
     });
+
     // Set default selected shifts when shiftTypes are loaded
     useEffect(() => {
       if (shiftTypes && shiftTypes.length > 0 && selectedShifts.length === 0) {
@@ -604,15 +714,12 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       }
     }, [shiftTypes]);
 
+    // Calculate which shifts are active right now
+    const activeShiftsNow = getCurrentlyActiveShifts(shiftTypes || []);
 
     // Filter officers by selected shifts
     const filteredOfficers = officersWithShifts?.filter(officer => {
-      // If officer has no shift, skip
-      if (!officer.current_shift) {
-        return false;
-      }
-      
-      // Check if officer's shift is in selected shifts
+      if (!officer.current_shift) return false;
       return selectedShifts.includes(officer.current_shift.name);
     }) || [];
 
@@ -622,7 +729,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       } else {
         setSelectedShifts([...selectedShifts, shift]);
       }
-      console.log('Selected shifts:', selectedShifts);
     };
 
     const handleSendAlert = async () => {
@@ -750,9 +856,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         officersCount: officersWithShifts?.length,
         filteredCount: filteredOfficers.length,
         selectedShifts,
-        hasSchedules: officersWithShifts?.length > 0
+        activeShiftsNow
       });
-    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts, todayDayOfWeek, todayDate]);
+    }, [shiftTypes, officersWithShifts, filteredOfficers, selectedShifts, todayDayOfWeek, todayDate, activeShiftsNow]);
 
     return (
       <Card>
@@ -767,18 +873,48 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
-            {/* Today's Info */}
+            {/* Current Time Info */}
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-medium text-blue-800">Today's Schedule</h4>
+                  <h4 className="font-medium text-blue-800">Current Time</h4>
                   <p className="text-sm text-blue-700">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br/>
+                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                <Badge variant="outline" className="bg-white">
-                  Day {todayDayOfWeek}
-                </Badge>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-blue-800">
+                    Active shifts: {activeShiftsNow.length > 0 ? activeShiftsNow.join(', ') : 'None'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Shift Schedule Display */}
+            <div>
+              <Label className="text-base mb-2 block">Shift Schedule</Label>
+              <div className="space-y-2 text-sm">
+                {shiftTypes?.map(shift => {
+                  const startTime = formatTimeForDisplay(shift.start_time);
+                  const endTime = formatTimeForDisplay(shift.end_time);
+                  const crosses = shift.crosses_midnight || parseTimeToMinutes(shift.end_time) < parseTimeToMinutes(shift.start_time);
+                  const isActive = activeShiftsNow.includes(shift.name);
+                  
+                  return (
+                    <div 
+                      key={shift.id} 
+                      className={`flex justify-between items-center p-2 rounded ${isActive ? 'bg-green-100 border border-green-200' : 'bg-gray-50'}`}
+                    >
+                      <span className="font-medium">{shift.name}</span>
+                      <span>
+                        {startTime} - {endTime}
+                        {crosses && ' 🌙'}
+                      </span>
+                      {isActive && <span className="text-green-600 font-bold text-xs">ACTIVE</span>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -806,21 +942,21 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             {/* Affected Officers Count */}
             <div className="bg-muted p-4 rounded-lg">
               <div className="flex justify-between items-center">
-                <span className="font-medium">Officers Scheduled Today:</span>
+                <span className="font-medium">Officers with Shifts Today:</span>
                 <span className="text-lg font-bold">
-                  {isLoading ? 'Loading...' : officersWithShifts?.length || 0}
+                  {isLoading ? 'Loading...' : filteredOfficers.length}
                 </span>
               </div>
               <div className="text-sm text-muted-foreground mt-2">
                 {selectedShifts.length === 0 
-                  ? 'Select shifts to filter officers' 
+                  ? 'Select shifts to see affected officers' 
                   : filteredOfficers.length === 0 
                     ? 'No officers on selected shifts today' 
                     : `${filteredOfficers.length} officer(s) will receive the alert`}
               </div>
-              {!isLoading && officersWithShifts && officersWithShifts.length === 0 && (
+              {!isLoading && officersWithShifts && officersWithShifts.filter(o => o.current_shift).length === 0 && (
                 <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
-                  ⚠️ No officers are scheduled for today. Create schedules first.
+                  ⚠️ No officers have schedules for today. Create schedules in Schedule Management first.
                 </div>
               )}
             </div>

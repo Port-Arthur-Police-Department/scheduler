@@ -106,6 +106,7 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   show_pto_balances: false,
   pto_balances_visible: false,
   show_staffing_overview: true, // Added this
+  show_pto_tab: true,
 };
 
 const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
@@ -120,6 +121,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const [userCurrentShift, setUserCurrentShift] = useState<string>("all");
   const [determiningShift, setDeterminingShift] = useState<boolean>(false);
+  const showPtoTab = getSetting('show_pto_tab', true);
   const hash = location.hash.replace('#', '');
   const { 
     primaryRole, 
@@ -885,18 +887,20 @@ const renderTabContent = () => {
           <span className="hidden md:inline">Staff</span>
           <span className="md:hidden">Staff</span>
         </TabsTrigger>
-        <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-          <Clock className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">PTO</span>
-          <span className="md:hidden">PTO</span>
-        </TabsTrigger>
-        <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
-          <Settings className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">Settings</span>
-          <span className="md:hidden">Settings</span>
-        </TabsTrigger>
-      </TabsList>
-    ) : isAdminOrSupervisor ? (
+    {showPtoTab && (
+      <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+        <Clock className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">PTO</span>
+        <span className="md:hidden">PTO</span>
+      </TabsTrigger>
+    )}
+    <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
+      <Settings className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">Settings</span>
+      <span className="md:hidden">Settings</span>
+    </TabsTrigger>
+  </TabsList>
+) : isAdminOrSupervisor ? (
       // Supervisor tabs - All tabs except Settings (6 columns with PTO)
       <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 gap-1">
         <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
@@ -924,32 +928,37 @@ const renderTabContent = () => {
           <span className="hidden md:inline">Staff</span>
           <span className="md:hidden">Staff</span>
         </TabsTrigger>
-        <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-          <Clock className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">PTO</span>
-          <span className="md:hidden">PTO</span>
-        </TabsTrigger>
-      </TabsList>
-    ) : (
-      // Officer tabs - Daily, Weekly, and PTO tabs (3 columns)
-      <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-3 gap-1">
-        <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
-          <Calendar className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">Riding List</span>
-          <span className="md:hidden">Daily</span>
-        </TabsTrigger>
-        <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
-          <Calendar className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">The Book</span>
-          <span className="md:hidden">Weekly</span>
-        </TabsTrigger>
-        <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-          <Clock className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">PTO</span>
-          <span className="md:hidden">PTO</span>
-        </TabsTrigger>
-      </TabsList>
+    {showPtoTab && (
+      <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+        <Clock className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">PTO</span>
+        <span className="md:hidden">PTO</span>
+      </TabsTrigger>
     )}
+    {/* Note: No settings tab for supervisors */}
+  </TabsList>
+) : (
+  // Officer tabs - Daily, Weekly, and PTO tabs
+  <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-3 gap-1">
+    <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+      <Calendar className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">Riding List</span>
+      <span className="md:hidden">Daily</span>
+    </TabsTrigger>
+    <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+      <Calendar className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">The Book</span>
+      <span className="md:hidden">Weekly</span>
+    </TabsTrigger>
+    {showPtoTab && (
+      <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+        <Clock className="h-4 w-4 md:mr-2" />
+        <span className="hidden md:inline">PTO</span>
+        <span className="md:hidden">PTO</span>
+      </TabsTrigger>
+    )}
+  </TabsList>
+)}
     <TabsContent value={activeTab} className="space-y-6">
       {renderTabContent()}
     </TabsContent>

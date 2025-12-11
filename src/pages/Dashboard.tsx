@@ -41,6 +41,50 @@ import { ResponsiveTheBook } from "@/components/schedule/the-book";
 // Import the schedule data fetching function from DailyScheduleView
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";
 
+// Helper function to determine user's current shift
+const determineUserCurrentShift = async (userId: string): Promise<string> => {
+  try {
+    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDayOfWeek = new Date().getDay();
+    
+    console.log(`🔍 Determining shift for user ${userId} on ${todayDate}, day ${todayDayOfWeek}`);
+    
+    // Get the user's most recent active recurring schedule
+    const { data: activeSchedules } = await supabase
+      .from('recurring_schedules')
+      .select(`
+        shift_type_id,
+        start_date,
+        end_date,
+        day_of_week,
+        shift_types!inner(id, name, start_time, end_time, crosses_midnight)
+      `)
+      .eq('officer_id', userId)
+      .eq('is_active', true)
+      .lte('start_date', todayDate)
+      .or(`end_date.is.null,end_date.gte.${todayDate}`)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    // If user has an active schedule within period
+    if (activeSchedules && activeSchedules.length > 0) {
+      const schedule = activeSchedules[0];
+      const shiftType = schedule.shift_types;
+      
+      if (shiftType) {
+        console.log(`✅ User ${userId} is assigned to shift: ${shiftType.name} (ID: ${shiftType.id})`);
+        return shiftType.id; // Return the shift ID
+      }
+    }
+
+    console.log(`⚠️ User ${userId} has no active schedule found, will use default`);
+    return "all"; // Default to "all" if no schedule found
+  } catch (error) {
+    console.error('❌ Error determining user shift:', error);
+    return "all"; // Default to "all" on error
+  }
+};
+
 // Update the Dashboard props interface
 interface DashboardProps {
   isMobile: boolean;
@@ -74,6 +118,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [manualRefresh, setManualRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
+  const [userCurrentShift, setUserCurrentShift] = useState<string>("all");
+  const [determiningShift, setDeterminingShift] = useState<boolean>(false);
   const hash = location.hash.replace('#', '');
   const { 
     primaryRole, 
@@ -382,22 +428,31 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
+const fetchProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
 
-      if (error) throw error;
-      setProfile(data);
-    } catch (error: any) {
-      console.error("Error fetching profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (error) throw error;
+    setProfile(data);
+    
+    // Determine user's current shift based on their schedule
+    setDeterminingShift(true);
+    const shiftId = await determineUserCurrentShift(userId);
+    setUserCurrentShift(shiftId);
+    setDeterminingShift(false);
+    
+    console.log(`🎯 User's determined shift ID: ${shiftId}`);
+  } catch (error: any) {
+    console.error("Error fetching profile:", error);
+    setDeterminingShift(false);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

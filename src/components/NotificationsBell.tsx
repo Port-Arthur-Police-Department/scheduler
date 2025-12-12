@@ -14,11 +14,13 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export const NotificationsBell = () => {
   // All hooks at top level
   const [open, setOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const queryClient = useQueryClient();
   
   const { 
     inAppNotifications, 
@@ -63,23 +65,30 @@ export const NotificationsBell = () => {
     setIsClearing(true);
     
     try {
-      const { error } = await supabase
+      console.log('🗑️ Attempting to delete read notifications for user:', userId);
+      console.log('📊 Read notifications to delete:', readNotifications.length);
+      
+      const { error, count } = await supabase
         .from('notifications')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('user_id', userId)
         .eq('is_read', true);
 
       if (error) {
-        console.error('Error clearing read notifications:', error);
-        toast.error("Failed to clear notifications");
+        console.error('❌ Error clearing read notifications:', error);
+        toast.error("Failed to clear notifications: " + error.message);
       } else {
-        toast.success(`Cleared ${readNotifications.length} read notification${readNotifications.length > 1 ? 's' : ''}`);
+        console.log('✅ Successfully deleted notifications. Count:', count);
+        toast.success(`Cleared ${count || readNotifications.length} read notification${(count || readNotifications.length) > 1 ? 's' : ''}`);
         
-        // Force refetch of notifications
-        window.location.reload(); // Simple refresh to update the list
+        // Invalidate and refetch queries
+        await queryClient.invalidateQueries({ queryKey: ['in-app-notifications', userId] });
+        await queryClient.invalidateQueries({ queryKey: ['unread-notifications-count', userId] });
+        
+        console.log('🔄 Queries invalidated, refetching...');
       }
     } catch (error) {
-      console.error('Error clearing notifications:', error);
+      console.error('❌ Exception while clearing notifications:', error);
       toast.error("Failed to clear notifications");
     } finally {
       setIsClearing(false);

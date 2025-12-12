@@ -1,7 +1,7 @@
-// components/NotificationsBell.tsx - CHECK HOOK ORDER
+// components/NotificationsBell.tsx - UPDATED WITH CLEAR READ NOTIFICATIONS
 import { useState } from "react";
-import { Bell, Check, X, Clock } from "lucide-react";
-import { useNotifications } from "@/hooks/useNotifications"; // Make sure this import is correct
+import { Bell, Check, X, Clock, Trash2 } from "lucide-react";
+import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { 
   Popover, 
@@ -12,10 +12,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export const NotificationsBell = () => {
   // All hooks at top level
   const [open, setOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  
   const { 
     inAppNotifications, 
     notificationsLoading, 
@@ -24,7 +28,7 @@ export const NotificationsBell = () => {
     markAllAsRead,
     isEnabled,
     requestPermission,
-    testNotification 
+    userId 
   } = useNotifications(); 
 
   const handleBellClick = async () => {
@@ -42,12 +46,54 @@ export const NotificationsBell = () => {
     // You can add navigation logic here based on notification type
   };
 
+  const handleClearReadNotifications = async () => {
+    if (!userId) {
+      toast.error("User not authenticated");
+      return;
+    }
+
+    // Get count of read notifications before clearing
+    const readNotifications = inAppNotifications?.filter(n => n.is_read) || [];
+    
+    if (readNotifications.length === 0) {
+      toast.info("No read notifications to clear");
+      return;
+    }
+
+    setIsClearing(true);
+    
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', userId)
+        .eq('is_read', true);
+
+      if (error) {
+        console.error('Error clearing read notifications:', error);
+        toast.error("Failed to clear notifications");
+      } else {
+        toast.success(`Cleared ${readNotifications.length} read notification${readNotifications.length > 1 ? 's' : ''}`);
+        
+        // Force refetch of notifications
+        window.location.reload(); // Simple refresh to update the list
+      }
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+      toast.error("Failed to clear notifications");
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'pto_request':
         return <Clock className="h-4 w-4" />;
       case 'pto_status':
         return <Check className="h-4 w-4" />;
+      case 'manual_alert':
+        return <Bell className="h-4 w-4" />;
       default:
         return <Bell className="h-4 w-4" />;
     }
@@ -59,10 +105,15 @@ export const NotificationsBell = () => {
         return "bg-blue-50 border-blue-200";
       case 'pto_status':
         return "bg-green-50 border-green-200";
+      case 'manual_alert':
+        return "bg-orange-50 border-orange-200";
       default:
         return "bg-gray-50 border-gray-200";
     }
   };
+
+  // Count read notifications
+  const readCount = inAppNotifications?.filter(n => n.is_read).length || 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -147,16 +198,30 @@ export const NotificationsBell = () => {
           )}
         </ScrollArea>
         
-        <div className="p-3 border-t">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="w-full" 
-            onClick={testNotification}
-          >
-            Test Notification
-          </Button>
-        </div>
+        {/* Only show clear button if there are read notifications */}
+        {readCount > 0 && (
+          <div className="p-3 border-t">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full" 
+              onClick={handleClearReadNotifications}
+              disabled={isClearing}
+            >
+              {isClearing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-600 mr-2" />
+                  Clearing...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Read Notifications ({readCount})
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

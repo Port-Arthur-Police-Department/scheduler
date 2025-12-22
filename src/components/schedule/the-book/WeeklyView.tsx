@@ -179,70 +179,81 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ EXTRACT AND ORGANIZE OFFICER DATA ============
-  const allOfficers = new Map();
-  const recurringSchedulesByOfficer = new Map();
+// ============ UPDATED SECTION: Extract and organize officer data ============
+const allOfficers = new Map();
+const recurringSchedulesByOfficer = new Map();
 
-  // Extract recurring schedule patterns
-  schedules.recurring?.forEach((recurring: any) => {
-    if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
-      recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
-    }
-    recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
-  });
+// Extract recurring schedule patterns
+schedules.recurring?.forEach((recurring: any) => {
+  if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+    recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
+  }
+  recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
+});
 
-  // Process daily schedules
-  schedules.dailySchedules?.forEach(day => {
-    day.officers.forEach((officer: any) => {
-      if (!allOfficers.has(officer.officerId)) {
-        // Get officer profile data
-        const profileData = effectiveOfficerProfiles.get(officer.officerId);
-        
-        if (!profileData) {
-          console.warn(`No profile data found for officer: ${officer.officerId} - ${officer.officerName}`);
-        }
-        
-        // Calculate service credit
-        const serviceCredit = calculateServiceCredit(
-          profileData?.hire_date,
-          profileData?.service_credit_override || 0,
-          profileData?.promotion_date_sergeant,
-          profileData?.promotion_date_lieutenant,
-          officer.rank || profileData?.rank
-        );
-        
-        // Debug log for first few officers
-        if (allOfficers.size < 3) {
-          console.log(`Officer ${officer.officerName}:`, {
-            hasProfile: !!profileData,
-            serviceCredit,
-            hireDate: profileData?.hire_date,
-            promotionSergeant: profileData?.promotion_date_sergeant,
-            promotionLieutenant: profileData?.promotion_date_lieutenant,
-            rank: officer.rank || profileData?.rank
-          });
-        }
-        
-        allOfficers.set(officer.officerId, {
-          ...officer,
-          service_credit: serviceCredit,
-          hire_date: profileData?.hire_date,
-          promotion_date_sergeant: profileData?.promotion_date_sergeant,
-          promotion_date_lieutenant: profileData?.promotion_date_lieutenant,
-          service_credit_override: profileData?.service_credit_override || 0,
-          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-          weeklySchedule: {} as Record<string, any>
-        });
+// Process daily schedules - FIXED: Service credit should be calculated here
+schedules.dailySchedules?.forEach(day => {
+  day.officers.forEach((officer: any) => {
+    if (!allOfficers.has(officer.officerId)) {
+      // IMPORTANT: The officer object from parent might not have hire/promotion dates
+      // We need to extract them from profiles if available
+      let profileData = null;
+      
+      // Try to get profile data from different sources
+      // Option 1: Check if officer has direct profile data
+      if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+        profileData = {
+          hire_date: officer.hire_date,
+          promotion_date_sergeant: officer.promotion_date_sergeant,
+          promotion_date_lieutenant: officer.promotion_date_lieutenant,
+          service_credit_override: officer.service_credit_override || 0
+        };
       }
+      // Option 2: Check if officerProfiles prop has the data
+      else if (officerProfiles && officerProfiles.has(officer.officerId)) {
+        profileData = officerProfiles.get(officer.officerId);
+      }
+      // Option 3: Use officer data as is (may be incomplete)
+      else {
+        profileData = {
+          hire_date: officer.hire_date || null,
+          promotion_date_sergeant: officer.promotion_date_sergeant || null,
+          promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
+          service_credit_override: officer.service_credit_override || 0
+        };
+      }
+
+      // Calculate service credit with available data
+      const serviceCredit = calculateServiceCredit(
+        profileData.hire_date,
+        profileData.service_credit_override || 0,
+        profileData.promotion_date_sergeant,
+        profileData.promotion_date_lieutenant,
+        officer.rank // Pass the rank for logic
+      );
       
-      const daySchedule = {
+      // Store officer with calculated service credit
+      allOfficers.set(officer.officerId, {
         ...officer,
-        isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false
-      };
-      
-      allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
-    });
+        service_credit: serviceCredit, // Use calculated service credit
+        hire_date: profileData.hire_date,
+        promotion_date_sergeant: profileData.promotion_date_sergeant,
+        promotion_date_lieutenant: profileData.promotion_date_lieutenant,
+        service_credit_override: profileData.service_credit_override || 0,
+        recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+        weeklySchedule: {} as Record<string, any>
+      });
+    }
+    
+    // Store daily schedule for this officer
+    const daySchedule = {
+      ...officer,
+      isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false
+    };
+    
+    allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
   });
+});
 
   console.log(`Processed ${allOfficers.size} officers with profiles`);
 

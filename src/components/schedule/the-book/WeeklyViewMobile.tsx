@@ -21,6 +21,31 @@ interface WeeklyViewMobileProps {
   onToday: () => void;
 }
 
+// Helper function to calculate service credit from hire date
+const calculateServiceCredit = (hireDate: string | null, override: number = 0) => {
+  // If there's an override, use it
+  if (override && override > 0) {
+    return override;
+  }
+  
+  // Otherwise calculate from hire date
+  if (!hireDate) return 0;
+  
+  try {
+    const hire = new Date(hireDate);
+    const now = new Date();
+    const years = now.getFullYear() - hire.getFullYear();
+    const months = now.getMonth() - hire.getMonth();
+    const totalYears = years + (months / 12);
+    
+    // Round to 1 decimal place
+    return Math.round(totalYears * 10) / 10;
+  } catch (error) {
+    console.error('Error calculating service credit:', error);
+    return 0;
+  }
+};
+
 export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   currentWeekStart,
   selectedShiftId,
@@ -115,156 +140,112 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
       });
 
-// Process weekly data
-weekDays.forEach(day => {
-  // Find exceptions for this day
-  const dayExceptions = exceptions?.filter(e => e.date === day.dateStr) || [];
-  
-  // Find recurring for this day of week
-  const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
-  
-  // Combine all officers for this day
-  const allDayOfficers = [...dayExceptions, ...dayRecurring];
-  
-  allDayOfficers.forEach(item => {
-    const officerId = item.officer_id;
-    if (!allOfficers.has(officerId)) {
-      allOfficers.set(officerId, {
-        officerId: officerId,
-        officerName: item.profiles?.full_name || "Unknown",
-        badgeNumber: item.profiles?.badge_number,
-        rank: item.profiles?.rank || "Officer",
-        service_credit: item.profiles?.service_credit_override || 0,
-        recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
-        weeklySchedule: {} as Record<string, any>
+      // Process weekly data
+      weekDays.forEach(day => {
+        // Find exceptions for this day
+        const dayExceptions = exceptions?.filter(e => e.date === day.dateStr) || [];
+        
+        // Find recurring for this day of week
+        const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
+        
+        // Combine all officers for this day
+        const allDayOfficers = [...dayExceptions, ...dayRecurring];
+        
+        allDayOfficers.forEach(item => {
+          const officerId = item.officer_id;
+          const hireDate = item.profiles?.hire_date;
+          const overrideCredit = item.profiles?.service_credit_override || 0;
+          
+          // Calculate service credit - use override if available, otherwise calculate from hire date
+          const serviceCredit = calculateServiceCredit(hireDate, overrideCredit);
+          
+          if (!allOfficers.has(officerId)) {
+            allOfficers.set(officerId, {
+              officerId: officerId,
+              officerName: item.profiles?.full_name || "Unknown",
+              badgeNumber: item.profiles?.badge_number,
+              rank: item.profiles?.rank || "Officer",
+              service_credit: serviceCredit,
+              recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+              weeklySchedule: {} as Record<string, any>
+            });
+          }
+          
+          const daySchedule = {
+            officerId: officerId,
+            officerName: item.profiles?.full_name || "Unknown",
+            badgeNumber: item.profiles?.badge_number,
+            rank: item.profiles?.rank || "Officer",
+            service_credit: serviceCredit,
+            date: day.dateStr,
+            dayOfWeek: day.dayOfWeek,
+            isRegularRecurringDay: recurringSchedulesByOfficer.get(officerId)?.has(day.dayOfWeek) || false,
+            shiftInfo: {
+              scheduleId: item.id,
+              scheduleType: item.date ? "exception" : "recurring",
+              position: item.position_name,
+              isOff: item.is_off || false,
+              hasPTO: !!item.pto_type,
+              ptoData: item.pto_type ? {
+                ptoType: item.pto_type,
+                isFullShift: item.pto_full_day || false
+              } : undefined,
+              reason: item.reason
+            }
+          };
+          
+          allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+        });
       });
-    }
-    
-    // DEBUG: Check if PTO exists
-    console.log('PTO Debug:', {
-      officerId,
-      date: day.dateStr,
-      pto_type: item.pto_type,
-      is_off: item.is_off,
-      position_name: item.position_name
-    });
-    
-    const daySchedule = {
-      officerId: officerId,
-      officerName: item.profiles?.full_name || "Unknown",
-      badgeNumber: item.profiles?.badge_number,
-      rank: item.profiles?.rank || "Officer",
-      service_credit: item.profiles?.service_credit_override || 0,
-      date: day.dateStr,
-      dayOfWeek: day.dayOfWeek,
-      isRegularRecurringDay: recurringSchedulesByOfficer.get(officerId)?.has(day.dayOfWeek) || false,
-      shiftInfo: {
-        scheduleId: item.id,
-        scheduleType: item.date ? "exception" : "recurring",
-        position: item.position_name,
-        isOff: item.is_off || false,
-        // FIX: Make sure hasPTO is set correctly
-        hasPTO: !!item.pto_type, // This should be true if pto_type exists
-        ptoData: item.pto_type ? {
-          ptoType: item.pto_type,
-          isFullShift: item.pto_full_day || false
-        } : undefined,
-        reason: item.reason
-      }
-    };
-    
-    allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
-  });
-});
 
-// Categorize officers - Use EXACT same logic as desktop version
-const supervisors = Array.from(allOfficers.values())
-  .filter(o => isSupervisorByRank(o))
-  .sort((a, b) => {
-    const aPriority = getRankPriority(a.rank);
-    const bPriority = getRankPriority(b.rank);
-    
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-    
-    // Add debug logging
-    console.log('Supervisor sort compare:', {
-      aName: a.officerName,
-      bName: b.officerName,
-      aCredit: a.service_credit,
-      bCredit: b.service_credit,
-      aLastName: getLastName(a.officerName),
-      bLastName: getLastName(b.officerName)
-    });
-    
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: highest first
-    }
-    
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      // Categorize officers with service credit sorting (HIGHEST FIRST)
+      const supervisors = Array.from(allOfficers.values())
+        .filter(o => isSupervisorByRank(o))
+        .sort((a, b) => {
+          const aPriority = getRankPriority(a.rank);
+          const bPriority = getRankPriority(b.rank);
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          // Sort by service credit DESCENDING (highest first)
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: b - a
+          }
+          
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-const allOfficersList = Array.from(allOfficers.values())
-  .filter(o => !isSupervisorByRank(o));
+      const allOfficersList = Array.from(allOfficers.values())
+        .filter(o => !isSupervisorByRank(o));
 
-const ppos = allOfficersList
-  .filter(o => o.rank?.toLowerCase() === 'probationary')
-  .sort((a, b) => {
-    console.log('PPO sort compare:', {
-      aName: a.officerName,
-      bName: b.officerName,
-      aCredit: a.service_credit,
-      bCredit: b.service_credit
-    });
-    
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: highest first
-    }
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      const ppos = allOfficersList
+        .filter(o => o.rank?.toLowerCase() === 'probationary')
+        .sort((a, b) => {
+          // Sort PPOs by service credit DESCENDING (highest first)
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: b - a
+          }
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-const regularOfficers = allOfficersList
-  .filter(o => o.rank?.toLowerCase() !== 'probationary')
-  .sort((a, b) => {
-    console.log('Regular officer sort compare:', {
-      aName: a.officerName,
-      bName: b.officerName,
-      aCredit: a.service_credit,
-      bCredit: b.service_credit
-    });
-    
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: highest first
-    }
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      const regularOfficers = allOfficersList
+        .filter(o => o.rank?.toLowerCase() !== 'probationary')
+        .sort((a, b) => {
+          // Sort regular officers by service credit DESCENDING (highest first)
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: b - a
+          }
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-// Log the final sorted lists
-console.log('Sorted supervisors:', supervisors.map(o => ({
-  name: o.officerName,
-  service_credit: o.service_credit,
-  rank: o.rank
-})));
-
-console.log('Sorted regular officers:', regularOfficers.map(o => ({
-  name: o.officerName,
-  service_credit: o.service_credit,
-  rank: o.rank
-})));
-
-console.log('Sorted PPOs:', ppos.map(o => ({
-  name: o.officerName,
-  service_credit: o.service_credit,
-  rank: o.rank
-})));
-      
       return {
         supervisors,
         regularOfficers,
@@ -283,17 +264,17 @@ console.log('Sorted PPOs:', ppos.map(o => ({
   });
 
   // Helper function to check if an assignment is a special assignment
-const isSpecialAssignment = (position: string) => {
-  return position && (
-    position.toLowerCase().includes('other') ||
-    position.toLowerCase().includes('special') ||
-    position.toLowerCase().includes('training') ||
-    position.toLowerCase().includes('detail') ||
-    position.toLowerCase().includes('court') ||
-    position.toLowerCase().includes('extra') ||
-    (position && !PREDEFINED_POSITIONS.includes(position))
-  );
-};
+  const isSpecialAssignment = (position: string) => {
+    return position && (
+      position.toLowerCase().includes('other') ||
+      position.toLowerCase().includes('special') ||
+      position.toLowerCase().includes('training') ||
+      position.toLowerCase().includes('detail') ||
+      position.toLowerCase().includes('court') ||
+      position.toLowerCase().includes('extra') ||
+      (position && !PREDEFINED_POSITIONS.includes(position))
+    );
+  };
 
   if (isLoading) {
     return (
@@ -377,7 +358,6 @@ const isSpecialAssignment = (position: string) => {
               const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
               
-              // *** FIXED: Exclude special assignments from count ***
               const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
                 const isSupervisor = isSupervisorByRank(officer);
                 const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
@@ -401,6 +381,9 @@ const isSpecialAssignment = (position: string) => {
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
                 <div className="text-xs opacity-80">{getRankAbbreviation(officer.rank)}</div>
+                <div className="text-xs text-muted-foreground">
+                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                </div>
               </div>
               {weekDays.map(({ dateStr }) => (
                 <div key={dateStr} className="p-2 border-r">
@@ -412,14 +395,14 @@ const isSpecialAssignment = (position: string) => {
                     isAdminOrSupervisor={isAdminOrSupervisor}
                     isSupervisor={true}
                     isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                    isSpecialAssignment={isSpecialAssignment} // Add this
+                    isSpecialAssignment={isSpecialAssignment}
                   />
                 </div>
               ))}
             </div>
           ))}
 
-          {/* Officer Count Row - FIXED */}
+          {/* Officer Count Row */}
           <div className="grid grid-cols-9 border-b bg-gray-200">
             <div className="p-2 border-r text-sm"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
@@ -428,7 +411,6 @@ const isSpecialAssignment = (position: string) => {
               const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
-              // *** FIXED: Exclude special assignments from count ***
               const officerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
@@ -452,6 +434,9 @@ const isSpecialAssignment = (position: string) => {
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
+                <div className="text-xs text-muted-foreground">
+                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                </div>
               </div>
               {weekDays.map(({ dateStr }) => (
                 <div key={dateStr} className="p-2 border-r">
@@ -462,7 +447,7 @@ const isSpecialAssignment = (position: string) => {
                     officerName={officer.officerName}
                     isAdminOrSupervisor={isAdminOrSupervisor}
                     isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                    isSpecialAssignment={isSpecialAssignment} // Add this
+                    isSpecialAssignment={isSpecialAssignment}
                   />
                 </div>
               ))}
@@ -503,6 +488,9 @@ const isSpecialAssignment = (position: string) => {
                     <Badge variant="outline" className="text-xs border-blue-300 bg-blue-100">
                       PPO
                     </Badge>
+                    <div className="text-xs text-muted-foreground">
+                      SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                    </div>
                   </div>
                   {weekDays.map(({ dateStr }) => (
                     <div key={dateStr} className="p-2 border-r">
@@ -514,7 +502,7 @@ const isSpecialAssignment = (position: string) => {
                         isAdminOrSupervisor={isAdminOrSupervisor}
                         isPPO={true}
                         isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                        isSpecialAssignment={isSpecialAssignment} // Add this
+                        isSpecialAssignment={isSpecialAssignment}
                       />
                     </div>
                   ))}

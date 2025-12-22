@@ -347,6 +347,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     officerName={officer.officerName}
                     isAdminOrSupervisor={isAdminOrSupervisor}
                     isSupervisor={true}
+                    isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
                   />
                 </div>
               ))}
@@ -395,6 +396,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     officerId={officer.officerId}
                     officerName={officer.officerName}
                     isAdminOrSupervisor={isAdminOrSupervisor}
+                    isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
                   />
                 </div>
               ))}
@@ -445,6 +447,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                         officerName={officer.officerName}
                         isAdminOrSupervisor={isAdminOrSupervisor}
                         isPPO={true}
+                        isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
                       />
                     </div>
                   ))}
@@ -475,6 +478,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             <div className="flex items-center gap-2">
               <Badge variant="destructive" className="h-4 text-xs">Off</Badge>
               <span>Day Off</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-green-50 border-l-2 border-green-400"></div>
+              <span>Recurring Day</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-white border"></div>
+              <span>Ad-hoc Assignment</span>
             </div>
           </div>
         </CardContent>

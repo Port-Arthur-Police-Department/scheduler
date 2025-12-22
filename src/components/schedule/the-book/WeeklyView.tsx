@@ -1,5 +1,6 @@
-// Updated WeeklyView.tsx - Fixed service credit calculation
+// Updated WeeklyView.tsx with internal profile fetching
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query'; // Add this
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +10,12 @@ import { ScheduleCell } from "../ScheduleCell";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { supabase } from "@/integrations/supabase/client"; // Add this
 
-// Define extended interface that includes officer profiles
+// Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
-  officerProfiles?: Map<string, any>; // Add officer profiles data
+  officerProfiles?: Map<string, any>; // Optional prop
 }
 
 // Helper function to calculate service credit
@@ -82,11 +84,40 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   getRankPriority,
   isSupervisorByRank,
   onDateChange,
-  officerProfiles, // Add this prop
+  officerProfiles, // Optional prop
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
+
+  // Fetch officer profiles if not provided as prop
+  const { data: fetchedOfficerProfiles, isLoading: isLoadingProfiles } = useQuery({
+    queryKey: ['officer-profiles-weekly'],
+    queryFn: async () => {
+      console.log('Fetching officer profiles for WeeklyView...');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, badge_number, rank, hire_date, promotion_date_sergeant, promotion_date_lieutenant, service_credit_override');
+      
+      if (error) {
+        console.error('Error fetching officer profiles:', error);
+        return new Map();
+      }
+      
+      // Convert to Map for easy lookup
+      const profilesMap = new Map();
+      data.forEach(profile => {
+        profilesMap.set(profile.id, profile);
+      });
+      
+      console.log(`Fetched ${profilesMap.size} officer profiles`);
+      return profilesMap;
+    },
+    enabled: !officerProfiles, // Only fetch if not provided
+  });
+
+  // Use either provided prop or fetched data
+  const effectiveOfficerProfiles = officerProfiles || fetchedOfficerProfiles || new Map();
 
   // Sync with parent when date changes
   useEffect(() => {
@@ -110,6 +141,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
+  }
+
+  if (isLoadingProfiles && !officerProfiles) {
+    return <div className="text-center py-8">Loading officer data...</div>;
   }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -144,7 +179,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ UPDATED SECTION: Extract and organize officer data ============
+  // ============ EXTRACT AND ORGANIZE OFFICER DATA ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
@@ -160,43 +195,41 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   schedules.dailySchedules?.forEach(day => {
     day.officers.forEach((officer: any) => {
       if (!allOfficers.has(officer.officerId)) {
-        // Try to get officer profile data from different sources
-        let profileData = null;
+        // Get officer profile data
+        const profileData = effectiveOfficerProfiles.get(officer.officerId);
         
-        // Option 1: Check if officerProfiles prop exists
-        if (officerProfiles && officerProfiles.has(officer.officerId)) {
-          profileData = officerProfiles.get(officer.officerId);
+        if (!profileData) {
+          console.warn(`No profile data found for officer: ${officer.officerId} - ${officer.officerName}`);
         }
-        // Option 2: Check if officer has profile data embedded
-        else if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
-          profileData = officer;
-        }
-        // Option 3: Use default values
-        else {
-          profileData = {
-            hire_date: null,
-            promotion_date_sergeant: null,
-            promotion_date_lieutenant: null,
-            service_credit_override: 0
-          };
-        }
-
-        // Calculate service credit with available data
+        
+        // Calculate service credit
         const serviceCredit = calculateServiceCredit(
-          profileData.hire_date,
-          profileData.service_credit_override || 0,
-          profileData.promotion_date_sergeant,
-          profileData.promotion_date_lieutenant,
-          officer.rank
+          profileData?.hire_date,
+          profileData?.service_credit_override || 0,
+          profileData?.promotion_date_sergeant,
+          profileData?.promotion_date_lieutenant,
+          officer.rank || profileData?.rank
         );
+        
+        // Debug log for first few officers
+        if (allOfficers.size < 3) {
+          console.log(`Officer ${officer.officerName}:`, {
+            hasProfile: !!profileData,
+            serviceCredit,
+            hireDate: profileData?.hire_date,
+            promotionSergeant: profileData?.promotion_date_sergeant,
+            promotionLieutenant: profileData?.promotion_date_lieutenant,
+            rank: officer.rank || profileData?.rank
+          });
+        }
         
         allOfficers.set(officer.officerId, {
           ...officer,
-          service_credit: serviceCredit, // Store calculated service credit
-          hire_date: profileData.hire_date,
-          promotion_date_sergeant: profileData.promotion_date_sergeant,
-          promotion_date_lieutenant: profileData.promotion_date_lieutenant,
-          service_credit_override: profileData.service_credit_override || 0,
+          service_credit: serviceCredit,
+          hire_date: profileData?.hire_date,
+          promotion_date_sergeant: profileData?.promotion_date_sergeant,
+          promotion_date_lieutenant: profileData?.promotion_date_lieutenant,
+          service_credit_override: profileData?.service_credit_override || 0,
           recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
           weeklySchedule: {} as Record<string, any>
         });
@@ -210,6 +243,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
     });
   });
+
+  console.log(`Processed ${allOfficers.size} officers with profiles`);
 
   // Categorize officers with UPDATED supervisor sorting
   // First get all supervisors
@@ -273,22 +308,25 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       }
       return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
     });
-  // ============ END OF UPDATED SECTION ============
 
-  // Debug log to check data
-  console.log('Desktop WeeklyView data:', {
+  // Debug: Check sorting results
+  console.log('Sorting results:', {
     totalOfficers: allOfficers.size,
-    supervisorsCount: supervisors.length,
-    lieutenantsCount: lieutenants.length,
-    sergeantsCount: sergeants.length,
-    sampleSupervisor: supervisors.length > 0 ? {
-      name: supervisors[0].officerName,
-      rank: supervisors[0].rank,
-      serviceCredit: supervisors[0].service_credit,
-      hireDate: supervisors[0].hire_date,
-      promotionSergeant: supervisors[0].promotion_date_sergeant,
-      promotionLieutenant: supervisors[0].promotion_date_lieutenant
-    } : null
+    supervisors: supervisors.length,
+    lieutenants: lieutenants.length,
+    sergeants: sergeants.length,
+    regularOfficers: regularOfficers.length,
+    ppos: ppos.length,
+    sampleLieutenants: lieutenants.slice(0, 3).map(l => ({
+      name: l.officerName,
+      rank: l.rank,
+      serviceCredit: l.service_credit
+    })),
+    sampleSergeants: sergeants.slice(0, 3).map(s => ({
+      name: s.officerName,
+      rank: s.rank,
+      serviceCredit: s.service_credit
+    }))
   });
 
   return (

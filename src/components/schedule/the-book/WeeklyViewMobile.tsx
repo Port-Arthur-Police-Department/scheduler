@@ -458,38 +458,38 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         </div>
       </div>
 
-{/* Legend */}
-<Card>
-  <CardContent className="p-4">
-    <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
-    <div className="grid grid-cols-2 gap-2 text-xs">
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded bg-gray-100 border"></div>
-        <span>Supervisor</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
-        <span>PPO</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="h-4 text-xs">PTO</Badge>
-        <span>Paid Time Off</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Badge variant="destructive" className="h-4 text-xs">Off</Badge>
-        <span>Day Off</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded bg-white border"></div>
-        <span>Regular Scheduled Day</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded bg-gray-900 border border-gray-700"></div>
-        <span>Ad-hoc Assignment</span>
-      </div>
-    </div>
-  </CardContent>
-</Card>
+      {/* Legend */}
+      <Card>
+        <CardContent className="p-4">
+          <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-gray-100 border"></div>
+              <span>Supervisor</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
+              <span>PPO</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="h-4 text-xs">PTO</Badge>
+              <span>Paid Time Off</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="destructive" className="h-4 text-xs">Off</Badge>
+              <span>Day Off</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-green-50 border-l-2 border-green-400"></div>
+              <span>Recurring Day</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-white border"></div>
+              <span>Ad-hoc Assignment</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

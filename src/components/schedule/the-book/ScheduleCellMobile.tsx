@@ -27,26 +27,20 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   isPPO = false,
   isRegularRecurringDay = false
 }) => {
-  if (!officer || !officer.shiftInfo) {
-    return (
-      <div className="h-8 flex items-center justify-center">
-        <span className="text-xs text-muted-foreground">-</span>
-      </div>
-    );
-  }
-
-  const { shiftInfo } = officer;
-  const isOff = shiftInfo.isOff;
-  const hasPTO = shiftInfo.hasPTO;
-  const position = shiftInfo.position;
+  const hasOfficerData = officer && officer.shiftInfo;
+  const shiftInfo = officer?.shiftInfo;
+  const isOff = shiftInfo?.isOff || false;
+  const hasPTO = shiftInfo?.hasPTO || false;
+  const position = shiftInfo?.position;
+  const isScheduledDay = hasOfficerData && !isOff && !hasPTO;
 
   // Determine cell styling based on schedule type
   const cellClass = cn(
     "relative group h-8 flex items-center justify-center",
-    // Green for recurring days
-    isRegularRecurringDay && position && !isOff && !hasPTO && "bg-green-50 border-l-2 border-green-400",
-    // Gray for non-recurring/ad-hoc days
-    !isRegularRecurringDay && position && !isOff && !hasPTO && "bg-gray-100 border-l-2 border-gray-400"
+    // Green for recurring days (whether they have an assignment or not)
+    isRegularRecurringDay && "bg-green-50 border-l-2 border-green-400",
+    // Gray for non-recurring/ad-hoc days (only when they have an assignment)
+    !isRegularRecurringDay && isScheduledDay && position && "bg-gray-100 border-l-2 border-gray-400"
   );
 
   // Handle PTO assignment
@@ -71,6 +65,12 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
 
   // Get cell content based on status
   const getCellContent = () => {
+    if (!hasOfficerData) {
+      return (
+        <span className="text-xs text-muted-foreground">-</span>
+      );
+    }
+
     if (isOff) {
       return (
         <Badge variant="destructive" className="text-xs w-full justify-center">
@@ -97,13 +97,13 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
           <div className="text-xs truncate max-w-[80px]" title={position}>
             {position}
           </div>
-          {isRegularRecurringDay && position && !isOff && !hasPTO && (
+          {isRegularRecurringDay && (
             <div className="flex items-center gap-1 mt-0.5">
               <CalendarCheck className="h-2 w-2 text-green-600" />
               <span className="text-[9px] text-green-600 font-medium">RECURRING</span>
             </div>
           )}
-          {!isRegularRecurringDay && position && !isOff && !hasPTO && (
+          {!isRegularRecurringDay && position && (
             <div className="flex items-center gap-1 mt-0.5">
               <CalendarX className="h-2 w-2 text-gray-600" />
               <span className="text-[9px] text-gray-600 font-medium">AD-HOC</span>
@@ -113,6 +113,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
       );
     }
 
+    // This is a recurring day but with no specific assignment (just "-")
     return (
       <span className="text-xs text-muted-foreground">-</span>
     );
@@ -124,7 +125,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
         {getCellContent()}
       </div>
       
-      {isAdminOrSupervisor && (
+      {hasOfficerData && isAdminOrSupervisor && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 

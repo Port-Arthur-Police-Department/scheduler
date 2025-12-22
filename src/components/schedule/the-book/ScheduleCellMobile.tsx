@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Edit, Trash2, Plane, CalendarCheck, Umbrella, Star } from "lucide-react";
+import { MoreVertical, Edit, Trash2, Plane, Umbrella, Star } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -29,19 +29,6 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   isRegularRecurringDay = false,
   isSpecialAssignment
 }) => {
-  // Debug PTO data
-  useEffect(() => {
-    if (officer?.shiftInfo?.ptoData?.ptoType || officer?.shiftInfo?.hasPTO) {
-      console.log('PTO Cell Debug:', {
-        dateStr,
-        officerName,
-        hasPTO: officer.shiftInfo.hasPTO,
-        ptoData: officer.shiftInfo.ptoData,
-        shiftInfo: officer.shiftInfo
-      });
-    }
-  }, [officer, dateStr, officerName]);
-
   const hasOfficerData = officer && officer.shiftInfo;
   const shiftInfo = officer?.shiftInfo;
   const isOff = shiftInfo?.isOff || false;
@@ -76,6 +63,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   // Get cell content based on status
   const getCellContent = () => {
     if (!hasOfficerData) {
+      // This is a non-scheduled day (not recurring, no assignment)
       return (
         <span className="text-xs text-muted-foreground">-</span>
       );
@@ -97,12 +85,6 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
             <Umbrella className="h-3 w-3 text-blue-600" />
             <span className="text-xs text-blue-700 font-medium">{displayPtoType}</span>
           </div>
-          {isRegularRecurringDay && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <CalendarCheck className="h-2 w-2 text-blue-600" />
-              <span className="text-[9px] text-blue-600 font-medium">SCHEDULED</span>
-            </div>
-          )}
         </div>
       );
     }
@@ -117,46 +99,23 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
                 {position}
               </div>
             </div>
-            {!isRegularRecurringDay && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9px] text-purple-600 font-medium">SPECIAL</span>
-              </div>
-            )}
-            {isRegularRecurringDay && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <CalendarCheck className="h-2 w-2 text-purple-600" />
-                <span className="text-[9px] text-purple-600 font-medium">SCHEDULED</span>
-              </div>
-            )}
           </div>
         );
       }
 
+      // Regular assignment (not special, not PTO, not Off)
       return (
         <div className="flex flex-col items-center">
           <div className="text-xs truncate max-w-[80px]" title={position}>
             {position}
           </div>
-          {isRegularRecurringDay && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <CalendarCheck className="h-2 w-2 text-green-600" />
-              <span className="text-[9px] text-green-600 font-medium">SCHEDULED</span>
-            </div>
-          )}
         </div>
       );
     }
 
+    // This is a recurring day but with no specific assignment (just "-")
     return (
-      <div className="flex flex-col items-center">
-        <span className="text-xs text-muted-foreground">-</span>
-        {isRegularRecurringDay && (
-          <div className="flex items-center gap-1 mt-0.5">
-            <CalendarCheck className="h-2 w-2 text-green-600" />
-            <span className="text-[9px] text-green-600 font-medium">SCHEDULED</span>
-          </div>
-        )}
-      </div>
+      <span className="text-xs text-muted-foreground">-</span>
     );
   };
 

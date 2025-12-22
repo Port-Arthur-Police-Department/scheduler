@@ -1,4 +1,4 @@
-// WeeklyView.tsx - Complete with navigation and officer categorization
+// WeeklyView.tsx - Fixed officer count calculation
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -350,7 +350,7 @@ if (!schedules) {
             </div>
           ))}
 
-          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS) */}
+          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) - FIXED */}
           <div className="grid grid-cols-9 border-b bg-muted/30">
             <div className="p-2 border-r"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
@@ -361,13 +361,13 @@ if (!schedules) {
               const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
-              // Count only non-PPO officers, excluding only full-day PTO
+              // *** FIXED: Count only non-PPO officers, excluding full-day PTO AND special assignments ***
               const officerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-                // Only exclude if they have full-day PTO
                 const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
                 return isOfficer && isNotPPO && isScheduled;
               }).length || 0;
               

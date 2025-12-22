@@ -213,7 +213,7 @@ const safeRemovePTOMutation = removePTOMutation || {
     return staffingMap;
   };
 
-  // Main schedule query - UPDATED to return proper data structure
+  // Main schedule query - UPDATED to include officer profiles
   const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
     queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
     queryFn: async () => {
@@ -260,16 +260,47 @@ const safeRemovePTOMutation = removePTOMutation || {
 
       if (exceptionsError) throw exceptionsError;
 
-      // Get officer profiles separately
-      const officerIds = [...new Set(exceptionsData?.map(e => e.officer_id).filter(Boolean))];
-      let officerProfiles = [];
-      if (officerIds.length > 0) {
-        const { data: profilesData } = await supabase
+      // Get ALL officer profiles at once (CRITICAL FIX)
+      const allOfficerIds = new Set<string>();
+      
+      // Add officer IDs from recurring schedules
+      recurringData?.forEach(r => r.officer_id && allOfficerIds.add(r.officer_id));
+      
+      // Add officer IDs from exceptions
+      exceptionsData?.forEach(e => e.officer_id && allOfficerIds.add(e.officer_id));
+      
+      let officerProfilesMap = new Map();
+      if (allOfficerIds.size > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
           .from("profiles")
-          .select("id, full_name, badge_number, rank, hire_date")
-          .in("id", officerIds);
-        officerProfiles = profilesData || [];
+          .select(`
+            id, 
+            full_name, 
+            badge_number, 
+            rank, 
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant,
+            service_credit_override
+          `)
+          .in("id", Array.from(allOfficerIds));
+
+        if (profilesError) {
+          console.error("Error fetching officer profiles:", profilesError);
+        } else {
+          // Create a map of officer profiles for easy lookup
+          profilesData?.forEach(profile => {
+            officerProfilesMap.set(profile.id, profile);
+          });
+        }
       }
+
+      console.log('📊 Fetched officer profiles:', {
+        totalOfficers: allOfficerIds.size,
+        profilesFound: officerProfilesMap.size,
+        sampleProfile: officerProfilesMap.size > 0 ? 
+          Array.from(officerProfilesMap.values())[0] : null
+      });
 
       // Get shift types for exceptions
       const shiftTypeIds = [...new Set(exceptionsData?.map(e => e.shift_type_id).filter(Boolean))];
@@ -283,19 +314,18 @@ const safeRemovePTOMutation = removePTOMutation || {
       }
 
       // Fetch service credits for all officers involved
-      const allOfficerIds = [
-        ...(recurringData?.map(r => r.officer_id) || []),
-        ...officerIds
-      ];
-      const uniqueOfficerIds = [...new Set(allOfficerIds)];
-      const serviceCredits = await fetchServiceCredits(uniqueOfficerIds);
+      const allOfficerIdsArray = Array.from(allOfficerIds);
+      const serviceCredits = await fetchServiceCredits(allOfficerIdsArray);
 
-      // Combine exception data
-      const combinedExceptions = exceptionsData?.map(exception => ({
-        ...exception,
-        profiles: officerProfiles.find(p => p.id === exception.officer_id),
-        shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id)
-      })) || [];
+      // Combine exception data with profiles
+      const combinedExceptions = exceptionsData?.map(exception => {
+        const profile = officerProfilesMap.get(exception.officer_id);
+        return {
+          ...exception,
+          profiles: profile || null,
+          shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id)
+        };
+      }) || [];
 
       // Build schedule structure
       const scheduleByDateAndOfficer: Record<string, Record<string, any>> = {};
@@ -312,6 +342,7 @@ const safeRemovePTOMutation = removePTOMutation || {
 
       // Process recurring schedules
       recurringData?.forEach(recurring => {
+        const profile = officerProfilesMap.get(recurring.officer_id);
         dates.forEach(date => {
           const currentDate = parseISO(date);
           const dayOfWeek = currentDate.getDay();
@@ -332,9 +363,13 @@ const safeRemovePTOMutation = removePTOMutation || {
               if (!scheduleByDateAndOfficer[date][recurring.officer_id]) {
                 scheduleByDateAndOfficer[date][recurring.officer_id] = {
                   officerId: recurring.officer_id,
-                  officerName: recurring.profiles?.full_name || "Unknown",
-                  badgeNumber: recurring.profiles?.badge_number,
-                  rank: recurring.profiles?.rank,
+                  officerName: profile?.full_name || recurring.profiles?.full_name || "Unknown",
+                  badgeNumber: profile?.badge_number || recurring.profiles?.badge_number,
+                  rank: profile?.rank || recurring.profiles?.rank,
+                  hire_date: profile?.hire_date || null,
+                  promotion_date_sergeant: profile?.promotion_date_sergeant || null,
+                  promotion_date_lieutenant: profile?.promotion_date_lieutenant || null,
+                  service_credit_override: profile?.service_credit_override || 0,
                   service_credit: serviceCredits.get(recurring.officer_id) || 0,
                   date,
                   dayOfWeek,
@@ -371,6 +406,7 @@ const safeRemovePTOMutation = removePTOMutation || {
           scheduleByDateAndOfficer[exception.date] = {};
         }
 
+        const profile = officerProfilesMap.get(exception.officer_id);
         const ptoException = combinedExceptions?.find(e => 
           e.officer_id === exception.officer_id && e.date === exception.date && e.is_off
         );
@@ -379,9 +415,13 @@ const safeRemovePTOMutation = removePTOMutation || {
 
         scheduleByDateAndOfficer[exception.date][exception.officer_id] = {
           officerId: exception.officer_id,
-          officerName: exception.profiles?.full_name || "Unknown",
-          badgeNumber: exception.profiles?.badge_number,
-          rank: exception.profiles?.rank,
+          officerName: profile?.full_name || exception.profiles?.full_name || "Unknown",
+          badgeNumber: profile?.badge_number || exception.profiles?.badge_number,
+          rank: profile?.rank || exception.profiles?.rank,
+          hire_date: profile?.hire_date || null,
+          promotion_date_sergeant: profile?.promotion_date_sergeant || null,
+          promotion_date_lieutenant: profile?.promotion_date_lieutenant || null,
+          service_credit_override: profile?.service_credit_override || 0,
           service_credit: serviceCredits.get(exception.officer_id) || 0,
           date: exception.date,
           dayOfWeek: parseISO(exception.date).getDay(),
@@ -417,11 +457,16 @@ const safeRemovePTOMutation = removePTOMutation || {
         }
 
         if (!scheduleByDateAndOfficer[ptoException.date][ptoException.officer_id]) {
+          const profile = officerProfilesMap.get(ptoException.officer_id);
           scheduleByDateAndOfficer[ptoException.date][ptoException.officer_id] = {
             officerId: ptoException.officer_id,
-            officerName: ptoException.profiles?.full_name || "Unknown",
-            badgeNumber: ptoException.profiles?.badge_number,
-            rank: ptoException.profiles?.rank,
+            officerName: profile?.full_name || ptoException.profiles?.full_name || "Unknown",
+            badgeNumber: profile?.badge_number || ptoException.profiles?.badge_number,
+            rank: profile?.rank || ptoException.profiles?.rank,
+            hire_date: profile?.hire_date || null,
+            promotion_date_sergeant: profile?.promotion_date_sergeant || null,
+            promotion_date_lieutenant: profile?.promotion_date_lieutenant || null,
+            service_credit_override: profile?.service_credit_override || 0,
             service_credit: serviceCredits.get(ptoException.officer_id) || 0,
             date: ptoException.date,
             dayOfWeek: parseISO(ptoException.date).getDay(),
@@ -448,27 +493,34 @@ const safeRemovePTOMutation = removePTOMutation || {
         }
       });
 
-     // Convert to array format
-const dailySchedules = dates.map(date => {
-  const officers = Object.values(scheduleByDateAndOfficer[date] || {});
-  
-  // Use the imported categorizeAndSortOfficers function
-  const categorized = categorizeAndSortOfficers(officers);
-  const { supervisorCount, officerCount } = calculateStaffingCounts(categorized);
+      // Convert to array format
+      const dailySchedules = dates.map(date => {
+        const officers = Object.values(scheduleByDateAndOfficer[date] || {});
+        
+        // Use the imported categorizeAndSortOfficers function
+        const categorized = categorizeAndSortOfficers(officers);
+        const { supervisorCount, officerCount } = calculateStaffingCounts(categorized);
 
-  return {
-    date,
-    dayOfWeek: parseISO(date).getDay(),
-    officers,
-    categorizedOfficers: categorized,
-    staffing: {
-      supervisors: supervisorCount,
-      officers: officerCount,
-      total: supervisorCount + officerCount
-    },
-    isCurrentMonth: activeView === "monthly" ? isSameMonth(parseISO(date), currentMonth) : true
-  };
-});
+        return {
+          date,
+          dayOfWeek: parseISO(date).getDay(),
+          officers,
+          categorizedOfficers: categorized,
+          staffing: {
+            supervisors: supervisorCount,
+            officers: officerCount,
+            total: supervisorCount + officerCount
+          },
+          isCurrentMonth: activeView === "monthly" ? isSameMonth(parseISO(date), currentMonth) : true
+        };
+      });
+
+      console.log('📋 Schedule data prepared:', {
+        dailySchedulesCount: dailySchedules.length,
+        totalOfficers: dailySchedules.reduce((sum, day) => sum + day.officers.length, 0),
+        officerProfilesCount: officerProfilesMap.size,
+        sampleOfficer: dailySchedules[0]?.officers[0]
+      });
 
       return { 
         dailySchedules, 
@@ -477,7 +529,8 @@ const dailySchedules = dates.map(date => {
         exceptions: combinedExceptions,
         startDate: format(startDate, "yyyy-MM-dd"),
         endDate: format(endDate, "yyyy-MM-dd"),
-        minimumStaffing
+        minimumStaffing,
+        officerProfiles: officerProfilesMap // CRITICAL: Pass profiles to WeeklyView
       };
     },
     enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
@@ -496,284 +549,261 @@ const dailySchedules = dates.map(date => {
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-// Event handlers
-const handleEditAssignment = (officer: any, dateStr: string) => {
-  // Log the officer object to see its structure
-  console.log('=== EDIT ASSIGNMENT CLICKED ===');
-  console.log('Officer object:', officer);
-  console.log('Officer keys:', Object.keys(officer || {}));
-  console.log('Date:', dateStr);
-  
-  // Check for officer ID in various locations
-  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
-  console.log('Found officerId:', officerId);
-  
-  setEditingAssignment({ 
-    officer: {
-      ...officer,
-      // Ensure we have the ID
-      officerId: officerId
-    }, 
-    dateStr 
-  });
-};
-
-const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
-  setSelectedSchedule({
-    scheduleId: schedule.scheduleId,
-    type: schedule.scheduleType,
-    date,
-    shift: schedule.shift,
-    officerId,
-    officerName,
-    ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
-  });
-  setPtoDialogOpen(true);
-  
-  // Note: The actual PTO assignment logging should happen in the PTO dialog's save handler
-  // not here. This function just opens the dialog.
-};
-
-// In TheBook.tsx - Replace the handleRemovePTO function with this:
-
-const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
-  console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
-  
-  // Check if we have the required data
-  if (!schedule?.ptoData?.id) {
-    console.error('❌ Missing PTO data:', { 
-      hasSchedule: !!schedule, 
-      hasPTOData: !!schedule?.ptoData,
-      ptoDataId: schedule?.ptoData?.id 
+  // Event handlers
+  const handleEditAssignment = (officer: any, dateStr: string) => {
+    console.log('=== EDIT ASSIGNMENT CLICKED ===');
+    console.log('Officer object:', officer);
+    console.log('Officer keys:', Object.keys(officer || {}));
+    console.log('Date:', dateStr);
+    
+    const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+    console.log('Found officerId:', officerId);
+    
+    setEditingAssignment({ 
+      officer: {
+        ...officer,
+        officerId: officerId
+      }, 
+      dateStr 
     });
-    toast.error("Cannot remove PTO: Missing PTO data");
-    return;
-  }
-
-  if (!officerId) {
-    console.error('❌ Missing officer ID');
-    toast.error("Cannot remove PTO: Missing officer ID");
-    return;
-  }
-
-  // Get officer name from schedule data for audit logging
-  let officerName = "Unknown Officer";
-  try {
-    // Try to find the officer in the current schedule data
-    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
-    if (daySchedule) {
-      const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
-      officerName = officerData?.officerName || officerName;
-    }
-  } catch (error) {
-    console.error("Error getting officer name:", error);
-  }
-
-  // Prepare the data for the mutation
-  const ptoMutationData = {
-    id: schedule.ptoData.id,
-    officerId: officerId,
-    date: date,
-    shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
-    ptoType: schedule.ptoData.ptoType || "PTO",
-    startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
-    endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
   };
 
-  console.log('📋 Calling removePTOMutation with:', ptoMutationData);
+  const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
+    setSelectedSchedule({
+      scheduleId: schedule.scheduleId,
+      type: schedule.scheduleType,
+      date,
+      shift: schedule.shift,
+      officerId,
+      officerName,
+      ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
+    });
+    setPtoDialogOpen(true);
+  };
 
-  removePTOMutation.mutate(ptoMutationData, {
-    onSuccess: () => {
-      // AUDIT LOGGING - Use the correct method from your audit logger
-      try {
-        // Use logPTORemoval which exists in your audit logger
-        auditLogger.logPTORemoval(
-          officerId,
-          ptoMutationData.ptoType,
-          date,
-          userEmail,
-          `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
-        );
+  const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
+    console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
+    
+    if (!schedule?.ptoData?.id) {
+      console.error('❌ Missing PTO data:', { 
+        hasSchedule: !!schedule, 
+        hasPTOData: !!schedule?.ptoData,
+        ptoDataId: schedule?.ptoData?.id 
+      });
+      toast.error("Cannot remove PTO: Missing PTO data");
+      return;
+    }
+
+    if (!officerId) {
+      console.error('❌ Missing officer ID');
+      toast.error("Cannot remove PTO: Missing officer ID");
+      return;
+    }
+
+    let officerName = "Unknown Officer";
+    try {
+      const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+      if (daySchedule) {
+        const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
+        officerName = officerData?.officerName || officerName;
+      }
+    } catch (error) {
+      console.error("Error getting officer name:", error);
+    }
+
+    const ptoMutationData = {
+      id: schedule.ptoData.id,
+      officerId: officerId,
+      date: date,
+      shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
+      ptoType: schedule.ptoData.ptoType || "PTO",
+      startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
+      endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
+    };
+
+    console.log('📋 Calling removePTOMutation with:', ptoMutationData);
+
+    safeRemovePTOMutation.mutate(ptoMutationData, {
+      onSuccess: () => {
+        try {
+          auditLogger.logPTORemoval(
+            officerId,
+            ptoMutationData.ptoType,
+            date,
+            userEmail,
+            `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
+          );
+          console.log('📋 PTO removal logged to audit trail');
+        } catch (logError) {
+          console.error('Failed to log PTO removal audit:', logError);
+          console.log('PTO removed (audit logging failed):', {
+            officerId,
+            officerName,
+            date,
+            ptoType: ptoMutationData.ptoType,
+            user: userEmail
+          });
+        }
         
-        console.log('📋 PTO removal logged to audit trail');
-      } catch (logError) {
-        console.error('Failed to log PTO removal audit:', logError);
-        // Fallback to console logging
-        console.log('PTO removed (audit logging failed):', {
-          officerId,
-          officerName,
-          date,
-          ptoType: ptoMutationData.ptoType,
-          user: userEmail
-        });
+        toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
+      },
+      onError: (error) => {
+        console.error('❌ Error removing PTO:', error);
+        toast.error(`Failed to remove PTO: ${error.message}`);
       }
-      
-      toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
-    },
-    onError: (error) => {
-      console.error('❌ Error removing PTO:', error);
-      toast.error(`Failed to remove PTO: ${error.message}`);
+    });
+  };
+
+  const handleSaveAssignment = () => {
+    if (!editingAssignment) return;
+
+    const { officer, dateStr } = editingAssignment;
+    
+    console.log('Officer object in handleSaveAssignment:', officer);
+    
+    const officerId = officer?.officerId || 
+                      officer?.officer_id || 
+                      officer?.id ||
+                      'unknown-id';
+    
+    const officerName = officer?.officerName || 
+                        officer?.full_name || 
+                        officer?.profiles?.full_name ||
+                        'Unknown Officer';
+    
+    const currentPosition = officer?.shiftInfo?.position || '';
+    
+    console.log('Extracted values:', { officerId, officerName, currentPosition });
+    
+    if (!officerId || officerId === 'unknown-id') {
+      console.error('Could not find officer ID in:', officer);
+      toast.error("Cannot save: Officer ID not found");
+      return;
     }
-  });
-};
-
-// In TheBook.tsx - Update the onSuccess callback in handleSaveAssignment:
-
-const handleSaveAssignment = () => {
-  if (!editingAssignment) return;
-
-  const { officer, dateStr } = editingAssignment;
-  
-  // DEBUG: Log the officer object to confirm structure
-  console.log('Officer object in handleSaveAssignment:', officer);
-  
-  // Extract officer ID - try multiple possibilities
-  const officerId = officer?.officerId || 
-                    officer?.officer_id || 
-                    officer?.id ||
-                    'unknown-id';
-  
-  const officerName = officer?.officerName || 
-                      officer?.full_name || 
-                      officer?.profiles?.full_name ||
-                      'Unknown Officer';
-  
-  const currentPosition = officer?.shiftInfo?.position || '';
-  
-  console.log('Extracted values:', { officerId, officerName, currentPosition });
-  
-  if (!officerId || officerId === 'unknown-id') {
-    console.error('Could not find officer ID in:', officer);
-    toast.error("Cannot save: Officer ID not found");
-    return;
-  }
-  
-  updatePositionMutation.mutate({
-    scheduleId: officer.shiftInfo?.scheduleId,
-    type: officer.shiftInfo?.scheduleType,
-    positionName: officer.shiftInfo?.position,
-    date: dateStr,
-    officerId: officerId,
-    shiftTypeId: selectedShiftId,
-    currentPosition: currentPosition
-  }, {
-    onSuccess: () => {
-      // AUDIT LOGGING - Use logPositionChange which exists in your audit logger
-      try {
-        auditLogger.logPositionChange(
-          officerId,
-          officerName,
-          currentPosition,
-          officer.shiftInfo?.position || currentPosition,
-          userEmail,
-          `Changed position for ${officerName} on ${dateStr}`
-        );
-      } catch (logError) {
-        console.error('Failed to log position change audit:', logError);
-      }
-      
-      setEditingAssignment(null);
-      toast.success("Assignment updated successfully");
-    },
-    onError: (error) => {
-      console.error('Error updating assignment:', error);
-      toast.error("Failed to update assignment");
-    }
-  });
-};
-
-const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
-  removeOfficerMutation.mutate({
-    scheduleId,
-    type,
-    officerData
-  }, {
-    onSuccess: () => {
-      if (officerData) {
-        // AUDIT LOGGING - Log officer removal
-        // Extract officer ID safely
-        const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
-        const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
+    
+    updatePositionMutation.mutate({
+      scheduleId: officer.shiftInfo?.scheduleId,
+      type: officer.shiftInfo?.scheduleType,
+      positionName: officer.shiftInfo?.position,
+      date: dateStr,
+      officerId: officerId,
+      shiftTypeId: selectedShiftId,
+      currentPosition: currentPosition
+    }, {
+      onSuccess: () => {
+        try {
+          auditLogger.logPositionChange(
+            officerId,
+            officerName,
+            currentPosition,
+            officer.shiftInfo?.position || currentPosition,
+            userEmail,
+            `Changed position for ${officerName} on ${dateStr}`
+          );
+        } catch (logError) {
+          console.error('Failed to log position change audit:', logError);
+        }
         
-        auditLogger.logOfficerRemoval(
-          officerId,
-          officerName,
-          userEmail,
-          `Removed ${officerName} from schedule`
-        );
+        setEditingAssignment(null);
+        toast.success("Assignment updated successfully");
+      },
+      onError: (error) => {
+        console.error('Error updating assignment:', error);
+        toast.error("Failed to update assignment");
       }
-    }
-  });
-};
+    });
+  };
 
-  // Prepare common props for view components
-const viewProps = {
-  currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
-  selectedShiftId,
-  schedules: schedules || null,
-  shiftTypes: shiftTypes || [],
-  isAdminOrSupervisor,
-  weeklyColors,
-  onDateChange: (date: Date) => { // Add this callback
-    if (activeView === "weekly") {
-      setCurrentWeekStart(date);
-    } else if (activeView === "monthly") {
-      setCurrentMonth(date);
-    }
-  },
-  onDateNavigation: {
-    goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
-    goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
-    goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
-  },
-  onEventHandlers: {
-    onAssignPTO: handleAssignPTO,
-    onRemovePTO: handleRemovePTO,
-    onEditAssignment: handleEditAssignment,
-    onRemoveOfficer: handleRemoveOfficer,
-  },
-  mutations: {
-    removeOfficerMutation: safeRemoveOfficerMutation,  // Use the safe version
-    removePTOMutation: safeRemovePTOMutation,          // Use the safe version
-  },
-  navigateToDailySchedule,
-  getLastName,
-  getRankAbbreviation,
-  getRankPriority,
-  isSupervisorByRank,
-};
+  const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+    safeRemoveOfficerMutation.mutate({
+      scheduleId,
+      type,
+      officerData
+    }, {
+      onSuccess: () => {
+        if (officerData) {
+          const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
+          const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
+          
+          auditLogger.logOfficerRemoval(
+            officerId,
+            officerName,
+            userEmail,
+            `Removed ${officerName} from schedule`
+          );
+        }
+      }
+    });
+  };
 
-// In TheBook.tsx - Update the renderView function
-const renderView = () => {
-  switch (activeView) {
-    case "weekly":
-      return <WeeklyView {...viewProps} />;
-    case "monthly":
-      return <MonthlyView {...viewProps} />;
-    case "force-list":
-      return <ForceListView 
-        selectedShiftId={selectedShiftId}
-        setSelectedShiftId={setSelectedShiftId}
-        shiftTypes={shiftTypes || []}
-        isAdminOrSupervisor={isAdminOrSupervisor} // ADD THIS
-      />;
-    case "vacation-list":
-      return <VacationListView 
-        selectedShiftId={selectedShiftId}
-        setSelectedShiftId={setSelectedShiftId}
-        shiftTypes={shiftTypes || []}
-      />;
-    case "beat-preferences":
-      return <BeatPreferencesView 
-        isAdminOrSupervisor={isAdminOrSupervisor}
-        selectedShiftId={selectedShiftId}
-        setSelectedShiftId={setSelectedShiftId}
-        shiftTypes={shiftTypes || []}
-      />;
-    default:
-      return <WeeklyView {...viewProps} />;
-  }
-};
+  // Prepare common props for view components - UPDATED to include officerProfiles
+  const viewProps = {
+    currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
+    selectedShiftId,
+    schedules: schedules || null,
+    shiftTypes: shiftTypes || [],
+    isAdminOrSupervisor,
+    weeklyColors,
+    onDateChange: (date: Date) => {
+      if (activeView === "weekly") {
+        setCurrentWeekStart(date);
+      } else if (activeView === "monthly") {
+        setCurrentMonth(date);
+      }
+    },
+    onDateNavigation: {
+      goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
+      goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
+      goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
+    },
+    onEventHandlers: {
+      onAssignPTO: handleAssignPTO,
+      onRemovePTO: handleRemovePTO,
+      onEditAssignment: handleEditAssignment,
+      onRemoveOfficer: handleRemoveOfficer,
+    },
+    mutations: {
+      removeOfficerMutation: safeRemoveOfficerMutation,
+      removePTOMutation: safeRemovePTOMutation,
+    },
+    navigateToDailySchedule,
+    getLastName,
+    getRankAbbreviation,
+    getRankPriority,
+    isSupervisorByRank,
+    officerProfiles: schedules?.officerProfiles || new Map(), // CRITICAL: Pass profiles to WeeklyView
+  };
+
+  const renderView = () => {
+    switch (activeView) {
+      case "weekly":
+        return <WeeklyView {...viewProps} />;
+      case "monthly":
+        return <MonthlyView {...viewProps} />;
+      case "force-list":
+        return <ForceListView 
+          selectedShiftId={selectedShiftId}
+          setSelectedShiftId={setSelectedShiftId}
+          shiftTypes={shiftTypes || []}
+          isAdminOrSupervisor={isAdminOrSupervisor}
+        />;
+      case "vacation-list":
+        return <VacationListView 
+          selectedShiftId={selectedShiftId}
+          setSelectedShiftId={setSelectedShiftId}
+          shiftTypes={shiftTypes || []}
+        />;
+      case "beat-preferences":
+        return <BeatPreferencesView 
+          isAdminOrSupervisor={isAdminOrSupervisor}
+          selectedShiftId={selectedShiftId}
+          setSelectedShiftId={setSelectedShiftId}
+          shiftTypes={shiftTypes || []}
+        />;
+      default:
+        return <WeeklyView {...viewProps} />;
+    }
+  };
 
   const isLoading = schedulesLoading || shiftsLoading;
 
@@ -809,20 +839,43 @@ const renderView = () => {
     );
   }
 
-return (
-  <>
-    {/* DESKTOP VERSION - hidden on mobile */}
-    <div className="hidden md:block">
-      {/* Your existing desktop JSX - KEEP EVERYTHING EXACTLY AS IS */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              {isAdminOrSupervisor && (
+  return (
+    <>
+      {/* DESKTOP VERSION - hidden on mobile */}
+      <div className="hidden md:block">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" />
+                Schedule - {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Select Shift"}
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                {isAdminOrSupervisor && (
+                  <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+                    <SelectTrigger className="w-64">
+                      <SelectValue placeholder="Select Shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shiftTypes?.map((shift) => (
+                        <SelectItem key={shift.id} value={shift.id}>
+                          {shift.name} ({shift.start_time} - {shift.end_time})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {(activeView === "weekly" || activeView === "monthly") && (
+                  <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {!isAdminOrSupervisor && (
+              <div className="flex items-center gap-3 mt-3">
                 <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
                   <SelectTrigger className="w-64">
                     <SelectValue placeholder="Select Shift" />
@@ -835,119 +888,94 @@ return (
                     ))}
                   </SelectContent>
                 </Select>
-              )}
-              {(activeView === "weekly" || activeView === "monthly") && (
-                <Button onClick={() => setExportDialogOpen(true)} size="sm" variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export PDF
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {!isAdminOrSupervisor && (
-            <div className="flex items-center gap-3 mt-3">
-              <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shiftTypes?.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name} ({shift.start_time} - {shift.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {/* Tabs for different views */}
-          <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
-            <TabsList className="grid w-full max-w-2xl grid-cols-5">
-              <TabsTrigger value="weekly" className="flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4" />
-                Weekly
-              </TabsTrigger>
-              <TabsTrigger value="monthly" className="flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Monthly
-              </TabsTrigger>
-              <TabsTrigger value="force-list" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Force List
-              </TabsTrigger>
-              <TabsTrigger value="vacation-list" className="flex items-center gap-2">
-                <Plane className="h-4 w-4" />
-                Vacation List
-              </TabsTrigger>
-              <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Beat Preferences
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
-            <p className="text-sm text-muted-foreground mt-2">
-              Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
-            </p>
-          )}
-        </CardHeader>
-        <CardContent>
-          {!selectedShiftId && (activeView === "weekly" || activeView === "monthly") ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Please select a shift to view the schedule
-            </div>
-          ) : (
-            renderView()
-          )}
-        </CardContent>
-      </Card>
-    </div>
+              </div>
+            )}
+            
+            <Tabs value={activeView} onValueChange={(value) => setActiveView(value as TheBookView)} className="mt-4">
+              <TabsList className="grid w-full max-w-2xl grid-cols-5">
+                <TabsTrigger value="weekly" className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Weekly
+                </TabsTrigger>
+                <TabsTrigger value="monthly" className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4" />
+                  Monthly
+                </TabsTrigger>
+                <TabsTrigger value="force-list" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Force List
+                </TabsTrigger>
+                <TabsTrigger value="vacation-list" className="flex items-center gap-2">
+                  <Plane className="h-4 w-4" />
+                  Vacation List
+                </TabsTrigger>
+                <TabsTrigger value="beat-preferences" className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Beat Preferences
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            
+            {selectedShiftId && (activeView === "weekly" || activeView === "monthly") && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Viewing officers assigned to: {shiftTypes?.find(s => s.id === selectedShiftId)?.name}
+              </p>
+            )}
+          </CardHeader>
+          <CardContent>
+            {!selectedShiftId && (activeView === "weekly" || activeView === "monthly") ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Please select a shift to view the schedule
+              </div>
+            ) : (
+              renderView()
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-    {/* MOBILE VERSION - hidden on desktop */}
-    <div className="block md:hidden">
-      <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />
-    </div>
+      {/* MOBILE VERSION - hidden on desktop */}
+      <div className="block md:hidden">
+        <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />
+      </div>
 
-    {/* Dialogs - Keep these outside so they work for both */}
-    <AssignmentEditDialog
-      editingAssignment={editingAssignment}
-      onClose={() => setEditingAssignment(null)}
-      onSave={handleSaveAssignment}
-      updatePositionMutation={updatePositionMutation}
-    />
+      {/* Dialogs */}
+      <AssignmentEditDialog
+        editingAssignment={editingAssignment}
+        onClose={() => setEditingAssignment(null)}
+        onSave={handleSaveAssignment}
+        updatePositionMutation={updatePositionMutation}
+      />
 
-<ScheduleExportDialog
-  open={exportDialogOpen}
-  onOpenChange={setExportDialogOpen}
-  selectedShiftId={selectedShiftId}
-  shiftTypes={shiftTypes || []}
-  activeView={activeView}
-  userEmail={userEmail}
-/>
+      <ScheduleExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        selectedShiftId={selectedShiftId}
+        shiftTypes={shiftTypes || []}
+        activeView={activeView}
+        userEmail={userEmail}
+      />
 
-    {/* PTO Assignment Dialog */}
-    {selectedSchedule && (
-      <PTOAssignmentDialog
-        open={ptoDialogOpen}
-        onOpenChange={(open) => {
-          setPtoDialogOpen(open);
-          if (!open) {
-            queryClient.invalidateQueries({ queryKey });
-            setSelectedSchedule(null);
-          }
-        }}
-        officer={{
-          officerId: selectedSchedule.officerId,
-          name: selectedSchedule.officerName,
-          scheduleId: selectedSchedule.scheduleId,
-          type: selectedSchedule.type,
-          ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
-        }}
-        shift={selectedSchedule.shift}
-        date={selectedSchedule.date}
+      {/* PTO Assignment Dialog */}
+      {selectedSchedule && (
+        <PTOAssignmentDialog
+          open={ptoDialogOpen}
+          onOpenChange={(open) => {
+            setPtoDialogOpen(open);
+            if (!open) {
+              queryClient.invalidateQueries({ queryKey });
+              setSelectedSchedule(null);
+            }
+          }}
+          officer={{
+            officerId: selectedSchedule.officerId,
+            name: selectedSchedule.officerName,
+            scheduleId: selectedSchedule.scheduleId,
+            type: selectedSchedule.type,
+            ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
+          }}
+          shift={selectedSchedule.shift}
+          date={selectedSchedule.date}
           ptoBalancesEnabled={websiteSettings?.show_pto_balances}
         />
       )}

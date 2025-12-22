@@ -37,10 +37,10 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   // Determine cell styling based on schedule type
   const cellClass = cn(
     "relative group h-8 flex items-center justify-center",
-    // Green for recurring days (whether they have an assignment or not)
+    // Green for ALL recurring days (scheduled days)
     isRegularRecurringDay && "bg-green-50 border-l-2 border-green-400",
-    // Gray for non-recurring/ad-hoc days (only when they have an assignment)
-    !isRegularRecurringDay && isScheduledDay && position && "bg-gray-100 border-l-2 border-gray-400"
+    // Gray for non-scheduled days (not recurring, no assignment)
+    !isRegularRecurringDay && !hasOfficerData && "bg-gray-100 border-l-2 border-gray-300"
   );
 
   // Handle PTO assignment
@@ -66,6 +66,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   // Get cell content based on status
   const getCellContent = () => {
     if (!hasOfficerData) {
+      // This is a non-scheduled day (not recurring, no assignment)
       return (
         <span className="text-xs text-muted-foreground">-</span>
       );
@@ -100,13 +101,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
           {isRegularRecurringDay && (
             <div className="flex items-center gap-1 mt-0.5">
               <CalendarCheck className="h-2 w-2 text-green-600" />
-              <span className="text-[9px] text-green-600 font-medium">RECURRING</span>
-            </div>
-          )}
-          {!isRegularRecurringDay && position && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <CalendarX className="h-2 w-2 text-gray-600" />
-              <span className="text-[9px] text-gray-600 font-medium">AD-HOC</span>
+              <span className="text-[9px] text-green-600 font-medium">SCHEDULED</span>
             </div>
           )}
         </div>
@@ -115,7 +110,15 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
 
     // This is a recurring day but with no specific assignment (just "-")
     return (
-      <span className="text-xs text-muted-foreground">-</span>
+      <div className="flex flex-col items-center">
+        <span className="text-xs text-muted-foreground">-</span>
+        {isRegularRecurringDay && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <CalendarCheck className="h-2 w-2 text-green-600" />
+            <span className="text-[9px] text-green-600 font-medium">SCHEDULED</span>
+          </div>
+        )}
+      </div>
     );
   };
 

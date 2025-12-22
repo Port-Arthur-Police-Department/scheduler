@@ -15,6 +15,8 @@ interface ScheduleCellMobileProps {
   isSupervisor?: boolean;
   isPPO?: boolean;
   isRegularRecurringDay?: boolean;
+  // Add this prop to detect special assignments
+  isSpecialAssignment?: (position: string) => boolean;
 }
 
 export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
@@ -25,7 +27,8 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   isAdminOrSupervisor,
   isSupervisor = false,
   isPPO = false,
-  isRegularRecurringDay = false
+  isRegularRecurringDay = false,
+  isSpecialAssignment
 }) => {
   const hasOfficerData = officer && officer.shiftInfo;
   const shiftInfo = officer?.shiftInfo;
@@ -34,14 +37,14 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   const ptoType = shiftInfo?.ptoData?.ptoType;
   const position = shiftInfo?.position;
   
-  // Helper function to check if an assignment is special
-  const isSpecialAssignment = (position: string) => {
+  // Use the passed function or default detection
+  const defaultIsSpecial = (position: string) => {
     if (!position) return false;
     const specialKeywords = ['other', 'special', 'training', 'detail', 'court', 'extra'];
     return specialKeywords.some(keyword => position.toLowerCase().includes(keyword));
   };
   
-  const isSpecial = position && isSpecialAssignment(position);
+  const isSpecial = position && (isSpecialAssignment ? isSpecialAssignment(position) : defaultIsSpecial(position));
 
   // Determine cell styling based on schedule type
   const cellClass = cn(
@@ -56,30 +59,9 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
     !isRegularRecurringDay && !hasOfficerData && "bg-gray-100 border-l-2 border-gray-300"
   );
 
-  // Handle PTO assignment
-  const handleAssignPTO = () => {
-    toast.info("PTO assignment coming soon");
-  };
-
-  // Handle remove PTO
-  const handleRemovePTO = () => {
-    toast.info("Remove PTO coming soon");
-  };
-
-  // Handle edit assignment
-  const handleEditAssignment = () => {
-    toast.info("Edit assignment coming soon");
-  };
-
-  // Handle remove officer
-  const handleRemoveOfficer = () => {
-    toast.info("Remove officer coming soon");
-  };
-
   // Get cell content based on status
   const getCellContent = () => {
     if (!hasOfficerData) {
-      // This is a non-scheduled day (not recurring, no assignment)
       return (
         <span className="text-xs text-muted-foreground">-</span>
       );
@@ -136,7 +118,6 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
         );
       }
 
-      // Regular assignment (not special, not PTO, not Off)
       return (
         <div className="flex flex-col items-center">
           <div className="text-xs truncate max-w-[80px]" title={position}>
@@ -152,7 +133,6 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
       );
     }
 
-    // This is a recurring day but with no specific assignment (just "-")
     return (
       <div className="flex flex-col items-center">
         <span className="text-xs text-muted-foreground">-</span>
@@ -165,6 +145,12 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
       </div>
     );
   };
+
+  // Handle actions
+  const handleAssignPTO = () => toast.info("PTO assignment coming soon");
+  const handleRemovePTO = () => toast.info("Remove PTO coming soon");
+  const handleEditAssignment = () => toast.info("Edit assignment coming soon");
+  const handleRemoveOfficer = () => toast.info("Remove officer coming soon");
 
   return (
     <div className={cellClass}>
@@ -190,25 +176,19 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
                 Assign PTO
               </DropdownMenuItem>
             )}
-            
             {hasPTO && (
               <DropdownMenuItem onClick={handleRemovePTO}>
                 <Trash2 className="h-3 w-3 mr-2" />
                 Remove PTO
               </DropdownMenuItem>
             )}
-            
             {!isOff && (
               <DropdownMenuItem onClick={handleEditAssignment}>
                 <Edit className="h-3 w-3 mr-2" />
                 Edit Assignment
               </DropdownMenuItem>
             )}
-            
-            <DropdownMenuItem 
-              onClick={handleRemoveOfficer}
-              className="text-destructive"
-            >
+            <DropdownMenuItem onClick={handleRemoveOfficer} className="text-destructive">
               <Trash2 className="h-3 w-3 mr-2" />
               Remove
             </DropdownMenuItem>

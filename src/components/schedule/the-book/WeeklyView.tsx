@@ -1,4 +1,4 @@
-// WeeklyView.tsx - Updated supervisor sorting and service credit display
+// Updated WeeklyView.tsx - Fixed service credit calculation
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,14 @@ import { ScheduleCell } from "../ScheduleCell";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
-import TheBookMobile from "./TheBookMobile";
 
-// Define extended interface that includes onDateChange
+// Define extended interface that includes officer profiles
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
+  officerProfiles?: Map<string, any>; // Add officer profiles data
 }
 
-// Helper function to calculate service credit with promotion date support
+// Helper function to calculate service credit
 const calculateServiceCredit = (hireDate: string | null, 
                                override: number = 0,
                                promotionDateSergeant: string | null = null,
@@ -82,6 +82,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   getRankPriority,
   isSupervisorByRank,
   onDateChange,
+  officerProfiles, // Add this prop
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -100,7 +101,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   }, []);
 
-  // ADD THIS NEW USEEFFECT: Sync selected date when popover opens
+  // Sync selected date when popover opens
   useEffect(() => {
     if (weekPickerOpen) {
       setSelectedWeekDate(currentWeekStart);
@@ -143,7 +144,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ ADD THIS SECTION: Extract and organize officer data ============
+  // ============ UPDATED SECTION: Extract and organize officer data ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
@@ -155,22 +156,47 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
   });
 
-  // Process daily schedules with promotion date data
+  // Process daily schedules
   schedules.dailySchedules?.forEach(day => {
     day.officers.forEach((officer: any) => {
       if (!allOfficers.has(officer.officerId)) {
-        // Calculate service credit with promotion dates if available
+        // Try to get officer profile data from different sources
+        let profileData = null;
+        
+        // Option 1: Check if officerProfiles prop exists
+        if (officerProfiles && officerProfiles.has(officer.officerId)) {
+          profileData = officerProfiles.get(officer.officerId);
+        }
+        // Option 2: Check if officer has profile data embedded
+        else if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+          profileData = officer;
+        }
+        // Option 3: Use default values
+        else {
+          profileData = {
+            hire_date: null,
+            promotion_date_sergeant: null,
+            promotion_date_lieutenant: null,
+            service_credit_override: 0
+          };
+        }
+
+        // Calculate service credit with available data
         const serviceCredit = calculateServiceCredit(
-          officer.hire_date,
-          officer.service_credit_override || 0,
-          officer.promotion_date_sergeant,
-          officer.promotion_date_lieutenant,
+          profileData.hire_date,
+          profileData.service_credit_override || 0,
+          profileData.promotion_date_sergeant,
+          profileData.promotion_date_lieutenant,
           officer.rank
         );
         
         allOfficers.set(officer.officerId, {
           ...officer,
           service_credit: serviceCredit, // Store calculated service credit
+          hire_date: profileData.hire_date,
+          promotion_date_sergeant: profileData.promotion_date_sergeant,
+          promotion_date_lieutenant: profileData.promotion_date_lieutenant,
+          service_credit_override: profileData.service_credit_override || 0,
           recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
           weeklySchedule: {} as Record<string, any>
         });
@@ -247,7 +273,23 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       }
       return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
     });
-  // ============ END OF ADDED SECTION ============
+  // ============ END OF UPDATED SECTION ============
+
+  // Debug log to check data
+  console.log('Desktop WeeklyView data:', {
+    totalOfficers: allOfficers.size,
+    supervisorsCount: supervisors.length,
+    lieutenantsCount: lieutenants.length,
+    sergeantsCount: sergeants.length,
+    sampleSupervisor: supervisors.length > 0 ? {
+      name: supervisors[0].officerName,
+      rank: supervisors[0].rank,
+      serviceCredit: supervisors[0].service_credit,
+      hireDate: supervisors[0].hire_date,
+      promotionSergeant: supervisors[0].promotion_date_sergeant,
+      promotionLieutenant: supervisors[0].promotion_date_lieutenant
+    } : null
+  });
 
   return (
     <div className="space-y-4">
@@ -435,7 +477,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             </div>
           ))}
 
-          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) - FIXED */}
+          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
           <div className="grid grid-cols-9 border-b bg-muted/30">
             <div className="p-2 border-r"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
@@ -446,7 +488,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
-              // *** FIXED: Count only non-PPO officers, excluding full-day PTO AND special assignments ***
+              // Count only non-PPO officers, excluding full-day PTO AND special assignments
               const officerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
@@ -517,7 +559,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                   const ppoCount = daySchedule?.officers?.filter((officer: any) => {
                     const isOfficer = !isSupervisorByRank(officer);
                     const isPPO = officer.rank?.toLowerCase() === 'probationary';
-                    // Only exclude if they have full-day PTO
                     const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
                     const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
                     return isOfficer && isPPO && isScheduled;

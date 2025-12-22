@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreVertical, Edit, Trash2, Plane, CalendarCheck, Umbrella, Star } from "lucide-react";
@@ -15,7 +15,6 @@ interface ScheduleCellMobileProps {
   isSupervisor?: boolean;
   isPPO?: boolean;
   isRegularRecurringDay?: boolean;
-  // Add this prop to detect special assignments
   isSpecialAssignment?: (position: string) => boolean;
 }
 
@@ -30,10 +29,25 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   isRegularRecurringDay = false,
   isSpecialAssignment
 }) => {
+  // Debug PTO data
+  useEffect(() => {
+    if (officer?.shiftInfo?.ptoData?.ptoType || officer?.shiftInfo?.hasPTO) {
+      console.log('PTO Cell Debug:', {
+        dateStr,
+        officerName,
+        hasPTO: officer.shiftInfo.hasPTO,
+        ptoData: officer.shiftInfo.ptoData,
+        shiftInfo: officer.shiftInfo
+      });
+    }
+  }, [officer, dateStr, officerName]);
+
   const hasOfficerData = officer && officer.shiftInfo;
   const shiftInfo = officer?.shiftInfo;
   const isOff = shiftInfo?.isOff || false;
-  const hasPTO = shiftInfo?.hasPTO || false;
+  
+  // More robust PTO detection
+  const hasPTO = shiftInfo?.hasPTO === true || !!shiftInfo?.ptoData?.ptoType;
   const ptoType = shiftInfo?.ptoData?.ptoType;
   const position = shiftInfo?.position;
   

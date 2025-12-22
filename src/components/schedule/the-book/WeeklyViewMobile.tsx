@@ -82,7 +82,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         .select(`
           *,
           profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date, service_credit_override
+            id, full_name, badge_number, rank, hire_date, promotion_date, service_credit_override
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -98,7 +98,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         .select(`
           *,
           profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date, service_credit_override
+            id, full_name, badge_number, rank, hire_date, promotion_date, service_credit_override
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -154,7 +154,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         allDayOfficers.forEach(item => {
           const officerId = item.officer_id;
           const hireDate = item.profiles?.hire_date;
+          const promotionDate = item.profiles?.promotion_date;
           const overrideCredit = item.profiles?.service_credit_override || 0;
+          const badgeNumber = item.profiles?.badge_number || '9999'; // Default high number for sorting
           
           // Calculate service credit - use override if available, otherwise calculate from hire date
           const serviceCredit = calculateServiceCredit(hireDate, overrideCredit);
@@ -163,9 +165,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             allOfficers.set(officerId, {
               officerId: officerId,
               officerName: item.profiles?.full_name || "Unknown",
-              badgeNumber: item.profiles?.badge_number,
+              badgeNumber: badgeNumber,
               rank: item.profiles?.rank || "Officer",
               service_credit: serviceCredit,
+              promotion_date: promotionDate,
               recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
               weeklySchedule: {} as Record<string, any>
             });
@@ -174,7 +177,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           const daySchedule = {
             officerId: officerId,
             officerName: item.profiles?.full_name || "Unknown",
-            badgeNumber: item.profiles?.badge_number,
+            badgeNumber: badgeNumber,
             rank: item.profiles?.rank || "Officer",
             service_credit: serviceCredit,
             date: day.dateStr,
@@ -198,56 +201,84 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         });
       });
 
-// Categorize officers with service credit sorting
-const supervisors = Array.from(allOfficers.values())
-  .filter(o => isSupervisorByRank(o))
-  .sort((a, b) => {
-    // First, sort by rank priority using getRankPriority
-    const aPriority = getRankPriority(a.rank);
-    const bPriority = getRankPriority(b.rank);
-    
-    // If different ranks, sort by rank priority (lower number = higher rank)
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
-    
-    // If same rank, sort by service credit DESCENDING (highest first)
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: b - a
-    }
-    
-    // If same service credit, sort by last name
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      // Categorize officers with promotion date sorting for supervisors
+      const supervisors = Array.from(allOfficers.values())
+        .filter(o => isSupervisorByRank(o))
+        .sort((a, b) => {
+          // First, sort by rank priority (Lieutenant before Sergeant)
+          const aPriority = getRankPriority(a.rank);
+          const bPriority = getRankPriority(b.rank);
+          
+          // If different ranks, sort by rank priority
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority; // Lower number = higher rank
+          }
+          
+          // If same rank, sort by promotion date (most recent first)
+          const aPromotion = a.promotion_date ? new Date(a.promotion_date).getTime() : 0;
+          const bPromotion = b.promotion_date ? new Date(b.promotion_date).getTime() : 0;
+          
+          // Handle missing promotion dates
+          if (!a.promotion_date && b.promotion_date) return 1; // a goes after b
+          if (a.promotion_date && !b.promotion_date) return -1; // a goes before b
+          if (!a.promotion_date && !b.promotion_date) {
+            // Both missing promotion dates, sort by service credit
+            const aCredit = a.service_credit || 0;
+            const bCredit = b.service_credit || 0;
+            if (bCredit !== aCredit) {
+              return bCredit - aCredit;
+            }
+            return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+          }
+          
+          // Both have promotion dates, sort most recent first
+          if (bPromotion !== aPromotion) {
+            return bPromotion - aPromotion; // Most recent first (descending)
+          }
+          
+          // Same promotion date, sort by service credit
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: highest service credit first
+          }
+          
+          // Same service credit, sort by last name
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
 
-const allOfficersList = Array.from(allOfficers.values())
-  .filter(o => !isSupervisorByRank(o));
+      const allOfficersList = Array.from(allOfficers.values())
+        .filter(o => !isSupervisorByRank(o));
 
-const ppos = allOfficersList
-  .filter(o => o.rank?.toLowerCase() === 'probationary')
-  .sort((a, b) => {
-    // Sort PPOs by service credit DESCENDING (highest first)
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: b - a
-    }
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      const ppos = allOfficersList
+        .filter(o => o.rank?.toLowerCase() === 'probationary')
+        .sort((a, b) => {
+          // Sort PPOs by service credit DESCENDING (highest first), then by badge number
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: b - a
+          }
+          // If same service credit, sort by badge number (ascending)
+          const aBadge = parseInt(a.badgeNumber) || 9999;
+          const bBadge = parseInt(b.badgeNumber) || 9999;
+          return aBadge - bBadge;
+        });
 
-const regularOfficers = allOfficersList
-  .filter(o => o.rank?.toLowerCase() !== 'probationary')
-  .sort((a, b) => {
-    // Sort regular officers by service credit DESCENDING (highest first)
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending: b - a
-    }
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-  });
+      const regularOfficers = allOfficersList
+        .filter(o => o.rank?.toLowerCase() !== 'probationary')
+        .sort((a, b) => {
+          // Sort regular officers by service credit DESCENDING (highest first), then by badge number
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending: b - a
+          }
+          // If same service credit, sort by badge number (ascending)
+          const aBadge = parseInt(a.badgeNumber) || 9999;
+          const bBadge = parseInt(b.badgeNumber) || 9999;
+          return aBadge - bBadge;
+        });
 
       return {
         supervisors,
@@ -387,6 +418,11 @@ const regularOfficers = allOfficersList
                 <div className="text-xs text-muted-foreground">
                   SC: {officer.service_credit?.toFixed(1) || '0.0'}
                 </div>
+                {officer.promotion_date && (
+                  <div className="text-xs text-muted-foreground">
+                    Promo: {format(new Date(officer.promotion_date), 'MM/dd/yyyy')}
+                  </div>
+                )}
               </div>
               {weekDays.map(({ dateStr }) => (
                 <div key={dateStr} className="p-2 border-r">

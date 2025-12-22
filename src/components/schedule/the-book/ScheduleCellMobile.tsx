@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Edit, Trash2, Plane, CalendarCheck, CalendarX } from "lucide-react";
+import { MoreVertical, Edit, Trash2, Plane, CalendarCheck, Umbrella, Star } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,14 +31,27 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   const shiftInfo = officer?.shiftInfo;
   const isOff = shiftInfo?.isOff || false;
   const hasPTO = shiftInfo?.hasPTO || false;
+  const ptoType = shiftInfo?.ptoData?.ptoType;
   const position = shiftInfo?.position;
-  const isScheduledDay = hasOfficerData && !isOff && !hasPTO;
+  
+  // Helper function to check if an assignment is special
+  const isSpecialAssignment = (position: string) => {
+    if (!position) return false;
+    const specialKeywords = ['other', 'special', 'training', 'detail', 'court', 'extra'];
+    return specialKeywords.some(keyword => position.toLowerCase().includes(keyword));
+  };
+  
+  const isSpecial = position && isSpecialAssignment(position);
 
   // Determine cell styling based on schedule type
   const cellClass = cn(
     "relative group h-8 flex items-center justify-center",
-    // Green for ALL recurring days (scheduled days)
-    isRegularRecurringDay && "bg-green-50 border-l-2 border-green-400",
+    // Blue for PTO days
+    hasPTO && "bg-blue-50 border-l-2 border-blue-400",
+    // Purple for special assignments (but not if it's PTO or Off)
+    isSpecial && !hasPTO && !isOff && "bg-purple-50 border-l-2 border-purple-400",
+    // Green for ALL recurring days (scheduled days) - but not if it's PTO, Off, or Special
+    isRegularRecurringDay && !hasPTO && !isOff && !isSpecial && "bg-green-50 border-l-2 border-green-400",
     // Gray for non-scheduled days (not recurring, no assignment)
     !isRegularRecurringDay && !hasOfficerData && "bg-gray-100 border-l-2 border-gray-300"
   );
@@ -81,18 +94,49 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
     }
 
     if (hasPTO) {
-      const ptoType = shiftInfo.ptoData?.ptoType || 'PTO';
+      const displayPtoType = ptoType || 'PTO';
       return (
-        <Badge 
-          variant="outline" 
-          className="text-xs w-full justify-center bg-yellow-50 border-yellow-200"
-        >
-          {ptoType}
-        </Badge>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1">
+            <Umbrella className="h-3 w-3 text-blue-600" />
+            <span className="text-xs text-blue-700 font-medium">{displayPtoType}</span>
+          </div>
+          {isRegularRecurringDay && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <CalendarCheck className="h-2 w-2 text-blue-600" />
+              <span className="text-[9px] text-blue-600 font-medium">SCHEDULED</span>
+            </div>
+          )}
+        </div>
       );
     }
 
     if (position) {
+      if (isSpecial) {
+        return (
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1">
+              <Star className="h-3 w-3 text-purple-600" />
+              <div className="text-xs truncate max-w-[70px] text-purple-700" title={position}>
+                {position}
+              </div>
+            </div>
+            {!isRegularRecurringDay && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-[9px] text-purple-600 font-medium">SPECIAL</span>
+              </div>
+            )}
+            {isRegularRecurringDay && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <CalendarCheck className="h-2 w-2 text-purple-600" />
+                <span className="text-[9px] text-purple-600 font-medium">SCHEDULED</span>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Regular assignment (not special, not PTO, not Off)
       return (
         <div className="flex flex-col items-center">
           <div className="text-xs truncate max-w-[80px]" title={position}>

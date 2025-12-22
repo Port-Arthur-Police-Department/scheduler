@@ -1,4 +1,4 @@
-// WeeklyView.tsx - Fixed officer count calculation
+// WeeklyView.tsx - Updated with uniform sorting logic
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { ScheduleCell } from "../ScheduleCell";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
-import TheBookMobile from "./TheBookMobile";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -35,29 +34,25 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
 
-// Sync with parent when date changes
-useEffect(() => {
-  setCurrentWeekStart(initialDate);
-  setSelectedWeekDate(initialDate);
-}, [initialDate]);
+  // Sync with parent when date changes
+  useEffect(() => {
+    setCurrentWeekStart(initialDate);
+    setSelectedWeekDate(initialDate);
+  }, [initialDate]);
 
-// Call onDateChange when component mounts with initial date
-useEffect(() => {
-  if (onDateChange) {
-    onDateChange(currentWeekStart);
-  }
-}, []);
+  // Call onDateChange when component mounts with initial date
+  useEffect(() => {
+    if (onDateChange) {
+      onDateChange(currentWeekStart);
+    }
+  }, []);
 
-// ADD THIS NEW USEEFFECT: Sync selected date when popover opens
-useEffect(() => {
-  if (weekPickerOpen) {
-    setSelectedWeekDate(currentWeekStart);
-  }
-}, [weekPickerOpen, currentWeekStart]);
-
-if (!schedules) {
-  return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
-}
+  // ADD THIS NEW USEEFFECT: Sync selected date when popover opens
+  useEffect(() => {
+    if (weekPickerOpen) {
+      setSelectedWeekDate(currentWeekStart);
+    }
+  }, [weekPickerOpen, currentWeekStart]);
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
@@ -80,6 +75,11 @@ if (!schedules) {
   const isSpecialAssignment = (position: string) => {
     return position && (
       position.toLowerCase().includes('other') ||
+      position.toLowerCase().includes('special') ||
+      position.toLowerCase().includes('training') ||
+      position.toLowerCase().includes('detail') ||
+      position.toLowerCase().includes('court') ||
+      position.toLowerCase().includes('extra') ||
       (position && !PREDEFINED_POSITIONS.includes(position))
     );
   };
@@ -95,7 +95,7 @@ if (!schedules) {
     }
   };
 
-  // ============ ADD THIS SECTION: Extract and organize officer data ============
+  // ============ Extract and organize officer data ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
@@ -127,17 +127,49 @@ if (!schedules) {
     });
   });
 
-  // Categorize officers
+  // Categorize officers with UNIFORM SORTING LOGIC (same as mobile)
   const supervisors = Array.from(allOfficers.values())
     .filter(o => isSupervisorByRank(o))
     .sort((a, b) => {
+      // First, sort by rank priority (Lieutenant before Sergeant)
       const aPriority = getRankPriority(a.rank);
       const bPriority = getRankPriority(b.rank);
       
+      // If different ranks, sort by rank priority
       if (aPriority !== bPriority) {
-        return aPriority - bPriority;
+        return aPriority - bPriority; // Lower number = higher rank
       }
       
+      // If same rank, sort by promotion date (most recent first)
+      const aPromotion = a.promotion_date ? new Date(a.promotion_date).getTime() : 0;
+      const bPromotion = b.promotion_date ? new Date(b.promotion_date).getTime() : 0;
+      
+      // Handle missing promotion dates
+      if (!a.promotion_date && b.promotion_date) return 1; // a goes after b
+      if (a.promotion_date && !b.promotion_date) return -1; // a goes before b
+      if (!a.promotion_date && !b.promotion_date) {
+        // Both missing promotion dates, sort by service credit
+        const aCredit = a.service_credit || 0;
+        const bCredit = b.service_credit || 0;
+        if (bCredit !== aCredit) {
+          return bCredit - aCredit;
+        }
+        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      }
+      
+      // Both have promotion dates, sort most recent first
+      if (bPromotion !== aPromotion) {
+        return bPromotion - aPromotion; // Most recent first (descending)
+      }
+      
+      // Same promotion date, sort by service credit
+      const aCredit = a.service_credit || 0;
+      const bCredit = b.service_credit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit; // Descending: highest service credit first
+      }
+      
+      // Same service credit, sort by last name
       return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
     });
 
@@ -147,23 +179,31 @@ if (!schedules) {
   const ppos = allOfficersList
     .filter(o => o.rank?.toLowerCase() === 'probationary')
     .sort((a, b) => {
+      // Sort PPOs by service credit DESCENDING (highest first), then by badge number
       const aCredit = a.service_credit || 0;
       const bCredit = b.service_credit || 0;
       if (bCredit !== aCredit) {
-        return bCredit - aCredit;
+        return bCredit - aCredit; // Descending: b - a
       }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      // If same service credit, sort by badge number (ascending)
+      const aBadge = parseInt(a.badgeNumber) || 9999;
+      const bBadge = parseInt(b.badgeNumber) || 9999;
+      return aBadge - bBadge;
     });
 
   const regularOfficers = allOfficersList
     .filter(o => o.rank?.toLowerCase() !== 'probationary')
     .sort((a, b) => {
+      // Sort regular officers by service credit DESCENDING (highest first), then by badge number
       const aCredit = a.service_credit || 0;
       const bCredit = b.service_credit || 0;
       if (bCredit !== aCredit) {
-        return bCredit - aCredit;
+        return bCredit - aCredit; // Descending: b - a
       }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      // If same service credit, sort by badge number (ascending)
+      const aBadge = parseInt(a.badgeNumber) || 9999;
+      const bBadge = parseInt(b.badgeNumber) || 9999;
+      return aBadge - bBadge;
     });
   // ============ END OF ADDED SECTION ============
 
@@ -350,7 +390,7 @@ if (!schedules) {
             </div>
           ))}
 
-          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) - FIXED */}
+          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
           <div className="grid grid-cols-9 border-b bg-muted/30">
             <div className="p-2 border-r"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
@@ -361,7 +401,7 @@ if (!schedules) {
               const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
-              // *** FIXED: Count only non-PPO officers, excluding full-day PTO AND special assignments ***
+              // Count only non-PPO officers, excluding full-day PTO AND special assignments
               const officerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';

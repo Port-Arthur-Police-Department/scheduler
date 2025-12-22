@@ -224,12 +224,17 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   });
 
   // Helper function to check if an assignment is a special assignment
-  const isSpecialAssignment = (position: string) => {
-    return position && (
-      position.toLowerCase().includes('other') ||
-      (position && !PREDEFINED_POSITIONS.includes(position))
-    );
-  };
+const isSpecialAssignment = (position: string) => {
+  return position && (
+    position.toLowerCase().includes('other') ||
+    position.toLowerCase().includes('special') ||
+    position.toLowerCase().includes('training') ||
+    position.toLowerCase().includes('detail') ||
+    position.toLowerCase().includes('court') ||
+    position.toLowerCase().includes('extra') ||
+    (position && !PREDEFINED_POSITIONS.includes(position))
+  );
+};
 
   if (isLoading) {
     return (
@@ -348,6 +353,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     isAdminOrSupervisor={isAdminOrSupervisor}
                     isSupervisor={true}
                     isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
+                    isSpecialAssignment={isSpecialAssignment} // Add this
                   />
                 </div>
               ))}
@@ -397,6 +403,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     officerName={officer.officerName}
                     isAdminOrSupervisor={isAdminOrSupervisor}
                     isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
+                    isSpecialAssignment={isSpecialAssignment} // Add this
                   />
                 </div>
               ))}
@@ -448,6 +455,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                         isAdminOrSupervisor={isAdminOrSupervisor}
                         isPPO={true}
                         isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
+                        isSpecialAssignment={isSpecialAssignment} // Add this
                       />
                     </div>
                   ))}

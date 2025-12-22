@@ -1,10 +1,10 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Edit, Trash2, Plane, CalendarCheck } from "lucide-react";
+import { MoreVertical, Edit, Trash2, Plane, CalendarCheck, CalendarX } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils"; // You may need to import cn if you don't have it
+import { cn } from "@/lib/utils";
 
 interface ScheduleCellMobileProps {
   officer: any;
@@ -14,7 +14,7 @@ interface ScheduleCellMobileProps {
   isAdminOrSupervisor: boolean;
   isSupervisor?: boolean;
   isPPO?: boolean;
-  isRegularRecurringDay?: boolean; // Add this prop
+  isRegularRecurringDay?: boolean;
 }
 
 export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
@@ -25,7 +25,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   isAdminOrSupervisor,
   isSupervisor = false,
   isPPO = false,
-  isRegularRecurringDay = false // Add default value
+  isRegularRecurringDay = false
 }) => {
   if (!officer || !officer.shiftInfo) {
     return (
@@ -40,10 +40,13 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   const hasPTO = shiftInfo.hasPTO;
   const position = shiftInfo.position;
 
-  // Base cell class - add styling for recurring days
+  // Determine cell styling based on schedule type
   const cellClass = cn(
     "relative group h-8 flex items-center justify-center",
-    isRegularRecurringDay && !isOff && !hasPTO && "bg-green-50 border-l-2 border-green-400" // Green styling for recurring days
+    // Green for recurring days
+    isRegularRecurringDay && position && !isOff && !hasPTO && "bg-green-50 border-l-2 border-green-400",
+    // Gray for non-recurring/ad-hoc days
+    !isRegularRecurringDay && position && !isOff && !hasPTO && "bg-gray-100 border-l-2 border-gray-400"
   );
 
   // Handle PTO assignment
@@ -94,10 +97,16 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
           <div className="text-xs truncate max-w-[80px]" title={position}>
             {position}
           </div>
-          {isRegularRecurringDay && (
+          {isRegularRecurringDay && position && !isOff && !hasPTO && (
             <div className="flex items-center gap-1 mt-0.5">
               <CalendarCheck className="h-2 w-2 text-green-600" />
               <span className="text-[9px] text-green-600 font-medium">RECURRING</span>
+            </div>
+          )}
+          {!isRegularRecurringDay && position && !isOff && !hasPTO && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <CalendarX className="h-2 w-2 text-gray-600" />
+              <span className="text-[9px] text-gray-600 font-medium">AD-HOC</span>
             </div>
           )}
         </div>

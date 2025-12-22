@@ -177,7 +177,7 @@ weekDays.forEach(day => {
   });
 });
 
-// Categorize officers with proper service credit sorting
+// Categorize officers - Use EXACT same logic as desktop version
 const supervisors = Array.from(allOfficers.values())
   .filter(o => isSupervisorByRank(o))
   .sort((a, b) => {
@@ -188,20 +188,20 @@ const supervisors = Array.from(allOfficers.values())
       return aPriority - bPriority;
     }
     
-    // Debug supervisor sorting
-    console.log('Supervisor sorting:', {
-      a: a.officerName,
-      b: b.officerName,
+    // Add debug logging
+    console.log('Supervisor sort compare:', {
+      aName: a.officerName,
+      bName: b.officerName,
       aCredit: a.service_credit,
-      bCredit: b.service_credit
+      bCredit: b.service_credit,
+      aLastName: getLastName(a.officerName),
+      bLastName: getLastName(b.officerName)
     });
     
-    // Sort by service credit (highest first)
     const aCredit = a.service_credit || 0;
     const bCredit = b.service_credit || 0;
-    
     if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending order
+      return bCredit - aCredit; // Descending: highest first
     }
     
     return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
@@ -213,10 +213,9 @@ const allOfficersList = Array.from(allOfficers.values())
 const ppos = allOfficersList
   .filter(o => o.rank?.toLowerCase() === 'probationary')
   .sort((a, b) => {
-    // Debug PPO sorting
-    console.log('PPO sorting:', {
-      a: a.officerName,
-      b: b.officerName,
+    console.log('PPO sort compare:', {
+      aName: a.officerName,
+      bName: b.officerName,
       aCredit: a.service_credit,
       bCredit: b.service_credit
     });
@@ -224,7 +223,7 @@ const ppos = allOfficersList
     const aCredit = a.service_credit || 0;
     const bCredit = b.service_credit || 0;
     if (bCredit !== aCredit) {
-      return bCredit - aCredit;
+      return bCredit - aCredit; // Descending: highest first
     }
     return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
   });
@@ -232,10 +231,9 @@ const ppos = allOfficersList
 const regularOfficers = allOfficersList
   .filter(o => o.rank?.toLowerCase() !== 'probationary')
   .sort((a, b) => {
-    // Debug regular officer sorting
-    console.log('Regular officer sorting:', {
-      a: a.officerName,
-      b: b.officerName,
+    console.log('Regular officer sort compare:', {
+      aName: a.officerName,
+      bName: b.officerName,
       aCredit: a.service_credit,
       bCredit: b.service_credit
     });
@@ -243,16 +241,30 @@ const regularOfficers = allOfficersList
     const aCredit = a.service_credit || 0;
     const bCredit = b.service_credit || 0;
     if (bCredit !== aCredit) {
-      return bCredit - aCredit;
+      return bCredit - aCredit; // Descending: highest first
     }
     return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
   });
 
-// Debug: Log the sorted results
+// Log the final sorted lists
+console.log('Sorted supervisors:', supervisors.map(o => ({
+  name: o.officerName,
+  service_credit: o.service_credit,
+  rank: o.rank
+})));
+
 console.log('Sorted regular officers:', regularOfficers.map(o => ({
   name: o.officerName,
-  service_credit: o.service_credit
+  service_credit: o.service_credit,
+  rank: o.rank
 })));
+
+console.log('Sorted PPOs:', ppos.map(o => ({
+  name: o.officerName,
+  service_credit: o.service_credit,
+  rank: o.rank
+})));
+      
       return {
         supervisors,
         regularOfficers,

@@ -305,7 +305,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           </div>
 
           {/* Supervisor Count Row */}
-          <div className="grid grid-cols-9 border-b">
+          <div className="grid grid-cols-9 border-b bg-gray-100">
             <div className="p-2 border-r text-sm"></div>
             <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
             {weekDays.map(({ dateStr, dayOfWeek }) => {
@@ -313,6 +313,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
               
+              // *** FIXED: Exclude special assignments from count ***
               const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
                 const isSupervisor = isSupervisorByRank(officer);
                 const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
@@ -322,7 +323,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               }).length || 0;
               
               return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm">
+                <div key={dateStr} className="p-2 text-center border-r text-sm bg-gray-100">
                   {supervisorCount} / {minimumSupervisors}
                 </div>
               );
@@ -352,8 +353,8 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             </div>
           ))}
 
-          {/* Officer Count Row */}
-          <div className="grid grid-cols-9 border-b bg-muted/30">
+          {/* Officer Count Row - FIXED */}
+          <div className="grid grid-cols-9 border-b bg-gray-200">
             <div className="p-2 border-r text-sm"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
             {weekDays.map(({ dateStr, dayOfWeek }) => {
@@ -361,16 +362,18 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
+              // *** FIXED: Exclude special assignments from count ***
               const officerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
                 const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
+                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
                 return isOfficer && isNotPPO && isScheduled;
               }).length || 0;
               
               return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                <div key={dateStr} className="p-2 text-center border-r text-sm font-medium bg-gray-200">
                   {officerCount} / {minimumOfficers}
                 </div>
               );
@@ -416,7 +419,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                   }).length || 0;
                   
                   return (
-                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium bg-blue-50">
                       {ppoCount}
                     </div>
                   );
@@ -425,7 +428,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
 
               {/* PPO Officers */}
               {scheduleData.ppos.map((officer: any) => (
-                <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-blue-50/50">
+                <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-blue-50/50 bg-blue-50/30">
                   <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
                   <div className="p-2 border-r font-medium text-sm flex items-center gap-2">
                     {getLastName(officer.officerName)}
@@ -458,11 +461,11 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-blue-100"></div>
+              <div className="w-3 h-3 rounded bg-gray-100 border"></div>
               <span>Supervisor</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-green-100"></div>
+              <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
               <span>PPO</span>
             </div>
             <div className="flex items-center gap-2">

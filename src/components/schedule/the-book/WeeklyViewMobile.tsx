@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CalendarDays, MoreVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, addDays, isSameDay, startOfWeek, endOfWeek } from "date-fns";
 import { getLastName, getRankAbbreviation, isSupervisorByRank, getRankPriority } from "./utils";
@@ -302,50 +302,47 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
 
         console.log('Total unique officers found:', allOfficers.size);
 
-        // Categorize officers with promotion date sorting for supervisors
-        const supervisors = Array.from(allOfficers.values())
-          .filter(o => isSupervisorByRank(o))
-          .sort((a, b) => {
-            // First, sort by rank priority (Lieutenant before Sergeant)
-            const aPriority = getRankPriority(a.rank);
-            const bPriority = getRankPriority(b.rank);
-            
-            // If different ranks, sort by rank priority
-            if (aPriority !== bPriority) {
-              return aPriority - bPriority; // Lower number = higher rank
-            }
-            
-            // If same rank, sort by promotion date (most recent first)
-            // Parse dates safely
-            const parseDate = (dateStr: string | null) => {
-              if (!dateStr) return new Date(0); // Very old date for sorting
-              try {
-                return new Date(dateStr);
-              } catch {
-                return new Date(0);
-              }
-            };
-            
-            const aPromotion = parseDate(a.promotion_date);
-            const bPromotion = parseDate(b.promotion_date);
-            
-            // Most recent promotion first (descending)
-            if (bPromotion.getTime() !== aPromotion.getTime()) {
-              return bPromotion.getTime() - aPromotion.getTime();
-            }
-            
-            // Same promotion date, sort by service credit (from promotion date)
-            const aCredit = a.service_credit || 0;
-            const bCredit = b.service_credit || 0;
-            if (bCredit !== aCredit) {
-              return bCredit - aCredit; // Descending: highest service credit first
-            }
-            
-            // Same service credit, sort by last name
-            return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-          });
+        // Categorize officers with UPDATED supervisor sorting
+        // First get all supervisors
+        const allSupervisors = Array.from(allOfficers.values())
+          .filter(o => isSupervisorByRank(o));
 
-        console.log('Supervisors found:', supervisors.length);
+        // Separate Lieutenants and Sergeants
+        const lieutenants = allSupervisors.filter(o => 
+          o.rank?.toLowerCase().includes('lieutenant') || 
+          o.rank?.toLowerCase().includes('lt') ||
+          o.rank?.toLowerCase().includes('chief')
+        ).sort((a, b) => {
+          // Sort Lieutenants by service credit DESCENDING (highest first)
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending
+          }
+          // If same service credit, sort by last name
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
+
+        const sergeants = allSupervisors.filter(o => 
+          o.rank?.toLowerCase().includes('sergeant') || 
+          o.rank?.toLowerCase().includes('sgt')
+        ).sort((a, b) => {
+          // Sort Sergeants by service credit DESCENDING (highest first)
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) {
+            return bCredit - aCredit; // Descending
+          }
+          // If same service credit, sort by last name
+          return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+        });
+
+        // Combine with Lieutenants first, then Sergeants
+        const supervisors = [...lieutenants, ...sergeants];
+
+        console.log('Lieutenants found:', lieutenants.length);
+        console.log('Sergeants found:', sergeants.length);
+        console.log('Total supervisors:', supervisors.length);
 
         const allOfficersList = Array.from(allOfficers.values())
           .filter(o => !isSupervisorByRank(o));
@@ -387,16 +384,22 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         // Set debug info for inspection
         setDebugInfo({
           allOfficersCount: allOfficers.size,
+          lieutenantsCount: lieutenants.length,
+          sergeantsCount: sergeants.length,
           supervisorsCount: supervisors.length,
           regularOfficersCount: regularOfficers.length,
           pposCount: ppos.length,
           exceptionsCount: exceptions?.length,
           recurringCount: recurringSchedules?.length,
-          sampleSupervisors: supervisors.slice(0, 3).map((s: any) => ({
+          sampleLieutenants: lieutenants.slice(0, 3).map((s: any) => ({
             name: s.officerName,
             rank: s.rank,
-            serviceCredit: s.service_credit,
-            promotionDate: s.promotion_date
+            serviceCredit: s.service_credit
+          })),
+          sampleSergeants: sergeants.slice(0, 3).map((s: any) => ({
+            name: s.officerName,
+            rank: s.rank,
+            serviceCredit: s.service_credit
           }))
         });
 
@@ -572,12 +575,6 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 <div className="text-xs text-muted-foreground">
                   SC: {officer.service_credit?.toFixed(1) || '0.0'}
                 </div>
-                {/* Show relevant promotion date if available */}
-                {officer.promotion_date && officer.promotion_date !== officer.hire_date && (
-                  <div className="text-xs text-muted-foreground">
-                    Promo: {format(new Date(officer.promotion_date), 'MM/dd/yyyy')}
-                  </div>
-                )}
               </div>
               {weekDays.map(({ dateStr }) => (
                 <div key={dateStr} className="p-2 border-r">
@@ -743,10 +740,8 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           </div>
           <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
             <p className="font-medium mb-1">Supervisor Sorting:</p>
-            <p>1. Rank (Lieutenant → Sergeant)</p>
-            <p>2. Promotion Date (Most Recent First)</p>
-            <p>3. Service Credit in Current Rank</p>
-            <p>4. Last Name</p>
+            <p>1. Lieutenants (Highest SC First)</p>
+            <p>2. Sergeants (Highest SC First)</p>
           </div>
         </CardContent>
       </Card>

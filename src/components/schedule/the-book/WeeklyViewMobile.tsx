@@ -120,20 +120,20 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
       try {
         // Fetch schedule exceptions
         console.log('🔄 Fetching exceptions...');
-        const { data: exceptions, error: exceptionsError } = await supabase
-          .from("schedule_exceptions")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date, 
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .gte("date", startStr)
-          .lte("date", endStr)
-          .order("date", { ascending: true });
+const { data: exceptions, error: exceptionsError } = await supabase
+  .from("schedule_exceptions")
+  .select(`
+    *,
+    profiles:officer_id (
+      id, full_name, badge_number, rank, hire_date, 
+      promotion_date_sergeant, promotion_date_lieutenant,
+      service_credit_override
+    )
+  `)
+  .eq("shift_type_id", selectedShiftId)
+  .gte("date", startStr)
+  .lte("date", endStr)
+  .order("date", { ascending: true });
 
         if (exceptionsError) throw exceptionsError;
         console.log('✅ Exceptions fetched:', exceptions?.length, 'records');

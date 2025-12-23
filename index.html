@@ -20,6 +20,120 @@
     <!-- PWA manifest (vite-plugin-pwa injects /scheduler/manifest.json) -->
     <link rel="manifest" href="/scheduler/manifest.json" />
 
+    <!-- OneSignal Push Notification SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        // Initialize OneSignal with your App ID
+        await OneSignal.init({
+          appId: "3417d840-c226-40ba-92d6-a7590c31eef3", // Your App ID from OneSignal
+          
+          // Development settings
+          allowLocalhostAsSecureOrigin: true,
+          
+          // Safari settings
+          safari_web_id: "", // Add your Safari Web ID if you have one
+          
+          // Service Worker settings
+          serviceWorkerParam: { scope: "/scheduler/" },
+          serviceWorkerPath: "OneSignalSDKWorker.js",
+          
+          // Notification prompt settings
+          notifyButton: {
+            enable: false, // We'll use our own custom notification prompt
+          },
+          
+          // Auto-resubscribe
+          autoResubscribe: true,
+          autoRegister: true,
+          
+          // Prompt settings
+          promptOptions: {
+            /* 
+            Action Messages - Customize for police department
+            Modify these messages to match your department's tone
+            */
+            slidedown: {
+              enabled: true,
+              autoPrompt: true,
+              timeDelay: 3, // Show after 3 seconds
+              pageViews: 1, // Show after 1 page view
+              acceptButtonText: "Allow Alerts", // Custom button text
+              acceptButtonColor: "#2563eb", // Police blue color
+              cancelButtonText: "Not Now",
+              cancelButtonColor: "#6b7280",
+              title: "PAPD Alert Notifications",
+              message: "Stay informed with shift changes, vacancies, and emergency alerts from Port Arthur Police Department.",
+              actionMessage: "We'll send you notifications for:",
+              examples: {
+                actionMessage: [
+                  "Shift schedule changes",
+                  "Vacancy openings", 
+                  "Emergency department alerts",
+                  "PTO request updates"
+                ]
+              }
+            }
+          }
+        });
+        
+        console.log("🚨 PAPD OneSignal initialized");
+        
+        // Helper to set user ID after login
+        window.setOneSignalUserId = function(userId) {
+          if (OneSignal && OneSignal.setExternalUserId) {
+            OneSignal.setExternalUserId(userId);
+            console.log("🔗 Linked OneSignal to user:", userId);
+            
+            // Store in localStorage for persistence
+            localStorage.setItem('onesignal_user_id', userId);
+          }
+        };
+        
+        // Helper to clear user ID on logout
+        window.clearOneSignalUserId = function() {
+          if (OneSignal && OneSignal.removeExternalUserId) {
+            OneSignal.removeExternalUserId();
+            localStorage.removeItem('onesignal_user_id');
+            console.log("🔗 Cleared OneSignal user link");
+          }
+        };
+        
+        // Check for existing user ID on load
+        const savedUserId = localStorage.getItem('onesignal_user_id');
+        if (savedUserId) {
+          window.setOneSignalUserId(savedUserId);
+        }
+        
+        // Listen for custom events from your React app
+        window.addEventListener('onesignal-set-user', (event) => {
+          if (event.detail && event.detail.userId) {
+            window.setOneSignalUserId(event.detail.userId);
+          }
+        });
+        
+        window.addEventListener('onesignal-clear-user', () => {
+          window.clearOneSignalUserId();
+        });
+        
+        // Dispatch event when OneSignal is ready
+        window.dispatchEvent(new CustomEvent('onesignal-ready'));
+      });
+      
+      // Handle OneSignal errors
+      window.OneSignalDeferred.push(function(OneSignal) {
+        OneSignal.on('subscriptionChange', function(isSubscribed) {
+          console.log("🔔 User subscription changed:", isSubscribed);
+          
+          // Dispatch event for React app
+          window.dispatchEvent(new CustomEvent('onesignal-subscription-change', {
+            detail: { isSubscribed }
+          }));
+        });
+      });
+    </script>
+
     <title>Port Arthur PD Scheduler</title>
   </head>
   <body>

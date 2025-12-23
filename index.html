@@ -2,115 +2,49 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-
-    <!-- Base URL for GitHub Pages subdirectory -->
+    <link rel="icon" type="image/svg+xml" href="/scheduler/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Base tag for GitHub Pages -->
     <base href="/scheduler/">
-
-    <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#2563eb" />
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="PAPD Scheduler">
-
-    <!-- FAVICONS (generated package) - Use absolute paths -->
-    <link rel="icon" type="image/png" sizes="96x96" href="/scheduler/icons/favicon-96x96.png" />
-    <link rel="icon" type="image/svg+xml" href="/scheduler/icons/favicon.svg" />
-    <link rel="shortcut icon" href="/scheduler/icons/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/scheduler/icons/apple-touch-icon.png" />
-
-    <!-- PWA manifest -->
+    
+    <!-- Manifest -->
     <link rel="manifest" href="/scheduler/manifest.json" />
-
-    <!-- OneSignal Push Notification SDK -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    
+    <!-- OneSignal SDK - IMPORTANT: Use THIS version -->
+    <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" defer></script>
+    
+    <!-- OneSignal Configuration -->
     <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        // Get current path for dynamic configuration
-        const isLocalhost = window.location.hostname === 'localhost';
-        const isGithubPages = window.location.hostname.includes('github.io');
-        const hasSchedulerPath = window.location.pathname.includes('/scheduler');
+      var OneSignal = window.OneSignal || [];
+      
+      // PREVENT auto-init
+      OneSignal.push(function() {
+        OneSignal.SERVICE_WORKER_UPDATER_PATH = "/scheduler/OneSignalSDKUpdaterWorker.js";
+        OneSignal.SERVICE_WORKER_PATH = "/scheduler/OneSignalSDKWorker.js";
+        OneSignal.SERVICE_WORKER_PARAM = { scope: "/scheduler/" };
         
-        console.log('🔧 OneSignal Configuration:', {
-          hostname: window.location.hostname,
-          pathname: window.location.pathname,
-          isLocalhost,
-          isGithubPages,
-          hasSchedulerPath
-        });
-        
-        // App ID injected by Vite during build
-        await OneSignal.init({
-          appId: "%%ONESIGNAL_APP_ID%%",
+        // Don't auto-initialize - we'll do it manually
+        OneSignal.init = function(options) {
+          // Override options with our GitHub Pages paths
+          const mergedOptions = {
+            ...options,
+            serviceWorkerPath: "/scheduler/OneSignalSDKWorker.js",
+            serviceWorkerParam: { scope: "/scheduler/" },
+            safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+            allowLocalhostAsSecureOrigin: true,
+            autoResubscribe: true
+          };
           
-          // CRITICAL FIX: Dynamic service worker paths
-          serviceWorkerPath: isGithubPages ? "/scheduler/OneSignalSDKWorker.js" : "/OneSignalSDKWorker.js",
-          serviceWorkerParam: { 
-            scope: isGithubPages ? "/scheduler/" : "/"
-          },
-          
-          // Allow localhost for development
-          allowLocalhostAsSecureOrigin: isLocalhost,
-          
-          // HTTP permission request for GitHub Pages
-          httpPermissionRequest: {
-            enable: true,
-            useCustomModal: false
-          },
-          
-          // Subdomain configuration for GitHub Pages
-          subdomainName: isGithubPages ? "scheduler" : undefined,
-          
-          // Prompt settings
-          promptOptions: {
-            slidedown: {
-              enabled: true,
-              autoPrompt: true,
-              timeDelay: 3,
-              pageViews: 1,
-              acceptButtonText: "Allow Alerts",
-              acceptButtonColor: "#2563eb",
-              cancelButtonText: "Not Now",
-              cancelButtonColor: "#6b7280",
-              title: "PAPD Alert Notifications",
-              message: "Stay informed with shift changes, vacancies, and emergency alerts from Port Arthur Police Department.",
-            }
-          }
-        });
-        
-        console.log("🚨 PAPD OneSignal initialized for GitHub Pages");
-        
-        // Debug helper
-        window.debugOneSignal = async () => {
-          const registration = await OneSignal.getRegistration();
-          console.log("🔧 OneSignal Debug:", {
-            registration: registration ? "Success" : "Failed",
-            scope: registration?.scope,
-            scriptURL: registration?.active?.scriptURL,
-            currentPath: window.location.pathname
-          });
-          return registration;
+          // Call original init with merged options
+          return window.OneSignal.prototype.init.call(this, mergedOptions);
         };
-        
-        // Dispatch ready event
-        window.dispatchEvent(new Event('onesignal-ready'));
       });
       
-      // Add error handling
-      window.OneSignalDeferred.push(function(OneSignal) {
-        OneSignal.on('subscriptionChange', function(isSubscribed) {
-          console.log("🔔 Subscription changed:", isSubscribed);
-        });
-        
-        OneSignal.on('notificationPermissionChange', function(permission) {
-          console.log("🔔 Permission changed:", permission);
-        });
-      });
+      // We'll initialize manually in App.tsx
     </script>
-
-    <title>Port Arthur PD Scheduler</title>
+    
+    <title>Port Arthur PD - Officer Scheduler</title>
   </head>
   <body>
     <div id="root"></div>

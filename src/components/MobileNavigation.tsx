@@ -134,16 +134,6 @@ const MobileNavigation = ({
           );
         })}
         
-        {/* Logout button as a separate item */}
-        <Button
-          variant="ghost"
-          onClick={handleSignOut}
-          className="flex flex-col items-center justify-center h-full text-muted-foreground hover:text-foreground hover:bg-muted/50 flex-1"
-          size="sm"
-        >
-          <LogOut className="h-5 w-5 mb-1" />
-          <span className="text-xs font-medium">Logout</span>
-        </Button>
       </div>
     </nav>
   );

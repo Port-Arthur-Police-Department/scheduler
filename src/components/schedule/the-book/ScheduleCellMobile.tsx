@@ -99,100 +99,46 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   const isSpecial = position && (isSpecialAssignment ? isSpecialAssignment(position) : defaultIsSpecial(position));
 
   // Determine cell styling based on schedule type
-  const cellClass = cn(
-    "relative group h-8 flex items-center justify-center",
-    // PTO styling - apply based on PTO type
-    shouldShowAsPTO && "border-l-2",
-    // Vacation: Light blue
-    shouldShowAsPTO && ptoType?.toLowerCase().includes('vacation') && "bg-blue-50 border-blue-400",
-    // Holiday: Light orange
-    shouldShowAsPTO && ptoType?.toLowerCase().includes('holiday') && "bg-orange-50 border-orange-400",
-    // Sick: Light red
-    shouldShowAsPTO && ptoType?.toLowerCase().includes('sick') && "bg-red-50 border-red-400",
-    // Comp: Light purple
-    shouldShowAsPTO && ptoType?.toLowerCase().includes('comp') && "bg-purple-50 border-purple-400",
-    // Other PTO: Light green (fallback)
-    shouldShowAsPTO && !ptoType?.toLowerCase().includes('vacation') && 
-               !ptoType?.toLowerCase().includes('holiday') && 
-               !ptoType?.toLowerCase().includes('sick') && 
-               !ptoType?.toLowerCase().includes('comp') && "bg-green-50 border-green-400",
-    // Purple for special assignments (but not if it's PTO)
-    isSpecial && !shouldShowAsPTO && "bg-purple-50 border-l-2 border-purple-400",
-    // Green for ALL recurring days (scheduled days) - but not if it's PTO or Special
-    isRegularRecurringDay && !shouldShowAsPTO && !isSpecial && "bg-green-50 border-l-2 border-green-400",
-    // Gray for non-scheduled days (not recurring, no assignment, no PTO)
-    !isRegularRecurringDay && !hasOfficerData && !shouldShowAsPTO && "bg-gray-100 border-l-2 border-gray-300",
-    // If marked as "Off" but no PTO type - should be rare, show as gray
-    isOff && !shouldShowAsPTO && "bg-gray-200 border-l-2 border-gray-400"
-  );
+// Update the cellClass logic in ScheduleCellMobile.tsx:
+const cellClass = cn(
+  "relative group h-8 flex items-center justify-center",
+  // PTO styling
+  shiftInfo?.hasPTO && shiftInfo?.ptoData?.ptoType && "border-l-2",
+  // Vacation
+  shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('vacation') && "bg-blue-50 border-blue-400",
+  // Holiday
+  shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('holiday') && "bg-orange-50 border-orange-400",
+  // Sick
+  shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('sick') && "bg-red-50 border-red-400",
+  // Comp
+  shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('comp') && "bg-purple-50 border-purple-400",
+  // Other PTO
+  shiftInfo?.hasPTO && shiftInfo?.ptoData?.ptoType && 
+  !shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('vacation') && 
+  !shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('holiday') && 
+  !shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('sick') && 
+  !shiftInfo?.ptoData?.ptoType?.toLowerCase().includes('comp') && "bg-green-50 border-green-400",
+  // Special assignment
+  isSpecial && !shiftInfo?.hasPTO && "bg-purple-50 border-l-2 border-purple-400",
+  // Regular recurring day
+  isRegularRecurringDay && !shiftInfo?.hasPTO && !isSpecial && "bg-green-50 border-l-2 border-green-400",
+  // Empty cell
+  !hasOfficerData && !isRegularRecurringDay && "bg-gray-100 border-l-2 border-gray-300"
+);
 
   // Get cell content based on status
-  const getCellContent = () => {
-    // If no officer data at all and it's not a recurring day
-    if (!hasOfficerData && !isRegularRecurringDay) {
-      return (
-        <span className="text-xs text-muted-foreground">-</span>
-      );
-    }
+const getCellContent = () => {
+  console.log('📱 ScheduleCellMobile for', officerName, 'on', dateStr, ':', {
+    hasOfficerData,
+    shiftInfo,
+    isRegularRecurringDay,
+    hasPTO: shiftInfo?.hasPTO,
+    ptoType: shiftInfo?.ptoData?.ptoType
+  });
 
-    // If this is a recurring day but no specific data (just scheduled)
-    if (isRegularRecurringDay && !hasOfficerData) {
-      return (
-        <div className="flex flex-col items-center">
-          <div className="text-xs text-green-700 font-medium">Recur</div>
-        </div>
-      );
-    }
-
-    // PTO Handling - Show PTO abbreviation
-    if (shouldShowAsPTO) {
-      const ptoInfo = getPTOInfo(ptoType);
-      return (
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1">
-            <span className={`${ptoInfo.colorClass.replace('text-', 'text-')}`}>
-              {ptoInfo.icon}
-            </span>
-            <span className={`text-xs font-medium ${ptoInfo.colorClass}`}>
-              {ptoInfo.abbreviation}
-            </span>
-          </div>
-          {/* Show position for partial PTO */}
-          {shiftInfo?.ptoData?.isFullShift === false && position && (
-            <div className="text-[10px] mt-0.5 truncate max-w-[70px] opacity-80" title={position}>
-              {position}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Special Assignment
-    if (isSpecial && position) {
-      return (
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1">
-            <Star className="h-3 w-3 text-purple-600" />
-            <div className="text-xs truncate max-w-[70px] text-purple-700" title={position}>
-              {position}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Regular assignment (not special, not PTO)
-    if (position) {
-      return (
-        <div className="flex flex-col items-center">
-          <div className="text-xs truncate max-w-[80px]" title={position}>
-            {position}
-          </div>
-        </div>
-      );
-    }
-
-    // Recurring day with no specific position
+  // If no officer data at all
+  if (!hasOfficerData) {
+    // Check if this is a recurring day (should have data, but just in case)
     if (isRegularRecurringDay) {
       return (
         <div className="flex flex-col items-center">
@@ -200,21 +146,68 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
         </div>
       );
     }
-
-    // If marked as "Off" but no PTO type (should be rare)
-    if (isOff && !shouldShowAsPTO) {
-      return (
-        <Badge variant="outline" className="text-xs text-gray-600 border-gray-400 bg-gray-200">
-          Off
-        </Badge>
-      );
-    }
-
-    // Fallback: Should not happen in a properly configured system
     return (
       <span className="text-xs text-muted-foreground">-</span>
     );
-  };
+  }
+
+  // PTO Handling - This should be the primary check
+  if (shiftInfo?.hasPTO && shiftInfo?.ptoData?.ptoType) {
+    console.log('🟢 Found PTO:', shiftInfo.ptoData.ptoType);
+    const ptoInfo = getPTOInfo(shiftInfo.ptoData.ptoType);
+    return (
+      <div className="flex flex-col items-center p-1">
+        <div className="flex items-center gap-1">
+          <span className={`${ptoInfo.colorClass}`}>
+            {ptoInfo.icon}
+          </span>
+          <span className={`text-xs font-medium ${ptoInfo.colorClass}`}>
+            {ptoInfo.abbreviation}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Special Assignment
+  if (isSpecial && position) {
+    return (
+      <div className="flex flex-col items-center">
+        <div className="flex items-center gap-1">
+          <Star className="h-3 w-3 text-purple-600" />
+          <div className="text-xs truncate max-w-[70px] text-purple-700" title={position}>
+            {position}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Regular assignment (not special, not PTO)
+  if (position) {
+    return (
+      <div className="flex flex-col items-center">
+        <div className="text-xs truncate max-w-[80px]" title={position}>
+          {position}
+        </div>
+      </div>
+    );
+  }
+
+  // Recurring day with no specific position
+  if (isRegularRecurringDay) {
+    return (
+      <div className="flex flex-col items-center">
+        <div className="text-xs text-green-700 font-medium">Recur</div>
+      </div>
+    );
+  }
+
+  // Fallback
+  return (
+    <span className="text-xs text-muted-foreground">-</span>
+  );
+};
 
   // Handle actions
   const handleAssignPTO = () => toast.info("PTO assignment coming soon");

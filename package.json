@@ -5,14 +5,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf dev-dist dist node_modules/.vite",
+    "clean:all": "rm -rf dev-dist dist node_modules/.vite .vite",
     "dev": "vite",
-    "fix-deploy": "node scripts/fix-github-pages.js",
-    "build": "vite build && npm run prepare-pwa",
+    "build": "npm run clean:build && vite build && npm run prepare-pwa",
+    "clean:build": "rm -rf dist dev-dist",
     "prepare-pwa": "mkdir -p dist/scheduler && cp public/manifest.json dist/ && cp public/manifest.json dist/scheduler/ && cp public/service-worker.js dist/ && cp public/service-worker.js dist/scheduler/ && cp public/OneSignalSDKWorker.js dist/ && cp public/OneSignalSDKWorker.js dist/scheduler/",
-    "build:dev": "vite build --mode development",
-    "copy-service-workers": "mkdir -p dist/scheduler && cp public/OneSignalSDKWorker.js dist/ && cp public/service-worker.js dist/ && cp public/OneSignalSDKUpdaterWorker.js dist/ && cp public/OneSignalSDKWorker.js dist/scheduler/ && cp public/service-worker.js dist/scheduler/ && cp public/OneSignalSDKUpdaterWorker.js dist/scheduler/",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "predeploy": "npm run clean:all && npm run build",
+    "deploy": "gh-pages -d dist"
   }
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

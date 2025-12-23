@@ -20,10 +20,17 @@ export const subscribeToPushNotifications = async (userId: string): Promise<bool
       return false;
     }
 
+    // Get VAPID public key from environment
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidPublicKey) {
+      console.error('VAPID public key not configured');
+      return false;
+    }
+
     // Get subscription
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '')
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
     });
 
     // Save subscription to Supabase

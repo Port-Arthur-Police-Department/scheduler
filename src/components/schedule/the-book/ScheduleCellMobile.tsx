@@ -1,3 +1,4 @@
+// Updated ScheduleCellMobile.tsx with proper PTO abbreviations
 import React, { useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,20 @@ interface ScheduleCellMobileProps {
   isRegularRecurringDay?: boolean;
   isSpecialAssignment?: (position: string) => boolean;
 }
+
+// Helper function to get PTO abbreviation
+const getPTOAbbreviation = (ptoType: string | undefined): string => {
+  if (!ptoType) return 'PTO';
+  
+  const ptoTypeLower = ptoType.toLowerCase();
+  
+  if (ptoTypeLower.includes('vacation')) return 'Vac';
+  if (ptoTypeLower.includes('holiday')) return 'Hol';
+  if (ptoTypeLower.includes('sick')) return 'Sick';
+  if (ptoTypeLower.includes('comp')) return 'Comp';
+  
+  return ptoType.substring(0, 3); // Return first 3 letters as fallback
+};
 
 export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   officer,
@@ -78,13 +93,19 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
     }
 
     if (hasPTO) {
-      const displayPtoType = ptoType || 'PTO';
+      const ptoAbbreviation = getPTOAbbreviation(ptoType);
       return (
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1">
             <Umbrella className="h-3 w-3 text-blue-600" />
-            <span className="text-xs text-blue-700 font-medium">{displayPtoType}</span>
+            <span className="text-xs text-blue-700 font-medium">{ptoAbbreviation}</span>
           </div>
+          {/* Show position for partial PTO */}
+          {shiftInfo?.ptoData?.isFullShift === false && position && (
+            <div className="text-[10px] mt-0.5 truncate max-w-[70px] opacity-80" title={position}>
+              {position}
+            </div>
+          )}
         </div>
       );
     }

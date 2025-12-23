@@ -21,6 +21,8 @@ import { MonthlyViewMobile } from "./MonthlyViewMobile";
 import { ForceListViewMobile } from "./ForceListViewMobile";
 import { VacationListViewMobile } from "./VacationListViewMobile";
 import { BeatPreferencesViewMobile } from "./BeatPreferencesViewMobile";
+// Import PTO Dialog
+import { PTODialogMobile } from "./PTODialogMobile";
 
 interface TheBookMobileProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
@@ -32,6 +34,15 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // PTO Dialog state
+  const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
+  const [selectedOfficer, setSelectedOfficer] = useState<{
+    id: string;
+    name: string;
+    date: string;
+    schedule: any;
+  } | null>(null);
 
   // Get user context for audit logging
   const { userEmail } = useUser();
@@ -84,6 +95,132 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     queryKey
   } = mutationsResult;
 
+  // Add PTO Assignment Mutation
+  const assignPTOMutation = useMutation({
+    mutationFn: async (ptoData: any) => {
+      console.log('🎯 Assigning PTO on mobile:', ptoData);
+
+      // Check if there's already a schedule exception for this officer on this date
+      const { data: existingExceptions, error: checkError } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", ptoData.officerId)
+        .eq("date", ptoData.date)
+        .eq("shift_type_id", ptoData.shiftTypeId);
+
+      if (checkError) throw checkError;
+
+      let exceptionId;
+
+      if (existingExceptions && existingExceptions.length > 0) {
+        // Update existing exception
+        const { error: updateError } = await supabase
+          .from("schedule_exceptions")
+          .update({
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.startTime,
+            custom_end_time: ptoData.endTime,
+            position_name: null,
+            unit_number: null,
+            notes: `PTO: ${ptoData.ptoType}`
+          })
+          .eq("id", existingExceptions[0].id);
+
+        if (updateError) throw updateError;
+        exceptionId = existingExceptions[0].id;
+      } else {
+        // Create new exception
+        const { data: newException, error: insertError } = await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: ptoData.officerId,
+            date: ptoData.date,
+            shift_type_id: ptoData.shiftTypeId,
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.startTime,
+            custom_end_time: ptoData.endTime,
+            position_name: null,
+            unit_number: null,
+            notes: `PTO: ${ptoData.ptoType}`
+          })
+          .select("id")
+          .single();
+
+        if (insertError) throw insertError;
+        exceptionId = newException.id;
+      }
+
+      // Deduct from PTO balance (matching desktop logic)
+      const ptoColumn = getPTOColumn(ptoData.ptoType);
+      if (ptoColumn) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", ptoData.officerId)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        } else if (profile) {
+          const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+          const hoursUsed = calculateHoursUsed(ptoData.startTime, ptoData.endTime);
+          
+          const { error: updateBalanceError } = await supabase
+            .from("profiles")
+            .update({
+              [ptoColumn]: Math.max(0, (currentBalance || 0) - hoursUsed),
+            })
+            .eq("id", ptoData.officerId);
+
+          if (updateBalanceError) {
+            console.error('Error updating PTO balance:', updateBalanceError);
+          }
+        }
+      }
+
+      return { id: exceptionId, success: true };
+    },
+    onSuccess: () => {
+      toast.success("PTO assigned successfully");
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error: any) => {
+      console.error('❌ Error assigning PTO:', error);
+      toast.error(error.message || "Failed to assign PTO");
+    },
+  });
+
+  // Helper function to get PTO column name
+  const getPTOColumn = (ptoType: string): string | null => {
+    const ptoTypes = {
+      'vacation': 'vacation_hours',
+      'sick': 'sick_hours',
+      'holiday': 'holiday_hours',
+      'comp': 'comp_time_hours',
+      'other': 'other_pto_hours'
+    };
+    return ptoTypes[ptoType as keyof typeof ptoTypes] || null;
+  };
+
+  // Helper function to calculate hours used
+  const calculateHoursUsed = (startTime: string, endTime: string): number => {
+    try {
+      const [startHour, startMin] = startTime.split(":").map(Number);
+      const [endHour, endMin] = endTime.split(":").map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      return (endMinutes - startMinutes) / 60;
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return 8; // Default to 8 hours
+    }
+  };
+
+  const { useMutation: useReactQueryMutation, useQueryClient } = require('@tanstack/react-query');
+  const queryClient = useQueryClient();
+
   // Navigation functions
   const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
@@ -96,10 +233,50 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
 
   // Event handlers for mobile
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
-    // For mobile, we can show a simplified dialog or use a bottom sheet
-    // For now, show a toast with info
-    toast.info(`To assign PTO to ${officerName} on ${date}, please use the desktop version for now. Mobile PTO assignment coming soon.`, {
-      duration: 4000,
+    console.log('📱 Opening PTO dialog for:', officerName, date);
+    
+    setSelectedOfficer({
+      id: officerId,
+      name: officerName,
+      date: date,
+      schedule: schedule
+    });
+    setPtoDialogOpen(true);
+  };
+
+  const handleSavePTO = async (ptoData: any) => {
+    if (!selectedOfficer || !selectedShiftId) {
+      toast.error("Missing required information");
+      return;
+    }
+
+    console.log('💾 Saving PTO:', ptoData);
+
+    // Call the mutation to assign PTO
+    assignPTOMutation.mutate({
+      ...ptoData,
+      officerId: selectedOfficer.id,
+      date: selectedOfficer.date,
+      shiftTypeId: selectedShiftId
+    }, {
+      onSuccess: () => {
+        // Log audit trail
+        try {
+          auditLogger.logPTOAssignment(
+            selectedOfficer.id,
+            ptoData.ptoType,
+            selectedOfficer.date,
+            userEmail,
+            `Assigned ${ptoData.ptoType} PTO via mobile`
+          );
+        } catch (logError) {
+          console.error('Failed to log PTO audit:', logError);
+        }
+        
+        // Close dialog
+        setPtoDialogOpen(false);
+        setSelectedOfficer(null);
+      }
     });
   };
 
@@ -198,7 +375,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
             onRemovePTO={handleRemovePTO}
             onEditAssignment={handleEditAssignment}
             onRemoveOfficer={handleRemoveOfficer}
-            isUpdating={removeOfficerMutation.isPending}
+            isUpdating={removeOfficerMutation.isPending || assignPTOMutation.isPending}
           />
         );
       
@@ -332,6 +509,20 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* PTO Dialog */}
+      {selectedOfficer && (
+        <PTODialogMobile
+          open={ptoDialogOpen}
+          onOpenChange={setPtoDialogOpen}
+          officerName={selectedOfficer.name}
+          date={selectedOfficer.date}
+          officerId={selectedOfficer.id}
+          shiftTypeId={selectedShiftId}
+          onSave={handleSavePTO}
+          isUpdating={assignPTOMutation.isPending}
+        />
+      )}
     </div>
   );
 };

@@ -95,6 +95,12 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   onPreviousWeek,
   onNextWeek,
   onToday,
+  // New action props
+  onAssignPTO,
+  onRemovePTO,
+  onEditAssignment,
+  onRemoveOfficer,
+  isUpdating = false,
 }) => {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentWeekStart, i);
@@ -108,312 +114,333 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     };
   });
 
-  const { data: scheduleData, isLoading, error } = useQuery({
-    queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],
-// Replace the entire query function in WeeklyViewMobile.tsx with this:
-queryFn: async () => {
-  console.log('🔍 Mobile query started for shift:', selectedShiftId, 'week:', format(currentWeekStart, 'yyyy-MM-dd'));
-  
-  if (!selectedShiftId) {
-    console.log('❌ No shift ID selected');
-    return null;
-  }
-
-  const startStr = format(currentWeekStart, "yyyy-MM-dd");
-  const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
-
-  console.log('📅 Fetching data for date range:', startStr, 'to', endStr);
-
-  try {
-    // Fetch ALL schedule exceptions (including PTO)
-    console.log('🔄 Fetching ALL schedule exceptions...');
-    const { data: allExceptions, error: exceptionsError } = await supabase
-      .from("schedule_exceptions")
-      .select(`
-        *,
-        profiles:officer_id (
-          id, full_name, badge_number, rank, hire_date, 
-          promotion_date_sergeant, promotion_date_lieutenant,
-          service_credit_override
-        )
-      `)
-      .eq("shift_type_id", selectedShiftId)
-      .gte("date", startStr)
-      .lte("date", endStr)
-      .order("date", { ascending: true });
-
-    if (exceptionsError) throw exceptionsError;
-    console.log('✅ All exceptions fetched:', allExceptions?.length, 'records');
-
-    // Log all PTO records found
-    const ptoExceptions = allExceptions?.filter(e => e.is_off === true && e.reason);
-    console.log('📋 PTO Exceptions found:', ptoExceptions?.length);
-    ptoExceptions?.forEach(ptoe => {
-      console.log('   -', ptoe.profiles?.full_name, 'on', ptoe.date, ':', ptoe.reason);
-    });
-
-    // Fetch recurring schedules
-    console.log('🔄 Fetching recurring schedules...');
-    const { data: recurringSchedules, error: recurringError } = await supabase
-      .from("recurring_schedules")
-      .select(`
-        *,
-        profiles:officer_id (
-          id, full_name, badge_number, rank, hire_date,
-          promotion_date_sergeant, promotion_date_lieutenant,
-          service_credit_override
-        )
-      `)
-      .eq("shift_type_id", selectedShiftId)
-      .or(`end_date.is.null,end_date.gte.${startStr}`);
-
-    if (recurringError) throw recurringError;
-    console.log('✅ Recurring fetched:', recurringSchedules?.length, 'records');
-
-    // Fetch minimum staffing
-    const { data: minStaffingData, error: minStaffingError } = await supabase
-      .from("minimum_staffing")
-      .select("*")
-      .eq("shift_type_id", selectedShiftId);
-
-    if (minStaffingError) {
-      console.error("Error fetching minimum staffing:", minStaffingError);
+const { data: scheduleData, isLoading, error } = useQuery({
+  queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],
+  queryFn: async () => {
+    console.log('🔍 Mobile query started for shift:', selectedShiftId, 'week:', format(currentWeekStart, 'yyyy-MM-dd'));
+    
+    if (!selectedShiftId) {
+      console.log('❌ No shift ID selected');
+      return null;
     }
 
-    // Create minimum staffing map
-    const minimumStaffing = new Map();
-    minStaffingData?.forEach(staffing => {
-      if (!minimumStaffing.has(staffing.day_of_week)) {
-        minimumStaffing.set(staffing.day_of_week, new Map());
+    const startStr = format(currentWeekStart, "yyyy-MM-dd");
+    const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
+
+    console.log('📅 Fetching data for date range:', startStr, 'to', endStr);
+
+    try {
+      // Fetch schedule exceptions
+      console.log('🔄 Fetching exceptions...');
+      const { data: exceptions, error: exceptionsError } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date, 
+            promotion_date_sergeant, promotion_date_lieutenant,
+            service_credit_override
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .gte("date", startStr)
+        .lte("date", endStr)
+        .order("date", { ascending: true });
+
+      if (exceptionsError) throw exceptionsError;
+      console.log('✅ Exceptions fetched:', exceptions?.length, 'records');
+      
+      // Fetch recurring schedules
+      console.log('🔄 Fetching recurring schedules...');
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date,
+            promotion_date_sergeant, promotion_date_lieutenant,
+            service_credit_override
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${startStr}`);
+
+      if (recurringError) throw recurringError;
+      console.log('✅ Recurring fetched:', recurringSchedules?.length, 'records');
+
+      // Fetch minimum staffing
+      const { data: minStaffingData, error: minStaffingError } = await supabase
+        .from("minimum_staffing")
+        .select("*")
+        .eq("shift_type_id", selectedShiftId);
+
+      if (minStaffingError) {
+        console.error("Error fetching minimum staffing:", minStaffingError);
       }
-      minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
-        minimumOfficers: staffing.minimum_officers,
-        minimumSupervisors: staffing.minimum_supervisors
-      });
-    });
 
-    // Organize data - SIMPLER APPROACH
-    const allOfficers = new Map();
-    
-    // Process each day of the week
-    weekDays.forEach(day => {
-      // Find exceptions for this day
-      const dayExceptions = allExceptions?.filter(e => e.date === day.dateStr) || [];
-      
-      // Find recurring schedules for this day of week
-      const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
-      
-      // Process exceptions first (they override recurring)
-      dayExceptions.forEach(exception => {
-        const officerId = exception.officer_id;
-        const profile = exception.profiles;
+      // Create minimum staffing map
+      const minimumStaffing = new Map();
+      minStaffingData?.forEach(staffing => {
+        if (!minimumStaffing.has(staffing.day_of_week)) {
+          minimumStaffing.set(staffing.day_of_week, new Map());
+        }
+        minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
+          minimumOfficers: staffing.minimum_officers,
+          minimumSupervisors: staffing.minimum_supervisors
+        });
+      });
+
+      // Organize data
+      const allOfficers = new Map();
+      const recurringSchedulesByOfficer = new Map();
+      const exceptionsByOfficerAndDate = new Map();
+
+      // Extract recurring schedule patterns
+      recurringSchedules?.forEach((recurring: any) => {
+        if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+          recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
+        }
+        recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
+      });
+
+      // Map exceptions by officer and date for quick lookup
+      exceptions?.forEach((exception: any) => {
+        const key = `${exception.officer_id}-${exception.date}`;
+        exceptionsByOfficerAndDate.set(key, exception);
+      });
+
+      console.log('🗺️ Processing weekly data...');
+
+      // Process weekly data
+      weekDays.forEach(day => {
+        const dayExceptions = exceptions?.filter(e => e.date === day.dateStr) || [];
+        const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
         
-        const serviceCredit = calculateServiceCredit(
-          profile?.hire_date,
-          profile?.service_credit_override || 0,
-          profile?.promotion_date_sergeant,
-          profile?.promotion_date_lieutenant,
-          profile?.rank
-        );
+        // Prioritize exceptions over recurring
+        const processedOfficers = new Set();
         
-        if (!allOfficers.has(officerId)) {
-          const relevantPromotionDate = getRelevantPromotionDate(
-            profile?.rank,
-            profile?.promotion_date_sergeant,
-            profile?.promotion_date_lieutenant
+        // First, process exceptions
+        dayExceptions.forEach(item => {
+          const officerId = item.officer_id;
+          processedOfficers.add(officerId);
+          
+          const hireDate = item.profiles?.hire_date;
+          const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
+          const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
+          const overrideCredit = item.profiles?.service_credit_override || 0;
+          const badgeNumber = item.profiles?.badge_number || '9999';
+          
+          const serviceCredit = calculateServiceCredit(
+            hireDate, 
+            overrideCredit,
+            promotionDateSergeant,
+            promotionDateLieutenant,
+            item.profiles?.rank
           );
           
-          allOfficers.set(officerId, {
-            officerId: officerId,
-            officerName: profile?.full_name || "Unknown",
-            badgeNumber: profile?.badge_number || '9999',
-            rank: profile?.rank || "Officer",
-            service_credit: serviceCredit,
-            hire_date: profile?.hire_date,
-            promotion_date_sergeant: profile?.promotion_date_sergeant,
-            promotion_date_lieutenant: profile?.promotion_date_lieutenant,
-            promotion_date: relevantPromotionDate || profile?.hire_date,
-            recurringDays: new Set(), // Will be filled later
-            weeklySchedule: {} as Record<string, any>
-          });
-        }
-        
-        // Check if this is PTO (is_off AND has a reason)
-        const hasPTO = exception.is_off === true && !!exception.reason;
-        
-        const daySchedule = {
-          officerId: officerId,
-          officerName: profile?.full_name || "Unknown",
-          badgeNumber: profile?.badge_number || '9999',
-          rank: profile?.rank || "Officer",
-          service_credit: serviceCredit,
-          date: day.dateStr,
-          dayOfWeek: day.dayOfWeek,
-          isRegularRecurringDay: false, // Exceptions override recurring
-          shiftInfo: {
-            scheduleId: exception.id,
-            scheduleType: "exception",
-            position: exception.position_name,
-            isOff: exception.is_off,
-            hasPTO: hasPTO,
-            ptoData: hasPTO ? {
-              ptoType: exception.reason,
-              isFullShift: true // Most PTO is full shift
-            } : undefined,
-            reason: exception.reason
+          if (!allOfficers.has(officerId)) {
+            const relevantPromotionDate = getRelevantPromotionDate(
+              item.profiles?.rank,
+              promotionDateSergeant,
+              promotionDateLieutenant
+            );
+            
+            allOfficers.set(officerId, {
+              officerId: officerId,
+              officerName: item.profiles?.full_name || "Unknown",
+              badgeNumber: badgeNumber,
+              rank: item.profiles?.rank || "Officer",
+              service_credit: serviceCredit,
+              hire_date: hireDate,
+              promotion_date_sergeant: promotionDateSergeant,
+              promotion_date_lieutenant: promotionDateLieutenant,
+              promotion_date: relevantPromotionDate || hireDate,
+              recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+              weeklySchedule: {} as Record<string, any>
+            });
           }
-        };
+          
+          // CRITICAL: Properly set PTO data - Use 'reason' field for PTO type
+          const hasPTO = item.is_off === true && !!item.reason;
+          const daySchedule = {
+            officerId: officerId,
+            officerName: item.profiles?.full_name || "Unknown",
+            badgeNumber: badgeNumber,
+            rank: item.profiles?.rank || "Officer",
+            service_credit: serviceCredit,
+            date: day.dateStr,
+            dayOfWeek: day.dayOfWeek,
+            isRegularRecurringDay: false, // Exceptions are never "regular recurring"
+            shiftInfo: {
+              scheduleId: item.id,
+              scheduleType: "exception",
+              position: item.position_name,
+              isOff: item.is_off || false,
+              hasPTO: hasPTO,
+              ptoData: hasPTO ? {
+                ptoType: item.reason,
+                isFullShift: true
+              } : undefined,
+              reason: item.reason
+            }
+          };
+          
+          if (hasPTO) {
+            console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
+              ptoType: item.reason
+            });
+          }
+          
+          allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+        });
         
-        if (hasPTO) {
-          console.log('✅ PTO assigned to', profile?.full_name, 'on', day.dateStr, ':', exception.reason);
-        }
-        
-        allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
-      });
-      
-      // Process recurring schedules ONLY if no exception exists for that officer/day
-      dayRecurring.forEach(recurring => {
-        const officerId = recurring.officer_id;
-        const profile = recurring.profiles;
-        
-        // Skip if we already have an exception for this officer on this day
-        const hasException = dayExceptions.some(e => e.officer_id === officerId);
-        if (hasException) return;
-        
-        const serviceCredit = calculateServiceCredit(
-          profile?.hire_date,
-          profile?.service_credit_override || 0,
-          profile?.promotion_date_sergeant,
-          profile?.promotion_date_lieutenant,
-          profile?.rank
-        );
-        
-        if (!allOfficers.has(officerId)) {
-          const relevantPromotionDate = getRelevantPromotionDate(
-            profile?.rank,
-            profile?.promotion_date_sergeant,
-            profile?.promotion_date_lieutenant
+        // Then, process recurring ONLY if no exception exists
+        dayRecurring.forEach(item => {
+          const officerId = item.officer_id;
+          
+          // Skip if we already processed an exception for this officer on this day
+          if (processedOfficers.has(officerId)) {
+            return;
+          }
+          
+          const hireDate = item.profiles?.hire_date;
+          const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
+          const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
+          const overrideCredit = item.profiles?.service_credit_override || 0;
+          const badgeNumber = item.profiles?.badge_number || '9999';
+          
+          const serviceCredit = calculateServiceCredit(
+            hireDate, 
+            overrideCredit,
+            promotionDateSergeant,
+            promotionDateLieutenant,
+            item.profiles?.rank
           );
           
-          allOfficers.set(officerId, {
-            officerId: officerId,
-            officerName: profile?.full_name || "Unknown",
-            badgeNumber: profile?.badge_number || '9999',
-            rank: profile?.rank || "Officer",
-            service_credit: serviceCredit,
-            hire_date: profile?.hire_date,
-            promotion_date_sergeant: profile?.promotion_date_sergeant,
-            promotion_date_lieutenant: profile?.promotion_date_lieutenant,
-            promotion_date: relevantPromotionDate || profile?.hire_date,
-            recurringDays: new Set(),
-            weeklySchedule: {} as Record<string, any>
-          });
-        }
-        
-        // Track that this officer has a recurring schedule on this day
-        allOfficers.get(officerId).recurringDays.add(day.dayOfWeek);
-        
-        const daySchedule = {
-          officerId: officerId,
-          officerName: profile?.full_name || "Unknown",
-          badgeNumber: profile?.badge_number || '9999',
-          rank: profile?.rank || "Officer",
-          service_credit: serviceCredit,
-          date: day.dateStr,
-          dayOfWeek: day.dayOfWeek,
-          isRegularRecurringDay: true,
-          shiftInfo: {
-            scheduleId: recurring.id,
-            scheduleType: "recurring",
-            position: recurring.position_name,
-            isOff: false,
-            hasPTO: false,
-            ptoData: undefined
+          if (!allOfficers.has(officerId)) {
+            const relevantPromotionDate = getRelevantPromotionDate(
+              item.profiles?.rank,
+              promotionDateSergeant,
+              promotionDateLieutenant
+            );
+            
+            allOfficers.set(officerId, {
+              officerId: officerId,
+              officerName: item.profiles?.full_name || "Unknown",
+              badgeNumber: badgeNumber,
+              rank: item.profiles?.rank || "Officer",
+              service_credit: serviceCredit,
+              hire_date: hireDate,
+              promotion_date_sergeant: promotionDateSergeant,
+              promotion_date_lieutenant: promotionDateLieutenant,
+              promotion_date: relevantPromotionDate || hireDate,
+              recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+              weeklySchedule: {} as Record<string, any>
+            });
           }
-        };
-        
-        allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+          
+          const daySchedule = {
+            officerId: officerId,
+            officerName: item.profiles?.full_name || "Unknown",
+            badgeNumber: badgeNumber,
+            rank: item.profiles?.rank || "Officer",
+            service_credit: serviceCredit,
+            date: day.dateStr,
+            dayOfWeek: day.dayOfWeek,
+            isRegularRecurringDay: true, // This is a regular recurring day
+            shiftInfo: {
+              scheduleId: item.id,
+              scheduleType: "recurring",
+              position: item.position_name,
+              isOff: item.is_off || false,
+              hasPTO: false, // Recurring schedules don't have PTO
+              ptoData: undefined,
+              reason: item.reason
+            }
+          };
+          
+          allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+        });
       });
-    });
-    
-    console.log('📊 Total unique officers found:', allOfficers.size);
 
-    // Categorize officers
-    const allSupervisors = Array.from(allOfficers.values())
-      .filter(o => isSupervisorByRank(o));
+      console.log('📊 Total unique officers found:', allOfficers.size);
 
-    const lieutenants = allSupervisors.filter(o => 
-      o.rank?.toLowerCase().includes('lieutenant') || 
-      o.rank?.toLowerCase().includes('lt') ||
-      o.rank?.toLowerCase().includes('chief')
-    ).sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-    });
+      // Categorize officers
+      const allSupervisors = Array.from(allOfficers.values())
+        .filter(o => isSupervisorByRank(o));
 
-    const sergeants = allSupervisors.filter(o => 
-      o.rank?.toLowerCase().includes('sergeant') || 
-      o.rank?.toLowerCase().includes('sgt')
-    ).sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
-    });
-
-    const supervisors = [...lieutenants, ...sergeants];
-
-    const allOfficersList = Array.from(allOfficers.values())
-      .filter(o => !isSupervisorByRank(o));
-
-    const ppos = allOfficersList
-      .filter(o => o.rank?.toLowerCase() === 'probationary')
-      .sort((a, b) => {
+      const lieutenants = allSupervisors.filter(o => 
+        o.rank?.toLowerCase().includes('lieutenant') || 
+        o.rank?.toLowerCase().includes('lt') ||
+        o.rank?.toLowerCase().includes('chief')
+      ).sort((a, b) => {
         const aCredit = a.service_credit || 0;
         const bCredit = b.service_credit || 0;
         if (bCredit !== aCredit) return bCredit - aCredit;
-        const aBadge = parseInt(a.badgeNumber) || 9999;
-        const bBadge = parseInt(b.badgeNumber) || 9999;
-        return aBadge - bBadge;
+        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
       });
 
-    const regularOfficers = allOfficersList
-      .filter(o => o.rank?.toLowerCase() !== 'probationary')
-      .sort((a, b) => {
+      const sergeants = allSupervisors.filter(o => 
+        o.rank?.toLowerCase().includes('sergeant') || 
+        o.rank?.toLowerCase().includes('sgt')
+      ).sort((a, b) => {
         const aCredit = a.service_credit || 0;
         const bCredit = b.service_credit || 0;
         if (bCredit !== aCredit) return bCredit - aCredit;
-        const aBadge = parseInt(a.badgeNumber) || 9999;
-        const bBadge = parseInt(b.badgeNumber) || 9999;
-        return aBadge - bBadge;
+        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
       });
 
-    console.log('✅ Data processing complete');
+      const supervisors = [...lieutenants, ...sergeants];
 
-    return {
-      supervisors,
-      regularOfficers,
-      ppos,
-      minimumStaffing,
-      dailySchedules: weekDays.map(day => ({
-        date: day.dateStr,
-        dayOfWeek: day.dayOfWeek,
-        officers: Array.from(allOfficers.values())
-          .map(officer => officer.weeklySchedule[day.dateStr])
-          .filter(Boolean)
-      }))
-    };
+      const allOfficersList = Array.from(allOfficers.values())
+        .filter(o => !isSupervisorByRank(o));
 
-  } catch (error) {
-    console.error('❌ Error in mobile schedule query:', error);
-    throw error;
-  }
-},
-    enabled: !!selectedShiftId,
-    retry: 1,
-  });
+      const ppos = allOfficersList
+        .filter(o => o.rank?.toLowerCase() === 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          const aBadge = parseInt(a.badgeNumber) || 9999;
+          const bBadge = parseInt(b.badgeNumber) || 9999;
+          return aBadge - bBadge;
+        });
+
+      const regularOfficers = allOfficersList
+        .filter(o => o.rank?.toLowerCase() !== 'probationary')
+        .sort((a, b) => {
+          const aCredit = a.service_credit || 0;
+          const bCredit = b.service_credit || 0;
+          if (bCredit !== aCredit) return bCredit - aCredit;
+          const aBadge = parseInt(a.badgeNumber) || 9999;
+          const bBadge = parseInt(b.badgeNumber) || 9999;
+          return aBadge - bBadge;
+        });
+
+      console.log('✅ Data processing complete');
+
+      return {
+        supervisors,
+        regularOfficers,
+        ppos,
+        minimumStaffing,
+        dailySchedules: weekDays.map(day => ({
+          date: day.dateStr,
+          dayOfWeek: day.dayOfWeek,
+          officers: Array.from(allOfficers.values())
+            .map(officer => officer.weeklySchedule[day.dateStr])
+            .filter(Boolean)
+        }))
+      };
+
+    } catch (error) {
+      console.error('❌ Error in mobile schedule query:', error);
+      throw error;
+    }
+  },
+  enabled: !!selectedShiftId,
+  retry: 1,
+});
 
   // Helper function to check if an assignment is a special assignment
   const isSpecialAssignment = (position: string) => {

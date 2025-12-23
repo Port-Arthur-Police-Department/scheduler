@@ -11,6 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
+import { useUser } from "@/contexts/UserContext";
+import { auditLogger } from "@/lib/auditLogger";
 
 // Import mobile view components
 import { WeeklyViewMobile } from "./WeeklyViewMobile";
@@ -29,6 +32,9 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Get user context for audit logging
+  const { userEmail } = useUser();
 
   // Get shift types
   const { data: shiftTypes, isLoading: shiftsLoading } = useQuery({
@@ -50,6 +56,34 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     }
   }, [shiftTypes]);
 
+  // Setup mutations
+  const mutationsResult = useWeeklyScheduleMutations(
+    currentWeekStart,
+    currentMonth,
+    activeView,
+    selectedShiftId
+  );
+
+  // Destructure with safe fallbacks
+  const {
+    updatePositionMutation,
+    removeOfficerMutation = {
+      mutate: () => {
+        console.error("removeOfficerMutation not available");
+        toast.error("Cannot remove officer: System error");
+      },
+      isPending: false
+    },
+    removePTOMutation = {
+      mutate: () => {
+        console.error("removePTOMutation not available");
+        toast.error("Cannot remove PTO: System error");
+      },
+      isPending: false
+    },
+    queryKey
+  } = mutationsResult;
+
   // Navigation functions
   const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
@@ -60,32 +94,125 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     setCurrentMonth(new Date());
   };
 
-const renderView = () => {
-  switch (activeView) {
-    case "weekly":
-      return (
-        <WeeklyViewMobile
-          currentWeekStart={currentWeekStart}
-          selectedShiftId={selectedShiftId}
-          shiftTypes={shiftTypes || []}
-          isAdminOrSupervisor={isAdminOrSupervisor}
-          onPreviousWeek={goToPreviousWeek}
-          onNextWeek={goToNextWeek}
-          onToday={goToToday}
-        />
-      );
-    
-    case "monthly":
-      return (
-        <MonthlyViewMobile
-          currentMonth={currentMonth}
-          selectedShiftId={selectedShiftId}
-          shiftTypes={shiftTypes || []}
-          onPreviousMonth={goToPreviousMonth}
-          onNextMonth={goToNextMonth}
-          onToday={goToToday}
-        />
-      );
+  // Event handlers for mobile
+  const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
+    // For mobile, we can show a simplified dialog or use a bottom sheet
+    // For now, show a toast with info
+    toast.info(`To assign PTO to ${officerName} on ${date}, please use the desktop version for now. Mobile PTO assignment coming soon.`, {
+      duration: 4000,
+    });
+  };
+
+  const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
+    if (!schedule?.ptoData?.id) {
+      console.error('❌ Missing PTO data');
+      toast.error("Cannot remove PTO: Missing PTO data");
+      return;
+    }
+
+    const ptoMutationData = {
+      id: schedule.ptoData.id,
+      officerId: officerId,
+      date: date,
+      shiftTypeId: selectedShiftId,
+      ptoType: schedule.ptoData.ptoType || "PTO",
+      startTime: schedule.ptoData.startTime || "00:00",
+      endTime: schedule.ptoData.endTime || "23:59"
+    };
+
+    console.log('🔄 Removing PTO on mobile:', ptoMutationData);
+
+    removePTOMutation.mutate(ptoMutationData, {
+      onSuccess: () => {
+        try {
+          auditLogger.logPTORemoval(
+            officerId,
+            ptoMutationData.ptoType,
+            date,
+            userEmail,
+            `Removed ${ptoMutationData.ptoType} PTO on mobile`
+          );
+        } catch (logError) {
+          console.error('Failed to log PTO removal audit:', logError);
+        }
+        
+        toast.success(`PTO removed successfully`);
+      },
+      onError: (error) => {
+        console.error('❌ Error removing PTO:', error);
+        toast.error(`Failed to remove PTO`);
+      }
+    });
+  };
+
+  const handleEditAssignment = (officer: any, dateStr: string) => {
+    // For mobile, show a toast with info
+    toast.info(`To edit assignment for ${officer.officerName} on ${dateStr}, please use the desktop version for now. Mobile editing coming soon.`, {
+      duration: 4000,
+    });
+  };
+
+  const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+    console.log('🔄 Removing officer on mobile:', { scheduleId, type, officerData });
+
+    removeOfficerMutation.mutate({
+      scheduleId,
+      type,
+      officerData
+    }, {
+      onSuccess: () => {
+        if (officerData) {
+          const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
+          const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
+          
+          auditLogger.logOfficerRemoval(
+            officerId,
+            officerName,
+            userEmail,
+            `Removed ${officerName} from schedule on mobile`
+          );
+        }
+        toast.success("Officer removed from schedule");
+      },
+      onError: (error) => {
+        console.error('Error removing officer:', error);
+        toast.error("Failed to remove officer");
+      }
+    });
+  };
+
+  const renderView = () => {
+    switch (activeView) {
+      case "weekly":
+        return (
+          <WeeklyViewMobile
+            currentWeekStart={currentWeekStart}
+            selectedShiftId={selectedShiftId}
+            shiftTypes={shiftTypes || []}
+            isAdminOrSupervisor={isAdminOrSupervisor}
+            onPreviousWeek={goToPreviousWeek}
+            onNextWeek={goToNextWeek}
+            onToday={goToToday}
+            // Pass the action handlers
+            onAssignPTO={handleAssignPTO}
+            onRemovePTO={handleRemovePTO}
+            onEditAssignment={handleEditAssignment}
+            onRemoveOfficer={handleRemoveOfficer}
+            isUpdating={removeOfficerMutation.isPending}
+          />
+        );
+      
+      case "monthly":
+        return (
+          <MonthlyViewMobile
+            currentMonth={currentMonth}
+            selectedShiftId={selectedShiftId}
+            shiftTypes={shiftTypes || []}
+            onPreviousMonth={goToPreviousMonth}
+            onNextMonth={goToNextMonth}
+            onToday={goToToday}
+          />
+        );
       
       case "force-list":
         return (

@@ -1,30 +1,98 @@
 {
-  "name": "Port Arthur PD Officer Scheduler",
+  "name": "Port Arthur PD Scheduler",
   "short_name": "PAPD Scheduler",
-  "description": "Officer scheduling and shift management system",
+  "description": "Officer scheduling and shift management",
   "start_url": "/scheduler/",
   "scope": "/scheduler/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0f172a",
   "theme_color": "#1e40af",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "business", "utilities"],
   "icons": [
     {
-      "src": "/scheduler/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "src": "/scheduler/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "/scheduler/logo-192.png",
+      "src": "/scheduler/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/scheduler/logo-512.png",
+      "src": "/scheduler/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "/scheduler/screenshots/desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Desktop view of officer scheduler"
+    },
+    {
+      "src": "/scheduler/screenshots/mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile view of officer scheduler"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Schedule",
+      "short_name": "Today",
+      "description": "View today's officer schedule",
+      "url": "/scheduler/#/daily-schedule",
+      "icons": [{ "src": "/scheduler/icons/shortcut-schedule.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Staff Management",
+      "short_name": "Staff",
+      "description": "Manage police department staff",
+      "url": "/scheduler/#/staff",
+      "icons": [{ "src": "/scheduler/icons/shortcut-staff.png", "sizes": "96x96" }]
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }

@@ -218,10 +218,22 @@ const { data: exceptions, error: exceptionsError } = await supabase
           // Prioritize exceptions over recurring
           const processedOfficers = new Set();
           
-// In the WeeklyViewMobile.tsx query function, update the exception processing:
-dayExceptions.forEach(item => {
+// In the recurring schedule processing in WeeklyViewMobile.tsx:
+dayRecurring.forEach(item => {
   const officerId = item.officer_id;
-  processedOfficers.add(officerId);
+  
+  // Skip if we already processed an exception for this officer on this day
+  if (processedOfficers.has(officerId)) {
+    return;
+  }
+  
+  // Check if there's a PTO exception for this officer on this day
+  const ptoException = exceptions?.find(e => 
+    e.officer_id === officerId && 
+    e.date === day.dateStr && 
+    e.is_off === true && 
+    e.reason // Has a reason (PTO type)
+  );
   
   const hireDate = item.profiles?.hire_date;
   const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
@@ -259,13 +271,9 @@ dayExceptions.forEach(item => {
     });
   }
   
-  // CRITICAL: Proper PTO handling
-  // Check if this is PTO by looking at pto_type field
-  const hasPTO = !!item.pto_type;
-  const isOffDay = item.is_off === true;
+  // Check if there's PTO for this recurring day
+  const hasPTO = !!ptoException;
   
-  // If it's an "off" day but has a PTO type, it's actually PTO
-  // If it's just "off" without PTO type, it should be treated as unscheduled (rare case)
   const daySchedule = {
     officerId: officerId,
     officerName: item.profiles?.full_name || "Unknown",
@@ -274,26 +282,24 @@ dayExceptions.forEach(item => {
     service_credit: serviceCredit,
     date: day.dateStr,
     dayOfWeek: day.dayOfWeek,
-    isRegularRecurringDay: false, // Exceptions are never "regular recurring"
+    isRegularRecurringDay: true,
     shiftInfo: {
       scheduleId: item.id,
-      scheduleType: "exception",
+      scheduleType: "recurring",
       position: item.position_name,
-      isOff: isOffDay,
+      isOff: hasPTO, // If there's PTO, they're off
       hasPTO: hasPTO,
       ptoData: hasPTO ? {
-        ptoType: item.pto_type, // This should be "Vacation", "Holiday", "Sick", "Comp", etc.
-        isFullShift: item.pto_full_day || isOffDay
+        ptoType: ptoException.reason, // PTO type from exception
+        isFullShift: true
       } : undefined,
-      reason: item.reason
+      reason: ptoException?.reason
     }
   };
   
   if (hasPTO) {
-    console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
-      ptoType: item.pto_type,
-      isFullShift: item.pto_full_day || isOffDay,
-      isOff: isOffDay
+    console.log('📅 Recurring day with PTO for', item.profiles?.full_name, 'on', day.dateStr, ':', {
+      ptoType: ptoException.reason
     });
   }
   

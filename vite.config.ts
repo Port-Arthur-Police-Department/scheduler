@@ -39,11 +39,15 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: [],          
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         navigateFallback: '/scheduler/index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // IMPORTANT: Set the correct glob directory for subdirectory
+        globDirectory: 'dist',
+        // Generate service worker with correct base
+        swDest: 'dist/sw.js',
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\/.*/i,
@@ -106,10 +110,18 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     copyPublicDir: true,
-    // Copy OneSignalSDKWorker.js to build output
+    // Ensure assets are built with correct paths
     rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html')
+      output: {
+        assetFileNames: (assetInfo) => {
+          let extType = assetInfo.name.split('.').at(1);
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(extType)) {
+            extType = 'img';
+          }
+          return `assets/${extType}/[name]-[hash][extname]`;
+        },
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
       }
     }
   },

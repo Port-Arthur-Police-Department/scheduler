@@ -67,25 +67,27 @@ export const PWAInstallPrompt = () => {
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+  // In your PWAInstallPrompt component, update the install click handler:
+const handleInstallClick = async () => {
+  const deferredPrompt = (window as any).deferredPrompt;
+  if (!deferredPrompt) return;
 
-    // Show the install prompt
-    deferredPrompt.prompt();
-    
-    // Wait for the user to respond to the prompt
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      console.log('✅ User accepted the PWA install');
-      setIsInstallable(false);
-    } else {
-      console.log('❌ User dismissed the PWA install');
-    }
-    
-    // Clear the saved prompt
-    setDeferredPrompt(null);
-  };
+  // Show the install prompt
+  deferredPrompt.prompt();
+  
+  // Wait for the user to respond to the prompt
+  const { outcome } = await deferredPrompt.userChoice;
+  
+  if (outcome === 'accepted') {
+    console.log('✅ User accepted the PWA install');
+    // Handle successful installation
+  } else {
+    console.log('❌ User dismissed the PWA install');
+  }
+  
+  // Clear the saved prompt
+  (window as any).deferredPrompt = null;
+};
 
   const handleCheckServiceWorker = async () => {
     if ('serviceWorker' in navigator) {

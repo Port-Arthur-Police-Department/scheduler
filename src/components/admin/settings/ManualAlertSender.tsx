@@ -17,7 +17,7 @@ import {
   getCurrentlyActiveShifts, 
   isDateWithinSchedulePeriod 
 } from "./alertHelpers";
-import { sendPushNotification, sendBatchPushNotifications } from "@/utils/supabasePushNotifications";
+import { alertSystem } from "@/utils/alertSystem";
 
 export const ManualAlertSender = () => {
   const [open, setOpen] = useState(false);
@@ -207,72 +207,50 @@ export const ManualAlertSender = () => {
       // Prepare title based on alert type
       const alertTitle = `${alertType === 'critical' ? '🚨 CRITICAL: ' : alertType === 'warning' ? '⚠️ WARNING: ' : ''}Department Alert`;
 
-      // Send to each officer
-      for (const officer of filteredOfficers) {
+      // Get officer IDs for alert system
+      const officerIds = filteredOfficers.map(officer => officer.id);
+
+      // Send alert using alertSystem for push notifications
+      if (usePushNotifications && officersWithPush > 0 && (sendMethod === 'push' || sendMethod === 'both')) {
         try {
-          // Send in-app notification if selected
-          if (sendMethod === 'in_app' || sendMethod === 'both') {
-            const { error: notificationError } = await supabase
-              .from('notifications')
-              .insert({
-                user_id: officer.id,
-                title: alertTitle,
-                message: message,
-                type: 'manual_alert',
-                alert_type: alertType,
-                is_read: false,
-                created_at: new Date().toISOString()
-              });
-
-            if (notificationError) {
-              console.error(`❌ Failed to send in-app notification:`, notificationError);
-              failed++;
-            } else {
-              inAppSuccess++;
-            }
-          }
-
-          // Send push notification if selected and officer has push enabled
-          if ((sendMethod === 'push' || sendMethod === 'both') && officer.has_push) {
-            const success = await sendPushNotification(
-              officer.id,
-              alertTitle,
-              message,
-              {
-                alertType,
-                shift: officer.current_shift?.name || 'Unknown',
-                officerName: officer.full_name,
-                url: '/scheduler/notifications'
-              }
-            );
-
-            if (success) {
-              pushSuccess++;
-            } else {
-              console.warn(`⚠️ Push failed for ${officer.full_name}`);
-            }
-          }
-
+          const pushAlertType = alertType === 'critical' ? 'critical' : 
+                               alertType === 'warning' ? 'warning' : 'info';
+          
+          await alertSystem.sendAlertToUsers(
+            officerIds,
+            alertTitle,
+            message,
+            pushAlertType
+          );
+          pushSuccess = officersWithPush;
         } catch (error) {
-          console.error(`❌ Error sending to ${officer.full_name}:`, error);
-          failed++;
+          console.error('Error sending push notifications:', error);
         }
       }
 
-      // Alternative: Use batch sending for push notifications
-      if (usePushNotifications && officersWithPush > 0 && (sendMethod === 'push' || sendMethod === 'both')) {
-        const userIdsWithPush = filteredOfficers.filter(o => o.has_push).map(o => o.id);
-        const { success: batchSuccess } = await sendBatchPushNotifications(
-          userIdsWithPush,
-          alertTitle,
-          message,
-          {
-            alertType,
-            sentVia: 'batch',
-            timestamp: new Date().toISOString()
-          }
-        );
-        console.log(`📱 Batch push: ${batchSuccess} sent successfully`);
+      // Handle in-app notifications separately
+      if (sendMethod === 'in_app' || sendMethod === 'both') {
+        // Create in-app notification records for all officers
+        const notifications = filteredOfficers.map(officer => ({
+          user_id: officer.id,
+          title: alertTitle,
+          message: message,
+          type: 'manual_alert',
+          alert_type: alertType,
+          is_read: false,
+          created_at: new Date().toISOString()
+        }));
+
+        const { error: notificationError, count } = await supabase
+          .from('notifications')
+          .insert(notifications, { count: 'exact' });
+
+        if (notificationError) {
+          console.error('❌ Failed to create in-app notifications:', notificationError);
+          failed += filteredOfficers.length;
+        } else {
+          inAppSuccess = count || filteredOfficers.length;
+        }
       }
 
       // Log to audit
@@ -281,7 +259,7 @@ export const ManualAlertSender = () => {
         user_email: userData.user?.email,
         action_type: 'manual_alert_sent',
         table_name: 'notifications',
-        description: `Sent ${alertType} alert to ${inAppSuccess} officers on shifts: ${selectedShifts.join(', ')}. Push: ${pushSuccess} sent.`
+        description: `Sent ${alertType} alert to ${filteredOfficers.length} officers on shifts: ${selectedShifts.join(', ')}. Push: ${pushSuccess} sent, In-app: ${inAppSuccess}.`
       });
 
       toast.success(
@@ -310,6 +288,23 @@ export const ManualAlertSender = () => {
       toast.error('Failed to send alert');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // Helper function to send individual push notifications (kept for backward compatibility)
+  const sendIndividualPushNotification = async (officer: any, title: string, message: string) => {
+    try {
+      await alertSystem.sendAlertToUsers(
+        [officer.id],
+        title,
+        message,
+        alertType === 'critical' ? 'critical' : 
+        alertType === 'warning' ? 'warning' : 'info'
+      );
+      return true;
+    } catch (error) {
+      console.error(`Push failed for ${officer.full_name}:`, error);
+      return false;
     }
   };
 

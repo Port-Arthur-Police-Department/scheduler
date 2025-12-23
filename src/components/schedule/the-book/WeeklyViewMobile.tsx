@@ -259,8 +259,13 @@ dayExceptions.forEach(item => {
     });
   }
   
-  // CRITICAL: Properly set PTO data - FIXED
-  const hasPTO = !!item.pto_type || item.is_off;
+  // CRITICAL: Proper PTO handling
+  // Check if this is PTO by looking at pto_type field
+  const hasPTO = !!item.pto_type;
+  const isOffDay = item.is_off === true;
+  
+  // If it's an "off" day but has a PTO type, it's actually PTO
+  // If it's just "off" without PTO type, it should be treated as unscheduled (rare case)
   const daySchedule = {
     officerId: officerId,
     officerName: item.profiles?.full_name || "Unknown",
@@ -274,11 +279,11 @@ dayExceptions.forEach(item => {
       scheduleId: item.id,
       scheduleType: "exception",
       position: item.position_name,
-      isOff: item.is_off || false,
+      isOff: isOffDay,
       hasPTO: hasPTO,
       ptoData: hasPTO ? {
-        ptoType: item.pto_type || (item.is_off ? 'Off' : 'PTO'),
-        isFullShift: item.pto_full_day || item.is_off // If it's an "Off" day, it's full shift
+        ptoType: item.pto_type, // This should be "Vacation", "Holiday", "Sick", "Comp", etc.
+        isFullShift: item.pto_full_day || isOffDay
       } : undefined,
       reason: item.reason
     }
@@ -286,8 +291,9 @@ dayExceptions.forEach(item => {
   
   if (hasPTO) {
     console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
-      ptoType: item.pto_type || (item.is_off ? 'Off' : 'PTO'),
-      isFullShift: item.pto_full_day || item.is_off
+      ptoType: item.pto_type,
+      isFullShift: item.pto_full_day || isOffDay,
+      isOff: isOffDay
     });
   }
   

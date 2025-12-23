@@ -1,14 +1,15 @@
-// src/components/admin/settings/ManualAlertSender.tsx
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Bell, Smartphone, MessageSquare } from "lucide-react";
 import { 
   parseTimeToMinutes, 
   formatTimeForDisplay, 
@@ -16,14 +17,17 @@ import {
   getCurrentlyActiveShifts, 
   isDateWithinSchedulePeriod 
 } from "./alertHelpers";
+import { sendPushNotification, sendBatchPushNotifications } from "@/utils/supabasePushNotifications";
 
 export const ManualAlertSender = () => {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [sendMethod, setSendMethod] = useState<'in_app' | 'all'>('in_app');
+  const [sendMethod, setSendMethod] = useState<'in_app' | 'push' | 'both'>('both');
   const [useActiveSchedulePeriod, setUseActiveSchedulePeriod] = useState(true);
+  const [alertType, setAlertType] = useState<'info' | 'warning' | 'critical'>('info');
+  const [usePushNotifications, setUsePushNotifications] = useState(true);
 
   // Get shift types from database
   const { data: shiftTypes } = useQuery({
@@ -48,15 +52,15 @@ export const ManualAlertSender = () => {
 
   // Get ALL officers and their current assigned shift
   const { data: officersWithShifts, isLoading } = useQuery({
-    queryKey: ['officers-active-schedules', todayDate],
+    queryKey: ['officers-active-schedules', todayDate, useActiveSchedulePeriod],
     queryFn: async () => {
       console.log('🔍 Fetching officers with active schedules...');
       
       try {
-        // Get all active officers
+        // Get all active officers WITH push subscription info
         const { data: officers, error: officersError } = await supabase
           .from('profiles')
-          .select('id, full_name, badge_number, phone, email')
+          .select('id, full_name, badge_number, phone, email, push_subscription, notification_preferences')
           .eq('active', true)
           .order('full_name', { ascending: true });
 
@@ -113,7 +117,8 @@ export const ManualAlertSender = () => {
                       start_date: schedule.start_date,
                       end_date: schedule.end_date,
                       day_of_week: schedule.day_of_week
-                    }
+                    },
+                    has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
                   };
                 }
               }
@@ -121,14 +126,16 @@ export const ManualAlertSender = () => {
               return {
                 ...officer,
                 current_shift: null,
-                schedule_info: null
+                schedule_info: null,
+                has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
               };
             } catch (error) {
               console.error(`❌ Error processing ${officer.full_name}:`, error);
               return {
                 ...officer,
                 current_shift: null,
-                schedule_info: null
+                schedule_info: null,
+                has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
               };
             }
           })
@@ -136,8 +143,9 @@ export const ManualAlertSender = () => {
 
         const withSchedules = officersWithCurrentShifts.filter(o => o.current_shift).length;
         const activeNow = officersWithCurrentShifts.filter(o => o.current_shift?.is_active_now).length;
+        const withPush = officersWithCurrentShifts.filter(o => o.has_push).length;
         
-        console.log(`📊 Results: ${withSchedules} officers with active schedules, ${activeNow} currently on shift`);
+        console.log(`📊 Results: ${withSchedules} with schedules, ${activeNow} on shift, ${withPush} with push`);
         
         return officersWithCurrentShifts;
       } catch (error) {
@@ -165,6 +173,10 @@ export const ManualAlertSender = () => {
     return selectedShifts.includes(officer.current_shift.name);
   }) || [];
 
+  // Count officers with push notifications enabled
+  const officersWithPush = filteredOfficers.filter(o => o.has_push).length;
+  const officersWithoutPush = filteredOfficers.length - officersWithPush;
+
   const handleShiftToggle = (shift: string) => {
     if (selectedShifts.includes(shift)) {
       setSelectedShifts(selectedShifts.filter(s => s !== shift));
@@ -188,34 +200,57 @@ export const ManualAlertSender = () => {
     console.log(`📤 Starting to send alert to ${filteredOfficers.length} officers...`);
 
     try {
-      let successful = 0;
+      let inAppSuccess = 0;
+      let pushSuccess = 0;
       let failed = 0;
 
+      // Prepare title based on alert type
+      const alertTitle = `${alertType === 'critical' ? '🚨 CRITICAL: ' : alertType === 'warning' ? '⚠️ WARNING: ' : ''}Department Alert`;
+
+      // Send to each officer
       for (const officer of filteredOfficers) {
         try {
-          // Send in-app notification
-          const { error: notificationError } = await supabase
-            .from('notifications')
-            .insert({
-              user_id: officer.id,
-              title: 'Department Alert',
-              message: message,
-              type: 'manual_alert',
-              is_read: false,
-              created_at: new Date().toISOString()
-            });
+          // Send in-app notification if selected
+          if (sendMethod === 'in_app' || sendMethod === 'both') {
+            const { error: notificationError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: officer.id,
+                title: alertTitle,
+                message: message,
+                type: 'manual_alert',
+                alert_type: alertType,
+                is_read: false,
+                created_at: new Date().toISOString()
+              });
 
-          if (notificationError) {
-            console.error(`❌ Failed to send in-app notification:`, notificationError);
-            failed++;
-          } else {
-            successful++;
+            if (notificationError) {
+              console.error(`❌ Failed to send in-app notification:`, notificationError);
+              failed++;
+            } else {
+              inAppSuccess++;
+            }
           }
 
-          // Optional: Send email/SMS if selected
-          if (sendMethod === 'all') {
-            // Email logic here
-            // SMS logic here
+          // Send push notification if selected and officer has push enabled
+          if ((sendMethod === 'push' || sendMethod === 'both') && officer.has_push) {
+            const success = await sendPushNotification(
+              officer.id,
+              alertTitle,
+              message,
+              {
+                alertType,
+                shift: officer.current_shift?.name || 'Unknown',
+                officerName: officer.full_name,
+                url: '/scheduler/notifications'
+              }
+            );
+
+            if (success) {
+              pushSuccess++;
+            } else {
+              console.warn(`⚠️ Push failed for ${officer.full_name}`);
+            }
           }
 
         } catch (error) {
@@ -224,16 +259,49 @@ export const ManualAlertSender = () => {
         }
       }
 
+      // Alternative: Use batch sending for push notifications
+      if (usePushNotifications && officersWithPush > 0 && (sendMethod === 'push' || sendMethod === 'both')) {
+        const userIdsWithPush = filteredOfficers.filter(o => o.has_push).map(o => o.id);
+        const { success: batchSuccess } = await sendBatchPushNotifications(
+          userIdsWithPush,
+          alertTitle,
+          message,
+          {
+            alertType,
+            sentVia: 'batch',
+            timestamp: new Date().toISOString()
+          }
+        );
+        console.log(`📱 Batch push: ${batchSuccess} sent successfully`);
+      }
+
       // Log to audit
       const { data: userData } = await supabase.auth.getUser();
       await supabase.from('audit_logs').insert({
         user_email: userData.user?.email,
         action_type: 'manual_alert_sent',
         table_name: 'notifications',
-        description: `Sent manual alert to ${successful} officers on shifts: ${selectedShifts.join(', ')}. Message: ${message.substring(0, 100)}...`
+        description: `Sent ${alertType} alert to ${inAppSuccess} officers on shifts: ${selectedShifts.join(', ')}. Push: ${pushSuccess} sent.`
       });
 
-      toast.success(`Alert sent to ${successful} officers on ${selectedShifts.length} shift(s)`);
+      toast.success(
+        `Alert sent! In-app: ${inAppSuccess}, Push: ${pushSuccess}, Failed: ${failed}`,
+        {
+          duration: 5000,
+          action: {
+            label: 'Details',
+            onClick: () => {
+              toast.info(
+                `Total: ${filteredOfficers.length} officers\n` +
+                `With push: ${officersWithPush}\n` +
+                `Without push: ${officersWithoutPush}\n` +
+                `Shifts: ${selectedShifts.join(', ')}`
+              );
+            }
+          }
+        }
+      );
+
       setOpen(false);
       setMessage("");
 
@@ -245,6 +313,14 @@ export const ManualAlertSender = () => {
     }
   };
 
+  const getAlertTypeColor = (type: string) => {
+    switch (type) {
+      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
+      case 'warning': return 'bg-amber-100 text-amber-800 border-amber-200';
+      default: return 'bg-blue-100 text-blue-800 border-blue-200';
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -253,7 +329,7 @@ export const ManualAlertSender = () => {
           Manual Alert System
         </CardTitle>
         <CardDescription>
-          Send alerts to officers based on their assigned shifts during active schedule periods
+          Send alerts to officers based on their assigned shifts. Now with push notifications!
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -303,6 +379,30 @@ export const ManualAlertSender = () => {
             </div>
           </div>
 
+          {/* Alert Type Selection */}
+          <div>
+            <Label className="text-base mb-2 block">Alert Type</Label>
+            <div className="flex flex-wrap gap-2">
+              {(['info', 'warning', 'critical'] as const).map((type) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant={alertType === type ? "default" : "outline"}
+                  onClick={() => setAlertType(type)}
+                  className={`flex-1 min-w-[100px] ${
+                    type === 'critical' ? 'hover:bg-red-100' :
+                    type === 'warning' ? 'hover:bg-amber-100' :
+                    'hover:bg-blue-100'
+                  }`}
+                >
+                  {type === 'critical' && '🚨 '}
+                  {type === 'warning' && '⚠️ '}
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           {/* Shift Schedule Display */}
           <div>
             <Label className="text-base mb-2 block">Shift Schedule</Label>
@@ -348,13 +448,24 @@ export const ManualAlertSender = () => {
             </div>
           </div>
 
-          {/* Affected Officers Count */}
+          {/* Affected Officers Count with Push Info */}
           <div className="bg-muted p-4 rounded-lg">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">Officers with Active Schedules:</span>
-              <span className="text-lg font-bold">
-                {isLoading ? 'Loading...' : filteredOfficers.length}
-              </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="font-medium">Total Officers:</span>
+                <div className="text-2xl font-bold mt-1">
+                  {isLoading ? '...' : filteredOfficers.length}
+                </div>
+              </div>
+              <div>
+                <span className="font-medium">Push Enabled:</span>
+                <div className="text-2xl font-bold mt-1">
+                  {isLoading ? '...' : officersWithPush}
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({Math.round((officersWithPush / filteredOfficers.length) * 100) || 0}%)
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -366,20 +477,61 @@ export const ManualAlertSender = () => {
                 type="button"
                 variant={sendMethod === 'in_app' ? "default" : "outline"}
                 onClick={() => setSendMethod('in_app')}
-                className="flex-1 min-w-[100px]"
+                className="flex-1 min-w-[100px] flex flex-col items-center py-3"
               >
+                <MessageSquare className="h-4 w-4 mb-1" />
                 In-App Only
               </Button>
               <Button
                 type="button"
-                variant={sendMethod === 'all' ? "default" : "outline"}
-                onClick={() => setSendMethod('all')}
-                className="flex-1 min-w-[100px]"
+                variant={sendMethod === 'push' ? "default" : "outline"}
+                onClick={() => setSendMethod('push')}
+                className="flex-1 min-w-[100px] flex flex-col items-center py-3"
               >
-                All Methods
+                <Smartphone className="h-4 w-4 mb-1" />
+                Push Only
+              </Button>
+              <Button
+                type="button"
+                variant={sendMethod === 'both' ? "default" : "outline"}
+                onClick={() => setSendMethod('both')}
+                className="flex-1 min-w-[100px] flex flex-col items-center py-3"
+              >
+                <Bell className="h-4 w-4 mb-1" />
+                Both
               </Button>
             </div>
           </div>
+
+          {/* Push Notifications Toggle */}
+          <div className="flex items-center justify-between p-3 border rounded-lg">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4" />
+                <label className="font-medium">Enable Push Notifications</label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Send push notifications to officers' devices
+              </p>
+            </div>
+            <Switch
+              checked={usePushNotifications}
+              onCheckedChange={setUsePushNotifications}
+              disabled={officersWithPush === 0}
+            />
+          </div>
+
+          {officersWithPush === 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <AlertCircle className="h-4 w-4 inline mr-1" />
+                No officers have push notifications enabled. 
+                <Button variant="link" className="p-0 h-auto ml-1" onClick={() => toast.info('Officers need to enable push notifications in their settings')}>
+                  Learn more
+                </Button>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Send Button Dialog */}
@@ -396,9 +548,20 @@ export const ManualAlertSender = () => {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Send Manual Alert</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Badge className={getAlertTypeColor(alertType)}>
+                  {alertType.toUpperCase()}
+                </Badge>
+                Send Manual Alert
+              </DialogTitle>
               <DialogDescription>
                 This alert will be sent to {filteredOfficers.length} officer(s) on {selectedShifts.join(', ')} shifts
+                {usePushNotifications && officersWithPush > 0 && (
+                  <span className="block mt-1">
+                    <Smartphone className="h-3 w-3 inline mr-1" />
+                    Push notifications will be sent to {officersWithPush} officer(s)
+                  </span>
+                )}
               </DialogDescription>
             </DialogHeader>
             
@@ -407,28 +570,42 @@ export const ManualAlertSender = () => {
                 <Label htmlFor="alert-message">Alert Message *</Label>
                 <Textarea
                   id="alert-message"
-                  placeholder="Enter your alert message here..."
+                  placeholder="Enter your alert message here... Be clear and concise."
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={6}
-                  className="resize-none"
+                  className="resize-none font-mono"
                   required
                 />
+                <p className="text-sm text-muted-foreground">
+                  {message.length}/500 characters
+                </p>
               </div>
             </div>
             
-            <DialogFooter>
+            <DialogFooter className="flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={isSending}>
                 Cancel
               </Button>
-              <Button onClick={handleSendAlert} disabled={!message.trim() || isSending}>
+              <Button 
+                onClick={handleSendAlert} 
+                disabled={!message.trim() || isSending || message.length > 500}
+                className={`${
+                  alertType === 'critical' ? 'bg-red-600 hover:bg-red-700' :
+                  alertType === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
+                  ''
+                }`}
+              >
                 {isSending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Sending...
                   </>
                 ) : (
-                  'Send Alert'
+                  <>
+                    <Bell className="h-4 w-4 mr-2" />
+                    Send Alert
+                  </>
                 )}
               </Button>
             </DialogFooter>

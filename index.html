@@ -1,25 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- ... other meta tags ... -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PAPD Scheduler">
+
+    <!-- FAVICONS (generated package) -->
+    <link rel="icon" type="image/png" sizes="96x96" href="/scheduler/icons/favicon-96x96.png" />
+    <link rel="icon" type="image/svg+xml" href="/scheduler/icons/favicon.svg" />
+    <link rel="shortcut icon" href="/scheduler/icons/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/scheduler/icons/apple-touch-icon.png" />
+
+    <!-- PWA manifest (vite-plugin-pwa injects /scheduler/manifest.json) -->
+    <link rel="manifest" href="/scheduler/manifest.json" />
 
     <!-- OneSignal Push Notification SDK -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
-        // App ID will be injected by Vite during build
+        // App ID injected by Vite during build - DO NOT EDIT
         await OneSignal.init({
-          appId: "%%ONESIGNAL_APP_ID%%", // This gets replaced at build time
+          appId: "%%ONESIGNAL_APP_ID%%",
           
-          // IMPORTANT: Service worker paths for GitHub Pages subdirectory
+          // CRITICAL: GitHub Pages subdirectory configuration
           serviceWorkerPath: "/scheduler/OneSignalSDKWorker.js",
           serviceWorkerParam: { scope: "/scheduler/" },
           
-          // Development settings
+          // Allow localhost for development
           allowLocalhostAsSecureOrigin: window.location.hostname === 'localhost',
           
-          // Prompt settings
+          // Prompt settings for police department
           promptOptions: {
             slidedown: {
               enabled: true,
@@ -36,14 +53,17 @@
           }
         });
         
-        console.log("🚨 PAPD OneSignal initialized");
+        console.log("🚨 PAPD OneSignal initialized successfully");
         
-        // Debug: Check service worker registration
+        // Debug: Check service worker
         OneSignal.getRegistration().then(registration => {
-          console.log("✅ Service Worker Registration:", registration);
+          console.log("✅ Service Worker Registration:", registration ? "Success" : "Failed");
         }).catch(error => {
           console.error("❌ Service Worker Error:", error);
         });
+        
+        // Dispatch ready event for React app
+        window.dispatchEvent(new Event('onesignal-ready'));
       });
     </script>
 

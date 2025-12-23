@@ -282,23 +282,103 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   };
 
   const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-    if (!schedule?.ptoData?.id) {
-      console.error('❌ Missing PTO data');
+    console.log('🔍 Checking PTO schedule data for removal:', {
+      schedule,
+      date,
+      officerId,
+      hasPTO: schedule?.hasPTO,
+      ptoData: schedule?.ptoData,
+      isOff: schedule?.isOff,
+      reason: schedule?.reason,
+      id: schedule?.id,
+      scheduleType: schedule?.scheduleType
+    });
+
+    // Try multiple ways to find PTO data
+    let ptoId = schedule?.id || schedule?.ptoData?.id;
+    let ptoType = schedule?.reason || schedule?.ptoData?.ptoType || "PTO";
+    
+    // If we don't have an ID but have PTO, we need to find it in the database
+    if (!ptoId && (schedule?.hasPTO || schedule?.reason)) {
+      console.log('🔄 Searching for PTO record in database...');
+      try {
+        const { data: ptoRecords, error } = await supabase
+          .from("schedule_exceptions")
+          .select("id, reason")
+          .eq("officer_id", officerId)
+          .eq("date", date)
+          .eq("shift_type_id", selectedShiftId)
+          .eq("is_off", true);
+
+        if (error) {
+          console.error('Error searching for PTO:', error);
+          toast.error("Could not find PTO record");
+          return;
+        }
+
+        if (ptoRecords && ptoRecords.length > 0) {
+          ptoId = ptoRecords[0].id;
+          ptoType = ptoRecords[0].reason || ptoType;
+          console.log('✅ Found PTO record:', { ptoId, ptoType });
+        }
+      } catch (searchError) {
+        console.error('Search error:', searchError);
+      }
+    }
+
+    // If still no ID, check if this is actually a recurring schedule that needs to be handled differently
+    if (!ptoId && schedule?.scheduleType === "recurring") {
+      console.log('⚠️ This appears to be a recurring schedule with PTO, checking database...');
+      try {
+        // Check if there's an exception overriding this recurring day
+        const { data: exceptionData, error } = await supabase
+          .from("schedule_exceptions")
+          .select("id, reason")
+          .eq("officer_id", officerId)
+          .eq("date", date)
+          .eq("shift_type_id", selectedShiftId)
+          .eq("is_off", true);
+
+        if (!error && exceptionData && exceptionData.length > 0) {
+          ptoId = exceptionData[0].id;
+          ptoType = exceptionData[0].reason || ptoType;
+          console.log('✅ Found overriding PTO exception:', { ptoId, ptoType });
+        } else {
+          console.log('❌ No PTO exception found for this recurring day');
+          toast.error("Cannot remove PTO: No PTO record found");
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking for PTO exception:', error);
+        toast.error("Error finding PTO data");
+        return;
+      }
+    }
+
+    // If we still don't have an ID, we can't proceed
+    if (!ptoId) {
+      console.error('❌ Missing PTO ID after all attempts:', {
+        scheduleId: schedule?.id,
+        ptoDataId: schedule?.ptoData?.id,
+        hasPTO: schedule?.hasPTO,
+        reason: schedule?.reason
+      });
       toast.error("Cannot remove PTO: Missing PTO data");
       return;
     }
 
+    // Prepare mutation data
     const ptoMutationData = {
-      id: schedule.ptoData.id,
+      id: ptoId,
       officerId: officerId,
       date: date,
       shiftTypeId: selectedShiftId,
-      ptoType: schedule.ptoData.ptoType || "PTO",
-      startTime: schedule.ptoData.startTime || "00:00",
-      endTime: schedule.ptoData.endTime || "23:59"
+      ptoType: ptoType,
+      startTime: schedule?.ptoData?.startTime || schedule?.custom_start_time || "00:00",
+      endTime: schedule?.ptoData?.endTime || schedule?.custom_end_time || "23:59"
     };
 
-    console.log('🔄 Removing PTO on mobile:', ptoMutationData);
+    console.log('🔄 Removing PTO with data:', ptoMutationData);
 
     removePTOMutation.mutate(ptoMutationData, {
       onSuccess: () => {
@@ -320,7 +400,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
       },
       onError: (error) => {
         console.error('❌ Error removing PTO:', error);
-        toast.error(`Failed to remove PTO`);
+        toast.error(`Failed to remove PTO: ${error.message || 'Unknown error'}`);
       }
     });
   };

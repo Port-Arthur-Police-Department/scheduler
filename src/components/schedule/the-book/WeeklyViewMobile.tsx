@@ -27,29 +27,24 @@ const calculateServiceCredit = (hireDate: string | null,
                                promotionDateSergeant: string | null = null,
                                promotionDateLieutenant: string | null = null,
                                currentRank: string | null = null) => {
-  // If there's an override, use it
   if (override && override > 0) {
     return override;
   }
   
-  // Determine which date to use based on rank and promotion dates
   let relevantDate: Date | null = null;
   
   if (currentRank) {
     const rankLower = currentRank.toLowerCase();
     
-    // Check if officer is a supervisor rank
     if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
       relevantDate = new Date(promotionDateSergeant);
     } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
       relevantDate = new Date(promotionDateLieutenant);
     } else if (rankLower.includes('chief') && promotionDateLieutenant) {
-      // Chiefs usually come from Lieutenant rank
       relevantDate = new Date(promotionDateLieutenant);
     }
   }
   
-  // If no relevant promotion date found, use hire date
   if (!relevantDate && hireDate) {
     relevantDate = new Date(hireDate);
   }
@@ -61,11 +56,7 @@ const calculateServiceCredit = (hireDate: string | null,
     const years = now.getFullYear() - relevantDate.getFullYear();
     const months = now.getMonth() - relevantDate.getMonth();
     const days = now.getDate() - relevantDate.getDate();
-    
-    // Calculate decimal years
     const totalYears = years + (months / 12) + (days / 365);
-    
-    // Round to 1 decimal place
     return Math.max(0, Math.round(totalYears * 10) / 10);
   } catch (error) {
     console.error('Error calculating service credit:', error);
@@ -73,24 +64,20 @@ const calculateServiceCredit = (hireDate: string | null,
   }
 };
 
-// Helper to get the relevant promotion date for sorting
 const getRelevantPromotionDate = (
   rank: string | undefined, 
   sergeantDate: string | null, 
   lieutenantDate: string | null
 ): string | null => {
   if (!rank) return null;
-  
   const rankLower = rank.toLowerCase();
   
   if (rankLower.includes('lieutenant') || rankLower.includes('chief')) {
     return lieutenantDate || sergeantDate || null;
   }
-  
   if (rankLower.includes('sergeant') || rankLower.includes('sgt')) {
     return sergeantDate || null;
   }
-  
   return null;
 };
 
@@ -115,28 +102,24 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     };
   });
 
-  // Add debug state
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  
-  // Fetch schedule data
   const { data: scheduleData, isLoading, error } = useQuery({
     queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],
     queryFn: async () => {
-      console.log('Mobile query started for shift:', selectedShiftId, 'week:', currentWeekStart);
+      console.log('🔍 Mobile query started for shift:', selectedShiftId, 'week:', format(currentWeekStart, 'yyyy-MM-dd'));
       
       if (!selectedShiftId) {
-        console.log('No shift ID selected');
+        console.log('❌ No shift ID selected');
         return null;
       }
 
       const startStr = format(currentWeekStart, "yyyy-MM-dd");
       const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
 
-      console.log('Fetching data for date range:', startStr, 'to', endStr);
+      console.log('📅 Fetching data for date range:', startStr, 'to', endStr);
 
       try {
         // Fetch schedule exceptions
-        console.log('Fetching exceptions...');
+        console.log('🔄 Fetching exceptions...');
         const { data: exceptions, error: exceptionsError } = await supabase
           .from("schedule_exceptions")
           .select(`
@@ -152,14 +135,22 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           .lte("date", endStr)
           .order("date", { ascending: true });
 
-        if (exceptionsError) {
-          console.error('Exceptions error:', exceptionsError);
-          throw exceptionsError;
+        if (exceptionsError) throw exceptionsError;
+        console.log('✅ Exceptions fetched:', exceptions?.length, 'records');
+        
+        // Log sample exception with PTO
+        const samplePTO = exceptions?.find(e => e.pto_type);
+        if (samplePTO) {
+          console.log('📝 Sample PTO exception:', {
+            officer: samplePTO.profiles?.full_name,
+            date: samplePTO.date,
+            pto_type: samplePTO.pto_type,
+            pto_full_day: samplePTO.pto_full_day
+          });
         }
-        console.log('Exceptions fetched:', exceptions?.length);
 
         // Fetch recurring schedules
-        console.log('Fetching recurring schedules...');
+        console.log('🔄 Fetching recurring schedules...');
         const { data: recurringSchedules, error: recurringError } = await supabase
           .from("recurring_schedules")
           .select(`
@@ -173,14 +164,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           .eq("shift_type_id", selectedShiftId)
           .or(`end_date.is.null,end_date.gte.${startStr}`);
 
-        if (recurringError) {
-          console.error('Recurring error:', recurringError);
-          throw recurringError;
-        }
-        console.log('Recurring fetched:', recurringSchedules?.length);
+        if (recurringError) throw recurringError;
+        console.log('✅ Recurring fetched:', recurringSchedules?.length, 'records');
 
         // Fetch minimum staffing
-        console.log('Fetching minimum staffing...');
         const { data: minStaffingData, error: minStaffingError } = await supabase
           .from("minimum_staffing")
           .select("*")
@@ -188,9 +175,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
 
         if (minStaffingError) {
           console.error("Error fetching minimum staffing:", minStaffingError);
-          // Don't throw - minimum staffing is optional
         }
-        console.log('Minimum staffing fetched:', minStaffingData?.length);
 
         // Create minimum staffing map
         const minimumStaffing = new Map();
@@ -204,11 +189,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           });
         });
 
-        console.log('Minimum staffing map created');
-
-        // Organize data similar to desktop version
+        // Organize data
         const allOfficers = new Map();
         const recurringSchedulesByOfficer = new Map();
+        const exceptionsByOfficerAndDate = new Map();
 
         // Extract recurring schedule patterns
         recurringSchedules?.forEach((recurring: any) => {
@@ -218,30 +202,33 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
         });
 
-        console.log('Recurring patterns extracted for', recurringSchedulesByOfficer.size, 'officers');
+        // Map exceptions by officer and date for quick lookup
+        exceptions?.forEach((exception: any) => {
+          const key = `${exception.officer_id}-${exception.date}`;
+          exceptionsByOfficerAndDate.set(key, exception);
+        });
+
+        console.log('🗺️ Processing weekly data...');
 
         // Process weekly data
         weekDays.forEach(day => {
-          // Find exceptions for this day
           const dayExceptions = exceptions?.filter(e => e.date === day.dateStr) || [];
-          
-          // Find recurring for this day of week
           const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
           
-          // Combine all officers for this day
-          const allDayOfficers = [...dayExceptions, ...dayRecurring];
+          // Prioritize exceptions over recurring
+          const processedOfficers = new Set();
           
-          console.log(`Day ${day.dateStr}: ${allDayOfficers.length} officer assignments`);
-          
-          allDayOfficers.forEach(item => {
+          // First, process exceptions
+          dayExceptions.forEach(item => {
             const officerId = item.officer_id;
+            processedOfficers.add(officerId);
+            
             const hireDate = item.profiles?.hire_date;
             const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
             const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
             const overrideCredit = item.profiles?.service_credit_override || 0;
             const badgeNumber = item.profiles?.badge_number || '9999';
             
-            // Calculate service credit WITH promotion dates
             const serviceCredit = calculateServiceCredit(
               hireDate, 
               overrideCredit,
@@ -266,7 +253,86 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 hire_date: hireDate,
                 promotion_date_sergeant: promotionDateSergeant,
                 promotion_date_lieutenant: promotionDateLieutenant,
-                // For sorting, use the relevant promotion date or hire date
+                promotion_date: relevantPromotionDate || hireDate,
+                recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+                weeklySchedule: {} as Record<string, any>
+              });
+            }
+            
+            // CRITICAL: Properly set PTO data
+            const hasPTO = !!item.pto_type;
+            const daySchedule = {
+              officerId: officerId,
+              officerName: item.profiles?.full_name || "Unknown",
+              badgeNumber: badgeNumber,
+              rank: item.profiles?.rank || "Officer",
+              service_credit: serviceCredit,
+              date: day.dateStr,
+              dayOfWeek: day.dayOfWeek,
+              isRegularRecurringDay: false, // Exceptions are never "regular recurring"
+              shiftInfo: {
+                scheduleId: item.id,
+                scheduleType: "exception",
+                position: item.position_name,
+                isOff: item.is_off || false,
+                hasPTO: hasPTO,
+                ptoData: hasPTO ? {
+                  ptoType: item.pto_type,
+                  isFullShift: item.pto_full_day || false
+                } : undefined,
+                reason: item.reason
+              }
+            };
+            
+            if (hasPTO) {
+              console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
+                ptoType: item.pto_type,
+                isFullShift: item.pto_full_day
+              });
+            }
+            
+            allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+          });
+          
+          // Then, process recurring ONLY if no exception exists
+          dayRecurring.forEach(item => {
+            const officerId = item.officer_id;
+            
+            // Skip if we already processed an exception for this officer on this day
+            if (processedOfficers.has(officerId)) {
+              return;
+            }
+            
+            const hireDate = item.profiles?.hire_date;
+            const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
+            const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
+            const overrideCredit = item.profiles?.service_credit_override || 0;
+            const badgeNumber = item.profiles?.badge_number || '9999';
+            
+            const serviceCredit = calculateServiceCredit(
+              hireDate, 
+              overrideCredit,
+              promotionDateSergeant,
+              promotionDateLieutenant,
+              item.profiles?.rank
+            );
+            
+            if (!allOfficers.has(officerId)) {
+              const relevantPromotionDate = getRelevantPromotionDate(
+                item.profiles?.rank,
+                promotionDateSergeant,
+                promotionDateLieutenant
+              );
+              
+              allOfficers.set(officerId, {
+                officerId: officerId,
+                officerName: item.profiles?.full_name || "Unknown",
+                badgeNumber: badgeNumber,
+                rank: item.profiles?.rank || "Officer",
+                service_credit: serviceCredit,
+                hire_date: hireDate,
+                promotion_date_sergeant: promotionDateSergeant,
+                promotion_date_lieutenant: promotionDateLieutenant,
                 promotion_date: relevantPromotionDate || hireDate,
                 recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
                 weeklySchedule: {} as Record<string, any>
@@ -281,17 +347,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               service_credit: serviceCredit,
               date: day.dateStr,
               dayOfWeek: day.dayOfWeek,
-              isRegularRecurringDay: recurringSchedulesByOfficer.get(officerId)?.has(day.dayOfWeek) || false,
+              isRegularRecurringDay: true, // This is a regular recurring day
               shiftInfo: {
                 scheduleId: item.id,
-                scheduleType: item.date ? "exception" : "recurring",
+                scheduleType: "recurring",
                 position: item.position_name,
                 isOff: item.is_off || false,
-                hasPTO: !!item.pto_type,
-                ptoData: item.pto_type ? {
-                  ptoType: item.pto_type,
-                  isFullShift: item.pto_full_day || false
-                } : undefined,
+                hasPTO: false, // Recurring schedules don't have PTO
+                ptoData: undefined,
                 reason: item.reason
               }
             };
@@ -300,26 +363,20 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           });
         });
 
-        console.log('Total unique officers found:', allOfficers.size);
+        console.log('📊 Total unique officers found:', allOfficers.size);
 
-        // Categorize officers with UPDATED supervisor sorting
-        // First get all supervisors
+        // Categorize officers
         const allSupervisors = Array.from(allOfficers.values())
           .filter(o => isSupervisorByRank(o));
 
-        // Separate Lieutenants and Sergeants
         const lieutenants = allSupervisors.filter(o => 
           o.rank?.toLowerCase().includes('lieutenant') || 
           o.rank?.toLowerCase().includes('lt') ||
           o.rank?.toLowerCase().includes('chief')
         ).sort((a, b) => {
-          // Sort Lieutenants by service credit DESCENDING (highest first)
           const aCredit = a.service_credit || 0;
           const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) {
-            return bCredit - aCredit; // Descending
-          }
-          // If same service credit, sort by last name
+          if (bCredit !== aCredit) return bCredit - aCredit;
           return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
         });
 
@@ -327,22 +384,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           o.rank?.toLowerCase().includes('sergeant') || 
           o.rank?.toLowerCase().includes('sgt')
         ).sort((a, b) => {
-          // Sort Sergeants by service credit DESCENDING (highest first)
           const aCredit = a.service_credit || 0;
           const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) {
-            return bCredit - aCredit; // Descending
-          }
-          // If same service credit, sort by last name
+          if (bCredit !== aCredit) return bCredit - aCredit;
           return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
         });
 
-        // Combine with Lieutenants first, then Sergeants
         const supervisors = [...lieutenants, ...sergeants];
-
-        console.log('Lieutenants found:', lieutenants.length);
-        console.log('Sergeants found:', sergeants.length);
-        console.log('Total supervisors:', supervisors.length);
 
         const allOfficersList = Array.from(allOfficers.values())
           .filter(o => !isSupervisorByRank(o));
@@ -350,58 +398,26 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         const ppos = allOfficersList
           .filter(o => o.rank?.toLowerCase() === 'probationary')
           .sort((a, b) => {
-            // Sort PPOs by service credit DESCENDING (highest first), then by badge number
             const aCredit = a.service_credit || 0;
             const bCredit = b.service_credit || 0;
-            if (bCredit !== aCredit) {
-              return bCredit - aCredit; // Descending: b - a
-            }
-            // If same service credit, sort by badge number (ascending)
+            if (bCredit !== aCredit) return bCredit - aCredit;
             const aBadge = parseInt(a.badgeNumber) || 9999;
             const bBadge = parseInt(b.badgeNumber) || 9999;
             return aBadge - bBadge;
           });
-
-        console.log('PPOs found:', ppos.length);
 
         const regularOfficers = allOfficersList
           .filter(o => o.rank?.toLowerCase() !== 'probationary')
           .sort((a, b) => {
-            // Sort regular officers by service credit DESCENDING (highest first), then by badge number
             const aCredit = a.service_credit || 0;
             const bCredit = b.service_credit || 0;
-            if (bCredit !== aCredit) {
-              return bCredit - aCredit; // Descending: b - a
-            }
-            // If same service credit, sort by badge number (ascending)
+            if (bCredit !== aCredit) return bCredit - aCredit;
             const aBadge = parseInt(a.badgeNumber) || 9999;
             const bBadge = parseInt(b.badgeNumber) || 9999;
             return aBadge - bBadge;
           });
 
-        console.log('Regular officers found:', regularOfficers.length);
-
-        // Set debug info for inspection
-        setDebugInfo({
-          allOfficersCount: allOfficers.size,
-          lieutenantsCount: lieutenants.length,
-          sergeantsCount: sergeants.length,
-          supervisorsCount: supervisors.length,
-          regularOfficersCount: regularOfficers.length,
-          pposCount: ppos.length,
-          exceptionsCount: exceptions?.length,
-          recurringCount: recurringSchedules?.length,
-          sampleLieutenants: lieutenants.slice(0, 3).map((s: any) => ({
-            name: s.officerName,
-            rank: s.rank,
-            serviceCredit: s.service_credit
-          })),
-          sampleSergeants: sergeants.slice(0, 3).map((s: any) => ({
-            name: s.officerName,
-            rank: s.rank,
-            serviceCredit: s.service_credit
-          }))
-        });
+        console.log('✅ Data processing complete');
 
         return {
           supervisors,
@@ -418,7 +434,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         };
 
       } catch (error) {
-        console.error('Error in mobile schedule query:', error);
+        console.error('❌ Error in mobile schedule query:', error);
         throw error;
       }
     },
@@ -448,7 +464,6 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     );
   }
 
-  // Add error handling
   if (error) {
     console.error('Query error details:', error);
     return (
@@ -474,21 +489,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   }
 
   if (!scheduleData) {
-    // Add debug info display
     return (
-      <div className="space-y-4">
-        <div className="text-center py-8 text-muted-foreground">
-          <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No schedule data available</p>
-          {debugInfo && (
-            <div className="mt-4 p-4 border rounded-lg bg-muted/50 text-left">
-              <h4 className="font-semibold mb-2">Debug Information:</h4>
-              <pre className="text-xs overflow-auto">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
+      <div className="text-center py-8 text-muted-foreground">
+        No schedule data available
       </div>
     );
   }
@@ -525,7 +528,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         </CardContent>
       </Card>
 
-      {/* Weekly Table - Horizontal Scroll on Mobile */}
+      {/* Weekly Table */}
       <div className="overflow-x-auto -mx-4 px-4">
         <div className="min-w-[800px]">
           {/* Table Header */}
@@ -572,24 +575,24 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
                 <div className="text-xs opacity-80">{getRankAbbreviation(officer.rank)}</div>
-                <div className="text-xs text-muted-foreground">
-                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                </div>
               </div>
-              {weekDays.map(({ dateStr }) => (
-                <div key={dateStr} className="p-2 border-r">
-                  <ScheduleCellMobile
-                    officer={officer.weeklySchedule[dateStr]}
-                    dateStr={dateStr}
-                    officerId={officer.officerId}
-                    officerName={officer.officerName}
-                    isAdminOrSupervisor={isAdminOrSupervisor}
-                    isSupervisor={true}
-                    isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                    isSpecialAssignment={isSpecialAssignment}
-                  />
-                </div>
-              ))}
+              {weekDays.map(({ dateStr }) => {
+                const dayOfficer = officer.weeklySchedule[dateStr];
+                return (
+                  <div key={dateStr} className="p-2 border-r">
+                    <ScheduleCellMobile
+                      officer={dayOfficer}
+                      dateStr={dateStr}
+                      officerId={officer.officerId}
+                      officerName={officer.officerName}
+                      isAdminOrSupervisor={isAdminOrSupervisor}
+                      isSupervisor={true}
+                      isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
+                      isSpecialAssignment={isSpecialAssignment}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ))}
 
@@ -625,23 +628,23 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
-                <div className="text-xs text-muted-foreground">
-                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                </div>
               </div>
-              {weekDays.map(({ dateStr }) => (
-                <div key={dateStr} className="p-2 border-r">
-                  <ScheduleCellMobile
-                    officer={officer.weeklySchedule[dateStr]}
-                    dateStr={dateStr}
-                    officerId={officer.officerId}
-                    officerName={officer.officerName}
-                    isAdminOrSupervisor={isAdminOrSupervisor}
-                    isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                    isSpecialAssignment={isSpecialAssignment}
-                  />
-                </div>
-              ))}
+              {weekDays.map(({ dateStr }) => {
+                const dayOfficer = officer.weeklySchedule[dateStr];
+                return (
+                  <div key={dateStr} className="p-2 border-r">
+                    <ScheduleCellMobile
+                      officer={dayOfficer}
+                      dateStr={dateStr}
+                      officerId={officer.officerId}
+                      officerName={officer.officerName}
+                      isAdminOrSupervisor={isAdminOrSupervisor}
+                      isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
+                      isSpecialAssignment={isSpecialAssignment}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ))}
 
@@ -679,24 +682,24 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     <Badge variant="outline" className="text-xs border-blue-300 bg-blue-100">
                       PPO
                     </Badge>
-                    <div className="text-xs text-muted-foreground">
-                      SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                    </div>
                   </div>
-                  {weekDays.map(({ dateStr }) => (
-                    <div key={dateStr} className="p-2 border-r">
-                      <ScheduleCellMobile
-                        officer={officer.weeklySchedule[dateStr]}
-                        dateStr={dateStr}
-                        officerId={officer.officerId}
-                        officerName={officer.officerName}
-                        isAdminOrSupervisor={isAdminOrSupervisor}
-                        isPPO={true}
-                        isRegularRecurringDay={officer.weeklySchedule[dateStr]?.isRegularRecurringDay || false}
-                        isSpecialAssignment={isSpecialAssignment}
-                      />
-                    </div>
-                  ))}
+                  {weekDays.map(({ dateStr }) => {
+                    const dayOfficer = officer.weeklySchedule[dateStr];
+                    return (
+                      <div key={dateStr} className="p-2 border-r">
+                        <ScheduleCellMobile
+                          officer={dayOfficer}
+                          dateStr={dateStr}
+                          officerId={officer.officerId}
+                          officerName={officer.officerName}
+                          isAdminOrSupervisor={isAdminOrSupervisor}
+                          isPPO={true}
+                          isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
+                          isSpecialAssignment={isSpecialAssignment}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </>
@@ -710,38 +713,29 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-gray-100 border"></div>
-              <span>Supervisor</span>
+              <div className="w-4 h-4 rounded bg-green-50 border-l-2 border-green-400"></div>
+              <span>Recurring Day</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></div>
-              <span>PPO</span>
+              <div className="w-4 h-4 rounded bg-white border"></div>
+              <span>Exception</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="h-4 text-xs">PTO</Badge>
-              <span>Paid Time Off</span>
+              <div className="w-4 h-4 rounded bg-blue-50 border-l-2 border-blue-400"></div>
+              <span>PTO</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
+              <span>Special Assignment</span>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="destructive" className="h-4 text-xs">Off</Badge>
               <span>Day Off</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-green-50 border-l-2 border-green-400"></div>
-              <span>Recurring Day</span>
+              <div className="w-4 h-4 rounded bg-gray-100"></div>
+              <span>Not Scheduled</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-white border"></div>
-              <span>Ad-hoc Assignment</span>
-            </div>
-            <div className="flex items-center gap-2 col-span-2">
-              <div className="w-3 h-3 rounded bg-purple-50 border-l-2 border-purple-400"></div>
-              <span>Special Assignment</span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-            <p className="font-medium mb-1">Supervisor Sorting:</p>
-            <p>1. Lieutenants (Highest SC First)</p>
-            <p>2. Sergeants (Highest SC First)</p>
           </div>
         </CardContent>
       </Card>

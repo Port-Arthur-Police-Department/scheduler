@@ -120,12 +120,12 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     copyPublicDir: true,
-    // Define global constants for client-side
+    // Remove or update rollupOptions
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          onesignal: ['react-onesignal']
+          vendor: ['react', 'react-dom', 'react-router-dom']
+          // REMOVE: onesignal: ['react-onesignal'] ← This is causing the error
         }
       }
     }

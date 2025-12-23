@@ -218,81 +218,81 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           // Prioritize exceptions over recurring
           const processedOfficers = new Set();
           
-          // First, process exceptions
-          dayExceptions.forEach(item => {
-            const officerId = item.officer_id;
-            processedOfficers.add(officerId);
-            
-            const hireDate = item.profiles?.hire_date;
-            const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
-            const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
-            const overrideCredit = item.profiles?.service_credit_override || 0;
-            const badgeNumber = item.profiles?.badge_number || '9999';
-            
-            const serviceCredit = calculateServiceCredit(
-              hireDate, 
-              overrideCredit,
-              promotionDateSergeant,
-              promotionDateLieutenant,
-              item.profiles?.rank
-            );
-            
-            if (!allOfficers.has(officerId)) {
-              const relevantPromotionDate = getRelevantPromotionDate(
-                item.profiles?.rank,
-                promotionDateSergeant,
-                promotionDateLieutenant
-              );
-              
-              allOfficers.set(officerId, {
-                officerId: officerId,
-                officerName: item.profiles?.full_name || "Unknown",
-                badgeNumber: badgeNumber,
-                rank: item.profiles?.rank || "Officer",
-                service_credit: serviceCredit,
-                hire_date: hireDate,
-                promotion_date_sergeant: promotionDateSergeant,
-                promotion_date_lieutenant: promotionDateLieutenant,
-                promotion_date: relevantPromotionDate || hireDate,
-                recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
-                weeklySchedule: {} as Record<string, any>
-              });
-            }
-            
-            // CRITICAL: Properly set PTO data
-            const hasPTO = !!item.pto_type;
-            const daySchedule = {
-              officerId: officerId,
-              officerName: item.profiles?.full_name || "Unknown",
-              badgeNumber: badgeNumber,
-              rank: item.profiles?.rank || "Officer",
-              service_credit: serviceCredit,
-              date: day.dateStr,
-              dayOfWeek: day.dayOfWeek,
-              isRegularRecurringDay: false, // Exceptions are never "regular recurring"
-              shiftInfo: {
-                scheduleId: item.id,
-                scheduleType: "exception",
-                position: item.position_name,
-                isOff: item.is_off || false,
-                hasPTO: hasPTO,
-                ptoData: hasPTO ? {
-                  ptoType: item.pto_type,
-                  isFullShift: item.pto_full_day || false
-                } : undefined,
-                reason: item.reason
-              }
-            };
-            
-            if (hasPTO) {
-              console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
-                ptoType: item.pto_type,
-                isFullShift: item.pto_full_day
-              });
-            }
-            
-            allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
-          });
+// In the WeeklyViewMobile.tsx query function, update the exception processing:
+dayExceptions.forEach(item => {
+  const officerId = item.officer_id;
+  processedOfficers.add(officerId);
+  
+  const hireDate = item.profiles?.hire_date;
+  const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
+  const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
+  const overrideCredit = item.profiles?.service_credit_override || 0;
+  const badgeNumber = item.profiles?.badge_number || '9999';
+  
+  const serviceCredit = calculateServiceCredit(
+    hireDate, 
+    overrideCredit,
+    promotionDateSergeant,
+    promotionDateLieutenant,
+    item.profiles?.rank
+  );
+  
+  if (!allOfficers.has(officerId)) {
+    const relevantPromotionDate = getRelevantPromotionDate(
+      item.profiles?.rank,
+      promotionDateSergeant,
+      promotionDateLieutenant
+    );
+    
+    allOfficers.set(officerId, {
+      officerId: officerId,
+      officerName: item.profiles?.full_name || "Unknown",
+      badgeNumber: badgeNumber,
+      rank: item.profiles?.rank || "Officer",
+      service_credit: serviceCredit,
+      hire_date: hireDate,
+      promotion_date_sergeant: promotionDateSergeant,
+      promotion_date_lieutenant: promotionDateLieutenant,
+      promotion_date: relevantPromotionDate || hireDate,
+      recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+      weeklySchedule: {} as Record<string, any>
+    });
+  }
+  
+  // CRITICAL: Properly set PTO data - FIXED
+  const hasPTO = !!item.pto_type || item.is_off;
+  const daySchedule = {
+    officerId: officerId,
+    officerName: item.profiles?.full_name || "Unknown",
+    badgeNumber: badgeNumber,
+    rank: item.profiles?.rank || "Officer",
+    service_credit: serviceCredit,
+    date: day.dateStr,
+    dayOfWeek: day.dayOfWeek,
+    isRegularRecurringDay: false, // Exceptions are never "regular recurring"
+    shiftInfo: {
+      scheduleId: item.id,
+      scheduleType: "exception",
+      position: item.position_name,
+      isOff: item.is_off || false,
+      hasPTO: hasPTO,
+      ptoData: hasPTO ? {
+        ptoType: item.pto_type || (item.is_off ? 'Off' : 'PTO'),
+        isFullShift: item.pto_full_day || item.is_off // If it's an "Off" day, it's full shift
+      } : undefined,
+      reason: item.reason
+    }
+  };
+  
+  if (hasPTO) {
+    console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
+      ptoType: item.pto_type || (item.is_off ? 'Off' : 'PTO'),
+      isFullShift: item.pto_full_day || item.is_off
+    });
+  }
+  
+  allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+});
           
           // Then, process recurring ONLY if no exception exists
           dayRecurring.forEach(item => {

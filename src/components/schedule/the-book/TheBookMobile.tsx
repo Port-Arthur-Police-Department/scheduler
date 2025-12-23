@@ -23,6 +23,8 @@ import { VacationListViewMobile } from "./VacationListViewMobile";
 import { BeatPreferencesViewMobile } from "./BeatPreferencesViewMobile";
 // Import PTO Dialog
 import { PTODialogMobile } from "./PTODialogMobile";
+// Import Assignment Edit Dialog
+import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 
 interface TheBookMobileProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
@@ -35,13 +37,23 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // PTO Dialog state
+  // Dialog states
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  
   const [selectedOfficer, setSelectedOfficer] = useState<{
     id: string;
     name: string;
     date: string;
     schedule: any;
+  } | null>(null);
+
+  const [editingAssignment, setEditingAssignment] = useState<{
+    officer: any;
+    dateStr: string;
+    shiftTypeId?: string;
+    officerId?: string;
+    officerName?: string;
   } | null>(null);
 
   // Get user context for audit logging
@@ -78,23 +90,11 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   // Get query client
   const queryClient = useQueryClient();
 
-  // Destructure with safe fallbacks
+  // Destructure mutations
   const {
     updatePositionMutation,
-    removeOfficerMutation = {
-      mutate: () => {
-        console.error("removeOfficerMutation not available");
-        toast.error("Cannot remove officer: System error");
-      },
-      isPending: false
-    },
-    removePTOMutation = {
-      mutate: () => {
-        console.error("removePTOMutation not available");
-        toast.error("Cannot remove PTO: System error");
-      },
-      isPending: false
-    },
+    removeOfficerMutation,
+    removePTOMutation,
     queryKey
   } = mutationsResult;
 
@@ -213,7 +213,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     },
     onSuccess: () => {
       toast.success("PTO assigned successfully");
-      queryClient.invalidateQueries({ queryKey });
+      // Force refresh the weekly schedule query
+      queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
     },
     onError: (error: any) => {
       console.error('❌ Error assigning PTO:', error);
@@ -314,6 +315,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
         }
         
         toast.success(`PTO removed successfully`);
+        // Force refresh the weekly schedule query
+        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
       },
       onError: (error) => {
         console.error('❌ Error removing PTO:', error);
@@ -323,9 +326,47 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   };
 
   const handleEditAssignment = (officer: any, dateStr: string) => {
-    // For mobile, show a toast with info
-    toast.info(`To edit assignment for ${officer.officerName} on ${dateStr}, please use the desktop version for now. Mobile editing coming soon.`, {
-      duration: 4000,
+    console.log('📱 Opening assignment editor for:', officer.officerName, dateStr);
+    
+    setEditingAssignment({
+      officer: officer,
+      dateStr: dateStr,
+      shiftTypeId: selectedShiftId,
+      officerId: officer.officerId,
+      officerName: officer.officerName
+    });
+    setAssignmentDialogOpen(true);
+  };
+
+  const handleSaveAssignment = (assignmentData: any) => {
+    console.log('💾 Saving assignment:', assignmentData);
+    
+    updatePositionMutation.mutate(assignmentData, {
+      onSuccess: () => {
+        // Log audit trail
+        try {
+          auditLogger.logAssignmentUpdate(
+            assignmentData.officerId || editingAssignment?.officerId,
+            editingAssignment?.officerName || "Unknown Officer",
+            assignmentData.positionName,
+            editingAssignment?.dateStr || "",
+            userEmail,
+            `Updated assignment via mobile`
+          );
+        } catch (logError) {
+          console.error('Failed to log assignment audit:', logError);
+        }
+        
+        toast.success("Assignment updated successfully");
+        setAssignmentDialogOpen(false);
+        setEditingAssignment(null);
+        // Force refresh the weekly schedule query
+        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+      },
+      onError: (error) => {
+        console.error('❌ Error updating assignment:', error);
+        toast.error(error.message || "Failed to update assignment");
+      }
     });
   };
 
@@ -350,6 +391,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           );
         }
         toast.success("Officer removed from schedule");
+        // Force refresh the weekly schedule query
+        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
       },
       onError: (error) => {
         console.error('Error removing officer:', error);
@@ -375,7 +418,11 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
             onRemovePTO={handleRemovePTO}
             onEditAssignment={handleEditAssignment}
             onRemoveOfficer={handleRemoveOfficer}
-            isUpdating={removeOfficerMutation.isPending || assignPTOMutation.isPending}
+            isUpdating={
+              removeOfficerMutation.isPending || 
+              assignPTOMutation.isPending || 
+              updatePositionMutation.isPending
+            }
           />
         );
       
@@ -523,6 +570,17 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           isUpdating={assignPTOMutation.isPending}
         />
       )}
+
+      {/* Assignment Edit Dialog */}
+      <AssignmentEditDialogMobile
+        editingAssignment={editingAssignment}
+        onClose={() => {
+          setAssignmentDialogOpen(false);
+          setEditingAssignment(null);
+        }}
+        onSave={handleSaveAssignment}
+        isUpdating={updatePositionMutation.isPending}
+      />
     </div>
   );
 };

@@ -585,23 +585,33 @@ const invalidateScheduleQueries = () => {
 };
 
   // Event handlers
-  const handleEditAssignment = (officer: any, dateStr: string) => {
-    console.log('=== EDIT ASSIGNMENT CLICKED ===');
-    console.log('Officer object:', officer);
-    console.log('Officer keys:', Object.keys(officer || {}));
-    console.log('Date:', dateStr);
-    
-    const officerId = officer?.officerId || officer?.officer_id || officer?.id;
-    console.log('Found officerId:', officerId);
-    
-    setEditingAssignment({ 
-      officer: {
-        ...officer,
-        officerId: officerId
-      }, 
-      dateStr 
-    });
+const handleEditAssignment = (officer: any, dateStr: string) => {
+  console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
+  console.log('Full officer object:', officer);
+  console.log('Officer shiftInfo:', officer?.shiftInfo);
+  console.log('Date:', dateStr);
+  
+  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+  console.log('Found officerId:', officerId);
+  
+  // Make sure we have all the necessary data
+  const officerData = {
+    ...officer,
+    officerId: officerId,
+    shiftInfo: {
+      ...officer?.shiftInfo,
+      // Store current position for comparison
+      currentPosition: officer?.shiftInfo?.position || ''
+    }
   };
+  
+  console.log('Prepared officer data for editing:', officerData);
+  
+  setEditingAssignment({ 
+    officer: officerData, 
+    dateStr 
+  });
+};
 
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
     setSelectedSchedule({
@@ -1070,12 +1080,59 @@ const handleSaveAssignment = () => {
       </div>
 
       {/* Dialogs */}
-      <AssignmentEditDialog
-        editingAssignment={editingAssignment}
-        onClose={() => setEditingAssignment(null)}
-        onSave={handleSaveAssignment}
-        updatePositionMutation={updatePositionMutation}
-      />
+<AssignmentEditDialog
+  editingAssignment={editingAssignment}
+  onClose={() => {
+    console.log('Closing assignment dialog');
+    setEditingAssignment(null);
+  }}
+  onSave={(assignmentData) => {
+    // Use the same pattern as mobile - get the data directly from dialog
+    console.log('💾 Assignment data from dialog:', assignmentData);
+    
+    if (!assignmentData.positionName) {
+      toast.error("Position is required");
+      return;
+    }
+    
+    updatePositionMutation.mutate(assignmentData, {
+      onSuccess: () => {
+        // Force cache invalidation
+        invalidateScheduleQueries();
+        
+        // Force immediate refetch
+        queryClient.refetchQueries({ 
+          queryKey: scheduleQueryKey,
+          exact: true 
+        }).then(() => {
+          console.log('✅ Schedule data refetched after assignment update');
+        });
+        
+        // Log audit
+        try {
+          auditLogger.logPositionChange(
+            assignmentData.officerId || editingAssignment?.officer?.officerId,
+            editingAssignment?.officer?.officerName || 'Unknown Officer',
+            editingAssignment?.officer?.shiftInfo?.position || 'Unknown',
+            assignmentData.positionName,
+            userEmail,
+            `Updated assignment via desktop`
+          );
+        } catch (logError) {
+          console.error('Failed to log assignment audit:', logError);
+        }
+        
+        setEditingAssignment(null);
+        toast.success("Assignment updated successfully");
+      },
+      onError: (error) => {
+        console.error('❌ Error updating assignment:', error);
+        toast.error(error.message || "Failed to update assignment");
+      }
+    });
+  }}
+  updatePositionMutation={updatePositionMutation}
+/>
 
       <ScheduleExportDialog
         open={exportDialogOpen}

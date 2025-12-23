@@ -9,8 +9,13 @@ import NotFound from "./pages/NotFound";
 import { useIsMobile } from "./hooks/use-mobile";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { UserProvider } from "@/contexts/UserContext";
+import { useAutoAlerts } from '@/hooks/useAutoAlerts';
 
 const queryClient = new QueryClient();
+
+function App() {
+  // Initialize automatic alerts
+  useAutoAlerts();
 
 const App = () => {
   const isMobile = useIsMobile();

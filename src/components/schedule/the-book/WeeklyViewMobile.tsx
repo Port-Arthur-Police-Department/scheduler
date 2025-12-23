@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, addDays, isSameDay, startOfWeek, endOfWeek } from "date-fns";
-import { getLastName, getRankAbbreviation, isSupervisorByRank, getRankPriority } from "./utils";
+import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
@@ -19,6 +19,12 @@ interface WeeklyViewMobileProps {
   onPreviousWeek: () => void;
   onNextWeek: () => void;
   onToday: () => void;
+  // Add these new props
+  onAssignPTO?: (schedule: any, dateStr: string, officerId: string, officerName: string) => void;
+  onRemovePTO?: (schedule: any, dateStr: string, officerId: string) => void;
+  onEditAssignment?: (officer: any, dateStr: string) => void;
+  onRemoveOfficer?: (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => void;
+  isUpdating?: boolean;
 }
 
 // Helper function to calculate service credit with promotion date support

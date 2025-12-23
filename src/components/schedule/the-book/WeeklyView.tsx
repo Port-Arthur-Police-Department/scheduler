@@ -11,11 +11,13 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner"; // Added toast for feedback
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
   officerProfiles?: Map<string, any>; // Optional prop
+  queryKey?: any[]; // Add queryKey to invalidate
 }
 
 // Helper function to calculate service credit
@@ -85,6 +87,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   isSupervisorByRank,
   onDateChange,
   officerProfiles, // Optional prop
+  queryKey = ['weekly-schedule', selectedShiftId], // Default queryKey
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -142,40 +145,137 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   }, [weekPickerOpen, currentWeekStart]);
 
-  // Handler for PTO actions that invalidates the cache
+  // Handler for PTO assignment with cache invalidation
   const handleAssignPTO = async (schedule: any, date: string, officerId: string, officerName: string) => {
-    if (onEventHandlers.onAssignPTO) {
+    if (!onEventHandlers.onAssignPTO) return;
+    
+    try {
+      // Show loading state
+      toast.loading("Assigning PTO...");
+      
       await onEventHandlers.onAssignPTO(schedule, date, officerId, officerName);
-      // Invalidate the schedule query to force refresh
-      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
-      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+      
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ 
+        queryKey: queryKey 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['officer-profiles-weekly'] 
+      });
+      
+      // Force refetch
+      await queryClient.refetchQueries({ 
+        queryKey: queryKey 
+      });
+      
+      toast.success("PTO assigned successfully");
+    } catch (error) {
+      toast.error("Failed to assign PTO");
+      console.error('Error assigning PTO:', error);
+    } finally {
+      toast.dismiss();
     }
   };
 
   const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-    if (onEventHandlers.onRemovePTO) {
+    if (!onEventHandlers.onRemovePTO) return;
+    
+    try {
+      toast.loading("Removing PTO...");
+      
       await onEventHandlers.onRemovePTO(schedule, date, officerId);
-      // Invalidate the schedule query to force refresh
-      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
-      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+      
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ 
+        queryKey: queryKey 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['officer-profiles-weekly'] 
+      });
+      
+      // Force refetch
+      await queryClient.refetchQueries({ 
+        queryKey: queryKey 
+      });
+      
+      toast.success("PTO removed successfully");
+    } catch (error) {
+      toast.error("Failed to remove PTO");
+      console.error('Error removing PTO:', error);
+    } finally {
+      toast.dismiss();
     }
   };
 
   const handleEditAssignment = async (officer: any, dateStr: string) => {
-    if (onEventHandlers.onEditAssignment) {
+    if (!onEventHandlers.onEditAssignment) return;
+    
+    try {
+      toast.loading("Updating assignment...");
+      
       await onEventHandlers.onEditAssignment(officer, dateStr);
-      // Invalidate the schedule query to force refresh
-      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
-      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+      
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ 
+        queryKey: queryKey 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['officer-profiles-weekly'] 
+      });
+      
+      // Force refetch
+      await queryClient.refetchQueries({ 
+        queryKey: queryKey 
+      });
+      
+      toast.success("Assignment updated successfully");
+    } catch (error) {
+      toast.error("Failed to update assignment");
+      console.error('Error updating assignment:', error);
+    } finally {
+      toast.dismiss();
     }
   };
 
   const handleRemoveOfficer = async (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
-    if (onEventHandlers.onRemoveOfficer) {
+    if (!onEventHandlers.onRemoveOfficer) return;
+    
+    try {
+      toast.loading("Removing officer...");
+      
       await onEventHandlers.onRemoveOfficer(scheduleId, type, officerData);
-      // Invalidate the schedule query to force refresh
-      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
-      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+      
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ 
+        queryKey: queryKey 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['officer-profiles-weekly'] 
+      });
+      
+      // Force refetch
+      await queryClient.refetchQueries({ 
+        queryKey: queryKey 
+      });
+      
+      toast.success("Officer removed successfully");
+    } catch (error) {
+      toast.error("Failed to remove officer");
+      console.error('Error removing officer:', error);
+    } finally {
+      toast.dismiss();
     }
   };
 

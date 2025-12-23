@@ -1,6 +1,6 @@
 // TheBookMobile.tsx - Mobile version of JUST The Book tab
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOf
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useUser } from "@/contexts/UserContext";
 import { auditLogger } from "@/lib/auditLogger";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Import mobile view components
 import { WeeklyViewMobile } from "./WeeklyViewMobile";
@@ -76,6 +75,9 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     selectedShiftId
   );
 
+  // Get query client
+  const queryClient = useQueryClient();
+
   // Destructure with safe fallbacks
   const {
     updatePositionMutation,
@@ -95,6 +97,32 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     },
     queryKey
   } = mutationsResult;
+
+  // Helper function to get PTO column name
+  const getPTOColumn = (ptoType: string): string | null => {
+    const ptoTypes = {
+      'vacation': 'vacation_hours',
+      'sick': 'sick_hours',
+      'holiday': 'holiday_hours',
+      'comp': 'comp_time_hours',
+      'other': 'other_pto_hours'
+    };
+    return ptoTypes[ptoType as keyof typeof ptoTypes] || null;
+  };
+
+  // Helper function to calculate hours used
+  const calculateHoursUsed = (startTime: string, endTime: string): number => {
+    try {
+      const [startHour, startMin] = startTime.split(":").map(Number);
+      const [endHour, endMin] = endTime.split(":").map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      return (endMinutes - startMinutes) / 60;
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return 8; // Default to 8 hours
+    }
+  };
 
   // Add PTO Assignment Mutation
   const assignPTOMutation = useMutation({
@@ -192,35 +220,6 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
       toast.error(error.message || "Failed to assign PTO");
     },
   });
-
-  // Helper function to get PTO column name
-  const getPTOColumn = (ptoType: string): string | null => {
-    const ptoTypes = {
-      'vacation': 'vacation_hours',
-      'sick': 'sick_hours',
-      'holiday': 'holiday_hours',
-      'comp': 'comp_time_hours',
-      'other': 'other_pto_hours'
-    };
-    return ptoTypes[ptoType as keyof typeof ptoTypes] || null;
-  };
-
-  // Helper function to calculate hours used
-  const calculateHoursUsed = (startTime: string, endTime: string): number => {
-    try {
-      const [startHour, startMin] = startTime.split(":").map(Number);
-      const [endHour, endMin] = endTime.split(":").map(Number);
-      const startMinutes = startHour * 60 + startMin;
-      const endMinutes = endHour * 60 + endMin;
-      return (endMinutes - startMinutes) / 60;
-    } catch (error) {
-      console.error('Error calculating hours:', error);
-      return 8; // Default to 8 hours
-    }
-  };
-
-  const { useMutation: useReactQueryMutation, useQueryClient } = require('@tanstack/react-query');
-  const queryClient = useQueryClient();
 
   // Navigation functions
   const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));

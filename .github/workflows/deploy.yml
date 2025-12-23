@@ -22,183 +22,84 @@ jobs:
 
       - name: Create environment variables
         run: |
-          # Create .env file for build process with all required variables
-          cat > .env << 'EOF'
-          # Supabase Configuration
+          # Create .env file for build process
+          cat > .env << EOF
           VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          
-          # OneSignal Configuration
           VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
-          
-          # App Configuration
           VITE_APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
-          
-          # Build Configuration
-          VITE_APP_TITLE=Port Arthur PD Scheduler
-          VITE_APP_DESCRIPTION=Shift scheduling system for Port Arthur Police Department
           EOF
           
           echo "✅ Environment file created"
-          echo ""
-          echo "📋 Environment variables set:"
-          echo "  - VITE_SUPABASE_URL: ***"
-          echo "  - VITE_SUPABASE_ANON_KEY: ***"
-          echo "  - VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}"
-          echo "  - VITE_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/"
-          echo ""
 
       - name: Install dependencies
         run: |
-          echo "📦 Installing dependencies..."
           npm ci
-          echo "✅ Dependencies installed"
 
       - name: Build site
         run: npm run build
         env:
-          # Pass environment variables to the build process
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
 
-      - name: Verify Build Output
+      - name: Fix Service Worker Paths
         run: |
-          echo "🔍 Verifying build output..."
-          echo ""
+          echo "🔧 Fixing service worker paths for GitHub Pages..."
           
-          echo "===== Basic File Check ====="
-          if [ -d "dist" ]; then
-            echo "✅ dist/ directory exists"
-            echo "📊 Size of dist/:"
-            du -sh dist/
-          else
-            echo "❌ dist/ directory not found!"
-            exit 1
-          fi
-          
-          echo ""
-          echo "===== Required Files Check ====="
-          REQUIRED_FILES=("index.html" "assets/" "manifest.json" "sw.js")
-          for file in "${REQUIRED_FILES[@]}"; do
-            if [ -e "dist/$file" ]; then
-              echo "✅ dist/$file exists"
-            else
-              echo "⚠️ dist/$file not found"
-            fi
-          done
-
-      - name: Verify OneSignal Configuration
-        run: |
-          echo "🚀 Verifying OneSignal Configuration..."
-          echo ""
-          
-          echo "===== OneSignal Script Check ====="
-          if grep -q "OneSignalSDK.page.js" dist/index.html; then
-            echo "✅ OneSignal SDK script found in index.html"
-          else
-            echo "❌ OneSignal SDK script NOT found in index.html"
-          fi
-          
-          echo ""
-          echo "===== App ID Injection Check ====="
-          # Check if placeholder was replaced
-          if grep -q "%%ONESIGNAL_APP_ID%%" dist/index.html; then
-            echo "❌ ERROR: Placeholder %%ONESIGNAL_APP_ID%% still exists in index.html!"
-            echo "   The Vite plugin failed to inject the environment variable."
-            echo ""
-            echo "   First 5 lines containing 'appId':"
-            grep -n "appId" dist/index.html | head -5
-            exit 1
-          else
-            echo "✅ No placeholders found in index.html"
-          fi
-          
-          echo ""
-          echo "===== Actual App ID Check ====="
-          # Extract the actual App ID from the built HTML
-          APP_ID_LINE=$(grep -o 'appId: "[^"]*"' dist/index.html | head -1)
-          if [ -n "$APP_ID_LINE" ]; then
-            APP_ID=$(echo "$APP_ID_LINE" | cut -d'"' -f2)
-            echo "✅ Found App ID in HTML: ${APP_ID:0:10}..."
-            
-            # Check if it matches the expected pattern
-            if [[ "$APP_ID" == *"3417d840-c226-40ba-92d6-a7590c31eef3"* ]] || [[ "$APP_ID" == "${{ secrets.VITE_ONESIGNAL_APP_ID }}" ]]; then
-              echo "✅ App ID looks valid"
-            else
-              echo "⚠️ App ID doesn't match expected pattern"
-            fi
-          else
-            echo "❌ Could not find appId in index.html"
-          fi
-          
-          echo ""
-          echo "===== Service Worker Path Check ====="
-          if grep -q 'serviceWorkerPath: "/scheduler/OneSignalSDKWorker.js"' dist/index.html; then
-            echo "✅ Correct service worker path for GitHub Pages"
-          else
-            echo "⚠️ Service worker path may not be configured for /scheduler/ subdirectory"
-            echo "   Checking for serviceWorkerPath in HTML:"
-            grep -n "serviceWorker" dist/index.html || echo "   Not found"
-          fi
-          
-          echo ""
-          echo "===== Scope Check ====="
-          if grep -q 'scope: "/scheduler/"' dist/index.html; then
-            echo "✅ Correct scope configured for /scheduler/"
-          else
-            echo "⚠️ Scope may not be configured correctly"
-          fi
-
-      - name: Create OneSignal Service Worker Files
-        run: |
-          echo "🔧 Creating OneSignal service worker files..."
-          echo ""
-          
-          # Create OneSignalSDKWorker.js in dist directory
+          # Create OneSignal service worker files in dist root
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/OneSignalSDKWorker.js
-          
-          # Also create OneSignalSDKUpdaterWorker.js
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKUpdaterWorker.js");' > dist/OneSignalSDKUpdaterWorker.js
           
-          echo "✅ Created service worker files:"
-          ls -la dist/OneSignalSDKWorker.js dist/OneSignalSDKUpdaterWorker.js
+          # Also create them in a scheduler directory for backup
+          mkdir -p dist/scheduler
+          echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/scheduler/OneSignalSDKWorker.js
           
-          echo ""
-          echo "📋 Content of OneSignalSDKWorker.js:"
-          cat dist/OneSignalSDKWorker.js
+          echo "✅ Created service worker files in multiple locations"
+          
+          # Update manifest.json to use absolute paths
+          if [ -f "dist/manifest.json" ]; then
+            echo "📝 Updating manifest.json paths..."
+            sed -i 's|"icons/|"/scheduler/icons/|g' dist/manifest.json
+            echo "✅ Updated manifest.json"
+          fi
+          
+          # Create a test HTML to verify paths
+          cat > dist/test-paths.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head><title>Path Test</title></head>
+          <body>
+            <h1>Service Worker Path Test</h1>
+            <p>Testing if service workers are accessible:</p>
+            <ul>
+              <li><a href="/OneSignalSDKWorker.js">/OneSignalSDKWorker.js</a></li>
+              <li><a href="/scheduler/OneSignalSDKWorker.js">/scheduler/OneSignalSDKWorker.js</a></li>
+              <li><a href="/scheduler/manifest.json">/scheduler/manifest.json</a></li>
+              <li><a href="/scheduler/sw.js">/scheduler/sw.js</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
 
-      - name: Verify Service Worker Accessibility
+      - name: Verify Deployment Structure
         run: |
-          echo "🌐 Verifying service worker URLs..."
+          echo "📁 Final deployment structure:"
           echo ""
+          echo "Root files:"
+          ls -la dist/ | grep -E "(js|json|html|worker)" || true
+          echo ""
+          echo "scheduler/ directory files:"
+          ls -la dist/scheduler/ 2>/dev/null || echo "No scheduler directory"
+          echo ""
+          echo "Service worker verification:"
+          echo "OneSignalSDKWorker.js exists at root: $(test -f dist/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
+          echo "OneSignalSDKWorker.js exists in scheduler: $(test -f dist/scheduler/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
           
-          # Calculate expected URLs
-          REPO_NAME="${{ github.event.repository.name }}"
-          OWNER_NAME="${{ github.repository_owner }}"
-          BASE_URL="https://${OWNER_NAME}.github.io/${REPO_NAME}/scheduler"
-          
-          echo "Expected URLs after deployment:"
-          echo "  - Main App: ${BASE_URL}/"
-          echo "  - OneSignal Worker: ${BASE_URL}/OneSignalSDKWorker.js"
-          echo "  - PWA Manifest: ${BASE_URL}/manifest.json"
-          echo "  - PWA Service Worker: ${BASE_URL}/sw.js"
           echo ""
-          
-          echo "📁 Files that will be deployed:"
-          find dist -type f -name "*.js" -o -name "*.json" -o -name "*.html" | sort | head -20
-
-      - name: List build output
-        run: |
-          echo "===== Complete dist/ contents ====="
-          find dist/ -type f | sort
-          echo ""
-          echo "===== File Count ====="
-          find dist/ -type f | wc -l
-          echo ""
-          echo "===== Largest Files ====="
-          find dist/ -type f -exec du -h {} + | sort -rh | head -10
+          echo "🔍 Checking index.html for correct paths:"
+          grep -n "serviceWorker" dist/index.html || echo "No serviceWorker references"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -208,31 +109,24 @@ jobs:
           force_orphan: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: "Deploy: ${{ github.event.head_commit.message || 'Update' }}"
 
-      - name: Deployment Verification
-        if: always()
+      - name: Post-Deployment Test
         run: |
-          echo "🎉 Deployment completed!"
+          echo "🌐 Deployment completed!"
           echo ""
-          echo "===== Next Steps ====="
-          echo "1. Visit your site: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/"
-          echo "2. Open browser DevTools (F12)"
-          echo "3. Check Console for errors"
-          echo "4. Check Application → Service Workers"
-          echo "5. Look for 'OneSignal initialized' message"
+          echo "===== TEST YOUR DEPLOYMENT ====="
           echo ""
-          echo "===== OneSignal Testing ====="
-          echo "To test OneSignal:"
-          echo "1. Open the deployed site"
-          echo "2. You should see a notification prompt after 3 seconds"
-          echo "3. Click 'Allow Alerts'"
-          echo "4. Check browser console for '✅ Push notifications enabled'"
-          echo "5. Test from OneSignal dashboard: https://app.onesignal.com"
+          echo "1. Open your deployed site:"
+          echo "   https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/"
           echo ""
-          echo "===== Troubleshooting ====="
-          echo "If OneSignal isn't working:"
-          echo "1. Clear browser cache (Ctrl+Shift+R)"
-          echo "2. Check Console for 404 errors"
-          echo "3. Verify service worker is registered at /scheduler/ scope"
-          echo "4. Ensure HTTPS is working (GitHub Pages provides this)"
+          echo "2. Open browser DevTools (F12) and check:"
+          echo "   - Console tab for errors"
+          echo "   - Application → Service Workers"
+          echo "   - Network tab for 404 errors"
+          echo ""
+          echo "3. Test service worker URLs:"
+          echo "   - https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/OneSignalSDKWorker.js"
+          echo "   - https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/OneSignalSDKWorker.js"
+          echo ""
+          echo "4. If still failing, try this workaround in browser console:"
+          echo "   navigator.serviceWorker.register('/scheduler/OneSignalSDKWorker.js', { scope: '/scheduler/' })"

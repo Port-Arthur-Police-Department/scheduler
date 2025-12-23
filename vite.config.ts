@@ -8,23 +8,19 @@ function htmlEnvPlugin() {
   return {
     name: 'html-env',
     transformIndexHtml(html) {
-      // Get environment variables (with fallbacks)
       const onesignalAppId = process.env.VITE_ONESIGNAL_APP_ID || 
                             process.env.VITE_PUBLIC_ONESIGNAL_APP_ID || 
                             '3417d840-c226-40ba-92d6-a7590c31eef3';
       
       console.log('🔧 HTML Transform - OneSignal App ID:', onesignalAppId.substring(0, 10) + '...');
       
-      // Replace placeholders in HTML
       let transformedHtml = html;
       
-      // Replace OneSignal App ID placeholder
       transformedHtml = transformedHtml.replace(
         /%%ONESIGNAL_APP_ID%%/g,
         onesignalAppId
       );
       
-      // Also replace the hardcoded App ID with the environment variable
       transformedHtml = transformedHtml.replace(
         /appId: "3417d840-c226-40ba-92d6-a7590c31eef3"/g,
         `appId: "${onesignalAppId}"`
@@ -109,7 +105,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    copyPublicDir: true
+    copyPublicDir: true,
+    // Copy OneSignalSDKWorker.js to build output
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html')
+      }
+    }
   },
   publicDir: 'public',
   define: {

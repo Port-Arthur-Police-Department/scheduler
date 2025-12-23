@@ -284,32 +284,28 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
-            {!shiftInfo?.hasPTO && !shiftInfo?.isOff && (
+            {/* Only show Assign PTO if there's no PTO and officer is not off */}
+            {!shouldShowAsPTO && !shiftInfo?.isOff && (
               <DropdownMenuItem onClick={handleAssignPTO} disabled={isUpdating}>
                 <Plane className="h-3 w-3 mr-2" />
                 Assign PTO
               </DropdownMenuItem>
             )}
-            {shiftInfo?.hasPTO && (
+            {/* Only show Remove PTO if there's PTO */}
+            {shouldShowAsPTO && (
               <DropdownMenuItem onClick={handleRemovePTO} disabled={isUpdating}>
                 <Trash2 className="h-3 w-3 mr-2" />
                 Remove PTO
               </DropdownMenuItem>
             )}
-            {!shiftInfo?.hasPTO && !shiftInfo?.isOff && (
+            {/* Only show Edit Assignment if there's no PTO and officer is not off */}
+            {!shouldShowAsPTO && !shiftInfo?.isOff && (
               <DropdownMenuItem onClick={handleEditAssignment} disabled={isUpdating}>
                 <Edit className="h-3 w-3 mr-2" />
                 Edit Assignment
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem 
-              onClick={handleRemoveOfficer} 
-              className="text-destructive"
-              disabled={isUpdating}
-            >
-              <Trash2 className="h-3 w-3 mr-2" />
-              Remove
-            </DropdownMenuItem>
+            {/* REMOVED: The general "Remove" option that removes officers from schedule */}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

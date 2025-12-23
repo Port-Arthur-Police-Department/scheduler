@@ -77,47 +77,48 @@ const TheBook = ({
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [editingAssignment, setEditingAssignment] = useState<{ officer: any; dateStr: string } | null>(null);
   const mutationsResult = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
+  
   // Destructure with safe fallbacks
   const {
-  updatePositionMutation,
-  removeOfficerMutation = {
+    updatePositionMutation,
+    removeOfficerMutation = {
+      mutate: () => {
+        console.error("removeOfficerMutation not available");
+        toast.error("Cannot remove officer: System error");
+      },
+      isPending: false
+    },
+    removePTOMutation = {
+      mutate: () => {
+        console.error("removePTOMutation not available");
+        toast.error("Cannot remove PTO: System error");
+      },
+      isPending: false
+    },
+    queryKey: mutationQueryKey
+  } = mutationsResult;
+
+  console.log("🔍 Mutations initialized:", {
+    hasRemoveOfficerMutation: !!removeOfficerMutation,
+    hasRemovePTOMutation: !!removePTOMutation
+  });
+
+  // If removeOfficerMutation is still undefined, add a fallback
+  const safeRemoveOfficerMutation = removeOfficerMutation || {
     mutate: () => {
-      console.error("removeOfficerMutation not available");
-      toast.error("Cannot remove officer: System error");
+      console.error("removeOfficerMutation is not available");
+      toast.error("Cannot remove officer: Mutation not available");
     },
     isPending: false
-  },
-  removePTOMutation = {
+  };
+
+  const safeRemovePTOMutation = removePTOMutation || {
     mutate: () => {
-      console.error("removePTOMutation not available");
-      toast.error("Cannot remove PTO: System error");
+      console.error("removePTOMutation is not available");
+      toast.error("Cannot remove PTO: Mutation not available");
     },
     isPending: false
-  },
-  queryKey
-} = mutationsResult;
-
-console.log("🔍 Mutations initialized:", {
-  hasRemoveOfficerMutation: !!removeOfficerMutation,
-  hasRemovePTOMutation: !!removePTOMutation
-});
-
-// If removeOfficerMutation is still undefined, add a fallback
-const safeRemoveOfficerMutation = removeOfficerMutation || {
-  mutate: () => {
-    console.error("removeOfficerMutation is not available");
-    toast.error("Cannot remove officer: Mutation not available");
-  },
-  isPending: false
-};
-
-const safeRemovePTOMutation = removePTOMutation || {
-  mutate: () => {
-    console.error("removePTOMutation is not available");
-    toast.error("Cannot remove PTO: Mutation not available");
-  },
-  isPending: false
-};
+  };
 
   // Get shift types
   const { data: shiftTypes, isLoading: shiftsLoading } = useQuery({
@@ -213,9 +214,12 @@ const safeRemovePTOMutation = removePTOMutation || {
     return staffingMap;
   };
 
+  // Build the main schedule query key
+  const scheduleQueryKey = ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()];
+
   // Main schedule query - UPDATED to include officer profiles
   const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
-    queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
+    queryKey: scheduleQueryKey,
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
@@ -549,6 +553,22 @@ const safeRemovePTOMutation = removePTOMutation || {
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
+  // Helper function to invalidate schedule queries
+  const invalidateScheduleQueries = () => {
+    // Invalidate the main schedule query
+    queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+    
+    // Also invalidate the mutation hook's query key
+    if (mutationQueryKey) {
+      queryClient.invalidateQueries({ queryKey: mutationQueryKey });
+    }
+    
+    // Invalidate officer profiles query
+    queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    
+    console.log('✅ Cache invalidated for schedule queries');
+  };
+
   // Event handlers
   const handleEditAssignment = (officer: any, dateStr: string) => {
     console.log('=== EDIT ASSIGNMENT CLICKED ===');
@@ -625,6 +645,9 @@ const safeRemovePTOMutation = removePTOMutation || {
 
     safeRemovePTOMutation.mutate(ptoMutationData, {
       onSuccess: () => {
+        // Invalidate cache after successful PTO removal
+        invalidateScheduleQueries();
+        
         try {
           auditLogger.logPTORemoval(
             officerId,
@@ -691,6 +714,9 @@ const safeRemovePTOMutation = removePTOMutation || {
       currentPosition: currentPosition
     }, {
       onSuccess: () => {
+        // Invalidate cache after successful assignment update
+        invalidateScheduleQueries();
+        
         try {
           auditLogger.logPositionChange(
             officerId,
@@ -721,6 +747,9 @@ const safeRemovePTOMutation = removePTOMutation || {
       officerData
     }, {
       onSuccess: () => {
+        // Invalidate cache after successful officer removal
+        invalidateScheduleQueries();
+        
         if (officerData) {
           const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
           const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
@@ -732,6 +761,10 @@ const safeRemovePTOMutation = removePTOMutation || {
             `Removed ${officerName} from schedule`
           );
         }
+      },
+      onError: (error) => {
+        console.error('Error removing officer:', error);
+        toast.error("Failed to remove officer");
       }
     });
   };
@@ -744,6 +777,10 @@ const safeRemovePTOMutation = removePTOMutation || {
     shiftTypes: shiftTypes || [],
     isAdminOrSupervisor,
     weeklyColors,
+    // ADD currentWeekStart prop for WeeklyView
+    currentWeekStart: currentWeekStart,
+    // ADD queryKey for cache invalidation in WeeklyView
+    queryKey: scheduleQueryKey,
     onDateChange: (date: Date) => {
       if (activeView === "weekly") {
         setCurrentWeekStart(date);
@@ -765,6 +802,7 @@ const safeRemovePTOMutation = removePTOMutation || {
     mutations: {
       removeOfficerMutation: safeRemoveOfficerMutation,
       removePTOMutation: safeRemovePTOMutation,
+      updatePositionMutation, // Make sure this is included
     },
     navigateToDailySchedule,
     getLastName,
@@ -963,7 +1001,8 @@ const safeRemovePTOMutation = removePTOMutation || {
           onOpenChange={(open) => {
             setPtoDialogOpen(open);
             if (!open) {
-              queryClient.invalidateQueries({ queryKey });
+              // Invalidate cache when PTO dialog closes
+              invalidateScheduleQueries();
               setSelectedSchedule(null);
             }
           }}

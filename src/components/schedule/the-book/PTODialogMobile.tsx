@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,11 +18,9 @@ interface PTODialogMobileProps {
   isUpdating?: boolean;
   officerId?: string;
   shiftTypeId?: string;
-  // Add these to match desktop functionality
-  ptoType?: string;
-  isFullDay?: boolean;
-  startTime?: string;
-  endTime?: string;
+  // Add shift times for proper full day PTO
+  shiftStartTime?: string;
+  shiftEndTime?: string;
 }
 
 export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
@@ -34,15 +32,30 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
   isUpdating = false,
   officerId,
   shiftTypeId,
-  ptoType = "vacation",
-  isFullDay = true,
-  startTime = "08:00",
-  endTime = "17:00",
+  shiftStartTime = "08:00", // Default to 8 AM if not provided
+  shiftEndTime = "17:00",   // Default to 5 PM if not provided
 }) => {
-  const [selectedPtoType, setSelectedPtoType] = useState<string>(ptoType);
-  const [selectedIsFullDay, setSelectedIsFullDay] = useState<boolean>(isFullDay);
-  const [selectedStartTime, setSelectedStartTime] = useState<string>(startTime);
-  const [selectedEndTime, setSelectedEndTime] = useState<string>(endTime);
+  const [selectedPtoType, setSelectedPtoType] = useState<string>("vacation");
+  const [selectedIsFullDay, setSelectedIsFullDay] = useState<boolean>(true);
+  const [selectedStartTime, setSelectedStartTime] = useState<string>(shiftStartTime);
+  const [selectedEndTime, setSelectedEndTime] = useState<string>(shiftEndTime);
+
+  // Update times when shift times change
+  useEffect(() => {
+    if (selectedIsFullDay) {
+      setSelectedStartTime(shiftStartTime);
+      setSelectedEndTime(shiftEndTime);
+    }
+  }, [shiftStartTime, shiftEndTime, selectedIsFullDay]);
+
+  const handleFullDayToggle = (checked: boolean) => {
+    setSelectedIsFullDay(checked);
+    if (checked) {
+      // Reset to shift times for full day
+      setSelectedStartTime(shiftStartTime);
+      setSelectedEndTime(shiftEndTime);
+    }
+  };
 
   const handleSave = () => {
     const ptoData = {
@@ -51,20 +64,23 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
       shiftTypeId,
       ptoType: selectedPtoType,
       isFullShift: selectedIsFullDay,
-      startTime: selectedIsFullDay ? "00:00" : selectedStartTime,
-      endTime: selectedIsFullDay ? "23:59" : selectedEndTime,
-      // For mobile, we'll set these as needed
+      // For full day, use the shift times
+      startTime: selectedIsFullDay ? shiftStartTime : selectedStartTime,
+      endTime: selectedIsFullDay ? shiftEndTime : selectedEndTime,
       isOff: true,
       reason: selectedPtoType,
       custom_start_time: selectedIsFullDay ? null : selectedStartTime,
       custom_end_time: selectedIsFullDay ? null : selectedEndTime,
     };
+    
+    console.log('📱 Saving PTO data:', ptoData);
     onSave(ptoData);
   };
 
-  // Generate time options from 00:00 to 23:00
+  // Generate time options based on shift times
   const generateTimeOptions = () => {
     const times = [];
+    // Generate times from 00:00 to 23:30 in 30-min increments
     for (let hour = 0; hour < 24; hour++) {
       const hourStr = hour.toString().padStart(2, '0');
       times.push(`${hourStr}:00`);
@@ -77,6 +93,9 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
 
   const timeOptions = generateTimeOptions();
 
+  // Format shift time display
+  const formatShiftTimeDisplay = `${shiftStartTime} - ${shiftEndTime}`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -84,6 +103,9 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
           <DialogTitle>Assign PTO</DialogTitle>
           <p className="text-sm text-muted-foreground">
             For {officerName} on {format(new Date(date), "MMM d, yyyy")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Shift: {formatShiftTimeDisplay}
           </p>
         </DialogHeader>
         
@@ -106,16 +128,21 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="full-day">Full Day</Label>
+              <div className="space-y-0.5">
+                <Label htmlFor="full-day">Full Day</Label>
+                <p className="text-xs text-muted-foreground">
+                  {selectedIsFullDay 
+                    ? `Full shift (${shiftStartTime} - ${shiftEndTime})`
+                    : "Partial day (select times below)"
+                  }
+                </p>
+              </div>
               <Switch
                 id="full-day"
                 checked={selectedIsFullDay}
-                onCheckedChange={setSelectedIsFullDay}
+                onCheckedChange={handleFullDayToggle}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {selectedIsFullDay ? "Officer will be off for the entire shift" : "Officer will be off for part of the day"}
-            </p>
           </div>
 
           {!selectedIsFullDay && (
@@ -176,4 +203,4 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
+};]

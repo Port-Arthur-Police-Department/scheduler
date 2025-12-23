@@ -14,6 +14,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOf
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useUser } from "@/contexts/UserContext";
 import { auditLogger } from "@/lib/auditLogger";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Import mobile view components
 import { WeeklyViewMobile } from "./WeeklyViewMobile";

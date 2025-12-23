@@ -10,256 +10,248 @@ import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { UserProvider } from "@/contexts/UserContext";
 import { QueryClientProvider } from "@/providers/QueryClientProvider";
 import { OneSignalDebug } from "@/components/OneSignalDebug";
-import { useEffect, useRef } from "react";
-import { registerOneSignalWorker } from "@/utils/registerOneSignalWorker";
+import { useEffect, useState } from "react";
 
-// Debug function to check OneSignal status
-const checkOneSignalStatus = () => {
-  console.log("🔍 [App] Checking OneSignal status...");
-  
-  // Check if we're on the correct URL for GitHub Pages
-  const isGithubPages = window.location.hostname.includes('github.io');
-  const hasSchedulerPath = window.location.pathname.includes('/scheduler');
-  
-  console.log("📍 URL Info:", {
-    hostname: window.location.hostname,
-    pathname: window.location.pathname,
-    href: window.location.href,
-    isGithubPages,
-    hasSchedulerPath
-  });
-  
-  // Check if OneSignal scripts are loaded
-  if (typeof window.OneSignalDeferred === 'undefined') {
-    console.error("❌ [App] OneSignalDeferred not defined - script may not have loaded");
-    
-    // Try to dynamically load OneSignal if not present
-    if (!document.querySelector('script[src*="onesignal"]')) {
-      console.log("🔄 [App] Attempting to load OneSignal script dynamically...");
-      const script = document.createElement('script');
-      script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-      script.defer = true;
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  } else {
-    console.log("✅ [App] OneSignal scripts loaded");
+// Declare OneSignal types
+declare global {
+  interface Window {
+    OneSignal: any;
   }
-  
-  // Check service worker support
-  if ('serviceWorker' in navigator) {
-    console.log("✅ [App] Service Workers supported");
-    
-    // List registered service workers
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      console.log(`📋 [App] ${registrations.length} service worker(s) registered:`);
-      registrations.forEach((reg, index) => {
-        console.log(`  ${index + 1}. ${reg.scope}`);
-      });
-      
-      // Check for OneSignal worker
-      const onesignalWorker = registrations.find(reg => 
-        reg.scope.includes('OneSignal') || 
-        reg.active?.scriptURL?.includes('OneSignal') ||
-        reg.scope.includes('scheduler')
-      );
-      
-      if (onesignalWorker) {
-        console.log("✅ [App] Found service worker with scheduler scope");
-      }
-    });
-  } else {
-    console.error("❌ [App] Service Workers NOT supported by browser");
-  }
-  
-  // Check environment variables
-  console.log("⚙️ [App] Environment check:", {
-    hasAppId: !!import.meta.env.VITE_ONESIGNAL_APP_ID,
-    appIdPreview: import.meta.env.VITE_ONESIGNAL_APP_ID?.substring(0, 10) + '...',
-    isProduction: import.meta.env.PROD,
-    isDevelopment: import.meta.env.DEV
-  });
-};
-
-// Function to detect 404 errors for OneSignal resources
-const hasOneSignal404Errors = (): boolean => {
-  try {
-    // Check performance entries for 404 errors
-    const resources = performance.getEntriesByType('resource');
-    let has404 = false;
-    
-    resources.forEach(entry => {
-      const resource = entry as PerformanceResourceTiming;
-      const isOneSignalResource = resource.name.includes('OneSignal');
-      
-      // Check if it's a OneSignal script and had an error
-      // Resource entries with 404 will have transferSize of 0
-      if (isOneSignalResource) {
-        console.log(`📊 [App] Resource: ${resource.name}`, {
-          transferSize: resource.transferSize,
-          initiatorType: resource.initiatorType,
-          duration: resource.duration
-        });
-        
-        // A transferSize of 0 often indicates a 404 error
-        if (resource.transferSize === 0 || resource.duration < 10) {
-          console.error(`❌ [App] Possible 404 for: ${resource.name}`);
-          has404 = true;
-        }
-      }
-    });
-    
-    return has404;
-  } catch (error) {
-    console.error("❌ [App] Error checking for 404s:", error);
-    return false;
-  }
-};
+}
 
 const App = () => {
   const isMobile = useIsMobile();
-  const manualRegistrationAttempted = useRef(false);
+  const [oneSignalInitialized, setOneSignalInitialized] = useState(false);
 
-  // Manual OneSignal registration logic
+  // Main OneSignal initialization
   useEffect(() => {
-    const manualRegistrationTimeout = setTimeout(() => {
-      // Wait for page to load, then try manual registration
-      const checkOneSignalErrors = () => {
-        const has404Errors = hasOneSignal404Errors();
-        
-        if (has404Errors && !manualRegistrationAttempted.current) {
-          console.log('🔧 [App] Detected OneSignal 404 errors, attempting manual registration...');
-          manualRegistrationAttempted.current = true;
-          
-          // Call the manual registration function
-          registerOneSignalWorker();
-          
-          // Also try to re-check OneSignal status after manual registration
-          setTimeout(() => {
-            console.log("🔄 [App] Re-checking OneSignal after manual registration...");
-            
-            // Check if OneSignal is now available
-            if (window.OneSignal) {
-              console.log("✅ [App] Manual registration successful - OneSignal is now available");
-              
-              // Try to initialize OneSignal with correct paths
-              if (window.location.pathname.includes('/scheduler')) {
-                console.log("⚙️ [App] Configuring OneSignal for /scheduler/ subdirectory");
-                
-                window.OneSignal.init({
-                  appId: import.meta.env.VITE_ONESIGNAL_APP_ID || "3417d840-c226-40ba-92d6-a7590c31eef3",
-                  safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-                  serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
-                  serviceWorkerParam: { scope: '/scheduler/' },
-                  allowLocalhostAsSecureOrigin: true,
-                });
-              }
-            }
-          }, 2000);
-        } else if (!has404Errors && !manualRegistrationAttempted.current) {
-          console.log("✅ [App] No OneSignal 404 errors detected");
-        }
-      };
+    const initializeOneSignal = async () => {
+      console.log("🔧 [App] Starting OneSignal initialization...");
       
-      // Run check after 3 seconds to allow scripts to load
-      setTimeout(checkOneSignalErrors, 3000);
-    }, 1000); // Initial delay before starting checks
-    
-    return () => clearTimeout(manualRegistrationTimeout);
+      // Wait for OneSignal SDK to load
+      if (!window.OneSignal || typeof window.OneSignal.init !== 'function') {
+        console.log("⏳ [App] OneSignal not loaded yet, waiting...");
+        
+        // Check if OneSignal script is loaded
+        const oneSignalScript = document.querySelector('script[src*="onesignal"]');
+        if (!oneSignalScript) {
+          console.log("📦 [App] Loading OneSignal SDK...");
+          const script = document.createElement('script');
+          script.src = 'https://cdn.onesignal.com/sdks/OneSignalSDK.js';
+          script.async = true;
+          script.onload = () => {
+            console.log("✅ [App] OneSignal SDK loaded");
+            setTimeout(initializeOneSignal, 1000);
+          };
+          document.head.appendChild(script);
+          return;
+        }
+        
+        // Try again in 2 seconds
+        setTimeout(initializeOneSignal, 2000);
+        return;
+      }
+
+      try {
+        console.log("⚙️ [App] Initializing OneSignal for GitHub Pages...");
+        
+        // IMPORTANT: Pre-create service workers before OneSignal init
+        if ('serviceWorker' in navigator) {
+          console.log("🛠️ [App] Pre-registering service workers...");
+          
+          // Try to register our service workers first
+          try {
+            // Register the main service worker
+            await navigator.serviceWorker.register('/scheduler/service-worker.js', {
+              scope: '/scheduler/'
+            });
+            console.log("✅ [App] Main service worker registered");
+          } catch (swError) {
+            console.warn("⚠️ [App] Could not pre-register service worker:", swError);
+          }
+        }
+
+        // Initialize OneSignal with GitHub Pages configuration
+        window.OneSignal.init({
+          appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+          safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+          
+          // CRITICAL: GitHub Pages paths
+          serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
+          serviceWorkerParam: { scope: '/scheduler/' },
+          
+          allowLocalhostAsSecureOrigin: true,
+          autoResubscribe: true,
+          notifyButton: {
+            enable: false
+          },
+          
+          promptOptions: {
+            slidedown: {
+              enabled: true,
+              autoPrompt: true,
+              timeDelay: 3,
+              pageViews: 1,
+              prompts: [
+                {
+                  type: "push",
+                  text: {
+                    actionMessage: "Get notified about shift changes, emergencies, and department announcements",
+                    acceptButton: "Allow",
+                    cancelButton: "Not now"
+                  }
+                }
+              ]
+            }
+          }
+        });
+
+        console.log("✅ [App] OneSignal initialized successfully");
+        setOneSignalInitialized(true);
+
+        // Set up event listeners
+        window.OneSignal.on('subscriptionChange', (isSubscribed: boolean) => {
+          console.log(`🔔 [App] Subscription changed: ${isSubscribed ? 'Subscribed' : 'Unsubscribed'}`);
+        });
+
+        window.OneSignal.on('notificationDisplay', (event: any) => {
+          console.log('📨 [App] Notification displayed:', event);
+        });
+
+        // Set tags for police department
+        window.OneSignal.getUserId().then((userId: string) => {
+          if (userId) {
+            console.log(`👤 [App] OneSignal User ID: ${userId}`);
+            
+            // Set department tags
+            window.OneSignal.sendTags({
+              department: 'port-arthur-pd',
+              role: 'officer',
+              app: 'scheduler',
+              environment: import.meta.env.PROD ? 'production' : 'development'
+            }).then(() => {
+              console.log("🏷️ [App] Tags set successfully");
+            });
+          }
+        });
+
+        // Check permission
+        window.OneSignal.getNotificationPermission().then((permission: string) => {
+          console.log(`🔐 [App] Notification permission: ${permission}`);
+        });
+
+      } catch (error) {
+        console.error('❌ [App] Failed to initialize OneSignal:', error);
+        
+        // Fallback: Try alternative initialization
+        try {
+          console.log("🔄 [App] Trying fallback initialization...");
+          
+          // Force set service worker paths
+          if (window.OneSignal.SERVICE_WORKER_PARAM) {
+            window.OneSignal.SERVICE_WORKER_PARAM.scope = '/scheduler/';
+          }
+          
+          if (window.OneSignal.SERVICE_WORKER_PATH) {
+            window.OneSignal.SERVICE_WORKER_PATH = '/scheduler/OneSignalSDKWorker.js';
+          }
+          
+          setOneSignalInitialized(true);
+        } catch (fallbackError) {
+          console.error('❌ [App] Fallback also failed:', fallbackError);
+        }
+      }
+    };
+
+    // Start initialization
+    initializeOneSignal();
+
+    // Cleanup
+    return () => {
+      // Optional: Clean up OneSignal listeners
+      if (window.OneSignal && window.OneSignal.removeAllListeners) {
+        window.OneSignal.removeAllListeners();
+      }
+    };
   }, []);
 
-  // Original OneSignal initialization logic
+  // Service Worker Fallback Registration
   useEffect(() => {
-    // Run OneSignal checks after component mounts
-    const timer = setTimeout(() => {
-      checkOneSignalStatus();
+    const registerFallbackServiceWorkers = async () => {
+      if (!('serviceWorker' in navigator)) return;
       
-      // Set up OneSignal ready listener
-      const handleOneSignalReady = () => {
-        console.log("🎉 [App] OneSignal ready event received");
-        
-        // Try to access OneSignal
-        if (window.OneSignal) {
-          console.log("✅ [App] window.OneSignal is available");
-          
-          // Check notification permission
-          window.OneSignal.getNotificationPermission?.().then(permission => {
-            console.log(`🔔 [App] Notification permission: ${permission}`);
-            
-            if (permission === 'default') {
-              console.log("ℹ️ [App] User hasn't made a permission choice yet");
-              
-              // Auto-prompt after a delay
-              setTimeout(() => {
-                if (window.OneSignal && permission === 'default') {
-                  console.log("🔄 [App] Showing notification prompt...");
-                  window.OneSignal.showSlidedownPrompt?.();
-                }
-              }, 3000);
-            } else if (permission === 'granted') {
-              console.log("✅ [App] Notifications are enabled!");
-              
-              // Get user ID
-              window.OneSignal.getUserId?.().then((userId: string) => {
-                console.log(`👤 [App] OneSignal User ID: ${userId || 'Not subscribed yet'}`);
-              });
-            } else if (permission === 'denied') {
-              console.log("❌ [App] Notifications are blocked");
-            }
-          });
-          
-          // Set tags for police department context
-          window.OneSignal.sendTags?.({
-            department: 'port-arthur-pd',
-            app: 'scheduler',
-            environment: import.meta.env.PROD ? 'production' : 'development',
-            platform: isMobile ? 'mobile' : 'desktop'
-          }).then(() => {
-            console.log("🏷️ [App] Tags set successfully");
-          }).catch((error: Error) => {
-            console.error("❌ [App] Error setting tags:", error);
-          });
+      console.log("🛠️ [App] Registering fallback service workers...");
+      
+      // Array of service workers to register
+      const workers = [
+        {
+          path: '/scheduler/OneSignalSDKWorker.js',
+          scope: '/scheduler/'
+        },
+        {
+          path: '/scheduler/service-worker.js',
+          scope: '/scheduler/'
+        },
+        {
+          path: '/OneSignalSDKWorker.js',
+          scope: '/'
         }
-      };
+      ];
       
-      window.addEventListener('onesignal-ready', handleOneSignalReady);
-      
-      // Also check if OneSignal is already ready
-      if (window.OneSignal) {
-        handleOneSignalReady();
+      for (const worker of workers) {
+        try {
+          const registration = await navigator.serviceWorker.register(worker.path, {
+            scope: worker.scope,
+            updateViaCache: 'none'
+          });
+          
+          console.log(`✅ [App] Registered ${worker.path} with scope ${worker.scope}`);
+          console.log('   Active:', !!registration.active);
+          console.log('   Installing:', !!registration.installing);
+          console.log('   Waiting:', !!registration.waiting);
+          
+        } catch (error) {
+          console.log(`⚠️ [App] Failed to register ${worker.path}:`, error.message);
+        }
       }
       
-      // Fallback: Check periodically if OneSignal becomes available
-      const checkInterval = setInterval(() => {
-        if (window.OneSignal && !window.OneSignal.getNotificationPermission) {
-          // If OneSignal is partially loaded, try to trigger initialization
-          console.log("🔄 [App] OneSignal detected but not fully initialized");
-          handleOneSignalReady();
-        }
-      }, 5000);
-      
-      return () => {
-        window.removeEventListener('onesignal-ready', handleOneSignalReady);
-        clearInterval(checkInterval);
-      };
-    }, 2000); // Wait 2 seconds for scripts to load
+      // List all registered workers
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      console.log(`📋 [App] Total registered service workers: ${registrations.length}`);
+      registrations.forEach((reg, i) => {
+        console.log(`   ${i + 1}. ${reg.scope}`);
+      });
+    };
+    
+    // Register fallback workers after a delay
+    const timer = setTimeout(registerFallbackServiceWorkers, 3000);
     
     return () => clearTimeout(timer);
-  }, [isMobile]);
-
-  // Check for push notification support
-  useEffect(() => {
-    if ('Notification' in window) {
-      console.log("✅ [App] Push notifications supported");
-      
-      // Request permission if not already determined
-      if (Notification.permission === 'default') {
-        console.log("ℹ️ [App] Notification permission not yet requested");
-      }
-    } else {
-      console.error("❌ [App] Push notifications NOT supported");
-    }
   }, []);
+
+  // Test function for notifications
+  const testNotification = () => {
+    if (window.OneSignal) {
+      // This is a client-side test - actual notifications should come from your backend
+      console.log("📨 [App] Test notification triggered");
+      
+      // You would typically send a notification via your backend using OneSignal REST API
+      // For now, just show a local alert
+      alert("Test notification sent! Actual push notifications would come from your server.");
+      
+      // Example of how you'd trigger a real notification (server-side):
+      // fetch('/api/send-notification', {
+      //   method: 'POST',
+      //   body: JSON.stringify({
+      //     title: 'Test Alert',
+      //     message: 'This is a test notification from Port Arthur PD',
+      //     url: window.location.href
+      //   })
+      // });
+    } else {
+      alert("OneSignal not initialized yet. Please wait and try again.");
+    }
+  };
 
   return (
     <QueryClientProvider>
@@ -268,8 +260,42 @@ const App = () => {
         <Sonner />
         <HashRouter>
           <UserProvider>
-            {/* OneSignal Debug Component - Only show in development */}
+            {/* OneSignal Debug Component */}
             {import.meta.env.DEV && <OneSignalDebug />}
+            
+            {/* OneSignal Status Indicator */}
+            <div style={{
+              position: 'fixed',
+              top: 10,
+              right: 10,
+              background: oneSignalInitialized ? '#10b981' : '#ef4444',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              zIndex: 9999
+            }}>
+              {oneSignalInitialized ? '🔔 Notifications Ready' : '🔕 Notifications Loading...'}
+            </div>
+            
+            {/* Test Notification Button */}
+            <button
+              onClick={testNotification}
+              style={{
+                position: 'fixed',
+                bottom: 20,
+                right: 20,
+                background: '#1e40af',
+                color: 'white',
+                border: 'none',
+                padding: '10px 15px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                zIndex: 9999
+              }}
+            >
+              Test Notification
+            </button>
             
             <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
               <Routes>

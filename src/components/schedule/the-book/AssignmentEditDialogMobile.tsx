@@ -49,11 +49,11 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
       const isCustomPosition = currentPosition && !PREDEFINED_POSITIONS.includes(currentPosition);
       
       if (isCustomPosition) {
-        setPosition("Other (Custom)");
+        setPosition("other-custom");
         setCustomPosition(currentPosition);
         setShowCustomInput(true);
       } else {
-        setPosition(currentPosition);
+        setPosition(currentPosition || "");
         setCustomPosition("");
         setShowCustomInput(false);
       }
@@ -65,8 +65,8 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
 
   const handlePositionChange = (value: string) => {
     setPosition(value);
-    setShowCustomInput(value === "Other (Custom)");
-    if (value !== "Other (Custom)") {
+    setShowCustomInput(value === "other-custom");
+    if (value !== "other-custom") {
       setCustomPosition("");
     }
   };
@@ -78,12 +78,13 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
     }
 
     // Determine the final position name
-    const finalPosition = position === "Other (Custom)" && customPosition.trim() 
+    const finalPosition = position === "other-custom" && customPosition.trim() 
       ? customPosition.trim() 
       : position;
 
     if (!finalPosition) {
       console.error('Position is required');
+      toast.error("Position is required");
       return;
     }
 
@@ -130,13 +131,12 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
                 <SelectValue placeholder="Select position" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">-- Select Position --</SelectItem>
                 {PREDEFINED_POSITIONS.map((pos) => (
                   <SelectItem key={pos} value={pos}>
                     {pos}
                   </SelectItem>
                 ))}
-                <SelectItem value="Other (Custom)">Other (Custom)</SelectItem>
+                <SelectItem value="other-custom">Other (Custom)</SelectItem>
               </SelectContent>
             </Select>
             
@@ -191,14 +191,14 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
             <Button 
               onClick={handleSave} 
               className="flex-1"
-              disabled={isUpdating || !position || (position === "Other (Custom)" && !customPosition.trim())}
+              disabled={isUpdating || !position || (position === "other-custom" && !customPosition.trim())}
             >
               {isUpdating ? "Saving..." : "Save Assignment"}
             </Button>
           </div>
 
           {/* Validation Message */}
-          {(position === "Other (Custom)" && !customPosition.trim()) && (
+          {(position === "other-custom" && !customPosition.trim()) && (
             <p className="text-xs text-destructive mt-2">
               Please enter a custom position name
             </p>

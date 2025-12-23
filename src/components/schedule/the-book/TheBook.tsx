@@ -553,21 +553,36 @@ const TheBook = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-  // Helper function to invalidate schedule queries
-  const invalidateScheduleQueries = () => {
+// Helper function to invalidate schedule queries - UPDATE THIS FUNCTION
+const invalidateScheduleQueries = () => {
+  try {
+    console.log('🔄 Invalidating schedule queries...');
+    
     // Invalidate the main schedule query
-    queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+    queryClient.invalidateQueries({ 
+      queryKey: scheduleQueryKey,
+      refetchType: 'all'
+    });
     
     // Also invalidate the mutation hook's query key
     if (mutationQueryKey) {
-      queryClient.invalidateQueries({ queryKey: mutationQueryKey });
+      queryClient.invalidateQueries({ 
+        queryKey: mutationQueryKey,
+        refetchType: 'all'
+      });
     }
     
     // Invalidate officer profiles query
-    queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    queryClient.invalidateQueries({ 
+      queryKey: ['officer-profiles-weekly'],
+      refetchType: 'all'
+    });
     
     console.log('✅ Cache invalidated for schedule queries');
-  };
+  } catch (error) {
+    console.error('❌ Error invalidating schedule queries:', error);
+  }
+};
 
   // Event handlers
   const handleEditAssignment = (officer: any, dateStr: string) => {
@@ -601,81 +616,122 @@ const TheBook = ({
     setPtoDialogOpen(true);
   };
 
-  const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
-    console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
-    
-    if (!schedule?.ptoData?.id) {
-      console.error('❌ Missing PTO data:', { 
-        hasSchedule: !!schedule, 
-        hasPTOData: !!schedule?.ptoData,
-        ptoDataId: schedule?.ptoData?.id 
-      });
-      toast.error("Cannot remove PTO: Missing PTO data");
-      return;
-    }
-
-    if (!officerId) {
-      console.error('❌ Missing officer ID');
-      toast.error("Cannot remove PTO: Missing officer ID");
-      return;
-    }
-
-    let officerName = "Unknown Officer";
-    try {
-      const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
-      if (daySchedule) {
-        const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
-        officerName = officerData?.officerName || officerName;
-      }
-    } catch (error) {
-      console.error("Error getting officer name:", error);
-    }
-
-    const ptoMutationData = {
-      id: schedule.ptoData.id,
-      officerId: officerId,
-      date: date,
-      shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
-      ptoType: schedule.ptoData.ptoType || "PTO",
-      startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
-      endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
-    };
-
-    console.log('📋 Calling removePTOMutation with:', ptoMutationData);
-
-    safeRemovePTOMutation.mutate(ptoMutationData, {
-      onSuccess: () => {
-        // Invalidate cache after successful PTO removal
-        invalidateScheduleQueries();
-        
-        try {
-          auditLogger.logPTORemoval(
-            officerId,
-            ptoMutationData.ptoType,
-            date,
-            userEmail,
-            `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
-          );
-          console.log('📋 PTO removal logged to audit trail');
-        } catch (logError) {
-          console.error('Failed to log PTO removal audit:', logError);
-          console.log('PTO removed (audit logging failed):', {
-            officerId,
-            officerName,
-            date,
-            ptoType: ptoMutationData.ptoType,
-            user: userEmail
-          });
-        }
-        
-        toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
-      },
-      onError: (error) => {
-        console.error('❌ Error removing PTO:', error);
-        toast.error(`Failed to remove PTO: ${error.message}`);
-      }
+const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
+  console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
+  
+  if (!schedule?.ptoData?.id) {
+    console.error('❌ Missing PTO data:', { 
+      hasSchedule: !!schedule, 
+      hasPTOData: !!schedule?.ptoData,
+      ptoDataId: schedule?.ptoData?.id 
     });
+    toast.error("Cannot remove PTO: Missing PTO data");
+    return;
+  }
+
+  if (!officerId) {
+    console.error('❌ Missing officer ID');
+    toast.error("Cannot remove PTO: Missing officer ID");
+    return;
+  }
+
+  let officerName = "Unknown Officer";
+  try {
+    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+    if (daySchedule) {
+      const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
+      officerName = officerData?.officerName || officerName;
+    }
+  } catch (error) {
+    console.error("Error getting officer name:", error);
+  }
+
+  const ptoMutationData = {
+    id: schedule.ptoData.id,
+    officerId: officerId,
+    date: date,
+    shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
+    ptoType: schedule.ptoData.ptoType || "PTO",
+    startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
+    endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
   };
+
+  console.log('📋 Calling removePTOMutation with:', ptoMutationData);
+
+  // FIRST: Directly update the cache to remove PTO styling immediately
+  queryClient.setQueryData(scheduleQueryKey, (oldData: any) => {
+    if (!oldData) return oldData;
+    
+    const newData = JSON.parse(JSON.stringify(oldData));
+    
+    // Find and update the specific day and officer
+    if (newData.dailySchedules) {
+      newData.dailySchedules = newData.dailySchedules.map((day: any) => {
+        if (day.date === date) {
+          return {
+            ...day,
+            officers: day.officers.map((officer: any) => {
+              if (officer.officerId === officerId) {
+                // Remove PTO data from this officer
+                const updatedOfficer = {
+                  ...officer,
+                  shiftInfo: {
+                    ...officer.shiftInfo,
+                    hasPTO: false,
+                    ptoData: undefined,
+                    isOff: false // CRITICAL: Make sure isOff is false
+                  }
+                };
+                
+                console.log('🔄 Updated officer in cache:', updatedOfficer);
+                return updatedOfficer;
+              }
+              return officer;
+            })
+          };
+        }
+        return day;
+      });
+    }
+    
+    return newData;
+  });
+
+  // SECOND: Call the mutation
+  safeRemovePTOMutation.mutate(ptoMutationData, {
+    onSuccess: () => {
+      // THIRD: Force cache invalidation to ensure fresh data
+      invalidateScheduleQueries();
+      
+      // FOURTH: Force immediate refetch
+      queryClient.refetchQueries({ 
+        queryKey: scheduleQueryKey,
+        exact: true 
+      }).then(() => {
+        console.log('✅ Schedule data refetched after PTO removal');
+      });
+      
+      try {
+        auditLogger.logPTORemoval(
+          officerId,
+          ptoMutationData.ptoType,
+          date,
+          userEmail,
+          `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
+        );
+        console.log('📋 PTO removal logged to audit trail');
+      } catch (logError) {
+        console.error('Failed to log PTO removal audit:', logError);
+      }
+      
+      toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
+    },
+    onError: (error) => {
+      console.error('❌ Error removing PTO:', error);
+      toast.error(`Failed to remove PTO: ${error.message}`);
+    }
+  });
+};
 
   const handleSaveAssignment = () => {
     if (!editingAssignment) return;
@@ -994,30 +1050,37 @@ const TheBook = ({
         userEmail={userEmail}
       />
 
-      {/* PTO Assignment Dialog */}
-      {selectedSchedule && (
-        <PTOAssignmentDialog
-          open={ptoDialogOpen}
-          onOpenChange={(open) => {
-            setPtoDialogOpen(open);
-            if (!open) {
-              // Invalidate cache when PTO dialog closes
-              invalidateScheduleQueries();
-              setSelectedSchedule(null);
-            }
-          }}
-          officer={{
-            officerId: selectedSchedule.officerId,
-            name: selectedSchedule.officerName,
-            scheduleId: selectedSchedule.scheduleId,
-            type: selectedSchedule.type,
-            ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
-          }}
-          shift={selectedSchedule.shift}
-          date={selectedSchedule.date}
-          ptoBalancesEnabled={websiteSettings?.show_pto_balances}
-        />
-      )}
+{/* PTO Assignment Dialog */}
+{selectedSchedule && (
+  <PTOAssignmentDialog
+    open={ptoDialogOpen}
+    onOpenChange={(open) => {
+      setPtoDialogOpen(open);
+      if (!open) {
+        // Force cache invalidation when PTO dialog closes
+        invalidateScheduleQueries();
+        
+        // Force immediate refetch
+        queryClient.refetchQueries({ 
+          queryKey: scheduleQueryKey,
+          exact: true 
+        });
+        
+        setSelectedSchedule(null);
+      }
+    }}
+    officer={{
+      officerId: selectedSchedule.officerId,
+      name: selectedSchedule.officerName,
+      scheduleId: selectedSchedule.scheduleId,
+      type: selectedSchedule.type,
+      ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
+    }}
+    shift={selectedSchedule.shift}
+    date={selectedSchedule.date}
+    ptoBalancesEnabled={websiteSettings?.show_pto_balances}
+  />
+)}
     </>
   );
 };

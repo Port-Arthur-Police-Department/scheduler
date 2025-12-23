@@ -19,25 +19,49 @@ interface ScheduleCellMobileProps {
 }
 
 // Helper function to get PTO abbreviation and icon
-const getPTOInfo = (ptoType: string | undefined): { abbreviation: string; icon: React.ReactNode } => {
-  if (!ptoType) return { abbreviation: 'PTO', icon: <Umbrella className="h-3 w-3" /> };
+const getPTOInfo = (ptoType: string | undefined): { abbreviation: string; icon: React.ReactNode; colorClass: string } => {
+  if (!ptoType) return { 
+    abbreviation: 'PTO', 
+    icon: <Umbrella className="h-3 w-3" />,
+    colorClass: 'text-green-700' 
+  };
   
   const ptoTypeLower = ptoType.toLowerCase();
   
   if (ptoTypeLower.includes('vacation')) {
-    return { abbreviation: 'Vac', icon: <Plane className="h-3 w-3" /> };
+    return { 
+      abbreviation: 'Vac', 
+      icon: <Plane className="h-3 w-3" />,
+      colorClass: 'text-blue-700' 
+    };
   }
   if (ptoTypeLower.includes('holiday')) {
-    return { abbreviation: 'Hol', icon: <CalendarOff className="h-3 w-3" /> };
+    return { 
+      abbreviation: 'Hol', 
+      icon: <CalendarOff className="h-3 w-3" />,
+      colorClass: 'text-orange-700' 
+    };
   }
   if (ptoTypeLower.includes('sick')) {
-    return { abbreviation: 'Sick', icon: <Briefcase className="h-3 w-3" /> };
+    return { 
+      abbreviation: 'Sick', 
+      icon: <Briefcase className="h-3 w-3" />,
+      colorClass: 'text-red-700' 
+    };
   }
   if (ptoTypeLower.includes('comp')) {
-    return { abbreviation: 'Comp', icon: <Star className="h-3 w-3" /> };
+    return { 
+      abbreviation: 'Comp', 
+      icon: <Star className="h-3 w-3" />,
+      colorClass: 'text-purple-700' 
+    };
   }
   
-  return { abbreviation: ptoType.substring(0, 3), icon: <Umbrella className="h-3 w-3" /> };
+  return { 
+    abbreviation: ptoType.substring(0, 3), 
+    icon: <Umbrella className="h-3 w-3" />,
+    colorClass: 'text-green-700' 
+  };
 };
 
 export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
@@ -54,14 +78,16 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   const hasOfficerData = officer && officer.shiftInfo;
   const shiftInfo = officer?.shiftInfo;
   
-  // PTO Detection - More robust
+  // PTO Detection - Look for ptoData with ptoType
   const hasPTO = shiftInfo?.hasPTO === true || 
-                 (shiftInfo?.ptoData && shiftInfo.ptoData.ptoType) || 
-                 shiftInfo?.isOff === true;
+                 (shiftInfo?.ptoData && shiftInfo.ptoData.ptoType);
   
-  const ptoType = shiftInfo?.ptoData?.ptoType || (shiftInfo?.isOff ? 'Off' : undefined);
+  const ptoType = shiftInfo?.ptoData?.ptoType;
   const position = shiftInfo?.position;
   const isOff = shiftInfo?.isOff === true;
+  
+  // IMPORTANT: If it's marked as "Off" but has a PTO type, treat it as PTO, not "Off"
+  const shouldShowAsPTO = hasPTO && ptoType;
   
   // Use the passed function or default detection
   const defaultIsSpecial = (position: string) => {
@@ -75,27 +101,29 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   // Determine cell styling based on schedule type
   const cellClass = cn(
     "relative group h-8 flex items-center justify-center",
-    // Different colors for different PTO types
-    hasPTO && !isSpecial && "border-l-2",
+    // PTO styling - apply based on PTO type
+    shouldShowAsPTO && "border-l-2",
     // Vacation: Light blue
-    hasPTO && ptoType?.toLowerCase().includes('vacation') && "bg-blue-50 border-blue-400",
+    shouldShowAsPTO && ptoType?.toLowerCase().includes('vacation') && "bg-blue-50 border-blue-400",
     // Holiday: Light orange
-    hasPTO && ptoType?.toLowerCase().includes('holiday') && "bg-orange-50 border-orange-400",
+    shouldShowAsPTO && ptoType?.toLowerCase().includes('holiday') && "bg-orange-50 border-orange-400",
     // Sick: Light red
-    hasPTO && ptoType?.toLowerCase().includes('sick') && "bg-red-50 border-red-400",
+    shouldShowAsPTO && ptoType?.toLowerCase().includes('sick') && "bg-red-50 border-red-400",
     // Comp: Light purple
-    hasPTO && ptoType?.toLowerCase().includes('comp') && "bg-purple-50 border-purple-400",
-    // Other PTO: Light green
-    hasPTO && !ptoType?.toLowerCase().includes('vacation') && 
+    shouldShowAsPTO && ptoType?.toLowerCase().includes('comp') && "bg-purple-50 border-purple-400",
+    // Other PTO: Light green (fallback)
+    shouldShowAsPTO && !ptoType?.toLowerCase().includes('vacation') && 
                !ptoType?.toLowerCase().includes('holiday') && 
                !ptoType?.toLowerCase().includes('sick') && 
                !ptoType?.toLowerCase().includes('comp') && "bg-green-50 border-green-400",
     // Purple for special assignments (but not if it's PTO)
-    isSpecial && !hasPTO && "bg-purple-50 border-l-2 border-purple-400",
+    isSpecial && !shouldShowAsPTO && "bg-purple-50 border-l-2 border-purple-400",
     // Green for ALL recurring days (scheduled days) - but not if it's PTO or Special
-    isRegularRecurringDay && !hasPTO && !isSpecial && "bg-green-50 border-l-2 border-green-400",
+    isRegularRecurringDay && !shouldShowAsPTO && !isSpecial && "bg-green-50 border-l-2 border-green-400",
     // Gray for non-scheduled days (not recurring, no assignment, no PTO)
-    !isRegularRecurringDay && !hasOfficerData && !hasPTO && "bg-gray-100 border-l-2 border-gray-300"
+    !isRegularRecurringDay && !hasOfficerData && !shouldShowAsPTO && "bg-gray-100 border-l-2 border-gray-300",
+    // If marked as "Off" but no PTO type - should be rare, show as gray
+    isOff && !shouldShowAsPTO && "bg-gray-200 border-l-2 border-gray-400"
   );
 
   // Get cell content based on status
@@ -116,22 +144,16 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
       );
     }
 
-    // PTO Handling
-    if (hasPTO && hasOfficerData) {
+    // PTO Handling - Show PTO abbreviation
+    if (shouldShowAsPTO) {
       const ptoInfo = getPTOInfo(ptoType);
       return (
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1">
-            <span className="text-blue-600">
+            <span className={`${ptoInfo.colorClass.replace('text-', 'text-')}`}>
               {ptoInfo.icon}
             </span>
-            <span className={`text-xs font-medium ${
-              ptoType?.toLowerCase().includes('vacation') ? 'text-blue-700' :
-              ptoType?.toLowerCase().includes('holiday') ? 'text-orange-700' :
-              ptoType?.toLowerCase().includes('sick') ? 'text-red-700' :
-              ptoType?.toLowerCase().includes('comp') ? 'text-purple-700' :
-              'text-green-700'
-            }`}>
+            <span className={`text-xs font-medium ${ptoInfo.colorClass}`}>
               {ptoInfo.abbreviation}
             </span>
           </div>
@@ -179,6 +201,15 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
       );
     }
 
+    // If marked as "Off" but no PTO type (should be rare)
+    if (isOff && !shouldShowAsPTO) {
+      return (
+        <Badge variant="outline" className="text-xs text-gray-600 border-gray-400 bg-gray-200">
+          Off
+        </Badge>
+      );
+    }
+
     // Fallback: Should not happen in a properly configured system
     return (
       <span className="text-xs text-muted-foreground">-</span>
@@ -209,19 +240,19 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
-            {!hasPTO && (
+            {!shouldShowAsPTO && (
               <DropdownMenuItem onClick={handleAssignPTO}>
                 <Plane className="h-3 w-3 mr-2" />
                 Assign PTO
               </DropdownMenuItem>
             )}
-            {hasPTO && (
+            {shouldShowAsPTO && (
               <DropdownMenuItem onClick={handleRemovePTO}>
                 <Trash2 className="h-3 w-3 mr-2" />
                 Remove PTO
               </DropdownMenuItem>
             )}
-            {!hasPTO && (
+            {!shouldShowAsPTO && (
               <DropdownMenuItem onClick={handleEditAssignment}>
                 <Edit className="h-3 w-3 mr-2" />
                 Edit Assignment

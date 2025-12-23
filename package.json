@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "fix-deploy": "node scripts/fix-github-pages.js",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "copy-service-workers": "cp public/OneSignalSDKWorker.js dist/ && cp public/service-worker.js dist/ && cp public/OneSignalSDKUpdaterWorker.js dist/",

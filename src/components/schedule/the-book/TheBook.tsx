@@ -43,7 +43,8 @@ import { ForceListView } from "./ForceListView";
 import { VacationListView } from "./VacationListView";
 import { BeatPreferencesView } from "./BeatPreferencesView";
 import { ScheduleExportDialog } from "./ScheduleExportDialog";
-import { AssignmentEditDialog } from "./AssignmentEditDialog";
+import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
+//import { AssignmentEditDialog } from "./AssignmentEditDialog";
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";

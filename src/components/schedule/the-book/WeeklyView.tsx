@@ -1,6 +1,6 @@
 // Updated WeeklyView.tsx with internal profile fetching
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query'; // Add this
+import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { ScheduleCell } from "../ScheduleCell";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
-import { supabase } from "@/integrations/supabase/client"; // Add this
+import { supabase } from "@/integrations/supabase/client";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -89,6 +89,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
+  
+  // Get query client for cache invalidation
+  const queryClient = useQueryClient();
 
   // Fetch officer profiles if not provided as prop
   const { data: fetchedOfficerProfiles, isLoading: isLoadingProfiles } = useQuery({
@@ -138,6 +141,43 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       setSelectedWeekDate(currentWeekStart);
     }
   }, [weekPickerOpen, currentWeekStart]);
+
+  // Handler for PTO actions that invalidates the cache
+  const handleAssignPTO = async (schedule: any, date: string, officerId: string, officerName: string) => {
+    if (onEventHandlers.onAssignPTO) {
+      await onEventHandlers.onAssignPTO(schedule, date, officerId, officerName);
+      // Invalidate the schedule query to force refresh
+      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
+      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    }
+  };
+
+  const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
+    if (onEventHandlers.onRemovePTO) {
+      await onEventHandlers.onRemovePTO(schedule, date, officerId);
+      // Invalidate the schedule query to force refresh
+      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
+      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    }
+  };
+
+  const handleEditAssignment = async (officer: any, dateStr: string) => {
+    if (onEventHandlers.onEditAssignment) {
+      await onEventHandlers.onEditAssignment(officer, dateStr);
+      // Invalidate the schedule query to force refresh
+      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
+      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    }
+  };
+
+  const handleRemoveOfficer = async (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+    if (onEventHandlers.onRemoveOfficer) {
+      await onEventHandlers.onRemoveOfficer(scheduleId, type, officerData);
+      // Invalidate the schedule query to force refresh
+      queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
+      queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    }
+  };
 
   if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
@@ -512,10 +552,10 @@ schedules.dailySchedules?.forEach(day => {
                   officerId={officer.officerId}
                   officerName={officer.officerName}
                   isAdminOrSupervisor={isAdminOrSupervisor}
-                  onAssignPTO={onEventHandlers.onAssignPTO}
-                  onRemovePTO={onEventHandlers.onRemovePTO}
-                  onEditAssignment={onEventHandlers.onEditAssignment}
-                  onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                  onAssignPTO={handleAssignPTO}
+                  onRemovePTO={handleRemovePTO}
+                  onEditAssignment={handleEditAssignment}
+                  onRemoveOfficer={() => handleRemoveOfficer(
                     officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleId,
                     officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleType,
                     officer
@@ -577,10 +617,10 @@ schedules.dailySchedules?.forEach(day => {
                       officerId={officer.officerId}
                       officerName={officer.officerName}
                       isAdminOrSupervisor={isAdminOrSupervisor}
-                      onAssignPTO={onEventHandlers.onAssignPTO}
-                      onRemovePTO={onEventHandlers.onRemovePTO}
-                      onEditAssignment={onEventHandlers.onEditAssignment}
-                      onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                      onAssignPTO={handleAssignPTO}
+                      onRemovePTO={handleRemovePTO}
+                      onEditAssignment={handleEditAssignment}
+                      onRemoveOfficer={() => handleRemoveOfficer(
                         dayOfficer?.shiftInfo?.scheduleId,
                         dayOfficer?.shiftInfo?.scheduleType,
                         officer
@@ -662,10 +702,10 @@ schedules.dailySchedules?.forEach(day => {
                         officerId={officer.officerId}
                         officerName={officer.officerName}
                         isAdminOrSupervisor={isAdminOrSupervisor}
-                        onAssignPTO={onEventHandlers.onAssignPTO}
-                        onRemovePTO={onEventHandlers.onRemovePTO}
-                        onEditAssignment={onEventHandlers.onEditAssignment}
-                        onRemoveOfficer={() => onEventHandlers.onRemoveOfficer(
+                        onAssignPTO={handleAssignPTO}
+                        onRemovePTO={handleRemovePTO}
+                        onEditAssignment={handleEditAssignment}
+                        onRemoveOfficer={() => handleRemoveOfficer(
                           dayOfficer?.shiftInfo?.scheduleId,
                           dayOfficer?.shiftInfo?.scheduleType,
                           officer

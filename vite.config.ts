@@ -13,10 +13,6 @@ function htmlEnvPlugin() {
                             process.env.VITE_PUBLIC_ONESIGNAL_APP_ID || 
                             '3417d840-c226-40ba-92d6-a7590c31eef3';
       
-      const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-      const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-      const appUrl = process.env.VITE_APP_URL || 'http://localhost:5173';
-      
       console.log('🔧 HTML Transform - OneSignal App ID:', onesignalAppId.substring(0, 10) + '...');
       
       // Replace placeholders in HTML
@@ -27,11 +23,6 @@ function htmlEnvPlugin() {
         /%%ONESIGNAL_APP_ID%%/g,
         onesignalAppId
       );
-      
-      // Replace other placeholders if they exist
-      transformedHtml = transformedHtml.replace(/%%SUPABASE_URL%%/g, supabaseUrl);
-      transformedHtml = transformedHtml.replace(/%%SUPABASE_ANON_KEY%%/g, supabaseAnonKey);
-      transformedHtml = transformedHtml.replace(/%%APP_URL%%/g, appUrl);
       
       // Also replace the hardcoded App ID with the environment variable
       transformedHtml = transformedHtml.replace(
@@ -47,13 +38,13 @@ function htmlEnvPlugin() {
 export default defineConfig({
   plugins: [
     react(),
-    htmlEnvPlugin(), // Add this plugin BEFORE VitePWA
+    htmlEnvPlugin(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: [],          // let Vite decide → no "empty glob" warning
-        navigateFallback: '/scheduler/index.html', // ✅ ensures correct fallback
+        globPatterns: [],          
+        navigateFallback: '/scheduler/index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
@@ -66,7 +57,6 @@ export default defineConfig({
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 }
             }
           },
-          // Add OneSignal CDN caching
           {
             urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
             handler: 'CacheFirst',
@@ -74,7 +64,7 @@ export default defineConfig({
               cacheName: 'onesignal-cdn-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                maxAgeSeconds: 60 * 60 * 24 * 7
               }
             }
           }
@@ -119,19 +109,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    copyPublicDir: true,
-    // Remove or update rollupOptions
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom']
-          // REMOVE: onesignal: ['react-onesignal'] ← This is causing the error
-        }
-      }
-    }
+    copyPublicDir: true
   },
   publicDir: 'public',
-  // Define global constants
   define: {
     'import.meta.env.VITE_ONESIGNAL_APP_ID': JSON.stringify(process.env.VITE_ONESIGNAL_APP_ID),
     'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),

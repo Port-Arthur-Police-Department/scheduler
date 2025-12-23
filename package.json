@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "copy-service-workers": "cp public/OneSignalSDKWorker.js dist/ && cp public/service-worker.js dist/ && cp public/OneSignalSDKUpdaterWorker.js dist/",
     "lint": "eslint .",
     "preview": "vite preview"
   },

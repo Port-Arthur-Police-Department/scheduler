@@ -1081,38 +1081,27 @@ const handleSaveAssignment = () => {
       </div>
 
       {/* Dialogs */}
-<AssignmentEditDialog
+<AssignmentEditDialogMobile
   editingAssignment={editingAssignment}
-  onClose={() => {
-    console.log('Closing assignment dialog');
-    setEditingAssignment(null);
-  }}
+  onClose={() => setEditingAssignment(null)}
   onSave={(assignmentData) => {
-    // Use the same pattern as mobile - get the data directly from dialog
-    console.log('💾 Assignment data from dialog:', assignmentData);
-    
-    if (!assignmentData.positionName) {
-      toast.error("Position is required");
-      return;
-    }
+    console.log('💾 Saving assignment from mobile dialog:', assignmentData);
     
     updatePositionMutation.mutate(assignmentData, {
       onSuccess: () => {
         // Force cache invalidation
-        invalidateScheduleQueries();
+        queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
         
         // Force immediate refetch
         queryClient.refetchQueries({ 
           queryKey: scheduleQueryKey,
           exact: true 
-        }).then(() => {
-          console.log('✅ Schedule data refetched after assignment update');
         });
         
         // Log audit
         try {
           auditLogger.logPositionChange(
-            assignmentData.officerId || editingAssignment?.officer?.officerId,
+            assignmentData.officerId,
             editingAssignment?.officer?.officerName || 'Unknown Officer',
             editingAssignment?.officer?.shiftInfo?.position || 'Unknown',
             assignmentData.positionName,
@@ -1132,7 +1121,7 @@ const handleSaveAssignment = () => {
       }
     });
   }}
-  updatePositionMutation={updatePositionMutation}
+  isUpdating={updatePositionMutation.isPending}
 />
 
       <ScheduleExportDialog

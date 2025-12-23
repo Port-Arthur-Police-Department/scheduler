@@ -589,6 +589,12 @@ const { data: scheduleData, isLoading, error } = useQuery({
                       isSupervisor={true}
                       isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
                       isSpecialAssignment={isSpecialAssignment}
+                      // Add action handlers
+                      onAssignPTO={onAssignPTO}
+                      onRemovePTO={onRemovePTO}
+                      onEditAssignment={onEditAssignment}
+                      onRemoveOfficer={onRemoveOfficer}
+                      isUpdating={isUpdating}
                     />
                   </div>
                 );
@@ -641,6 +647,12 @@ const { data: scheduleData, isLoading, error } = useQuery({
                       isAdminOrSupervisor={isAdminOrSupervisor}
                       isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
                       isSpecialAssignment={isSpecialAssignment}
+                      // Add action handlers
+                      onAssignPTO={onAssignPTO}
+                      onRemovePTO={onRemovePTO}
+                      onEditAssignment={onEditAssignment}
+                      onRemoveOfficer={onRemoveOfficer}
+                      isUpdating={isUpdating}
                     />
                   </div>
                 );
@@ -696,6 +708,12 @@ const { data: scheduleData, isLoading, error } = useQuery({
                           isPPO={true}
                           isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
                           isSpecialAssignment={isSpecialAssignment}
+                          // Add action handlers
+                          onAssignPTO={onAssignPTO}
+                          onRemovePTO={onRemovePTO}
+                          onEditAssignment={onEditAssignment}
+                          onRemoveOfficer={onRemoveOfficer}
+                          isUpdating={isUpdating}
                         />
                       </div>
                     );

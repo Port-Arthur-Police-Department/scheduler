@@ -13,12 +13,9 @@ import { useAutoAlerts } from '@/hooks/useAutoAlerts';
 
 const queryClient = new QueryClient();
 
-function App() {
-  // Initialize automatic alerts
-  useAutoAlerts();
-
 const App = () => {
   const isMobile = useIsMobile();
+    useAutoAlerts();
 
   return (
     <QueryClientProvider client={queryClient}>

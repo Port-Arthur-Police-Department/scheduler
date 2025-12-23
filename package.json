@@ -13,7 +13,7 @@
     "prepare-pwa": "mkdir -p dist/scheduler && cp public/manifest.json dist/ && cp public/manifest.json dist/scheduler/ && cp public/service-worker.js dist/ && cp public/service-worker.js dist/scheduler/ && cp public/OneSignalSDKWorker.js dist/ && cp public/OneSignalSDKWorker.js dist/scheduler/",
     "predeploy": "npm run clean:all && npm run build",
     "deploy": "gh-pages -d dist"
-  }
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",

@@ -46,6 +46,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     name: string;
     date: string;
     schedule: any;
+    shiftStartTime?: string;
+    shiftEndTime?: string;
   } | null>(null);
 
   const [editingAssignment, setEditingAssignment] = useState<{
@@ -129,6 +131,15 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     mutationFn: async (ptoData: any) => {
       console.log('🎯 Assigning PTO on mobile:', ptoData);
 
+      // For full day PTO, we should use the shift times or 00:00-23:59
+      const startTime = ptoData.isFullShift 
+        ? (ptoData.startTime || "00:00") 
+        : ptoData.startTime;
+      
+      const endTime = ptoData.isFullShift 
+        ? (ptoData.endTime || "23:59") 
+        : ptoData.endTime;
+
       // Check if there's already a schedule exception for this officer on this date
       const { data: existingExceptions, error: checkError } = await supabase
         .from("schedule_exceptions")
@@ -148,8 +159,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           .update({
             is_off: true,
             reason: ptoData.ptoType,
-            custom_start_time: ptoData.startTime,
-            custom_end_time: ptoData.endTime,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
             position_name: null,
             unit_number: null,
             notes: `PTO: ${ptoData.ptoType}`
@@ -168,8 +179,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
             shift_type_id: ptoData.shiftTypeId,
             is_off: true,
             reason: ptoData.ptoType,
-            custom_start_time: ptoData.startTime,
-            custom_end_time: ptoData.endTime,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
             position_name: null,
             unit_number: null,
             notes: `PTO: ${ptoData.ptoType}`
@@ -193,8 +204,21 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
+          // For full day PTO, calculate hours based on shift times or 8 hours
+          let hoursUsed;
+          if (ptoData.isFullShift) {
+            // Try to calculate based on actual shift times if available
+            const currentShift = shiftTypes?.find(shift => shift.id === ptoData.shiftTypeId);
+            if (currentShift?.start_time && currentShift?.end_time) {
+              hoursUsed = calculateHoursUsed(currentShift.start_time, currentShift.end_time);
+            } else {
+              hoursUsed = 8; // Default to 8 hours for full day
+            }
+          } else {
+            hoursUsed = calculateHoursUsed(startTime, endTime);
+          }
+          
           const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-          const hoursUsed = calculateHoursUsed(ptoData.startTime, ptoData.endTime);
           
           const { error: updateBalanceError } = await supabase
             .from("profiles")
@@ -236,11 +260,18 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
     console.log('📱 Opening PTO dialog for:', officerName, date);
     
+    // Get the current shift times
+    const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
+    const shiftStartTime = currentShift?.start_time || "08:00";
+    const shiftEndTime = currentShift?.end_time || "17:00";
+    
     setSelectedOfficer({
       id: officerId,
       name: officerName,
       date: date,
-      schedule: schedule
+      schedule: schedule,
+      shiftStartTime: shiftStartTime,
+      shiftEndTime: shiftEndTime
     });
     setPtoDialogOpen(true);
   };
@@ -450,37 +481,6 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     });
   };
 
-  const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
-    console.log('🔄 Removing officer on mobile:', { scheduleId, type, officerData });
-
-    removeOfficerMutation.mutate({
-      scheduleId,
-      type,
-      officerData
-    }, {
-      onSuccess: () => {
-        if (officerData) {
-          const officerId = officerData?.officerId || officerData?.officer_id || officerData?.id;
-          const officerName = officerData?.officerName || officerData?.full_name || 'Unknown Officer';
-          
-          auditLogger.logOfficerRemoval(
-            officerId,
-            officerName,
-            userEmail,
-            `Removed ${officerName} from schedule on mobile`
-          );
-        }
-        toast.success("Officer removed from schedule");
-        // Force refresh the weekly schedule query
-        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
-      },
-      onError: (error) => {
-        console.error('Error removing officer:', error);
-        toast.error("Failed to remove officer");
-      }
-    });
-  };
-
   const renderView = () => {
     switch (activeView) {
       case "weekly":
@@ -497,9 +497,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
             onAssignPTO={handleAssignPTO}
             onRemovePTO={handleRemovePTO}
             onEditAssignment={handleEditAssignment}
-            onRemoveOfficer={handleRemoveOfficer}
             isUpdating={
-              removeOfficerMutation.isPending || 
               assignPTOMutation.isPending || 
               updatePositionMutation.isPending
             }
@@ -646,6 +644,8 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
           date={selectedOfficer.date}
           officerId={selectedOfficer.id}
           shiftTypeId={selectedShiftId}
+          shiftStartTime={selectedOfficer.shiftStartTime}
+          shiftEndTime={selectedOfficer.shiftEndTime}
           onSave={handleSavePTO}
           isUpdating={assignPTOMutation.isPending}
         />

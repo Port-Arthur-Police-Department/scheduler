@@ -20,6 +20,33 @@ jobs:
         with:
           node-version: 20
 
+      - name: Create environment variables
+        run: |
+          # Create .env.production file with all required variables
+          cat > .env.production << EOF
+          # Supabase Configuration
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          
+          # OneSignal Configuration
+          VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
+          ONESIGNAL_API_KEY=${{ secrets.ONESIGNAL_API_KEY }}
+          
+          # App Configuration
+          VITE_APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          EOF
+          
+          # Also create .env file for build process
+          cat > .env << EOF
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
+          EOF
+          
+          echo "✅ Environment files created"
+          echo "📋 .env.production contents:"
+          cat .env.production | sed 's/KEY=.*/KEY=***/' | sed 's/APP_ID=.*/APP_ID=***/'
+
       - name: Install dependencies
         run: |
           npm install --save-dev patch-package
@@ -28,16 +55,50 @@ jobs:
       - name: Build site
         run: npm run build
         env:
+          # Pass environment variables to the build process
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
+          VITE_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
 
-      - name: List build output (NEW)
+      - name: Verify OneSignal in build output
+        run: |
+          echo "🔍 Checking for OneSignal configuration in built files..."
+          if grep -r "onesignal" dist/ 2>/dev/null; then
+            echo "✅ OneSignal found in build output"
+          else
+            echo "⚠️ OneSignal not found in build output"
+          fi
+          
+          echo ""
+          echo "🔍 Checking index.html for OneSignal App ID..."
+          if grep -q "VITE_ONESIGNAL_APP_ID" dist/index.html 2>/dev/null; then
+            echo "❌ VITE_ONESIGNAL_APP_ID placeholder still in index.html"
+            echo "Fixing placeholder..."
+            # Replace placeholder with actual value
+            sed -i "s|VITE_ONESIGNAL_APP_ID|${{ secrets.VITE_ONESIGNAL_APP_ID }}|g" dist/index.html
+            echo "✅ Placeholder replaced"
+          fi
+          
+          # Also check for hardcoded App ID
+          if grep -q "3417d840-c226-40ba-92d6-a7590c31eef3" dist/index.html 2>/dev/null; then
+            echo "✅ Hardcoded OneSignal App ID found (this is okay for testing)"
+          fi
+
+      - name: List build output
         run: |
           echo "===== dist/ contents ====="
           find dist/ -type f | sort
           echo ""
           echo "===== PWA files ====="
           ls -l dist/manifest.json dist/sw.js || echo "❌ MISSING"
+          echo ""
+          echo "===== OneSignal verification ====="
+          echo "Index.html size:"
+          ls -lh dist/index.html
+          echo ""
+          echo "OneSignal script check:"
+          grep -n "OneSignal" dist/index.html | head -5
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -45,3 +106,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          
+      - name: Send deployment notification (Optional)
+        if: always()
+        run: |
+          DEPLOYMENT_STATUS="${{ job.status }}"
+          echo "Deployment completed with status: $DEPLOYMENT_STATUS"
+          # You could add Slack/email notifications here

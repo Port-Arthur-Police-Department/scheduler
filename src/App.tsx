@@ -11,8 +11,8 @@ import { UserProvider } from "@/contexts/UserContext";
 import { QueryClientProvider } from "@/providers/QueryClientProvider";
 import { OneSignalDebug } from "@/components/OneSignalDebug";
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 
-// Declare OneSignal types
 declare global {
   interface Window {
     OneSignal: any;
@@ -23,355 +23,292 @@ declare global {
 const App = () => {
   const isMobile = useIsMobile();
   const [oneSignalInitialized, setOneSignalInitialized] = useState(false);
-  const [pwaStatus, setPwaStatus] = useState<{
-    isInstallable: boolean;
-    isInstalled: boolean;
-    serviceWorkerActive: boolean;
-  }>({
+  const [pwaStatus, setPwaStatus] = useState({
     isInstallable: false,
     isInstalled: false,
-    serviceWorkerActive: false
+    serviceWorkerActive: false,
+    hasManifest: false
   });
+  const [showStatusPanel, setShowStatusPanel] = useState(true);
+  const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
 
-  // PWA Installation Status Check
+  // Auto-hide status panel after 10 seconds if everything is ready
+  useEffect(() => {
+    if (oneSignalInitialized && pwaStatus.serviceWorkerActive) {
+      const timer = setTimeout(() => {
+        setShowStatusPanel(false);
+      }, 10000); // 10 seconds
+      
+      setAutoHideTimer(timer);
+      
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }
+  }, [oneSignalInitialized, pwaStatus.serviceWorkerActive]);
+
+  // PWA Status Check
   useEffect(() => {
     const checkPWAStatus = () => {
-      // Check if app is already installed
+      // Check if installed
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isInWebAppiOS = (window.navigator as any).standalone === true;
       const isInstalled = isStandalone || isInWebAppiOS;
       
-      console.log('📱 PWA Status Check:', {
-        displayMode: window.matchMedia('(display-mode: standalone)').matches,
-        isStandalone,
-        isInWebAppiOS,
-        isInstalled
-      });
+      // Check manifest
+      const hasManifest = document.querySelector('link[rel="manifest"]') !== null;
       
-      // Check service worker registration
+      // Check service worker
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(registration => {
           const serviceWorkerActive = !!registration?.active;
-          console.log('🔧 Service Worker Registration:', {
-            hasRegistration: !!registration,
-            scope: registration?.scope,
-            active: serviceWorkerActive
-          });
           
           setPwaStatus(prev => ({
             ...prev,
             isInstalled,
-            serviceWorkerActive
+            serviceWorkerActive,
+            hasManifest
           }));
+          
+          console.log('📱 PWA Status:', {
+            isInstalled,
+            serviceWorkerActive,
+            hasManifest,
+            registrationScope: registration?.scope
+          });
         });
+      } else {
+        setPwaStatus(prev => ({
+          ...prev,
+          isInstalled,
+          hasManifest
+        }));
       }
     };
     
-    // Handle beforeinstallprompt event for PWA
+    // Handle PWA install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       console.log('📱 PWA install prompt available');
-      setPwaStatus(prev => ({
-        ...prev,
-        isInstallable: true
-      }));
-      
-      // Store the event for later use
       (window as any).deferredPrompt = e;
+      setPwaStatus(prev => ({ ...prev, isInstallable: true }));
     };
     
-    // Handle app installed event
     const handleAppInstalled = () => {
-      console.log('✅ PWA installed successfully');
-      setPwaStatus(prev => ({
-        ...prev,
-        isInstallable: false,
-        isInstalled: true
+      console.log('✅ PWA installed');
+      setPwaStatus(prev => ({ 
+        ...prev, 
+        isInstallable: false, 
+        isInstalled: true 
       }));
-    };
-    
-    // Check PWA requirements
-    const checkPWAEligibility = () => {
-      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
-      const hasServiceWorker = 'serviceWorker' in navigator;
-      const hasManifest = document.querySelector('link[rel="manifest"]') !== null;
-      
-      console.log('📱 PWA Eligibility Check:', {
-        isSecure,
-        hasServiceWorker,
-        hasManifest,
-        url: window.location.href
-      });
     };
     
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
     
-    // Run initial checks
-    setTimeout(checkPWAStatus, 1000);
-    setTimeout(checkPWAEligibility, 2000);
+    // Initial check
+    checkPWAStatus();
     
-    // Check periodically for PWA status changes
-    const pwaCheckInterval = setInterval(checkPWAStatus, 10000);
+    // Periodic checks
+    const interval = setInterval(checkPWAStatus, 5000);
     
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
-      clearInterval(pwaCheckInterval);
+      clearInterval(interval);
     };
   }, []);
 
-  // Main OneSignal initialization
+  // OneSignal Initialization
   useEffect(() => {
-    const initializeOneSignal = async () => {
-      console.log("🔧 [App] Starting OneSignal initialization...");
-      
-      // Wait for OneSignal SDK to load
+    const initOneSignal = () => {
+      // Check if OneSignal is loaded
       if (!window.OneSignal || typeof window.OneSignal.init !== 'function') {
-        console.log("⏳ [App] OneSignal not loaded yet, waiting...");
+        console.log('⏳ Waiting for OneSignal...');
         
-        // Check if OneSignal script is loaded
-        const oneSignalScript = document.querySelector('script[src*="onesignal"]');
-        if (!oneSignalScript) {
-          console.log("📦 [App] Loading OneSignal SDK...");
+        // Check if script is loaded
+        if (!document.querySelector('script[src*="onesignal"]')) {
+          console.log('📦 Loading OneSignal SDK...');
           const script = document.createElement('script');
           script.src = 'https://cdn.onesignal.com/sdks/OneSignalSDK.js';
           script.async = true;
           script.onload = () => {
-            console.log("✅ [App] OneSignal SDK loaded");
-            setTimeout(initializeOneSignal, 1000);
+            console.log('✅ OneSignal SDK loaded');
+            setTimeout(initOneSignal, 1000);
           };
           document.head.appendChild(script);
           return;
         }
         
-        // Try again in 2 seconds
-        setTimeout(initializeOneSignal, 2000);
+        setTimeout(initOneSignal, 2000);
         return;
       }
-
+      
+      // Initialize OneSignal
       try {
-        console.log("⚙️ [App] Initializing OneSignal for GitHub Pages...");
+        console.log('⚙️ Initializing OneSignal...');
         
-        // IMPORTANT: Pre-create service workers before OneSignal init
-        if ('serviceWorker' in navigator) {
-          console.log("🛠️ [App] Pre-registering service workers...");
-          
-          // Try to register our service workers first
-          try {
-            // Register the main service worker
-            await navigator.serviceWorker.register('/scheduler/service-worker.js', {
-              scope: '/scheduler/'
-            });
-            console.log("✅ [App] Main service worker registered");
-          } catch (swError) {
-            console.warn("⚠️ [App] Could not pre-register service worker:", swError);
-          }
-        }
-
-        // Initialize OneSignal with GitHub Pages configuration
         window.OneSignal.init({
           appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
           safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-          
-          // CRITICAL: GitHub Pages paths
           serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
           serviceWorkerParam: { scope: '/scheduler/' },
-          
           allowLocalhostAsSecureOrigin: true,
           autoResubscribe: true,
-          notifyButton: {
-            enable: false
-          },
-          
           promptOptions: {
             slidedown: {
               enabled: true,
               autoPrompt: true,
-              timeDelay: 3,
-              pageViews: 1,
-              prompts: [
-                {
-                  type: "push",
-                  text: {
-                    actionMessage: "Get notified about shift changes, emergencies, and department announcements",
-                    acceptButton: "Allow",
-                    cancelButton: "Not now"
-                  }
-                }
-              ]
+              timeDelay: 2,
+              pageViews: 1
             }
           }
-        });
-
-        console.log("✅ [App] OneSignal initialized successfully");
-        setOneSignalInitialized(true);
-
-        // Set up event listeners
-        window.OneSignal.on('subscriptionChange', (isSubscribed: boolean) => {
-          console.log(`🔔 [App] Subscription changed: ${isSubscribed ? 'Subscribed' : 'Unsubscribed'}`);
-        });
-
-        window.OneSignal.on('notificationDisplay', (event: any) => {
-          console.log('📨 [App] Notification displayed:', event);
-        });
-
-        // Set tags for police department
-        window.OneSignal.getUserId().then((userId: string) => {
-          if (userId) {
-            console.log(`👤 [App] OneSignal User ID: ${userId}`);
-            
-            // Set department tags
-            window.OneSignal.sendTags({
-              department: 'port-arthur-pd',
-              role: 'officer',
-              app: 'scheduler',
-              environment: import.meta.env.PROD ? 'production' : 'development'
-            }).then(() => {
-              console.log("🏷️ [App] Tags set successfully");
-            });
-          }
-        });
-
-        // Check permission
-        window.OneSignal.getNotificationPermission().then((permission: string) => {
-          console.log(`🔐 [App] Notification permission: ${permission}`);
-        });
-
-      } catch (error) {
-        console.error('❌ [App] Failed to initialize OneSignal:', error);
-        
-        // Fallback: Try alternative initialization
-        try {
-          console.log("🔄 [App] Trying fallback initialization...");
-          
-          // Force set service worker paths
-          if (window.OneSignal.SERVICE_WORKER_PARAM) {
-            window.OneSignal.SERVICE_WORKER_PARAM.scope = '/scheduler/';
-          }
-          
-          if (window.OneSignal.SERVICE_WORKER_PATH) {
-            window.OneSignal.SERVICE_WORKER_PATH = '/scheduler/OneSignalSDKWorker.js';
-          }
-          
+        }).then(() => {
+          console.log('✅ OneSignal initialized');
           setOneSignalInitialized(true);
-        } catch (fallbackError) {
-          console.error('❌ [App] Fallback also failed:', fallbackError);
-        }
-      }
-    };
-
-    // Start initialization
-    initializeOneSignal();
-
-    // Cleanup
-    return () => {
-      // Optional: Clean up OneSignal listeners
-      if (window.OneSignal && window.OneSignal.removeAllListeners) {
-        window.OneSignal.removeAllListeners();
-      }
-    };
-  }, []);
-
-  // Service Worker Fallback Registration
-  useEffect(() => {
-    const registerFallbackServiceWorkers = async () => {
-      if (!('serviceWorker' in navigator)) return;
-      
-      console.log("🛠️ [App] Registering fallback service workers...");
-      
-      // Array of service workers to register
-      const workers = [
-        {
-          path: '/scheduler/OneSignalSDKWorker.js',
-          scope: '/scheduler/'
-        },
-        {
-          path: '/scheduler/service-worker.js',
-          scope: '/scheduler/'
-        },
-        {
-          path: '/OneSignalSDKWorker.js',
-          scope: '/'
-        }
-      ];
-      
-      for (const worker of workers) {
-        try {
-          const registration = await navigator.serviceWorker.register(worker.path, {
-            scope: worker.scope,
-            updateViaCache: 'none'
+          
+          // Set tags
+          window.OneSignal.sendTags({
+            department: 'port-arthur-pd',
+            app: 'scheduler',
+            environment: import.meta.env.PROD ? 'production' : 'development'
           });
           
-          console.log(`✅ [App] Registered ${worker.path} with scope ${worker.scope}`);
-          console.log('   Active:', !!registration.active);
-          console.log('   Installing:', !!registration.installing);
-          console.log('   Waiting:', !!registration.waiting);
-          
-        } catch (error) {
-          console.log(`⚠️ [App] Failed to register ${worker.path}:`, error.message);
-        }
+          // Check user ID
+          window.OneSignal.getUserId().then((userId: string) => {
+            if (userId) {
+              console.log(`👤 User ID: ${userId}`);
+            }
+          });
+        });
+        
+      } catch (error) {
+        console.error('❌ OneSignal init error:', error);
       }
-      
-      // List all registered workers
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      console.log(`📋 [App] Total registered service workers: ${registrations.length}`);
-      registrations.forEach((reg, i) => {
-        console.log(`   ${i + 1}. ${reg.scope}`);
-      });
     };
     
-    // Register fallback workers after a delay
-    const timer = setTimeout(registerFallbackServiceWorkers, 3000);
+    // Start initialization
+    const timer = setTimeout(initOneSignal, 1500);
     
     return () => clearTimeout(timer);
   }, []);
 
-  // Test function for notifications
+  // Register Service Workers
+  useEffect(() => {
+    const registerServiceWorkers = async () => {
+      if (!('serviceWorker' in navigator)) {
+        console.log('❌ Service Workers not supported');
+        return;
+      }
+      
+      try {
+        console.log('🛠️ Registering service workers...');
+        
+        // Register OneSignal worker
+        try {
+          const oneSignalReg = await navigator.serviceWorker.register(
+            '/scheduler/OneSignalSDKWorker.js',
+            { scope: '/scheduler/', updateViaCache: 'none' }
+          );
+          console.log('✅ OneSignal worker registered:', oneSignalReg.scope);
+        } catch (error) {
+          console.log('⚠️ OneSignal worker registration failed:', error);
+        }
+        
+        // Register app service worker
+        try {
+          const appReg = await navigator.serviceWorker.register(
+            '/scheduler/service-worker.js',
+            { scope: '/scheduler/', updateViaCache: 'none' }
+          );
+          console.log('✅ App service worker registered:', appReg.scope);
+        } catch (error) {
+          console.log('⚠️ App service worker registration failed:', error);
+        }
+        
+        // Register Vite PWA service worker if it exists
+        try {
+          const viteReg = await navigator.serviceWorker.register(
+            '/scheduler/sw.js',
+            { scope: '/scheduler/', updateViaCache: 'none' }
+          );
+          console.log('✅ Vite PWA worker registered:', viteReg.scope);
+        } catch (error) {
+          // This is normal if sw.js doesn't exist
+        }
+        
+      } catch (error) {
+        console.error('❌ Service worker registration failed:', error);
+      }
+    };
+    
+    const timer = setTimeout(registerServiceWorkers, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Debug functions
   const testNotification = () => {
     if (window.OneSignal) {
-      // This is a client-side test - actual notifications should come from your backend
-      console.log("📨 [App] Test notification triggered");
+      console.log('📨 Test notification triggered');
+      alert('Test notification - In production, this would send via OneSignal API');
       
-      // You would typically send a notification via your backend using OneSignal REST API
-      // For now, just show a local alert
-      alert("Test notification sent! Actual push notifications would come from your server.");
-      
-      // Example of how you'd trigger a real notification (server-side):
-      // fetch('/api/send-notification', {
-      //   method: 'POST',
-      //   body: JSON.stringify({
-      //     title: 'Test Alert',
-      //     message: 'This is a test notification from Port Arthur PD',
-      //     url: window.location.href
-      //   })
-      // });
+      // Reset auto-hide timer when user interacts
+      if (autoHideTimer) {
+        clearTimeout(autoHideTimer);
+      }
+      const newTimer = setTimeout(() => {
+        setShowStatusPanel(false);
+      }, 10000);
+      setAutoHideTimer(newTimer);
     } else {
-      alert("OneSignal not initialized yet. Please wait and try again.");
+      alert('OneSignal not ready yet');
     }
   };
 
-  // Force service worker update (for debugging)
-  const forceServiceWorkerUpdate = async () => {
+  const checkServiceWorkers = async () => {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      console.log('🔄 Forcing service worker update...');
+      console.log('🔍 Service Workers:', registrations.map(r => ({
+        scope: r.scope,
+        active: !!r.active
+      })));
       
-      for (const registration of registrations) {
-        try {
-          await registration.update();
-          console.log(`✅ Updated: ${registration.scope}`);
-        } catch (error) {
-          console.log(`❌ Failed to update ${registration.scope}:`, error);
-        }
+      // Force update
+      registrations.forEach(reg => reg.update());
+      alert(`Found ${registrations.length} service workers. Check console for details.`);
+      
+      // Reset auto-hide timer when user interacts
+      if (autoHideTimer) {
+        clearTimeout(autoHideTimer);
       }
-      
-      // Reload page to activate new service worker
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      const newTimer = setTimeout(() => {
+        setShowStatusPanel(false);
+      }, 10000);
+      setAutoHideTimer(newTimer);
     }
   };
+
+  const handleClosePanel = () => {
+    setShowStatusPanel(false);
+    if (autoHideTimer) {
+      clearTimeout(autoHideTimer);
+    }
+  };
+
+  const handleShowPanel = () => {
+    setShowStatusPanel(true);
+    // Auto-hide again after 10 seconds
+    if (autoHideTimer) {
+      clearTimeout(autoHideTimer);
+    }
+    const newTimer = setTimeout(() => {
+      setShowStatusPanel(false);
+    }, 10000);
+    setAutoHideTimer(newTimer);
+  };
+
+  // Only show in development mode
+  const shouldShowPanel = import.meta.env.DEV && showStatusPanel;
 
   return (
     <QueryClientProvider>
@@ -384,77 +321,163 @@ const App = () => {
             {import.meta.env.DEV && <OneSignalDebug />}
             
             {/* Status Indicator Panel */}
-            <div style={{
-              position: 'fixed',
-              top: 10,
-              right: 10,
-              background: '#1e293b',
-              color: 'white',
-              padding: '12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              zIndex: 9999,
-              maxWidth: '250px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              border: '1px solid #334155'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <div style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: oneSignalInitialized ? '#10b981' : '#f59e0b'
-                }} />
-                <strong>OneSignal:</strong> {oneSignalInitialized ? '✅ Ready' : '🔄 Loading...'}
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <div style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: pwaStatus.serviceWorkerActive ? '#10b981' : '#ef4444'
-                }} />
-                <strong>PWA:</strong> {pwaStatus.isInstalled ? '✅ Installed' : pwaStatus.serviceWorkerActive ? '📱 Ready' : '🔧 Setting up...'}
-              </div>
-              
-              {/* Debug buttons for development */}
-              {import.meta.env.DEV && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                  <button
-                    onClick={testNotification}
-                    style={{
-                      background: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      width: '100%'
-                    }}
-                  >
-                    Test Notification
-                  </button>
-                  
-                  <button
-                    onClick={forceServiceWorkerUpdate}
-                    style={{
-                      background: '#8b5cf6',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      width: '100%'
-                    }}
-                  >
-                    Update Service Worker
-                  </button>
+            {shouldShowPanel ? (
+              <div style={{
+                position: 'fixed',
+                top: 10,
+                right: 10,
+                background: '#1e293b',
+                color: 'white',
+                padding: '12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                zIndex: 9999,
+                maxWidth: '250px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                border: '1px solid #334155',
+                animation: 'slideInRight 0.3s ease-out'
+              }}>
+                <style>
+                  {`
+                    @keyframes slideInRight {
+                      from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                      }
+                      to {
+                        transform: translateX(0);
+                        opacity: 1;
+                      }
+                    }
+                  `}
+                </style>
+                
+                {/* Close Button */}
+                <button
+                  onClick={handleClosePanel}
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    width: '20px',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '4px',
+                    fontSize: '12px'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <X size={14} />
+                </button>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', marginRight: '16px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: oneSignalInitialized ? '#10b981' : '#f59e0b',
+                    animation: !oneSignalInitialized ? 'pulse 1.5s infinite' : 'none'
+                  }} />
+                  <strong>OneSignal:</strong> {oneSignalInitialized ? '✅ Ready' : '🔄 Loading...'}
                 </div>
-              )}
-            </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: pwaStatus.serviceWorkerActive ? '#10b981' : '#ef4444',
+                    animation: !pwaStatus.serviceWorkerActive ? 'pulse 1.5s infinite' : 'none'
+                  }} />
+                  <strong>PWA:</strong> {pwaStatus.isInstalled ? '✅ Installed' : pwaStatus.serviceWorkerActive ? '📱 Ready' : '🔧 Setting up...'}
+                </div>
+                
+                {/* Debug buttons for development */}
+                {import.meta.env.DEV && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                    <button
+                      onClick={testNotification}
+                      style={{
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    >
+                      Test Notification
+                    </button>
+                    
+                    <button
+                      onClick={checkServiceWorkers}
+                      style={{
+                        background: '#8b5cf6',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    >
+                      Check Service Workers
+                    </button>
+                  </div>
+                )}
+                
+                <div style={{
+                  fontSize: '10px',
+                  color: '#94a3b8',
+                  marginTop: '8px',
+                  textAlign: 'center',
+                  borderTop: '1px solid #334155',
+                  paddingTop: '6px'
+                }}>
+                  Auto-hides in {autoHideTimer ? '10s' : 'hidden'}
+                </div>
+              </div>
+            ) : import.meta.env.DEV && (
+              // Show a small "Show Panel" button when hidden
+              <button
+                onClick={handleShowPanel}
+                style={{
+                  position: 'fixed',
+                  top: 10,
+                  right: 10,
+                  background: '#1e293b',
+                  color: 'white',
+                  border: 'none',
+                  padding: '6px 10px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  zIndex: 9999,
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span>Status</span>
+              </button>
+            )}
             
             <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
               <Routes>

@@ -707,38 +707,42 @@ dayExceptions.forEach(item => {
         </div>
       </div>
 
-      {/* Legend */}
-      <Card>
-        <CardContent className="p-4">
-          <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-green-50 border-l-2 border-green-400"></div>
-              <span>Recurring Day</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-white border"></div>
-              <span>Exception</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-blue-50 border-l-2 border-blue-400"></div>
-              <span>PTO</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
-              <span>Special Assignment</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="destructive" className="h-4 text-xs">Off</Badge>
-              <span>Day Off</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gray-100"></div>
-              <span>Not Scheduled</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+{/* Legend */}
+<Card>
+  <CardContent className="p-4">
+    <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
+    <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-green-50 border-l-2 border-green-400"></div>
+        <span>Recurring Day</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-blue-50 border-l-2 border-blue-400"></div>
+        <span>Vacation (Vac)</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-orange-50 border-l-2 border-orange-400"></div>
+        <span>Holiday (Hol)</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-red-50 border-l-2 border-red-400"></div>
+        <span>Sick (Sick)</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
+        <span>Comp (Comp)</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
+        <span>Special Assignment</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded bg-gray-100 border-l-2 border-gray-300"></div>
+        <span>Not Scheduled</span>
+      </div>
+    </div>
+  </CardContent>
+</Card>
     </div>
   );
 };

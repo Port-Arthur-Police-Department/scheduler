@@ -733,68 +733,104 @@ const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: str
   });
 };
 
-  const handleSaveAssignment = () => {
-    if (!editingAssignment) return;
+const handleSaveAssignment = () => {
+  if (!editingAssignment) return;
 
-    const { officer, dateStr } = editingAssignment;
-    
-    console.log('Officer object in handleSaveAssignment:', officer);
-    
-    const officerId = officer?.officerId || 
-                      officer?.officer_id || 
-                      officer?.id ||
-                      'unknown-id';
-    
-    const officerName = officer?.officerName || 
-                        officer?.full_name || 
-                        officer?.profiles?.full_name ||
-                        'Unknown Officer';
-    
-    const currentPosition = officer?.shiftInfo?.position || '';
-    
-    console.log('Extracted values:', { officerId, officerName, currentPosition });
-    
-    if (!officerId || officerId === 'unknown-id') {
-      console.error('Could not find officer ID in:', officer);
-      toast.error("Cannot save: Officer ID not found");
-      return;
-    }
-    
-    updatePositionMutation.mutate({
-      scheduleId: officer.shiftInfo?.scheduleId,
-      type: officer.shiftInfo?.scheduleType,
-      positionName: officer.shiftInfo?.position,
-      date: dateStr,
-      officerId: officerId,
-      shiftTypeId: selectedShiftId,
-      currentPosition: currentPosition
-    }, {
-      onSuccess: () => {
-        // Invalidate cache after successful assignment update
-        invalidateScheduleQueries();
-        
-        try {
-          auditLogger.logPositionChange(
-            officerId,
-            officerName,
-            currentPosition,
-            officer.shiftInfo?.position || currentPosition,
-            userEmail,
-            `Changed position for ${officerName} on ${dateStr}`
-          );
-        } catch (logError) {
-          console.error('Failed to log position change audit:', logError);
-        }
-        
-        setEditingAssignment(null);
-        toast.success("Assignment updated successfully");
-      },
-      onError: (error) => {
-        console.error('Error updating assignment:', error);
-        toast.error("Failed to update assignment");
-      }
-    });
+  const { officer, dateStr } = editingAssignment;
+  
+  console.log('💾 Saving assignment (desktop):', { officer, dateStr });
+  console.log('Officer shiftInfo:', officer.shiftInfo);
+  
+  const officerId = officer?.officerId || 
+                    officer?.officer_id || 
+                    officer?.id ||
+                    'unknown-id';
+  
+  const officerName = officer?.officerName || 
+                      officer?.full_name || 
+                      officer?.profiles?.full_name ||
+                      'Unknown Officer';
+  
+  // Get the updated position from the dialog (this is critical!)
+  // The dialog should have updated the officer.shiftInfo.position
+  const positionName = officer.shiftInfo?.position || '';
+  const unitNumber = officer.shiftInfo?.unitNumber || '';
+  const notes = officer.shiftInfo?.notes || '';
+  
+  console.log('📝 Assignment data to save:', {
+    officerId,
+    officerName,
+    positionName,
+    unitNumber,
+    notes,
+    scheduleId: officer.shiftInfo?.scheduleId,
+    scheduleType: officer.shiftInfo?.scheduleType,
+    dateStr,
+    selectedShiftId
+  });
+  
+  if (!officerId || officerId === 'unknown-id') {
+    console.error('Could not find officer ID in:', officer);
+    toast.error("Cannot save: Officer ID not found");
+    return;
+  }
+  
+  if (!positionName) {
+    console.error('Missing position name');
+    toast.error("Cannot save: Position name is required");
+    return;
+  }
+  
+  // Prepare the complete mutation data
+  const mutationData = {
+    scheduleId: officer.shiftInfo?.scheduleId,
+    type: officer.shiftInfo?.scheduleType as "recurring" | "exception",
+    positionName: positionName,
+    date: dateStr,
+    officerId: officerId,
+    shiftTypeId: selectedShiftId,
+    currentPosition: officer.shiftInfo?.currentPosition || positionName,
+    unitNumber: unitNumber || undefined,
+    notes: notes || undefined
   };
+  
+  console.log('🚀 Calling updatePositionMutation with:', mutationData);
+  
+  updatePositionMutation.mutate(mutationData, {
+    onSuccess: () => {
+      // Force cache invalidation
+      invalidateScheduleQueries();
+      
+      // Force immediate refetch
+      queryClient.refetchQueries({ 
+        queryKey: scheduleQueryKey,
+        exact: true 
+      }).then(() => {
+        console.log('✅ Schedule data refetched after assignment update');
+      });
+      
+      try {
+        auditLogger.logPositionChange(
+          officerId,
+          officerName,
+          officer.shiftInfo?.currentPosition || 'Unknown',
+          positionName,
+          userEmail,
+          `Changed position for ${officerName} on ${dateStr}`
+        );
+      } catch (logError) {
+        console.error('Failed to log position change audit:', logError);
+      }
+      
+      setEditingAssignment(null);
+      toast.success("Assignment updated successfully");
+    },
+    onError: (error) => {
+      console.error('❌ Error updating assignment:', error);
+      toast.error(error.message || "Failed to update assignment");
+    }
+  });
+};
 
   const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     safeRemoveOfficerMutation.mutate({

@@ -2,9 +2,9 @@
 
 import { QueryClient, QueryClientProvider as TanStackQueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 
-export const QueryClientProvider = ({ children }: { children: React.ReactNode }) => {
+export const QueryClientProvider = ({ children }: { children: ReactNode }) => {
   // Create a client once per app lifecycle
   const [queryClient] = useState(
     () =>

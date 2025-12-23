@@ -1,0 +1,30 @@
+{
+  "name": "Port Arthur PD Officer Scheduler",
+  "short_name": "PAPD Scheduler",
+  "description": "Officer scheduling and shift management system",
+  "start_url": "/scheduler/",
+  "scope": "/scheduler/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e40af",
+  "icons": [
+    {
+      "src": "/scheduler/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/scheduler/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/scheduler/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

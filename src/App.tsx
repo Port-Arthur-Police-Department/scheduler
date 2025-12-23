@@ -16,12 +16,110 @@ import { useEffect, useState } from "react";
 declare global {
   interface Window {
     OneSignal: any;
+    OneSignalDeferred: any[];
   }
 }
 
 const App = () => {
   const isMobile = useIsMobile();
   const [oneSignalInitialized, setOneSignalInitialized] = useState(false);
+  const [pwaStatus, setPwaStatus] = useState<{
+    isInstallable: boolean;
+    isInstalled: boolean;
+    serviceWorkerActive: boolean;
+  }>({
+    isInstallable: false,
+    isInstalled: false,
+    serviceWorkerActive: false
+  });
+
+  // PWA Installation Status Check
+  useEffect(() => {
+    const checkPWAStatus = () => {
+      // Check if app is already installed
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isInWebAppiOS = (window.navigator as any).standalone === true;
+      const isInstalled = isStandalone || isInWebAppiOS;
+      
+      console.log('📱 PWA Status Check:', {
+        displayMode: window.matchMedia('(display-mode: standalone)').matches,
+        isStandalone,
+        isInWebAppiOS,
+        isInstalled
+      });
+      
+      // Check service worker registration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(registration => {
+          const serviceWorkerActive = !!registration?.active;
+          console.log('🔧 Service Worker Registration:', {
+            hasRegistration: !!registration,
+            scope: registration?.scope,
+            active: serviceWorkerActive
+          });
+          
+          setPwaStatus(prev => ({
+            ...prev,
+            isInstalled,
+            serviceWorkerActive
+          }));
+        });
+      }
+    };
+    
+    // Handle beforeinstallprompt event for PWA
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      console.log('📱 PWA install prompt available');
+      setPwaStatus(prev => ({
+        ...prev,
+        isInstallable: true
+      }));
+      
+      // Store the event for later use
+      (window as any).deferredPrompt = e;
+    };
+    
+    // Handle app installed event
+    const handleAppInstalled = () => {
+      console.log('✅ PWA installed successfully');
+      setPwaStatus(prev => ({
+        ...prev,
+        isInstallable: false,
+        isInstalled: true
+      }));
+    };
+    
+    // Check PWA requirements
+    const checkPWAEligibility = () => {
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+      const hasServiceWorker = 'serviceWorker' in navigator;
+      const hasManifest = document.querySelector('link[rel="manifest"]') !== null;
+      
+      console.log('📱 PWA Eligibility Check:', {
+        isSecure,
+        hasServiceWorker,
+        hasManifest,
+        url: window.location.href
+      });
+    };
+    
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    
+    // Run initial checks
+    setTimeout(checkPWAStatus, 1000);
+    setTimeout(checkPWAEligibility, 2000);
+    
+    // Check periodically for PWA status changes
+    const pwaCheckInterval = setInterval(checkPWAStatus, 10000);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      clearInterval(pwaCheckInterval);
+    };
+  }, []);
 
   // Main OneSignal initialization
   useEffect(() => {
@@ -253,6 +351,28 @@ const App = () => {
     }
   };
 
+  // Force service worker update (for debugging)
+  const forceServiceWorkerUpdate = async () => {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      console.log('🔄 Forcing service worker update...');
+      
+      for (const registration of registrations) {
+        try {
+          await registration.update();
+          console.log(`✅ Updated: ${registration.scope}`);
+        } catch (error) {
+          console.log(`❌ Failed to update ${registration.scope}:`, error);
+        }
+      }
+      
+      // Reload page to activate new service worker
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+  };
+
   return (
     <QueryClientProvider>
       <TooltipProvider>
@@ -263,39 +383,78 @@ const App = () => {
             {/* OneSignal Debug Component */}
             {import.meta.env.DEV && <OneSignalDebug />}
             
-            {/* OneSignal Status Indicator */}
+            {/* Status Indicator Panel */}
             <div style={{
               position: 'fixed',
               top: 10,
               right: 10,
-              background: oneSignalInitialized ? '#10b981' : '#ef4444',
+              background: '#1e293b',
               color: 'white',
-              padding: '8px 12px',
-              borderRadius: '4px',
+              padding: '12px',
+              borderRadius: '8px',
               fontSize: '12px',
-              zIndex: 9999
+              zIndex: 9999,
+              maxWidth: '250px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              border: '1px solid #334155'
             }}>
-              {oneSignalInitialized ? '🔔 Notifications Ready' : '🔕 Notifications Loading...'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: oneSignalInitialized ? '#10b981' : '#f59e0b'
+                }} />
+                <strong>OneSignal:</strong> {oneSignalInitialized ? '✅ Ready' : '🔄 Loading...'}
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: pwaStatus.serviceWorkerActive ? '#10b981' : '#ef4444'
+                }} />
+                <strong>PWA:</strong> {pwaStatus.isInstalled ? '✅ Installed' : pwaStatus.serviceWorkerActive ? '📱 Ready' : '🔧 Setting up...'}
+              </div>
+              
+              {/* Debug buttons for development */}
+              {import.meta.env.DEV && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                  <button
+                    onClick={testNotification}
+                    style={{
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                  >
+                    Test Notification
+                  </button>
+                  
+                  <button
+                    onClick={forceServiceWorkerUpdate}
+                    style={{
+                      background: '#8b5cf6',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                  >
+                    Update Service Worker
+                  </button>
+                </div>
+              )}
             </div>
-            
-            {/* Test Notification Button */}
-            <button
-              onClick={testNotification}
-              style={{
-                position: 'fixed',
-                bottom: 20,
-                right: 20,
-                background: '#1e40af',
-                color: 'white',
-                border: 'none',
-                padding: '10px 15px',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                zIndex: 9999
-              }}
-            >
-              Test Notification
-            </button>
             
             <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
               <Routes>
@@ -315,7 +474,10 @@ const App = () => {
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
-              <PWAInstallPrompt />
+              {/* PWA Install Prompt - Only show if not installed and installable */}
+              {!pwaStatus.isInstalled && pwaStatus.serviceWorkerActive && (
+                <PWAInstallPrompt />
+              )}
             </div>
           </UserProvider>
         </HashRouter>

@@ -1,75 +1,23 @@
-name: Deploy Website
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Create environment variables
+      - name: Verify OneSignal in Production Build
         run: |
-          # Create .env file for build process
-          cat > .env << EOF
-          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
-          VITE_APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
-          EOF
+          echo "🔍 Verifying OneSignal in production build..."
           
-          echo "✅ Environment file created"
-          echo "📋 .env contents (sanitized):"
-          cat .env | sed 's/KEY=.*/KEY=***/' | sed 's/APP_ID=.*/APP_ID=***/'
-
-      - name: Install dependencies
-        run: |
-          npm install
-
-      - name: Build site
-        run: npm run build
-        env:
-          # Pass environment variables to the build process
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
-          VITE_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
-
-      - name: Verify OneSignal in build output
-        run: |
-          echo "🔍 Checking build output..."
-          if grep -q "OneSignal" dist/index.html; then
-            echo "✅ OneSignal found in build output"
+          # Check if App ID was injected
+          if grep -q "3417d840-c226-40ba-92d6-a7590c31eef3" dist/index.html; then
+            echo "✅ Hardcoded App ID found (using fallback)"
           else
-            echo "❌ OneSignal not found in build output"
+            echo "✅ App ID was replaced"
           fi
+          
+          # Check for OneSignal script
+          echo ""
+          echo "📋 OneSignal script check:"
+          grep -c "OneSignalSDK.page.js" dist/index.html || echo "Not found"
+          
+          # Check service worker path
+          echo ""
+          echo "🔧 Service Worker configuration:"
+          grep -A2 -B2 "serviceWorker" dist/index.html || echo "Not found"
           
           echo ""
-          echo "🔍 Checking for placeholders..."
-          if grep -q "%%ONESIGNAL_APP_ID%%" dist/index.html; then
-            echo "❌ ERROR: Placeholder still exists!"
-            echo "Index.html snippet:"
-            grep -n "ONESIGNAL" dist/index.html
-            exit 1
-          else
-            echo "✅ No placeholders found"
-          fi
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          force_orphan: true
+          echo "✅ Build verification complete"

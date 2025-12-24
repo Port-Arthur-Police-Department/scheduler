@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Bell, BellOff, CheckCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase'; // Make sure you have this import
+import { supabase } from '@/integrations/supabase/client';
 
 // Declare OneSignal types globally
 declare global {

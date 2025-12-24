@@ -26,6 +26,7 @@ import { NotificationsBell } from "@/components/NotificationsBell";
 import { ChangePassword } from "@/components/profile/ChangePassword";
 import { StaffManagementMobile } from "@/components/admin/StaffManagementMobile";
 import PoliceNotificationSubscribe from '@/components/PoliceNotificationSubscribe';
+import { useOneSignal } from '@/hooks/useOneSignal';
 import {
   DropdownMenu,
   DropdownMenuContent,

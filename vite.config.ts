@@ -1,63 +1,43 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
-import { VitePWA } from 'vite-plugin-pwa'; // Make sure this is imported
 import { resolve } from 'path';
+import { copyFileSync, existsSync, mkdirSync } from 'fs';
+
+// Custom plugin to copy OneSignal files to dist root
+const copyOneSignalFiles = () => {
+  return {
+    name: 'copy-onesignal-files',
+    closeBundle() {
+      const sourceDir = resolve(__dirname, 'public');
+      const targetDir = resolve(__dirname, 'dist');
+      
+      // Ensure dist directory exists
+      if (!existsSync(targetDir)) {
+        mkdirSync(targetDir, { recursive: true });
+      }
+      
+      // Copy OneSignal files
+      const filesToCopy = ['OneSignalSDKWorker.js', 'OneSignalSDKUpdaterWorker.js', 'manifest.json'];
+      
+      filesToCopy.forEach(file => {
+        const sourceFile = resolve(sourceDir, file);
+        const targetFile = resolve(targetDir, file);
+        
+        if (existsSync(sourceFile)) {
+          copyFileSync(sourceFile, targetFile);
+          console.log(`✅ Copied ${file} to dist root`);
+        } else {
+          console.warn(`⚠️ ${file} not found in public folder`);
+        }
+      });
+    }
+  };
+};
 
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      strategies: 'generateSW',
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      
-      // Since you have a static manifest.json
-      manifest: false,
-      
-      srcDir: 'src',
-      filename: 'service-worker.js',
-      
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
-        navigateFallback: '/scheduler/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        
-        // Exclude OneSignal workers
-        globIgnores: [
-          '**/OneSignalSDKWorker.js',
-          '**/OneSignalSDKUpdaterWorker.js'
-        ],
-        
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'onesignal-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 30
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 7
-              }
-            }
-          }
-        ]
-      },
-      
-      devOptions: {
-        enabled: false
-      }
-    })
+    copyOneSignalFiles() // Add this plugin
   ],
   base: '/scheduler/',
   

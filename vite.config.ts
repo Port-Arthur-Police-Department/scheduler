@@ -8,14 +8,43 @@ export default defineConfig({
     react(),
     VitePWA({
       strategies: 'generateSW',
-      srcDir: 'src',
-      filename: 'sw.js',
       registerType: 'autoUpdate',
-      manifest: false, // We use our own manifest
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: 'Port Arthur PD Scheduler',
+        short_name: 'PAPD Scheduler',
+        description: 'Officer scheduling system',
+        theme_color: '#1e40af',
+        background_color: '#0f172a',
+        display: 'standalone',
+        scope: '/scheduler/',
+        start_url: '/scheduler/',
+        orientation: 'portrait',
+        
+        icons: [
+          {
+            src: '/scheduler/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/scheduler/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/scheduler/index.html',
         navigateFallbackDenylist: [/^\/api\//],
+        
+        // IMPORTANT: Exclude OneSignal worker
+        exclude: [/OneSignalSDKWorker\.js$/],
+        
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
@@ -27,19 +56,16 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
-          },
-          {
-            urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 7
-              }
-            }
           }
         ]
+      },
+      
+      // OneSignal integration
+      injectRegister: false, // We'll handle OneSignal manually
+      
+      // Disable VitePWA's auto-registration since we have OneSignal
+      devOptions: {
+        enabled: false // Disable in dev to avoid conflicts
       }
     })
   ],
@@ -51,18 +77,12 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
-      },
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom']
-        }
       }
     }
   },
   
   server: {
-    port: 3000,
-    open: true
+    port: 3000
   },
   
   resolve: {

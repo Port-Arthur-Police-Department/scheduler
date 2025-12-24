@@ -26,12 +26,12 @@
       OneSignalDeferred.push(async function(OneSignal) {
         try {
           await OneSignal.init({
-            appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-            safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-            
-            // CRITICAL: Point to root paths for GitHub Pages
-            serviceWorkerPath: '/OneSignalSDKWorker.js',
-            serviceWorkerParam: { scope: '/' },
+  appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+  safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+  
+  // CRITICAL: Root paths for GitHub Pages
+  serviceWorkerPath: '/OneSignalSDKWorker.js',
+  serviceWorkerParam: { scope: '/' },
             
             // GitHub Pages specific settings
             allowLocalhostAsSecureOrigin: true,

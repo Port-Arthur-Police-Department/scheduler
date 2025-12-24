@@ -10,7 +10,6 @@
     "dev": "vite",
     "build": "npm run clean:build && vite build && npm run prepare-pwa",
     "clean:build": "rm -rf dist dev-dist",
-    "prepare-pwa": "mkdir -p dist/scheduler && cp public/manifest.json dist/ && cp public/manifest.json dist/scheduler/ && cp public/service-worker.js dist/ && cp public/service-worker.js dist/scheduler/ && cp public/OneSignalSDKWorker.js dist/ && cp public/OneSignalSDKWorker.js dist/scheduler/",
     "predeploy": "npm run clean:all && npm run build",
     "deploy": "gh-pages -d dist"
   },

@@ -125,9 +125,9 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [determiningShift, setDeterminingShift] = useState<boolean>(false);
   
   // ADDED: Notification banner state variables
-  const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
-  const [showNotificationBanner, setShowNotificationBanner] = useState(true);
-  const [oneSignalReady, setOneSignalReady] = useState(false);
+//  const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+//  const [showNotificationBanner, setShowNotificationBanner] = useState(true);
+//  const [oneSignalReady, setOneSignalReady] = useState(false);
   
   const hash = location.hash.replace('#', '');
   const { 

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Bell, BellOff, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/contexts/UserContext';
+import { useOneSignal } from '@/hooks/useOneSignal';
 
 // Declare OneSignal types globally
 declare global {
@@ -21,8 +22,19 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
 }) => {
   const { user, isLoading: authLoading } = useUser();
   const userId = user?.id || '';
+  
+  // Use the OneSignal hook
+  const { 
+    isInitialized: oneSignalReady, 
+    isSubscribed: oneSignalSubscribed,
+    loading: oneSignalLoading,
+    error: oneSignalError,
+    requestPermission,
+    checkSubscription,
+    storeOneSignalUserId
+  } = useOneSignal();
+  
   const [status, setStatus] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'blocked'>('loading');
-  const [oneSignalReady, setOneSignalReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
@@ -34,14 +46,17 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       userId: user?.id,
       email: user?.email,
       authLoading,
-      oneSignalReady
+      oneSignalReady,
+      oneSignalSubscribed,
+      oneSignalLoading,
+      oneSignalError
     });
     
     if (!user && !authLoading) {
       setDebugInfo('❌ No authenticated user found. Please log in.');
       console.error('No authenticated user for notifications');
     }
-  }, [user, authLoading, oneSignalReady]);
+  }, [user, authLoading, oneSignalReady, oneSignalSubscribed, oneSignalLoading, oneSignalError]);
 
   // Fetch user profile when user is available
   useEffect(() => {
@@ -82,10 +97,10 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         setUserProfile(data);
         setDebugInfo('✅ Profile loaded successfully');
         
-        // Check if already subscribed
+        // Check if already subscribed in database
         if (data.onesignal_user_id && data.notification_subscribed) {
           setStatus('subscribed');
-          console.log('📱 User already has OneSignal ID:', data.onesignal_user_id);
+          console.log('📱 User already has OneSignal ID in database:', data.onesignal_user_id);
         } else {
           setStatus('unsubscribed');
         }
@@ -137,8 +152,8 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
     }
   };
 
-  // Store OneSignal user ID in Supabase
-  const storeOneSignalUserId = async (onesignalId: string) => {
+  // Store OneSignal user ID in Supabase profile
+  const storeOneSignalUserIdInProfile = async (onesignalId: string) => {
     try {
       if (!userId) {
         console.error('❌ No user ID available to store OneSignal ID');
@@ -146,7 +161,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         return false;
       }
       
-      console.log('💾 Storing OneSignal ID:', {
+      console.log('💾 Storing OneSignal ID in profile:', {
         profileUserId: userId,
         onesignalId: onesignalId.substring(0, 8) + '...',
         timestamp: new Date().toISOString()
@@ -189,7 +204,6 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       
       console.log('✅ OneSignal user ID stored successfully in profiles table');
       setDebugInfo('✅ OneSignal ID saved to database');
-      onSubscribed?.(onesignalId);
       
       // Update local profile state
       setUserProfile((prev: any) => ({
@@ -208,9 +222,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
   };
 
   // Check subscription status
-  const checkSubscription = async (forceCheck = false) => {
-    if (!window.OneSignal && !forceCheck) return;
-    
+  const checkSubscriptionStatus = async (forceCheck = false) => {
     try {
       // First check browser permission
       const permission = Notification.permission;
@@ -222,33 +234,22 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         return;
       }
       
-      // Wait for OneSignal to be ready
-      if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
-        if (forceCheck) {
-          setStatus('unsubscribed');
-        }
-        return;
-      }
+      // Use the hook to check subscription
+      const subscribed = await checkSubscription();
       
-      // Get OneSignal subscription status
-      const isSubscribed = await window.OneSignal.isPushNotificationsEnabled();
-      const onesignalUserId = await window.OneSignal.getUserId();
-      
-      console.log('📱 OneSignal status:', { 
-        isSubscribed, 
-        userId: onesignalUserId || 'Not set',
-        permission
+      console.log('📱 OneSignal status check:', { 
+        subscribed, 
+        permission,
+        oneSignalReady
       });
       
-      if (isSubscribed && onesignalUserId) {
+      if (subscribed) {
         setStatus('subscribed');
         setDebugInfo('✅ Subscribed to push notifications');
-        // Store the OneSignal ID in database
-        await storeOneSignalUserId(onesignalUserId);
       } else {
         setStatus('unsubscribed');
-        if (permission === 'granted' && !onesignalUserId) {
-          setDebugInfo('⚠️ Browser allows notifications but OneSignal not registered');
+        if (permission === 'granted') {
+          setDebugInfo('⚠️ Browser allows notifications but subscription not active');
         } else if (permission === 'default') {
           setDebugInfo('ℹ️ Notifications not enabled yet');
         } else {
@@ -262,129 +263,94 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
     }
   };
 
-  // Initialize OneSignal monitoring
+  // Initialize and monitor OneSignal status
   useEffect(() => {
     if (authLoading) return;
     
-    // Check every second if OneSignal is ready (max 30 seconds)
-    let attempts = 0;
-    const maxAttempts = 30;
-    
-    const checkInterval = setInterval(() => {
-      attempts++;
+    if (oneSignalError) {
+      setDebugInfo(`❌ ${oneSignalError}`);
+      setStatus('unsubscribed');
+    } else if (oneSignalLoading) {
+      setStatus('loading');
+      setDebugInfo('🔄 Loading notification service...');
+    } else if (oneSignalReady) {
+      console.log('✅ OneSignal service ready');
+      setDebugInfo('✅ Notification service ready');
       
-      if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
-        console.log('✅ OneSignal ready after', attempts, 'seconds');
-        setOneSignalReady(true);
-        setDebugInfo('✅ OneSignal service ready');
-        
-        // If profile already has OneSignal ID, mark as subscribed
-        if (userProfile?.onesignal_user_id) {
-          setStatus('subscribed');
-          console.log('✅ Using existing OneSignal ID from profile');
-        } else {
-          checkSubscription();
+      // Check current subscription status
+      checkSubscriptionStatus().then((result) => {
+        // If subscribed and we have a user profile, store the OneSignal ID
+        if (status === 'subscribed' && userProfile && userId) {
+          // We need to get the OneSignal ID from the OneSignal SDK
+          if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
+            window.OneSignal.getUserId().then((onesignalUserId: string) => {
+              if (onesignalUserId) {
+                storeOneSignalUserIdInProfile(onesignalUserId);
+              }
+            });
+          }
         }
-        
-        clearInterval(checkInterval);
-        
-        // Set up subscription change listener
-        window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-          console.log(`🔔 OneSignal subscriptionChange event: ${isSubscribed}`);
-          await checkSubscription(true);
-        });
-        
-      } else if (attempts >= maxAttempts) {
-        console.warn('⚠️ OneSignal not ready after', maxAttempts, 'seconds');
-        setStatus('unsubscribed');
-        setDebugInfo('❌ OneSignal service failed to load');
-        clearInterval(checkInterval);
-      } else {
-        console.log(`⏳ Waiting for OneSignal... (${attempts}/${maxAttempts})`);
-      }
-    }, 1000);
-
-    return () => clearInterval(checkInterval);
-  }, [userProfile, authLoading]);
+      });
+    }
+  }, [oneSignalReady, oneSignalLoading, oneSignalError, authLoading, userProfile, userId, status]);
 
   const handleSubscribe = async () => {
-    if (!window.OneSignal) {
-      console.warn('OneSignal not available');
-      setDebugInfo('❌ Notification service not loaded');
-      alert('Notification service is still loading. Please wait a moment and try again.');
+    if (oneSignalError) {
+      alert('Notification service failed to load. Please refresh the page.');
+      return;
+    }
+
+    if (!oneSignalReady) {
+      setDebugInfo('🔄 Loading notification service...');
+      alert('Notification service is still loading. Please wait a moment.');
       return;
     }
     
     if (!userId) {
-      console.warn('No authenticated user');
       setDebugInfo('❌ Please log in first');
       alert('You must be logged in to enable notifications.');
       return;
     }
 
     setIsProcessing(true);
-    setDebugInfo('🔄 Starting subscription process...');
+    setDebugInfo('🔄 Enabling notifications...');
     
     try {
       console.log('🎯 Starting subscription process...');
       
-      // Method 1: Use OneSignal's slidedown prompt (recommended)
-      if (typeof window.OneSignal.showSlidedownPrompt === 'function') {
-        console.log('Using showSlidedownPrompt method');
-        await window.OneSignal.showSlidedownPrompt({
-          force: true // Force show even if autoPrompt is false
-        });
-      } 
-      // Method 2: Direct browser permission request with OneSignal registration
-      else {
-        console.log('Using direct permission request');
+      // Use the hook to request permission
+      const success = await requestPermission();
+      
+      if (success) {
+        // Check subscription status after requesting permission
+        await checkSubscriptionStatus();
         
-        // First get browser permission
-        const permission = await Notification.requestPermission();
-        console.log('Permission result:', permission);
-        
-        if (permission === 'granted') {
-          // Register with OneSignal after permission is granted
-          if (typeof window.OneSignal.setSubscription === 'function') {
-            await window.OneSignal.setSubscription(true);
+        if (status === 'subscribed') {
+          setDebugInfo('✅ Successfully subscribed!');
+          
+          // Get and store the OneSignal ID
+          if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
+            const onesignalUserId = await window.OneSignal.getUserId();
+            if (onesignalUserId) {
+              await storeOneSignalUserIdInProfile(onesignalUserId);
+            }
           }
           
-          // Give OneSignal time to register
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          alert('✅ Success! You will now receive shift alerts and emergency notifications.');
+          onSubscribed?.(userId);
         } else {
+          setDebugInfo('❌ Could not subscribe. Please try again.');
+          alert('Failed to enable notifications. Please try again.');
+        }
+      } else {
+        const permission = Notification.permission;
+        if (permission === 'denied') {
           setStatus('blocked');
           setDebugInfo('❌ Notifications blocked by user');
-          alert('Notifications are required for shift alerts. Please enable in browser settings.');
-          return;
+        } else {
+          setDebugInfo('❌ Permission request failed');
         }
-      }
-      
-      // Wait a moment for OneSignal to process
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check the subscription result
-      await checkSubscription(true);
-      
-      // If still not subscribed, try manual workaround
-      if (status !== 'subscribed') {
-        console.log('🔄 Subscription may have failed, trying workaround...');
-        setDebugInfo('🔄 Checking subscription status...');
-        
-        // Workaround: Manually trigger subscription
-        const onesignalUserId = await window.OneSignal.getUserId();
-        if (onesignalUserId) {
-          console.log('Workaround found user ID:', onesignalUserId.substring(0, 8) + '...');
-          setStatus('subscribed');
-          await storeOneSignalUserId(onesignalUserId);
-        }
-      }
-      
-      // Show success message if subscribed
-      if (status === 'subscribed') {
-        setDebugInfo('✅ Successfully subscribed!');
-        alert('✅ Success! You will now receive shift alerts and emergency notifications.');
-      } else {
-        setDebugInfo('⚠️ Subscription incomplete - please try again');
+        alert('Notifications are required for shift alerts. Please enable in browser settings.');
       }
       
     } catch (error: any) {
@@ -393,7 +359,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       
       // More specific error messages
       if (error.message?.includes('not a function')) {
-        alert('OneSignal is not properly loaded. Please refresh the page.');
+        alert('Notification service is not properly loaded. Please refresh the page.');
       } else if (error.message?.includes('permission')) {
         alert('Please allow notifications in your browser settings.');
       } else {
@@ -401,7 +367,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       }
       
       // Fallback: Direct check
-      await checkSubscription(true);
+      await checkSubscriptionStatus();
     } finally {
       setIsProcessing(false);
     }
@@ -416,6 +382,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
     setDebugInfo('🔄 Disabling notifications...');
     
     try {
+      // Try to unsubscribe via OneSignal
       if (typeof window.OneSignal.setSubscription === 'function') {
         await window.OneSignal.setSubscription(false);
       }
@@ -459,7 +426,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         <div className="flex items-center justify-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
           <span className="text-blue-700 font-medium">
-            {authLoading ? 'Checking authentication...' : 'Checking notification status...'}
+            {authLoading ? 'Checking authentication...' : 'Loading notification service...'}
           </span>
         </div>
         {debugInfo && (
@@ -609,7 +576,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       <Button 
         onClick={handleSubscribe}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 text-lg"
-        disabled={!oneSignalReady || isProcessing}
+        disabled={!oneSignalReady || isProcessing || oneSignalLoading}
       >
         {isProcessing ? (
           <>
@@ -623,9 +590,15 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         )}
       </Button>
       
-      {!oneSignalReady && (
+      {oneSignalLoading && (
         <p className="text-xs text-blue-600 mt-3 text-center">
           Initializing notification service... This may take a few seconds.
+        </p>
+      )}
+      
+      {oneSignalError && (
+        <p className="text-xs text-red-600 mt-3 text-center">
+          {oneSignalError}
         </p>
       )}
       
@@ -644,7 +617,10 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
           <p className="text-xs text-blue-700">User: {user?.email}</p>
           <p className="text-xs text-blue-700">User ID: {userId.substring(0, 8)}...</p>
           <p className="text-xs text-blue-700">OneSignal Ready: {oneSignalReady ? 'Yes' : 'No'}</p>
+          <p className="text-xs text-blue-700">OneSignal Loading: {oneSignalLoading ? 'Yes' : 'No'}</p>
+          <p className="text-xs text-blue-700">OneSignal Error: {oneSignalError || 'None'}</p>
           <p className="text-xs text-blue-700">Profile: {userProfile ? 'Loaded' : 'Not loaded'}</p>
+          <p className="text-xs text-blue-700">Browser Permission: {Notification.permission}</p>
         </div>
       )}
     </div>

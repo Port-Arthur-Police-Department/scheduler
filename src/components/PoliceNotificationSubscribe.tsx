@@ -23,18 +23,51 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
   const [status, setStatus] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'blocked'>('loading');
   const [oneSignalReady, setOneSignalReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Fetch user profile
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return;
+        }
+
+        setUserProfile(data);
+        
+        // Check if already subscribed
+        if (data.onesignal_user_id) {
+          setStatus('subscribed');
+        }
+      } catch (error) {
+        console.error('Error in fetchUserProfile:', error);
+      }
+    };
+
+    if (userId) {
+      fetchUserProfile();
+    }
+  }, [userId]);
 
   // Store OneSignal user ID in Supabase
   const storeOneSignalUserId = async (onesignalId: string) => {
     try {
-      console.log('💾 Storing OneSignal ID for officer:', userId, '->', onesignalId);
+      console.log('💾 Storing OneSignal ID for profile:', userId, '->', onesignalId);
       
       const { error } = await supabase
-        .from('officers')
+        .from('profiles')
         .update({ 
           onesignal_user_id: onesignalId,
           notification_subscribed: true,
-          notification_subscribed_at: new Date().toISOString()
+          notification_subscribed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .eq('id', userId);
 
@@ -43,8 +76,16 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
         throw error;
       }
       
-      console.log('✅ OneSignal user ID stored successfully');
+      console.log('✅ OneSignal user ID stored successfully in profiles table');
       onSubscribed?.(onesignalId);
+      
+      // Update local profile state
+      setUserProfile((prev: any) => ({
+        ...prev,
+        onesignal_user_id: onesignalId,
+        notification_subscribed: true,
+        notification_subscribed_at: new Date().toISOString()
+      }));
     } catch (error) {
       console.error('Error storing OneSignal user ID:', error);
     }
@@ -105,7 +146,14 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
         console.log('✅ OneSignal ready after', attempts, 'seconds');
         setOneSignalReady(true);
-        checkSubscription();
+        
+        // If profile already has OneSignal ID, mark as subscribed
+        if (userProfile?.onesignal_user_id) {
+          setStatus('subscribed');
+        } else {
+          checkSubscription();
+        }
+        
         clearInterval(checkInterval);
       } else if (attempts >= maxAttempts) {
         console.warn('⚠️ OneSignal not ready after', maxAttempts, 'seconds');
@@ -117,7 +165,7 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
     }, 1000);
 
     return () => clearInterval(checkInterval);
-  }, []);
+  }, [userProfile]);
 
   const handleSubscribe = async () => {
     if (!window.OneSignal) {
@@ -216,16 +264,25 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
       
       // Update database
       const { error } = await supabase
-        .from('officers')
+        .from('profiles')
         .update({ 
           onesignal_user_id: null,
-          notification_subscribed: false 
+          notification_subscribed: false,
+          updated_at: new Date().toISOString()
         })
         .eq('id', userId);
       
       if (error) throw error;
       
       setStatus('unsubscribed');
+      
+      // Update local profile state
+      setUserProfile((prev: any) => ({
+        ...prev,
+        onesignal_user_id: null,
+        notification_subscribed: false
+      }));
+      
       alert('Notifications have been disabled.');
     } catch (error) {
       console.error('Unsubscribe error:', error);
@@ -288,6 +345,12 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
           </div>
         </div>
         
+        {userProfile?.badge_number && (
+          <p className="text-sm text-green-600 mb-3">
+            Badge: {userProfile.badge_number} • Registered for notifications
+          </p>
+        )}
+        
         <div className="mt-4 flex gap-2">
           <Button
             onClick={handleUnsubscribe}
@@ -321,6 +384,12 @@ const PoliceNotificationSubscribe: React.FC<PoliceNotificationSubscribeProps> = 
           <p className="text-sm text-blue-700 mt-1">
             Get real-time alerts for shift changes, emergencies, and department announcements
           </p>
+          
+          {userProfile?.badge_number && (
+            <p className="text-sm text-blue-600 mt-2">
+              Officer: {userProfile.full_name} • Badge: {userProfile.badge_number}
+            </p>
+          )}
         </div>
       </div>
       

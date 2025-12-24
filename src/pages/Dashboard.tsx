@@ -811,16 +811,15 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       <main className={`container mx-auto px-4 ${isMobile ? 'pb-24' : 'py-8'}`}>
         
         {/* Police Department Notification Banner */}
-        {user && isSubscribed === false && showNotificationBanner && (
-          <div className="mb-6">
-            <PoliceNotificationSubscribe 
-              userId={user?.id || ''}
-              onSubscribed={(onesignalId) => {
-                console.log('Officer subscribed with OneSignal ID:', onesignalId);
-              // You might want to show a success message or update UI
-                  }}
-                />
-          </div>
+{user && isSubscribed === false && showNotificationBanner && (
+  <div className="mb-6">
+    <PoliceNotificationSubscribe 
+      userId={user?.id || ''}  // This should work if user exists
+      onSubscribed={(onesignalId) => {
+        console.log('Officer subscribed with OneSignal ID:', onesignalId);
+      }}
+    />
+  </div>
         )}
         
         {/* Welcome message */}

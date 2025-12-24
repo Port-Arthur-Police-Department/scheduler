@@ -813,7 +813,13 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         {/* Police Department Notification Banner */}
         {user && isSubscribed === false && showNotificationBanner && (
           <div className="mb-6">
-            <PoliceNotificationSubscribe />
+            <PoliceNotificationSubscribe 
+              userId={user?.id || ''}
+              onSubscribed={(onesignalId) => {
+                console.log('Officer subscribed with OneSignal ID:', onesignalId);
+              // You might want to show a success message or update UI
+                  }}
+                />
           </div>
         )}
         

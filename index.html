@@ -13,13 +13,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="PAPD Scheduler">
     
-    <!-- CORRECTED ICON PATHS -->
+    <!-- Icon paths -->
     <link rel="icon" href="/scheduler/icons/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/scheduler/icons/icon-192.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/scheduler/icons/icon-192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/scheduler/icons/icon-192.png">
     <link rel="apple-touch-icon" sizes="152x152" href="/scheduler/icons/icon-192.png">
     <link rel="apple-touch-icon" sizes="167x167" href="/scheduler/icons/icon-192.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/scheduler/manifest.webmanifest">
     
     <!-- Windows Tile -->
     <meta name="msapplication-TileImage" content="/scheduler/icons/icon-192.png">
@@ -30,10 +33,9 @@
     
     <title>Port Arthur PD - Officer Scheduler</title>
     
-    <!-- OneSignal SDK - Updated to v17 -->
-    <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" defer></script>
+    <!-- OneSignal SDK - Keep only the SDK, no initialization -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     
-
   </head>
   <body>
     <div id="root"></div>

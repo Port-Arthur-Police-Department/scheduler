@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate', // Add this
+      registerType: 'autoUpdate',
       includeAssets: [
         'icons/favicon.ico',
         'icons/icon-192.png',
@@ -21,7 +21,7 @@ export default defineConfig({
         theme_color: '#1e40af',
         background_color: '#0f172a',
         display: 'standalone',
-        orientation: 'portrait', // Add this
+        orientation: 'portrait',
         scope: '/scheduler/',
         start_url: '/scheduler/',
         
@@ -64,13 +64,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/scheduler/index.html',
-        // Better exclusion pattern for OneSignal
-        exclude: [
-          /OneSignal.*\.js$/,
-          /OneSignalSDKWorker\.js$/,
-          /OneSignalSDKUpdaterWorker\.js$/,
-          /manifest\.webmanifest$/ // Exclude manifest from cache
-        ],
+        // Correct placement: runtimeCaching goes inside workbox
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
@@ -86,16 +80,24 @@ export default defineConfig({
         ]
       },
       
-      // Changed from false to 'script' or 'auto'
-      injectRegister: 'auto', // Changed from false to 'auto'
+      // Exclude OneSignal files from being cached by workbox
+      // This should be at the root level, not inside workbox
+      exclude: [
+        /OneSignal.*\.js$/,
+        /OneSignalSDKWorker\.js$/,
+        /OneSignalSDKUpdaterWorker\.js$/,
+        /manifest\.webmanifest$/
+      ],
+      
+      injectRegister: 'auto',
       
       devOptions: {
         enabled: true,
-        type: 'module', // Add this for dev
+        type: 'module',
         navigateFallbackAllowlist: [/^\/scheduler/]
       },
       
-      // Add this for better PWA behavior
+      // Strategies and srcDir should be at the root level
       strategies: 'generateSW',
       srcDir: 'src',
       filename: 'service-worker.js'

@@ -391,44 +391,45 @@ const App = () => {
             console.log('✅ OneSignal initialized successfully');
             setOneSignalStatus(prev => ({ ...prev, initialized: true }));
 
-            // CRITICAL: Set up subscription change listener
-            window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-              console.log(`🔔 Subscription changed: ${isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}`);
-              
-              if (isSubscribed) {
-                try {
-                  const onesignalUserId = await window.OneSignal.getUserId();
-                  console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
-                  
-                  // Store in Supabase
-                  const success = await storeOneSignalUserId(onesignalUserId);
-                  if (success) {
-                    // Set department tags in OneSignal
-                    await window.OneSignal.sendTags({
-                      department: 'port-arthur-pd',
-                      user_type: 'officer',
-                      app: 'scheduler',
-                      environment: import.meta.env.PROD ? 'production' : 'development',
-                      subscribed_at: new Date().toISOString(),
-                      badge_number: 'test-123' // You would get this from user profile
-                    });
-                    console.log('✅ Tags set successfully');
-                    
-                    // Send welcome notification
-                    await window.OneSignal.sendSelfNotification({
-                      headings: { en: 'Notifications Enabled' },
-                      contents: { en: 'You will now receive shift alerts and department notifications.' },
-                      url: window.location.href
-                    });
-                  }
-                } catch (error) {
-                  console.error('Error in subscriptionChange handler:', error);
-                }
-              }
-              
-              // Update local state
-              await checkSubscriptionStatus();
-            });
+           // Replace the subscriptionChange listener in App.tsx with this simpler version:
+window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+  console.log(`🔔 OneSignal subscriptionChange: ${isSubscribed}`);
+  
+  if (isSubscribed) {
+    try {
+      const onesignalUserId = await window.OneSignal.getUserId();
+      console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
+      
+      // Wait for user to be authenticated
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id && onesignalUserId) {
+          console.log(`💾 Saving for user ${session.user.id}: ${onesignalUserId}`);
+          
+          // Update the profile
+          const { error } = await supabase
+            .from('profiles')
+            .update({ 
+              onesignal_user_id: onesignalUserId,
+              notification_subscribed: true,
+              notification_subscribed_at: new Date().toISOString()
+            })
+            .eq('id', session.user.id);
+          
+          if (error) {
+            console.error('❌ Failed to save OneSignal ID:', error);
+          } else {
+            console.log('✅ OneSignal ID saved to profile');
+          }
+        } else {
+          console.log('⚠️ No authenticated user found for OneSignal ID');
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error in subscriptionChange handler:', error);
+    }
+  }
+});
 
             // Check initial subscription status
             setTimeout(async () => {

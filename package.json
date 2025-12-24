@@ -8,7 +8,7 @@
     "clean": "rm -rf dev-dist dist node_modules/.vite",
     "clean:all": "rm -rf dev-dist dist node_modules/.vite .vite",
     "dev": "vite",
-    "build": "npm run clean:build && vite build && npm run prepare-pwa",
+    "build": "npm run clean:build && vite build", // REMOVED: && npm run prepare-pwa
     "clean:build": "rm -rf dist dev-dist",
     "predeploy": "npm run clean:all && npm run build",
     "deploy": "gh-pages -d dist"

@@ -25,6 +25,7 @@ import { WebsiteSettings } from '@/components/admin/WebsiteSettings';
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { ChangePassword } from "@/components/profile/ChangePassword";
 import { StaffManagementMobile } from "@/components/admin/StaffManagementMobile";
+import PoliceNotificationSubscribe from '@/components/PoliceNotificationSubscribe';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -752,12 +753,21 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className={`container mx-auto px-4 ${isMobile ? 'pb-24' : 'py-8'}`}>
-        <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold mb-2">Welcome back, {profile?.full_name?.split(" ")[0] || "Officer"}</h2>
-          <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
+    {/* MAIN CONTENT - ADD THE NOTIFICATION BANNER RIGHT HERE ↓↓↓ */}
+    <main className={`container mx-auto px-4 ${isMobile ? 'pb-24' : 'py-8'}`}>
+      
+      {/* ADD THE NOTIFICATION BANNER RIGHT AFTER <main> BUT BEFORE WELCOME MESSAGE */}
+      {user && !isSubscribed && showNotificationBanner && (
+        <div className="mb-6">
+          <PoliceNotificationSubscribe />
         </div>
+      )}
+      
+      {/* Your existing welcome message */}
+      <div className="mb-8">
+        <h2 className="text-2xl md:text-3xl font-bold mb-2">Welcome back, {profile?.full_name?.split(" ")[0] || "Officer"}</h2>
+        <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
+      </div>
 
         {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
         {isAdminOrSupervisor && !isMobile && getSetting('show_staffing_overview', true) && (

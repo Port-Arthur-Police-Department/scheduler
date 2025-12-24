@@ -19,62 +19,67 @@
     <!-- OneSignal SDK -->
     <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" defer></script>
     <script>
-      // Initialize OneSignalDeferred array
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      // OneSignal initialization
+      window.OneSignal = window.OneSignal || [];
       
-      // Push initialization function
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-          await OneSignal.init({
-  appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-  safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-  
-  // CRITICAL: Root paths for GitHub Pages
-  serviceWorkerPath: '/OneSignalSDKWorker.js',
-  serviceWorkerParam: { scope: '/' },
-            
-            // GitHub Pages specific settings
-            allowLocalhostAsSecureOrigin: true,
-            autoResubscribe: true,
-            persistNotification: false,
-            autoRegister: true,
-            httpPermissionRequest: { enable: true },
-            
-            // Prompt settings
-            promptOptions: {
-              slidedown: {
-                enabled: true,
-                autoPrompt: false,
-                timeDelay: 3,
-                pageViews: 1,
-                actionMessage: "Get police department shift alerts",
-                acceptButtonText: "ALLOW",
-                cancelButtonText: "NO THANKS"
-              }
-            },
-            
-            welcomeNotification: {
-              disable: false,
-              title: "Port Arthur PD Notifications",
-              message: "You'll receive shift alerts and emergency notifications"
-            },
-            
-            notifyButton: {
-              enable: false
+      // Initialize OneSignal
+      OneSignal.push(function() {
+        OneSignal.init({
+          appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+          safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+          
+          // IMPORTANT: Service worker path
+          serviceWorkerPath: "/OneSignalSDKWorker.js",
+          serviceWorkerParam: { scope: "/" },
+          
+          // Prompt settings
+          promptOptions: {
+            slidedown: {
+              enabled: true,
+              autoPrompt: false,
+              timeDelay: 3,
+              pageViews: 1,
+              actionMessage: "Get police department shift alerts",
+              acceptButtonText: "ALLOW",
+              cancelButtonText: "NO THANKS"
             }
-          });
+          },
           
-          console.log('✅ OneSignal initialized successfully');
-          window.OneSignal = OneSignal;
+          // Welcome notification
+          welcomeNotification: {
+            disable: false,
+            title: "Port Arthur PD Notifications",
+            message: "You'll receive shift alerts and emergency notifications"
+          },
           
-          // Notify React that OneSignal is ready
-          if (window.onOneSignalReady) {
-            window.onOneSignalReady();
+          notifyButton: {
+            enable: false
+          },
+          
+          // Settings for GitHub Pages
+          allowLocalhostAsSecureOrigin: true,
+          autoResubscribe: true,
+          persistNotification: false,
+          autoRegister: true,
+          httpPermissionRequest: {
+            enable: true
           }
-          
-        } catch (error) {
-          console.error('❌ OneSignal initialization failed:', error);
-        }
+        });
+        
+        console.log("✅ OneSignal initialized in index.html");
+        
+        // Make OneSignal globally available
+        window.OneSignalSDK = OneSignal;
+        
+        // Dispatch ready event
+        document.dispatchEvent(new CustomEvent('onesignal:ready'));
+      });
+      
+      // Error handling
+      OneSignal.push(function() {
+        OneSignal.on('notificationPermissionChange', function(permissionChange) {
+          console.log('Permission changed:', permissionChange);
+        });
       });
     </script>
   </head>

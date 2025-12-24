@@ -3,31 +3,27 @@ const CACHE_NAME = 'papd-scheduler-v1.0';
 const urlsToCache = [
   '/scheduler/',
   '/scheduler/index.html',
-  '/scheduler/manifest.json'
+  '/scheduler/manifest.json',
+  '/scheduler/icon-192.png',
+  '/scheduler/icon-512.png'
 ];
 
 // Install event
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing PWA...');
-  
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[Service Worker] Caching app shell');
         return cache.addAll(urlsToCache);
       })
-      .then(() => {
-        console.log('[Service Worker] Skip waiting to activate immediately');
-        return self.skipWaiting();
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
 // Activate event
 self.addEventListener('activate', (event) => {
   console.log('[Service Worker] Activating PWA...');
-  
-  // Clean up old caches
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -38,14 +34,11 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => {
-      console.log('[Service Worker] Claiming clients');
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Fetch event with cache-first strategy
+// Fetch event - cache first, then network
 self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) {
@@ -54,26 +47,22 @@ self.addEventListener('fetch', (event) => {
   
   event.respondWith(
     caches.match(event.request)
-      .then((response) => {
-        // Return cached response if found
-        if (response) {
-          return response;
+      .then((cachedResponse) => {
+        // Return cached if available
+        if (cachedResponse) {
+          return cachedResponse;
         }
         
-        // Clone the request
-        const fetchRequest = event.request.clone();
-        
-        // Make network request
-        return fetch(fetchRequest).then((response) => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+        // Otherwise fetch from network
+        return fetch(event.request).then((response) => {
+          // Don't cache if not successful
+          if (!response || response.status !== 200) {
             return response;
           }
           
           // Clone the response
           const responseToCache = response.clone();
           
-          // Cache the new response
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
@@ -85,13 +74,9 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle messages from the app
+// Handle messages
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
-
-// IMPORTANT: Let OneSignal handle push notifications
-// DO NOT add push event listeners here
-// OneSignal's SDK (loaded from index.html) will handle push

@@ -157,45 +157,66 @@ const App = () => {
     }
   };
 
-  // Check and log current subscription status
-  const checkSubscriptionStatus = async () => {
-    // Check if OneSignal is properly loaded
-    if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
-      console.log('⏳ OneSignal not ready for status check');
-      return null;
+const checkSubscriptionStatus = async () => {
+  // Check if OneSignal is properly loaded
+  if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
+    console.log('⏳ OneSignal not ready for status check');
+    return null;
+  }
+  
+  try {
+    const userId = await window.OneSignal.getUserId();
+    const permission = await window.OneSignal.getNotificationPermission();
+    const isSubscribed = !!userId;
+    
+    console.log('🔍 Subscription Status:', {
+      userId: userId || 'Not subscribed',
+      permission,
+      isSubscribed,
+      oneSignalReady: !!window.OneSignal
+    });
+    
+    setOneSignalStatus(prev => ({
+      ...prev,
+      userId,
+      subscribed: isSubscribed,
+      permission
+    }));
+    
+    // If subscribed, store the user ID in Supabase
+    if (isSubscribed && userId) {
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          console.log(`💾 Auto-saving OneSignal ID for user ${session.user.id}`);
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ 
+              onesignal_user_id: userId,
+              notification_subscribed: true,
+              notification_subscribed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', session.user.id);
+          
+          if (error) {
+            console.error('❌ Auto-save failed:', error);
+          } else {
+            console.log('✅ OneSignal ID auto-saved to profile');
+          }
+        }
+      }, 1000);
+      
+      setShowNotificationBanner(false);
     }
     
-    try {
-      const userId = await window.OneSignal.getUserId();
-      const permission = await window.OneSignal.getNotificationPermission();
-      const isSubscribed = !!userId;
-      
-      console.log('🔍 Subscription Status:', {
-        userId: userId || 'Not subscribed',
-        permission,
-        isSubscribed,
-        oneSignalReady: !!window.OneSignal
-      });
-      
-      setOneSignalStatus(prev => ({
-        ...prev,
-        userId,
-        subscribed: isSubscribed,
-        permission
-      }));
-      
-      // If subscribed, store the user ID in Supabase
-      if (isSubscribed && userId) {
-        await storeOneSignalUserId(userId);
-        setShowNotificationBanner(false);
-      }
-      
-      return { userId, isSubscribed, permission };
-    } catch (error) {
-      console.error('Error checking subscription:', error);
-      return null;
-    }
-  };
+    return { userId, isSubscribed, permission };
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+    return null;
+  }
+};
 
   // Auto-hide status panel after 10 seconds if everything is ready
   useEffect(() => {

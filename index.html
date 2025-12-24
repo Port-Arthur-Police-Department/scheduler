@@ -1,62 +1,207 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  
+  // Store the initialization function
+  OneSignalDeferred.push(async function(OneSignal) {
+    console.log('🚀 Starting OneSignal initialization...');
     
-    <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#1e40af" />
-    <meta name="description" content="Port Arthur Police Department Officer Scheduling System" />
-    
-    <!-- Apple Specific -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="PAPD Scheduler">
-    
-    <!-- Icons (backup for browsers that don't use manifest) -->
-    <link rel="icon" href="/scheduler/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/scheduler/icon-192.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/scheduler/icon-192.png">
-    <link rel="apple-touch-icon" href="/scheduler/icon-192.png">
-    
-    <!-- Windows Tile -->
-    <meta name="msapplication-TileImage" content="/scheduler/icon-192.png">
-    <meta name="msapplication-TileColor" content="#1e40af">
-    
-    <title>Port Arthur PD - Officer Scheduler</title>
-    
-    <!-- OneSignal SDK -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    
-    <!-- OneSignal Configuration -->
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        await OneSignal.init({
-          appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-          safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-          serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
-          serviceWorkerParam: { scope: '/scheduler/' },
-          allowLocalhostAsSecureOrigin: true,
-          autoResubscribe: true,
-          promptOptions: {
-            slidedown: {
-              enabled: true,
-              autoPrompt: true,
-              timeDelay: 5,
-              pageViews: 1
-            }
-          }
-        });
-        
-        console.log('OneSignal initialized');
+    try {
+      // Wait for page to fully load
+      await new Promise(resolve => {
+        if (document.readyState === 'complete') {
+          resolve();
+        } else {
+          window.addEventListener('load', resolve);
+        }
       });
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+      
+      console.log('📋 Configuring OneSignal...');
+      
+      // Initialize with explicit settings for GitHub Pages
+      await OneSignal.init({
+        appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+        safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+        
+        // GitHub Pages specific paths
+        serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
+        serviceWorkerParam: { 
+          scope: '/scheduler/',
+          updateViaCache: 'none'
+        },
+        
+        // Critical settings
+        allowLocalhostAsSecureOrigin: true,
+        autoResubscribe: true,
+        persistNotification: false,
+        
+        // IMPORTANT: Disable auto-prompt, we'll trigger manually
+        promptOptions: {
+          slidedown: {
+            enabled: true,
+            autoPrompt: false, // Set to FALSE
+            timeDelay: 1,
+            pageViews: 1
+          }
+        },
+        
+        // Welcome notification
+        welcomeNotification: {
+          disable: false,
+          title: "Welcome to PAPD Scheduler",
+          message: "You'll receive notifications about shift changes and alerts.",
+          url: window.location.href
+        },
+        
+        // Notify button (optional)
+        notifyButton: {
+          enable: false, // Disable default bell
+          size: 'medium',
+          theme: 'default',
+          position: 'bottom-right',
+          prenotify: true,
+          showCredit: false
+        }
+      });
+      
+      console.log('✅ OneSignal initialized successfully');
+      
+      // Check current subscription status
+      setTimeout(async () => {
+        const userId = await OneSignal.getUserId();
+        const permission = await OneSignal.getNotificationPermission();
+        
+        console.log('Initial status - User ID:', userId, 'Permission:', permission);
+        
+        // If not subscribed and permission is default, show custom prompt
+        if (!userId && permission === 'default') {
+          console.log('🔄 User not subscribed, will show prompt in 3 seconds...');
+          setTimeout(() => showCustomNotificationPrompt(), 3000);
+        } else if (userId) {
+          console.log('🎉 User already subscribed:', userId);
+          // Store the user ID in your database
+          storeOneSignalUserId(userId);
+        }
+      }, 2000);
+      
+      // Listen for subscription changes
+      OneSignal.on('subscriptionChange', async (isSubscribed) => {
+        console.log(`🔔 Subscription changed: ${isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}`);
+        
+        if (isSubscribed) {
+          const userId = await OneSignal.getUserId();
+          console.log('🎉 New subscription! User ID:', userId);
+          
+          // Store in your database
+          storeOneSignalUserId(userId);
+          
+          // Set tags for police department
+          try {
+            await OneSignal.sendTags({
+              department: 'port-arthur-pd',
+              user_type: 'officer',
+              app: 'scheduler',
+              environment: 'production',
+              subscribed_at: new Date().toISOString()
+            });
+            console.log('✅ Tags set successfully');
+          } catch (error) {
+            console.error('Error setting tags:', error);
+          }
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ OneSignal initialization failed:', error);
+    }
+  });
+  
+  // Custom notification prompt function
+  function showCustomNotificationPrompt() {
+    console.log('Showing custom notification prompt...');
+    
+    // Create and show your custom UI
+    const prompt = document.createElement('div');
+    prompt.innerHTML = `
+      <div style="
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: white;
+        border: 2px solid #1e40af;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        max-width: 300px;
+        font-family: system-ui, -apple-system, sans-serif;
+      ">
+        <h3 style="margin: 0 0 10px 0; color: #1e40af;">🔔 PAPD Notifications</h3>
+        <p style="margin: 0 0 15px 0; font-size: 14px; color: #333;">
+          Get notified about shift changes, emergencies, and department announcements.
+        </p>
+        <div style="display: flex; gap: 10px;">
+          <button id="enableNotifications" style="
+            flex: 1;
+            background: #1e40af;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+          ">Enable</button>
+          <button id="dismissPrompt" style="
+            flex: 1;
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+          ">Not Now</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(prompt);
+    
+    document.getElementById('enableNotifications').onclick = async () => {
+      console.log('User clicked Enable');
+      prompt.remove();
+      
+      if (window.OneSignal) {
+        try {
+          await window.OneSignal.showSlidedownPrompt();
+        } catch (error) {
+          console.error('Error showing prompt:', error);
+        }
+      }
+    };
+    
+    document.getElementById('dismissPrompt').onclick = () => {
+      console.log('User dismissed prompt');
+      prompt.remove();
+      // Optionally store dismissal in localStorage
+      localStorage.setItem('notificationPromptDismissed', new Date().toISOString());
+    };
+  }
+  
+  // Function to store OneSignal user ID in your database
+  async function storeOneSignalUserId(userId) {
+    try {
+      // You'll need to implement this based on your auth system
+      console.log('📝 Store this OneSignal user ID in your database:', userId);
+      
+      // Example using Supabase (adjust based on your setup):
+      // const { data: user } = await supabase.auth.getUser();
+      // if (user) {
+      //   await supabase
+      //     .from('officers')
+      //     .update({ onesignal_user_id: userId })
+      //     .eq('id', user.id);
+      // }
+    } catch (error) {
+      console.error('Error storing OneSignal ID:', error);
+    }
+  }
+</script>

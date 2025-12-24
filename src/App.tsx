@@ -353,10 +353,20 @@ const App = () => {
           }
         }
         
+        // Get the userId asynchronously
+        let userId = null;
+        if (isSubscribed) {
+          try {
+            userId = await window.OneSignal.getUserId();
+          } catch (error) {
+            console.error('Error getting OneSignal userId:', error);
+          }
+        }
+        
         setOneSignalStatus(prev => ({
           ...prev,
           subscribed: isSubscribed,
-          userId: isSubscribed ? await window.OneSignal.getUserId() : null
+          userId: userId
         }));
         
         if (isSubscribed) {

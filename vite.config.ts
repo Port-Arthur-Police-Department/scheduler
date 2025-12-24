@@ -42,8 +42,13 @@ export default defineConfig({
         navigateFallback: '/scheduler/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         
-        // IMPORTANT: Exclude OneSignal worker
-        exclude: [/OneSignalSDKWorker\.js$/],
+        // IMPORTANT: exclude needs to be in an array and inside globIgnores
+        globIgnores: [
+          '**/node_modules/**/*',
+          '**/OneSignalSDKWorker.js',
+          '**/OneSignalSDKUpdaterWorker.js',
+          '**/sw.js'
+        ],
         
         runtimeCaching: [
           {
@@ -56,17 +61,31 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
+          },
+          {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-cache',
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+              }
+            }
           }
         ]
       },
       
-      // OneSignal integration
-      injectRegister: false, // We'll handle OneSignal manually
+      // Disable auto-injection since we handle OneSignal manually
+      injectRegister: false,
       
-      // Disable VitePWA's auto-registration since we have OneSignal
       devOptions: {
         enabled: false // Disable in dev to avoid conflicts
-      }
+      },
+      
+      // Explicitly define mode
+      mode: 'production'
     })
   ],
   base: '/scheduler/',
@@ -77,8 +96,19 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
+      },
+      output: {
+        manualChunks: {
+          // Split vendor chunks better
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs'],
+          'utils-vendor': ['date-fns', 'lodash', 'jsPDF'],
+          'sonner-vendor': ['sonner']
+        }
       }
-    }
+    },
+    // Increase chunk size warning limit
+    chunkSizeWarningLimit: 1000
   },
   
   server: {

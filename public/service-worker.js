@@ -1,8 +1,8 @@
-// Simple service worker for PWA caching
+// Simple service worker for PWA
 const CACHE_NAME = 'pd-scheduler-v1';
 const urlsToCache = [
-  '/scheduler/',
-  '/scheduler/index.html',
+  '/',
+  '/index.html',
   '/manifest.json'
 ];
 
@@ -34,21 +34,4 @@ self.addEventListener('activate', event => {
   );
 });
 
-self.addEventListener('fetch', event => {
-  // Skip OneSignal requests
-  if (event.request.url.includes('onesignal.com')) {
-    return;
-  }
-  
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
-  );
-});
-
-console.log('Police Department Scheduler Service Worker loaded');
+console.log('Police Department Scheduler PWA Service Worker loaded');

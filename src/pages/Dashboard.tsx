@@ -814,9 +814,10 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
 {user && isSubscribed === false && showNotificationBanner && (
   <div className="mb-6">
     <PoliceNotificationSubscribe 
-      userId={user?.id || ''}  // This should work if user exists
       onSubscribed={(onesignalId) => {
         console.log('Officer subscribed with OneSignal ID:', onesignalId);
+        setIsSubscribed(true);
+        setShowNotificationBanner(false);
       }}
     />
   </div>

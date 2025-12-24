@@ -8,12 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: [
-        'icons/favicon.ico',
-        'icons/icon-192.png',
-        'icons/icon-512.png',
-        'icons/apple-touch-icon.png'
-      ],
+      includeAssets: ['icons/favicon.ico', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',
@@ -21,86 +16,41 @@ export default defineConfig({
         theme_color: '#1e40af',
         background_color: '#0f172a',
         display: 'standalone',
-        orientation: 'portrait',
         scope: '/scheduler/',
         start_url: '/scheduler/',
-        
         icons: [
           {
             src: '/scheduler/icons/icon-192.png',
             sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
+            type: 'image/png'
           },
           {
             src: '/scheduler/icons/icon-512.png',
             sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/scheduler/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'monochrome'
-          }
-        ],
-        
-        // Add these for better PWA experience
-        categories: ['productivity', 'business'],
-        shortcuts: [
-          {
-            name: 'Dashboard',
-            short_name: 'Dashboard',
-            description: 'View officer dashboard',
-            url: '/dashboard',
-            icons: [{ src: '/scheduler/icons/icon-192.png', sizes: '192x192' }]
-          }
-        ],
-        screenshots: [],
-        prefer_related_applications: false
-      },
-      
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: '/scheduler/index.html',
-        // Correct placement: runtimeCaching goes inside workbox
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'onesignal-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
-              }
-            }
+            type: 'image/png'
           }
         ]
       },
       
-      // Exclude OneSignal files from being cached by workbox
-      // This should be at the root level, not inside workbox
-      exclude: [
-        /OneSignal.*\.js$/,
-        /OneSignalSDKWorker\.js$/,
-        /OneSignalSDKUpdaterWorker\.js$/,
-        /manifest\.webmanifest$/
-      ],
+      // Minimal workbox configuration
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: '/scheduler/index.html',
+        // Exclude OneSignal files from precaching
+        globIgnores: [
+          '**/OneSignalSDKWorker.js',
+          '**/OneSignalSDKUpdaterWorker.js',
+          '**/sw.js',
+          '**/workbox-*.js'
+        ]
+      },
       
       injectRegister: 'auto',
       
       devOptions: {
         enabled: true,
-        type: 'module',
         navigateFallbackAllowlist: [/^\/scheduler/]
-      },
-      
-      // Strategies and srcDir should be at the root level
-      strategies: 'generateSW',
-      srcDir: 'src',
-      filename: 'service-worker.js'
+      }
     })
   ],
   base: '/scheduler/',
@@ -111,19 +61,12 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
-      },
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@/components/ui']
-        }
       }
     }
   },
   
   server: {
-    port: 3000,
-    host: true
+    port: 3000
   },
   
   resolve: {

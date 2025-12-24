@@ -278,35 +278,35 @@ const App = () => {
     };
     
     // Register service workers for PWA
-    const registerServiceWorkers = async () => {
-      if (!('serviceWorker' in navigator)) {
-        console.log('❌ Service Workers not supported');
-        return;
-      }
-      
-      try {
-        // Register Vite PWA service worker
-        try {
-          const vitePwaReg = await navigator.serviceWorker.register(
-            '/scheduler/service-worker.js',
-            { 
-              scope: '/scheduler/',
-              updateViaCache: 'none'
-            }
-          );
-          console.log('✅ Vite PWA service worker registered');
-          
-          if (vitePwaReg.active) {
-            setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
-          }
-        } catch (error) {
-          console.log('⚠️ Vite PWA service worker registration failed:', error);
+const registerServiceWorkers = async () => {
+  if (!('serviceWorker' in navigator)) {
+    console.log('❌ Service Workers not supported');
+    return;
+  }
+  
+  try {
+    // Register main service worker for PWA
+    try {
+      const vitePwaReg = await navigator.serviceWorker.register(
+        '/scheduler/service-worker.js',
+        { 
+          scope: '/scheduler/',
+          updateViaCache: 'none'
         }
-        
-      } catch (error) {
-        console.error('❌ Service worker registration failed:', error);
+      );
+      console.log('✅ Main service worker registered');
+      
+      if (vitePwaReg.active) {
+        setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
       }
-    };
+    } catch (error) {
+      console.log('⚠️ Main service worker registration failed:', error);
+    }
+    
+  } catch (error) {
+    console.error('❌ Service worker registration failed:', error);
+  }
+};
     
     // Set up event listeners
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -326,155 +326,148 @@ const App = () => {
     };
   }, []);
 
-  // FIXED OneSignal Initialization with proper subscription handling
+  // Set up OneSignal ready listener
   useEffect(() => {
-    console.log('🚀 Starting OneSignal initialization...');
+    console.log('🚀 Setting up OneSignal listener...');
     
-    // Function to initialize OneSignal
-    const initializeOneSignal = async () => {
-      // Wait for OneSignal SDK to load
-      if (!window.OneSignalDeferred) {
-        console.log('⏳ Waiting for OneSignal SDK to load...');
-        setTimeout(initializeOneSignal, 1000);
-        return;
-      }
-
-      try {
-        console.log('⚙️ OneSignal SDK loaded, configuring...');
-        
-        // Use the deferred initialization pattern
-        window.OneSignalDeferred.push(async function() {
-          try {
-            // Initialize OneSignal with PROMPT ENABLED
-            await window.OneSignal.init({
-  appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-  safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-  
-  // CRITICAL: Point to your public OneSignal files
-  serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
-  serviceWorkerParam: { scope: '/scheduler/' },
-  
-  // IMPORTANT: For GitHub Pages deployment
-  httpPermissionRequest: {
-    enable: true
-  },
-  
-  promptOptions: {
-    slidedown: {
-      enabled: true,
-      autoPrompt: false, // Manual control
-      timeDelay: 3,
-      pageViews: 1,
-      actionMessage: "Get police department shift alerts",
-      acceptButtonText: "ALLOW",
-      cancelButtonText: "NO THANKS"
-    }
-  },
-  
-  welcomeNotification: {
-    disable: false,
-    title: "Port Arthur PD Notifications",
-    message: "You'll receive shift alerts and emergency notifications"
-  },
-  
-  notifyButton: {
-    enable: false
-  },
-  
-  // GitHub Pages specific settings
-  allowLocalhostAsSecureOrigin: true,
-  autoResubscribe: true,
-  persistNotification: false,
-  autoRegister: true
-});
-
-            console.log('✅ OneSignal initialized successfully');
-            setOneSignalStatus(prev => ({ ...prev, initialized: true }));
-
-           // Replace the subscriptionChange listener in App.tsx with this simpler version:
-window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-  console.log(`🔔 OneSignal subscriptionChange: ${isSubscribed}`);
-  
-  if (isSubscribed) {
-    try {
-      const onesignalUserId = await window.OneSignal.getUserId();
-      console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
+    // Listen for OneSignal ready event from index.html
+    window.onOneSignalReady = () => {
+      console.log('✅ OneSignal is ready for React');
+      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
       
-      // Wait for user to be authenticated
-      setTimeout(async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id && onesignalUserId) {
-          console.log(`💾 Saving for user ${session.user.id}: ${onesignalUserId}`);
+      // Check subscription status
+      checkSubscriptionStatus();
+      
+      // Set up subscription change listener
+      if (window.OneSignal && typeof window.OneSignal.on === 'function') {
+        window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+          console.log(`🔔 OneSignal subscriptionChange: ${isSubscribed}`);
           
-          // Update the profile
-          const { error } = await supabase
-            .from('profiles')
-            .update({ 
-              onesignal_user_id: onesignalUserId,
-              notification_subscribed: true,
-              notification_subscribed_at: new Date().toISOString()
-            })
-            .eq('id', session.user.id);
-          
-          if (error) {
-            console.error('❌ Failed to save OneSignal ID:', error);
-          } else {
-            console.log('✅ OneSignal ID saved to profile');
-          }
-        } else {
-          console.log('⚠️ No authenticated user found for OneSignal ID');
-        }
-      }, 1000);
-    } catch (error) {
-      console.error('Error in subscriptionChange handler:', error);
-    }
-  }
-});
-
-            // Check initial subscription status
-            setTimeout(async () => {
-              const status = await checkSubscriptionStatus();
+          if (isSubscribed) {
+            try {
+              const onesignalUserId = await window.OneSignal.getUserId();
+              console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
               
-              // If not subscribed, manually trigger the prompt after delay
-              if (status && !status.isSubscribed && status.permission === 'default') {
-                console.log('🔄 User not subscribed, showing prompt in 5 seconds...');
-                setTimeout(() => {
-                  if (window.OneSignal && window.OneSignal.showSlidedownPrompt) {
-                    console.log('🎯 Manually showing subscription prompt...');
-                    window.OneSignal.showSlidedownPrompt({
-                      force: true
-                    }).catch((error: any) => {
-                      console.error('Error showing prompt:', error);
-                    });
+              // Wait for user to be authenticated
+              setTimeout(async () => {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.id && onesignalUserId) {
+                  console.log(`💾 Saving for user ${session.user.id}: ${onesignalUserId}`);
+                  
+                  // Update the profile
+                  const { error } = await supabase
+                    .from('profiles')
+                    .update({ 
+                      onesignal_user_id: onesignalUserId,
+                      notification_subscribed: true,
+                      notification_subscribed_at: new Date().toISOString()
+                    })
+                    .eq('id', session.user.id);
+                  
+                  if (error) {
+                    console.error('❌ Failed to save OneSignal ID:', error);
+                  } else {
+                    console.log('✅ OneSignal ID saved to profile');
                   }
-                }, 5000);
-              }
-            }, 3000);
-
-          } catch (initError) {
-            console.error('❌ OneSignal init error:', initError);
+                } else {
+                  console.log('⚠️ No authenticated user found for OneSignal ID');
+                }
+              }, 1000);
+            } catch (error) {
+              console.error('Error in subscriptionChange handler:', error);
+            }
           }
+          
+          // Update local state
+          await checkSubscriptionStatus();
         });
-        
-      } catch (error) {
-        console.error('❌ OneSignal setup error:', error);
       }
     };
-
-    // Start initialization
-    initializeOneSignal();
-
-    // Set up periodic subscription checks
-    const subscriptionCheckInterval = setInterval(() => {
-      if (window.OneSignal) {
-        checkSubscriptionStatus();
+    
+    // If OneSignal is already loaded (happens on page reload)
+    const checkOneSignalLoaded = () => {
+      if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
+        console.log('✅ OneSignal already loaded');
+        setOneSignalStatus(prev => ({ ...prev, initialized: true }));
+        
+        // Trigger ready callback
+        if (window.onOneSignalReady) {
+          window.onOneSignalReady();
+        }
+      } else {
+        // Check again in 1 second
+        setTimeout(checkOneSignalLoaded, 1000);
       }
-    }, 30000);
-
+    };
+    
+    checkOneSignalLoaded();
+    
     return () => {
-      clearInterval(subscriptionCheckInterval);
+      window.onOneSignalReady = undefined;
     };
   }, []);
+
+  // Check and log current subscription status
+  const checkSubscriptionStatus = async () => {
+    // Check if OneSignal is properly loaded
+    if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
+      console.log('⏳ OneSignal not ready for status check');
+      return null;
+    }
+    
+    try {
+      const userId = await window.OneSignal.getUserId();
+      const permission = await window.OneSignal.getNotificationPermission();
+      const isSubscribed = !!userId;
+      
+      console.log('🔍 Subscription Status:', {
+        userId: userId || 'Not subscribed',
+        permission,
+        isSubscribed,
+        oneSignalReady: !!window.OneSignal
+      });
+      
+      setOneSignalStatus(prev => ({
+        ...prev,
+        userId,
+        subscribed: isSubscribed,
+        permission
+      }));
+      
+      // If subscribed, store the user ID in Supabase
+      if (isSubscribed && userId) {
+        setTimeout(async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id) {
+            console.log(`💾 Auto-saving OneSignal ID for user ${session.user.id}`);
+            
+            const { error } = await supabase
+              .from('profiles')
+              .update({ 
+                onesignal_user_id: userId,
+                notification_subscribed: true,
+                notification_subscribed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', session.user.id);
+            
+            if (error) {
+              console.error('❌ Auto-save failed:', error);
+            } else {
+              console.log('✅ OneSignal ID auto-saved to profile');
+            }
+          }
+        }, 1000);
+        
+        setShowNotificationBanner(false);
+      }
+      
+      return { userId, isSubscribed, permission };
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      return null;
+    }
+  };
 
   // Manually trigger subscription prompt
   const triggerSubscriptionPrompt = async () => {

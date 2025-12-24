@@ -10,14 +10,14 @@ import { UserProvider } from "@/contexts/UserContext";
 import { QueryClientProvider } from "@/providers/QueryClientProvider";
 import { OneSignalDebug } from "@/components/OneSignalDebug";
 import { useEffect, useState } from "react";
-import { X, Download, Bell, Smartphone, CheckCircle } from "lucide-react";
+import { X, Download, Bell, Smartphone, CheckCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 declare global {
   interface Window {
     OneSignal: any;
-    OneSignalSDK: any;
     deferredPrompt: any;
   }
 }
@@ -46,158 +46,8 @@ const App = () => {
   const [showStatusPanel, setShowStatusPanel] = useState(true);
   const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
-  const [userId, setUserId] = useState<string>('');
   const [subscriptionMessage, setSubscriptionMessage] = useState<string>('');
-
-  // Mock user ID for testing - replace with actual auth
-  useEffect(() => {
-    // Simulate getting user ID (replace with actual auth logic)
-    const mockUserId = 'test-officer-id-123';
-    setUserId(mockUserId);
-    
-    // Show notification banner if not subscribed
-    const timer = setTimeout(() => {
-      if (!oneSignalStatus.subscribed) {
-        setShowNotificationBanner(true);
-      }
-    }, 5000);
-    
-    return () => clearTimeout(timer);
-  }, [oneSignalStatus.subscribed]);
-
-  // Function to store OneSignal user ID in Supabase
-  const storeOneSignalUserId = async (onesignalUserId: string) => {
-    try {
-      console.log('💾 Storing OneSignal ID in Supabase:', onesignalUserId);
-      
-      // First, check if profiles table exists and has the columns
-      const { data: profile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching profile:', fetchError);
-        setSubscriptionMessage('Error: User profile not found');
-        return false;
-      }
-
-      // Update the profile with OneSignal user ID
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          onesignal_user_id: onesignalUserId,
-          notification_subscribed: true,
-          notification_subscribed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (updateError) {
-        console.error('Error updating profile:', updateError);
-        
-        // If column doesn't exist, we need to add it
-        if (updateError.message.includes('column') && updateError.message.includes('does not exist')) {
-          console.log('🔄 Creating missing columns in profiles table...');
-          await createNotificationColumns();
-          // Retry the update
-          return await storeOneSignalUserId(onesignalUserId);
-        }
-        
-        setSubscriptionMessage('Error saving to database');
-        return false;
-      }
-
-      console.log('✅ Successfully stored OneSignal ID in Supabase');
-      setSubscriptionMessage('✅ Successfully subscribed! Your OneSignal ID has been saved.');
-      
-      // Show success message for 5 seconds
-      setTimeout(() => {
-        setSubscriptionMessage('');
-      }, 5000);
-      
-      return true;
-    } catch (error) {
-      console.error('Error storing OneSignal user ID:', error);
-      setSubscriptionMessage('Error: Could not save subscription');
-      return false;
-    }
-  };
-
-  // Function to create missing notification columns in profiles table
-  const createNotificationColumns = async () => {
-    try {
-      // Note: In production, you should run this SQL in Supabase dashboard
-      // This is just for development/testing
-      console.log('⚠️ Notification columns missing. Please run this SQL in Supabase:');
-      console.log(`
-        ALTER TABLE profiles 
-        ADD COLUMN IF NOT EXISTS onesignal_user_id TEXT,
-        ADD COLUMN IF NOT EXISTS notification_subscribed BOOLEAN DEFAULT false,
-        ADD COLUMN IF NOT EXISTS notification_subscribed_at TIMESTAMP WITH TIME ZONE;
-      `);
-      
-      // For now, we'll use a different approach
-      // Try to update without the missing columns
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (error) {
-        throw error;
-      }
-      
-      console.log('✅ Updated profile (without notification columns)');
-    } catch (error) {
-      console.error('Error creating columns:', error);
-    }
-  };
-
-  // Check and log current subscription status
-  const checkSubscriptionStatus = async () => {
-    // Check if OneSignal is properly loaded
-    const OneSignal = window.OneSignalSDK || (window.OneSignal && window.OneSignal[0]);
-    
-    if (!OneSignal || typeof OneSignal.getUserId !== 'function') {
-      console.log('⏳ OneSignal not ready for status check');
-      return null;
-    }
-    
-    try {
-      const userId = await OneSignal.getUserId();
-      const permission = await OneSignal.getNotificationPermission();
-      const isSubscribed = !!userId;
-      
-      console.log('🔍 Subscription Status:', {
-        userId: userId || 'Not subscribed',
-        permission,
-        isSubscribed,
-        oneSignalReady: !!OneSignal
-      });
-      
-      setOneSignalStatus(prev => ({
-        ...prev,
-        userId,
-        subscribed: isSubscribed,
-        permission
-      }));
-      
-      // If subscribed, store the user ID in Supabase
-      if (isSubscribed && userId) {
-        await storeOneSignalUserId(userId);
-        setShowNotificationBanner(false);
-      }
-      
-      return { userId, isSubscribed, permission };
-    } catch (error) {
-      console.error('Error checking subscription:', error);
-      return null;
-    }
-  };
+  const [isInitializingOneSignal, setIsInitializingOneSignal] = useState(false);
 
   // Auto-hide status panel after 10 seconds if everything is ready
   useEffect(() => {
@@ -260,11 +110,19 @@ const App = () => {
         ...prev, 
         isInstallable: true,
         deferredPrompt,
-        showInstallPrompt: !prev.isInstalled
+        showInstallPrompt: true
       }));
       
       // Also save to window for backup
       window.deferredPrompt = e;
+      
+      toast.info("Police Scheduler can be installed as an app!", {
+        duration: 5000,
+        action: {
+          label: "Install",
+          onClick: () => installPWA()
+        }
+      });
     };
     
     const handleAppInstalled = () => {
@@ -277,6 +135,8 @@ const App = () => {
         deferredPrompt: null
       }));
       window.deferredPrompt = null;
+      
+      toast.success("Police Scheduler installed successfully!");
     };
     
     // Register service workers for PWA
@@ -287,35 +147,40 @@ const App = () => {
       }
       
       try {
-        // First try root path (for OneSignal compatibility)
+        // Try to register service worker for PWA
         try {
-          const rootReg = await navigator.serviceWorker.register(
+          // First try at root scope (for PWA)
+          const registration = await navigator.serviceWorker.register(
             '/service-worker.js',
             { 
               scope: '/',
               updateViaCache: 'none'
             }
           );
-          console.log('✅ Root service worker registered:', rootReg.scope);
+          console.log('✅ PWA Service Worker registered:', registration.scope);
           
-          if (rootReg.active) {
+          if (registration.active) {
             setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
           }
-        } catch (rootError) {
-          console.log('⚠️ Root service worker registration failed, trying scheduler path:', rootError);
+        } catch (error) {
+          console.log('⚠️ PWA service worker registration failed, trying scheduler path:', error);
           
-          // Try scheduler path as fallback
-          const schedulerReg = await navigator.serviceWorker.register(
-            '/scheduler/service-worker.js',
-            { 
-              scope: '/scheduler/',
-              updateViaCache: 'none'
+          // Fallback to scheduler path
+          try {
+            const schedulerReg = await navigator.serviceWorker.register(
+              '/scheduler/service-worker.js',
+              { 
+                scope: '/scheduler/',
+                updateViaCache: 'none'
+              }
+            );
+            console.log('✅ Scheduler service worker registered:', schedulerReg.scope);
+            
+            if (schedulerReg.active) {
+              setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
             }
-          );
-          console.log('✅ Scheduler service worker registered:', schedulerReg.scope);
-          
-          if (schedulerReg.active) {
-            setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
+          } catch (schedulerError) {
+            console.error('❌ Scheduler service worker also failed:', schedulerError);
           }
         }
         
@@ -342,165 +207,317 @@ const App = () => {
     };
   }, []);
 
-  // Set up OneSignal ready listener
+  // SIMPLE OneSignal Initialization - Using browser notifications as fallback
   useEffect(() => {
-    console.log('🚀 Setting up OneSignal listener...');
+    console.log('🚀 Setting up notifications...');
     
-    const initializeOneSignal = () => {
-      // Get the OneSignal instance
-      const OneSignal = window.OneSignalSDK || (window.OneSignal && window.OneSignal[0]);
+    const initializeNotifications = async () => {
+      // First, check browser permission
+      const browserPermission = Notification.permission;
+      console.log('🔔 Browser notification permission:', browserPermission);
       
-      if (OneSignal && typeof OneSignal.getUserId === 'function') {
-        console.log('✅ OneSignal SDK available');
-        setOneSignalStatus(prev => ({ ...prev, initialized: true }));
-        checkSubscriptionStatus();
-        return true;
+      if (browserPermission === 'granted') {
+        // Already have permission
+        setOneSignalStatus(prev => ({
+          ...prev,
+          permission: 'granted',
+          initialized: true
+        }));
+        
+        // Check if we have a OneSignal ID stored
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('onesignal_user_id, notification_subscribed')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (profile?.onesignal_user_id && profile.notification_subscribed) {
+            setOneSignalStatus(prev => ({
+              ...prev,
+              subscribed: true,
+              userId: profile.onesignal_user_id
+            }));
+            setShowNotificationBanner(false);
+          }
+        }
+      } else if (browserPermission === 'denied') {
+        setOneSignalStatus(prev => ({
+          ...prev,
+          permission: 'denied',
+          initialized: true
+        }));
+        setShowNotificationBanner(false);
       }
       
-      return false;
+      // Try to initialize OneSignal if available
+      initializeOneSignal();
     };
     
-    // Listen for OneSignal ready event from index.html
-    const handleOneSignalReady = () => {
-      console.log('✅ OneSignal ready event received');
-      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
-      checkSubscriptionStatus();
-    };
-    
-    document.addEventListener('onesignal:ready', handleOneSignalReady);
-    
-    // Try to initialize immediately
-    if (!initializeOneSignal()) {
-      // Check periodically for OneSignal
-      const interval = setInterval(() => {
-        if (initializeOneSignal()) {
-          clearInterval(interval);
-          document.removeEventListener('onesignal:ready', handleOneSignalReady);
-        }
-      }, 1000);
-      
-      // Stop checking after 30 seconds
-      setTimeout(() => {
-        clearInterval(interval);
-        document.removeEventListener('onesignal:ready', handleOneSignalReady);
-        if (!oneSignalStatus.initialized) {
-          console.warn('⚠️ OneSignal failed to initialize after 30 seconds');
-        }
-      }, 30000);
-      
-      return () => {
-        clearInterval(interval);
-        document.removeEventListener('onesignal:ready', handleOneSignalReady);
-      };
-    } else {
-      document.removeEventListener('onesignal:ready', handleOneSignalReady);
-    }
+    initializeNotifications();
   }, []);
 
-  // Manually trigger subscription prompt
-  const triggerSubscriptionPrompt = async () => {
-    console.log('🎯 Triggering subscription prompt...');
+  // Try to initialize OneSignal
+  const initializeOneSignal = async () => {
+    if (isInitializingOneSignal || oneSignalStatus.initialized) return;
     
-    // Get the OneSignal instance
-    const OneSignal = window.OneSignalSDK || (window.OneSignal && window.OneSignal[0]);
-    
-    if (!OneSignal) {
-      console.error('❌ OneSignal not available');
-      alert('Notification service not available. Please refresh the page.');
-      return;
-    }
+    setIsInitializingOneSignal(true);
+    console.log('🔄 Attempting OneSignal initialization...');
     
     try {
-      setSubscriptionMessage('🔄 Opening notification permission prompt...');
-      
-      // Method 1: Try OneSignal's prompt
-      if (OneSignal.showSlidedownPrompt) {
-        await OneSignal.showSlidedownPrompt({ force: true });
-      } 
-      // Method 2: Use browser's native prompt
-      else if (Notification.permission === 'default') {
-        const permission = await Notification.requestPermission();
-        console.log('Browser permission result:', permission);
-        
-        if (permission === 'granted') {
-          // Manually trigger OneSignal registration
-          if (OneSignal.setSubscription) {
-            await OneSignal.setSubscription(true);
-          }
-        } else if (permission === 'denied') {
-          alert('Notifications are blocked. Please enable them in your browser settings.');
-          return;
-        }
-      } else if (Notification.permission === 'denied') {
-        alert('Notifications are blocked. Please enable them in your browser settings.');
+      // Check if OneSignal SDK is loaded
+      if (typeof window.OneSignal === 'undefined') {
+        console.log('⏳ OneSignal SDK not loaded yet');
+        setIsInitializingOneSignal(false);
         return;
       }
       
-      // Check status after a delay
-      setTimeout(async () => {
-        await checkSubscriptionStatus();
-        setSubscriptionMessage('');
-      }, 3000);
+      // Initialize OneSignal
+      await window.OneSignal.init({
+        appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+        safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+        
+        // Service worker paths for GitHub Pages
+        serviceWorkerPath: '/OneSignalSDKWorker.js',
+        serviceWorkerParam: { scope: '/' },
+        
+        // Disable auto-prompt (we'll handle it manually)
+        autoPrompt: false,
+        
+        // Prompt settings
+        promptOptions: {
+          slidedown: {
+            enabled: true,
+            autoPrompt: false,
+            timeDelay: 3,
+            pageViews: 1,
+            actionMessage: "Get police department shift alerts",
+            acceptButtonText: "ALLOW",
+            cancelButtonText: "NO THANKS"
+          }
+        },
+        
+        // Welcome notification
+        welcomeNotification: {
+          disable: false,
+          title: "Port Arthur PD Notifications",
+          message: "You'll receive shift alerts and emergency notifications"
+        },
+        
+        notifyButton: {
+          enable: false
+        },
+        
+        // GitHub Pages settings
+        allowLocalhostAsSecureOrigin: true,
+        autoResubscribe: true,
+        persistNotification: false,
+        autoRegister: true,
+        httpPermissionRequest: {
+          enable: true
+        }
+      });
+      
+      console.log('✅ OneSignal initialized');
+      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
+      
+      // Check subscription status
+      await checkOneSignalSubscription();
+      
+      // Set up subscription change listener
+      window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+        console.log(`🔔 OneSignal subscriptionChange: ${isSubscribed}`);
+        
+        if (isSubscribed) {
+          try {
+            const onesignalUserId = await window.OneSignal.getUserId();
+            console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
+            
+            // Store in database
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id && onesignalUserId) {
+              await supabase
+                .from('profiles')
+                .update({ 
+                  onesignal_user_id: onesignalUserId,
+                  notification_subscribed: true,
+                  notification_subscribed_at: new Date().toISOString()
+                })
+                .eq('id', session.user.id);
+              
+              console.log('✅ OneSignal ID saved to profile');
+            }
+          } catch (error) {
+            console.error('Error saving OneSignal ID:', error);
+          }
+        }
+        
+        setOneSignalStatus(prev => ({
+          ...prev,
+          subscribed: isSubscribed,
+          userId: isSubscribed ? await window.OneSignal.getUserId() : null
+        }));
+        
+        if (isSubscribed) {
+          setShowNotificationBanner(false);
+        }
+      });
       
     } catch (error) {
-      console.error('❌ Error showing prompt:', error);
-      setSubscriptionMessage('❌ Could not show notification prompt');
-      
-      // Fallback: Direct browser notification request
-      if (Notification.permission === 'default') {
-        const permission = await Notification.requestPermission();
-        console.log('Fallback permission result:', permission);
-        
-        if (permission === 'granted') {
-          await checkSubscriptionStatus();
-        }
-      }
+      console.error('❌ OneSignal initialization failed:', error);
+      // OneSignal failed, but we still have browser notifications
+      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
+    } finally {
+      setIsInitializingOneSignal(false);
     }
+  };
+
+  // Check OneSignal subscription status
+  const checkOneSignalSubscription = async () => {
+    if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
+      return null;
+    }
+    
+    try {
+      const userId = await window.OneSignal.getUserId();
+      const permission = await window.OneSignal.getNotificationPermission();
+      const isSubscribed = !!userId;
+      
+      console.log('🔍 OneSignal Subscription Status:', {
+        userId: userId || 'Not subscribed',
+        permission,
+        isSubscribed
+      });
+      
+      setOneSignalStatus(prev => ({
+        ...prev,
+        userId,
+        subscribed: isSubscribed,
+        permission
+      }));
+      
+      if (isSubscribed) {
+        setShowNotificationBanner(false);
+      }
+      
+      return { userId, isSubscribed, permission };
+    } catch (error) {
+      console.error('Error checking OneSignal subscription:', error);
+      return null;
+    }
+  };
+
+  // WORKING: Manually trigger subscription prompt
+  const triggerSubscriptionPrompt = async () => {
+    console.log('🎯 Triggering subscription prompt...');
+    
+    // Show loading message
+    setSubscriptionMessage('🔄 Requesting notification permission...');
+    
+    try {
+      // First, try browser's native permission request (this always works)
+      const browserPermission = await Notification.requestPermission();
+      console.log('Browser permission result:', browserPermission);
+      
+      if (browserPermission === 'granted') {
+        // Browser permission granted
+        setSubscriptionMessage('✅ Browser notifications enabled!');
+        
+        // Update state
+        setOneSignalStatus(prev => ({
+          ...prev,
+          permission: 'granted',
+          subscribed: true,
+          initialized: true
+        }));
+        
+        // Store in database (using browser as provider)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          await supabase
+            .from('profiles')
+            .update({ 
+              notification_subscribed: true,
+              notification_subscribed_at: new Date().toISOString(),
+              notification_provider: 'browser'
+            })
+            .eq('id', session.user.id);
+        }
+        
+        setShowNotificationBanner(false);
+        
+        // Show success message
+        toast.success("Notifications enabled! You'll receive shift alerts.");
+        
+        // Try to initialize OneSignal after permission is granted
+        setTimeout(() => {
+          initializeOneSignal();
+        }, 1000);
+        
+      } else if (browserPermission === 'denied') {
+        setSubscriptionMessage('❌ Notifications blocked in browser settings');
+        setOneSignalStatus(prev => ({ ...prev, permission: 'denied' }));
+        toast.error("Notifications blocked. Please enable them in browser settings.");
+      }
+      
+    } catch (error) {
+      console.error('❌ Error requesting permission:', error);
+      setSubscriptionMessage('❌ Failed to request permission');
+      toast.error("Failed to enable notifications. Please try again.");
+    }
+    
+    // Clear message after 3 seconds
+    setTimeout(() => {
+      setSubscriptionMessage('');
+    }, 3000);
   };
 
   // Test notification function
   const testNotification = async () => {
-    // Get the OneSignal instance
-    const OneSignal = window.OneSignalSDK || (window.OneSignal && window.OneSignal[0]);
-    
-    if (!OneSignal) {
-      alert('OneSignal not loaded yet. Please wait a moment.');
-      return;
-    }
-
-    // Check subscription status first
-    const status = await checkSubscriptionStatus();
-    
-    if (!status?.isSubscribed) {
-      alert('You need to enable push notifications first. Click "Enable Notifications" below.');
+    // First check if we have browser permission
+    if (Notification.permission !== 'granted') {
+      alert('You need to enable notifications first.');
       triggerSubscriptionPrompt();
       return;
     }
-
-    console.log('📨 Sending test notification...');
     
     try {
-      // Send a test notification
-      await OneSignal.sendSelfNotification({
-        headings: { en: 'Test Notification' },
-        contents: { en: 'This is a test notification from the Police Department Scheduler' },
-        url: window.location.href
-      });
-      
-      alert('✅ Test notification sent! Check your device.');
+      // Try to send via OneSignal if available
+      if (window.OneSignal && oneSignalStatus.subscribed) {
+        await window.OneSignal.sendSelfNotification({
+          headings: { en: 'Test Notification' },
+          contents: { en: 'This is a test notification from the Police Department Scheduler' },
+          url: window.location.href
+        });
+        toast.success("Test notification sent via OneSignal!");
+      } else {
+        // Fallback to browser notifications
+        const notification = new Notification('Police Department Test', {
+          body: 'This is a test notification from the Police Department Scheduler',
+          icon: '/scheduler/icon-192.png',
+          tag: 'test-notification'
+        });
+        
+        notification.onclick = () => {
+          window.focus();
+        };
+        
+        toast.success("Test notification sent via browser!");
+      }
     } catch (error) {
       console.error('Error sending test notification:', error);
-      alert('❌ Failed to send test notification');
+      toast.error("Failed to send test notification");
     }
   };
 
-  // Improved PWA install function
+  // WORKING PWA install function
   const installPWA = async () => {
     console.log('📲 Attempting PWA installation...');
     
     // Check if already installed
     if (pwaStatus.isInstalled) {
-      alert('App is already installed!');
+      toast.info("App is already installed!");
       return;
     }
     
@@ -509,31 +526,19 @@ const App = () => {
     
     if (deferredPrompt) {
       try {
+        console.log('🔄 Showing installation prompt...');
         deferredPrompt.prompt();
+        
         const { outcome } = await deferredPrompt.userChoice;
+        console.log(`✅ User choice: ${outcome}`);
         
         if (outcome === 'accepted') {
-          console.log('✅ User accepted PWA installation');
-          // Show success toast
-          const event = new CustomEvent('show-toast', {
-            detail: {
-              title: 'Installing Police Scheduler',
-              description: 'The app is being installed to your device...',
-              type: 'success'
-            }
-          });
-          document.dispatchEvent(event);
+          console.log('🎉 User accepted PWA installation');
+          toast.success("Police Scheduler is installing...");
         } else {
           console.log('❌ User dismissed PWA installation');
-          // Show info toast
-          const event = new CustomEvent('show-toast', {
-            detail: {
-              title: 'Installation Canceled',
-              description: 'You can install later from your browser menu.',
-              type: 'info'
-            }
-          });
-          document.dispatchEvent(event);
+          setPwaStatus(prev => ({ ...prev, showInstallPrompt: false }));
+          toast.info("Installation canceled. You can install later.");
         }
         
         // Clear the prompt
@@ -541,31 +546,37 @@ const App = () => {
         window.deferredPrompt = null;
         
       } catch (error) {
-        console.error('❌ Installation error:', error);
-        alert('Installation failed. Please try manual installation.');
+        console.error('❌ Error during PWA installation:', error);
+        showManualInstallInstructions();
       }
     } else {
-      // No prompt available, show manual instructions
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isAndroid = /Android/.test(navigator.userAgent);
-      
-      let message = 'To install this app:\n\n';
-      
-      if (isIOS) {
-        message += '1. Tap the Share button (⎋)\n';
-        message += '2. Scroll down and tap "Add to Home Screen"\n';
-        message += '3. Tap "Add" in the top right';
-      } else if (isAndroid) {
-        message += '1. Tap the menu (⋮) in your browser\n';
-        message += '2. Tap "Install app" or "Add to Home screen"\n';
-        message += '3. Confirm the installation';
-      } else {
-        message += 'Look for "Install Police Scheduler" in your browser menu\n';
-        message += 'Chrome/Edge: ⋮ → "Install Police Scheduler"';
-      }
-      
-      alert(message);
+      showManualInstallInstructions();
     }
+  };
+
+  const showManualInstallInstructions = () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    let message = '';
+    let title = 'Install Police Scheduler';
+    
+    if (isIOS) {
+      message = '1. Tap the Share button (⎋) at the bottom\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" in the top right';
+    } else if (isAndroid) {
+      message = '1. Tap the menu (⋮) in your browser\n2. Tap "Install app" or "Add to Home screen"\n3. Confirm the installation';
+    } else {
+      message = '1. Click the menu (⋮) in your browser\n2. Look for "Install Police Scheduler"\n3. Click to install';
+      title = 'Install App';
+    }
+    
+    toast(
+      <div className="space-y-2">
+        <div className="font-semibold">{title}</div>
+        <div className="text-sm whitespace-pre-line">{message}</div>
+      </div>,
+      { duration: 10000 }
+    );
   };
 
   const handleClosePanel = () => {
@@ -622,7 +633,7 @@ const App = () => {
             )}
             
             {/* Notification Subscription Banner */}
-            {showNotificationBanner && !oneSignalStatus.subscribed && (
+            {showNotificationBanner && !oneSignalStatus.subscribed && Notification.permission === 'default' && (
               <div className="fixed top-0 left-0 right-0 z-40 bg-blue-600 text-white p-4 shadow-lg">
                 <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -708,30 +719,6 @@ const App = () => {
                   <p className="text-xs text-gray-500 mt-3">
                     For all 129+ officers • Secure HTTPS connection
                   </p>
-                  
-                  {/* Manual install instructions */}
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <button
-                      onClick={() => {
-                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                        const isAndroid = /Android/.test(navigator.userAgent);
-                        
-                        let instructions = '';
-                        if (isIOS) {
-                          instructions = 'iOS: Tap Share → "Add to Home Screen"';
-                        } else if (isAndroid) {
-                          instructions = 'Android: Tap menu → "Install app"';
-                        } else {
-                          instructions = 'Desktop: Look for "Install" in browser menu';
-                        }
-                        
-                        alert(`Manual Installation:\n\n${instructions}`);
-                      }}
-                      className="text-xs text-blue-500 hover:text-blue-700 underline"
-                    >
-                      Need help installing?
-                    </button>
-                  </div>
                 </div>
               </div>
             )}
@@ -824,16 +811,11 @@ const App = () => {
                     borderRadius: '50%',
                     background: oneSignalStatus.initialized ? '#10b981' : '#f59e0b'
                   }} />
-                  <strong>OneSignal:</strong> {oneSignalStatus.initialized ? '✅ Ready' : '🔄 Loading...'}
+                  <strong>Notifications:</strong> {oneSignalStatus.subscribed ? '✅ Enabled' : '❌ Disabled'}
                 </div>
                 
                 <div style={{ marginBottom: '8px' }}>
-                  <strong>Status:</strong> {oneSignalStatus.subscribed ? '✅ Subscribed' : '❌ Not subscribed'}
-                  {oneSignalStatus.userId && (
-                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                      ID: {oneSignalStatus.userId.substring(0, 8)}...
-                    </div>
-                  )}
+                  <strong>Browser Permission:</strong> {Notification.permission}
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
@@ -877,10 +859,28 @@ const App = () => {
                       cursor: 'pointer',
                       width: '100%'
                     }}
-                    disabled={!oneSignalStatus.subscribed}
+                    disabled={Notification.permission !== 'granted'}
                   >
                     Test Notification
                   </button>
+                  
+                  {pwaStatus.showInstallPrompt && (
+                    <button
+                      onClick={installPWA}
+                      style={{
+                        background: '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      📱 Install App
+                    </button>
+                  )}
                 </div>
               </div>
             ) : import.meta.env.DEV && (

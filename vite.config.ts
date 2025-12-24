@@ -3,10 +3,10 @@ import react from '@vitejs/plugin-react-swc';
 import { resolve } from 'path';
 import { copyFileSync, existsSync, mkdirSync } from 'fs';
 
-// Custom plugin to copy OneSignal files to dist root
-const copyOneSignalFiles = () => {
+// Custom plugin to copy files to dist root
+const copyFilesToRoot = () => {
   return {
-    name: 'copy-onesignal-files',
+    name: 'copy-files-to-root',
     closeBundle() {
       const sourceDir = resolve(__dirname, 'public');
       const targetDir = resolve(__dirname, 'dist');
@@ -16,8 +16,13 @@ const copyOneSignalFiles = () => {
         mkdirSync(targetDir, { recursive: true });
       }
       
-      // Copy OneSignal files
-      const filesToCopy = ['OneSignalSDKWorker.js', 'OneSignalSDKUpdaterWorker.js', 'manifest.json'];
+      // Files to copy to root
+      const filesToCopy = [
+        'OneSignalSDKWorker.js',
+        'OneSignalSDKUpdaterWorker.js', 
+        'manifest.json',
+        'service-worker.js'
+      ];
       
       filesToCopy.forEach(file => {
         const sourceFile = resolve(sourceDir, file);
@@ -26,8 +31,6 @@ const copyOneSignalFiles = () => {
         if (existsSync(sourceFile)) {
           copyFileSync(sourceFile, targetFile);
           console.log(`✅ Copied ${file} to dist root`);
-        } else {
-          console.warn(`⚠️ ${file} not found in public folder`);
         }
       });
     }
@@ -37,7 +40,7 @@ const copyOneSignalFiles = () => {
 export default defineConfig({
   plugins: [
     react(),
-    copyOneSignalFiles() // Add this plugin
+    copyFilesToRoot() // Add this plugin
   ],
   base: '/scheduler/',
   

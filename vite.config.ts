@@ -6,61 +6,44 @@ import { resolve } from 'path';
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      
-      // IMPORTANT: Include all icon assets
-      includeAssets: [
-        'favicon.ico',
-        'apple-touch-icon.png',  // iOS icon
-        'icon-192.png',          // Your icon
-        'icon-512.png',          // Your icon
-        'masked-icon.svg'
-      ],
-      
-      manifest: {
-        name: 'Port Arthur PD Scheduler',
-        short_name: 'PAPD Scheduler',
-        description: 'Officer scheduling system for Port Arthur Police Department',
-        theme_color: '#1e40af',
-        background_color: '#0f172a',
-        display: 'standalone',
-        scope: '/scheduler/',
-        start_url: '/scheduler/',
-        orientation: 'portrait',
-        
-        // CRITICAL: Icon paths must be correct
-        icons: [
-          {
-            src: '/scheduler/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/scheduler/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/scheduler/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'monochrome'
-          }
-        ],
-        
-        // Add iOS specific icons
-        apple: {
-          icon: [
-            {
-              src: '/scheduler/apple-touch-icon.png',
-              sizes: '180x180'
-            }
-          ]
-        }
+VitePWA({
+  manifest: {
+    name: 'Port Arthur PD Scheduler',
+    short_name: 'PAPD Scheduler',
+    description: 'Officer scheduling system',
+    theme_color: '#1e40af',
+    background_color: '#0f172a',
+    display: 'standalone',
+    scope: '/scheduler/',
+    start_url: '/scheduler/',
+    
+    icons: [
+      {
+        src: '/scheduler/icons/icon-192.png', // Updated path
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any maskable'
       },
+      {
+        src: '/scheduler/icons/icon-512.png', // Updated path
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any maskable'
+      },
+      {
+        src: '/scheduler/icons/icon-192.png', // Updated path
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'monochrome'
+      }
+    ]
+  },
+  includeAssets: [
+    'icons/favicon.ico',
+    'icons/icon-192.png',
+    'icons/icon-512.png',
+    'icons/apple-touch-icon.png'
+  ],
       
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

@@ -808,17 +808,16 @@ useEffect(() => {
       <main className={`container mx-auto px-4 ${isMobile ? 'pb-24' : 'py-8'}`}>
         
         {/* Police Department Notification Banner */}
-{user && isSubscribed === false && showNotificationBanner && (
+{user && !oneSignalLoading && !oneSignalSubscribed && showNotificationBanner && (
   <div className="mb-6">
     <PoliceNotificationSubscribe 
-      onSubscribed={(onesignalId) => {
-        console.log('Officer subscribed with OneSignal ID:', onesignalId);
-        setIsSubscribed(true);
+      onSubscribed={() => {
+        console.log('Officer subscribed to notifications');
         setShowNotificationBanner(false);
       }}
     />
   </div>
-        )}
+)}
         
         {/* Welcome message */}
         <div className="mb-8">

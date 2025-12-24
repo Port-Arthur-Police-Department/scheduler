@@ -92,6 +92,6 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Import OneSignal SDK
-importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
-console.log('[Service Worker] OneSignal SDK loaded for PWA');
+// IMPORTANT: Let OneSignal handle push notifications
+// DO NOT add push event listeners here
+// OneSignal's SDK (loaded from index.html) will handle push

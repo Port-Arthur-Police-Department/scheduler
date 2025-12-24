@@ -42,20 +42,46 @@ const App = () => {
   const [showStatusPanel, setShowStatusPanel] = useState(true);
   const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
 
+  // Clean up any previous OneSignal instances on mount
+  useEffect(() => {
+    console.log('🧹 Cleaning up previous OneSignal state...');
+    
+    // Reset OneSignal global to ensure clean initialization
+    window.OneSignal = undefined;
+    window.OneSignalDeferred = [];
+    
+    // Clear service workers that might interfere (except OneSignal)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(registration => {
+          // Keep OneSignal workers, unregister others
+          if (!registration.scope.includes('OneSignal')) {
+            console.log('Unregistering service worker:', registration.scope);
+            registration.unregister();
+          }
+        });
+      });
+    }
+  }, []);
+
   // Check and log current subscription status
   const checkSubscriptionStatus = async () => {
-    if (!window.OneSignal) return;
+    // Check if OneSignal is properly loaded
+    if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
+      console.log('⏳ OneSignal not ready for status check');
+      return null;
+    }
     
     try {
       const userId = await window.OneSignal.getUserId();
       const permission = await window.OneSignal.getNotificationPermission();
       const isSubscribed = !!userId;
       
-      console.log('🔍 Current Subscription Status:', {
-        userId,
+      console.log('🔍 Subscription Status:', {
+        userId: userId || 'Not subscribed',
         permission,
         isSubscribed,
-        hasOneSignal: !!window.OneSignal
+        oneSignalReady: !!window.OneSignal
       });
       
       setOneSignalStatus(prev => ({
@@ -152,157 +178,112 @@ const App = () => {
     };
   }, []);
 
-  // Enhanced OneSignal Initialization
+  // Simplified OneSignal Initialization
   useEffect(() => {
-    console.log('🚀 Starting enhanced OneSignal initialization...');
+    console.log('🚀 Starting OneSignal initialization...');
     
+    // Function to initialize OneSignal
     const initializeOneSignal = async () => {
-      // Wait for OneSignal to be available
-      if (!window.OneSignal || typeof window.OneSignal.init !== 'function') {
-        console.log('⏳ OneSignal not loaded yet, checking script...');
-        
-        // Check if script is already loaded
-        const oneSignalScript = document.querySelector('script[src*="onesignal"]');
-        if (!oneSignalScript) {
-          console.log('📦 Loading OneSignal SDK...');
-          const script = document.createElement('script');
-          script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-          script.defer = true;
-          script.onload = () => {
-            console.log('✅ OneSignal SDK loaded');
-            setTimeout(initializeOneSignal, 1000);
-          };
-          document.head.appendChild(script);
-          return;
-        }
-        
-        setTimeout(initializeOneSignal, 2000);
+      // Wait for OneSignal SDK to load
+      if (!window.OneSignalDeferred) {
+        console.log('⏳ Waiting for OneSignal SDK to load...');
+        setTimeout(initializeOneSignal, 1000);
         return;
       }
 
       try {
-        console.log('⚙️ Configuring OneSignal...');
+        console.log('⚙️ OneSignal SDK loaded, configuring...');
         
-        // First, check current state
-        const currentState = await checkSubscriptionStatus();
-        
-        // Initialize with proper configuration
-        await window.OneSignal.init({
-          appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-          safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-          
-          // GitHub Pages configuration
-          serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
-          serviceWorkerParam: { scope: '/scheduler/' },
-          
-          // Critical settings
-          allowLocalhostAsSecureOrigin: true,
-          autoResubscribe: true,
-          persistNotification: false,
-          
-          // Prompt configuration
-          promptOptions: {
-            slidedown: {
-              enabled: true,
-              autoPrompt: true,
-              timeDelay: 1,
-              pageViews: 1,
-              prompts: [
-                {
-                  type: "push",
-                  text: {
-                    actionMessage: "Get notified about shift changes, emergencies, and department announcements",
-                    acceptButton: "Allow",
-                    cancelButton: "Not now"
-                  }
+        // Use the deferred initialization pattern
+        window.OneSignalDeferred.push(async function() {
+          try {
+            // Initialize OneSignal
+            await window.OneSignal.init({
+              appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+              safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+              
+              // CRITICAL: GitHub Pages paths
+              serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
+              serviceWorkerParam: { scope: '/scheduler/' },
+              
+              // Auto prompt settings
+              promptOptions: {
+                slidedown: {
+                  enabled: true,
+                  autoPrompt: true,
+                  timeDelay: 3,
+                  pageViews: 1,
+                  actionMessage: "Get police department shift alerts",
+                  acceptButtonText: "ALLOW",
+                  cancelButtonText: "NO THANKS"
                 }
-              ]
-            }
-          },
-          
-          // Welcome notification
-          welcomeNotification: {
-            disable: false,
-            title: "Welcome to Port Arthur PD Scheduler",
-            message: "You'll now receive notifications about your shifts and department alerts.",
-            url: window.location.href
+              },
+              
+              // Welcome notification
+              welcomeNotification: {
+                disable: false,
+                title: "Port Arthur PD Notifications",
+                message: "You'll receive shift alerts and emergency notifications"
+              },
+              
+              // Disable notify button
+              notifyButton: {
+                enable: false
+              },
+              
+              // Important settings for GitHub Pages
+              allowLocalhostAsSecureOrigin: true,
+              autoResubscribe: true,
+              persistNotification: false
+            });
+
+            console.log('✅ OneSignal initialized successfully');
+            setOneSignalStatus(prev => ({ ...prev, initialized: true }));
+
+            // Set up event listeners
+            window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+              console.log(`🔔 Subscription changed: ${isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}`);
+              await checkSubscriptionStatus();
+              
+              // If subscribed, set tags and send welcome notification
+              if (isSubscribed) {
+                try {
+                  const userId = await window.OneSignal.getUserId();
+                  console.log(`🎉 Officer subscribed with ID: ${userId}`);
+                  
+                  // Set department tags
+                  await window.OneSignal.sendTags({
+                    department: 'port-arthur-pd',
+                    user_type: 'officer',
+                    app: 'scheduler',
+                    environment: import.meta.env.PROD ? 'production' : 'development',
+                    subscribed_at: new Date().toISOString()
+                  });
+                  
+                  // Send welcome notification
+                  await window.OneSignal.sendSelfNotification({
+                    headings: { en: 'Notifications Enabled' },
+                    contents: { en: 'You will now receive shift alerts and department notifications.' },
+                    url: window.location.href
+                  });
+                } catch (error) {
+                  console.log('Could not send welcome notification:', error);
+                }
+              }
+            });
+
+            // Initial status check
+            setTimeout(async () => {
+              await checkSubscriptionStatus();
+            }, 2000);
+
+          } catch (initError) {
+            console.error('❌ OneSignal init error:', initError);
           }
         });
-
-        console.log('✅ OneSignal initialized');
-        setOneSignalStatus(prev => ({ ...prev, initialized: true }));
         
-        // Set up subscription change listener
-        window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-          console.log(`🔔 Subscription changed: ${isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}`);
-          
-          if (isSubscribed) {
-            const userId = await window.OneSignal.getUserId();
-            console.log(`🎉 User subscribed with ID: ${userId}`);
-            
-            // Set tags for police department
-            try {
-              await window.OneSignal.sendTags({
-                department: 'port-arthur-pd',
-                user_type: 'officer',
-                app: 'scheduler',
-                environment: import.meta.env.PROD ? 'production' : 'development',
-                subscribed_at: new Date().toISOString()
-              });
-              console.log('✅ Tags set successfully');
-            } catch (tagError) {
-              console.error('Error setting tags:', tagError);
-            }
-            
-            // Send welcome notification
-            try {
-              await window.OneSignal.sendSelfNotification({
-                headings: { en: 'Notifications Enabled' },
-                contents: { en: 'You will now receive shift alerts and department notifications.' },
-                url: window.location.href
-              });
-            } catch (notifError) {
-              console.log('Could not send welcome notification:', notifError);
-            }
-          }
-          
-          // Update state
-          const newStatus = await checkSubscriptionStatus();
-          if (newStatus) {
-            setOneSignalStatus(prev => ({
-              ...prev,
-              userId: newStatus.userId,
-              subscribed: newStatus.isSubscribed,
-              permission: newStatus.permission
-            }));
-          }
-        });
-
-        // Check initial subscription status
-        setTimeout(async () => {
-          const status = await checkSubscriptionStatus();
-          if (status) {
-            setOneSignalStatus(prev => ({
-              ...prev,
-              userId: status.userId,
-              subscribed: status.isSubscribed,
-              permission: status.permission
-            }));
-            
-            // If not subscribed, show prompt
-            if (!status.isSubscribed && status.permission === 'default') {
-              console.log('🔄 Showing notification prompt...');
-              setTimeout(() => {
-                if (window.OneSignal) {
-                  window.OneSignal.showSlidedownPrompt();
-                }
-              }, 2000);
-            }
-          }
-        }, 3000);
-
       } catch (error) {
-        console.error('❌ OneSignal initialization failed:', error);
+        console.error('❌ OneSignal setup error:', error);
       }
     };
 
@@ -321,48 +302,6 @@ const App = () => {
     };
   }, []);
 
-  // Register Service Workers
-  useEffect(() => {
-    const registerServiceWorkers = async () => {
-      if (!('serviceWorker' in navigator)) {
-        console.log('❌ Service Workers not supported');
-        return;
-      }
-      
-      try {
-        console.log('🛠️ Registering service workers...');
-        
-        // Register OneSignal worker
-        try {
-          const oneSignalReg = await navigator.serviceWorker.register(
-            '/scheduler/OneSignalSDKWorker.js',
-            { scope: '/scheduler/', updateViaCache: 'none' }
-          );
-          console.log('✅ OneSignal worker registered:', oneSignalReg.scope);
-        } catch (error) {
-          console.log('⚠️ OneSignal worker registration failed:', error);
-        }
-        
-        // Register app service worker
-        try {
-          const appReg = await navigator.serviceWorker.register(
-            '/scheduler/service-worker.js',
-            { scope: '/scheduler/', updateViaCache: 'none' }
-          );
-          console.log('✅ App service worker registered:', appReg.scope);
-        } catch (error) {
-          console.log('⚠️ App service worker registration failed:', error);
-        }
-        
-      } catch (error) {
-        console.error('❌ Service worker registration failed:', error);
-      }
-    };
-    
-    const timer = setTimeout(registerServiceWorkers, 3000);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Test notification function
   const testNotification = async () => {
     if (!window.OneSignal) {
@@ -378,7 +317,11 @@ const App = () => {
       
       // Show the prompt
       if (status?.permission === 'default') {
-        window.OneSignal.showSlidedownPrompt();
+        try {
+          await window.OneSignal.showSlidedownPrompt({ force: true });
+        } catch (error) {
+          console.error('Error showing prompt:', error);
+        }
       }
       return;
     }
@@ -398,21 +341,35 @@ const App = () => {
   };
 
   // Enable notifications function
-  const enableNotifications = () => {
-    if (!window.OneSignal) {
-      alert('OneSignal not ready yet. Please wait.');
+  const enableNotifications = async () => {
+    // Check if OneSignal is loaded
+    if (!window.OneSignal || typeof window.OneSignal.showSlidedownPrompt !== 'function') {
+      alert('Notification service is still loading. Please wait a moment.');
       return;
     }
     
     const permission = oneSignalStatus.permission;
     
-    if (permission === 'granted') {
-      alert('Notifications are already enabled!');
+    if (permission === 'granted' && oneSignalStatus.subscribed) {
+      alert('✅ You are already subscribed to notifications!');
     } else if (permission === 'denied') {
-      alert('Notifications were blocked. Please enable them in your browser settings.');
+      alert('❌ Notifications were blocked. Please enable them in your browser settings.');
     } else {
-      // Show the prompt
-      window.OneSignal.showSlidedownPrompt();
+      try {
+        console.log('🎯 Showing notification prompt...');
+        // Use showSlidedownPrompt which is the correct method
+        await window.OneSignal.showSlidedownPrompt({
+          force: true
+        });
+        
+        // Check status after showing prompt
+        setTimeout(async () => {
+          await checkSubscriptionStatus();
+        }, 2000);
+      } catch (error) {
+        console.error('Error showing prompt:', error);
+        alert('Could not show notification prompt. Please try refreshing the page.');
+      }
     }
   };
 

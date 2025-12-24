@@ -162,51 +162,48 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     localStorage.setItem("pdpd-ui-theme", theme);
   }, [theme]);
 
-  // ADDED: Check OneSignal subscription status
-  useEffect(() => {
-    const checkOneSignalAndSubscription = async () => {
-      // Check if OneSignal is loaded and ready
-      if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
-        setOneSignalReady(true);
-        
-        try {
-          const userId = await window.OneSignal.getUserId();
-          const permission = Notification.permission;
-          
-          console.log('🔔 OneSignal status check:', {
-            userId: userId ? 'Yes' : 'No',
-            permission: permission,
-            oneSignalReady: true
-          });
-          
-          setIsSubscribed(!!userId);
-          
-          // If subscribed, hide the banner
-          if (userId) {
-            setShowNotificationBanner(false);
-          }
-          
-          // If permission is denied, also hide the banner
-          if (permission === 'denied') {
-            setShowNotificationBanner(false);
-          }
-        } catch (error) {
-          console.error('Error checking OneSignal status:', error);
-          setIsSubscribed(false);
-        }
-      } else {
-        // OneSignal not ready yet, check again in 1 second
-        setTimeout(checkOneSignalAndSubscription, 1000);
-      }
-    };
-    
-    checkOneSignalAndSubscription();
-    
-    // Set up interval to check every 10 seconds
-    const interval = setInterval(checkOneSignalAndSubscription, 10000);
-    
-    return () => clearInterval(interval);
-  }, []);
+// Use the OneSignal hook for subscription status
+const { 
+  isInitialized: oneSignalInitialized,
+  isSubscribed: oneSignalSubscribed,
+  loading: oneSignalLoading,
+  error: oneSignalError
+} = useOneSignal();
+
+// Update notification banner based on OneSignal status
+useEffect(() => {
+  console.log('🔔 OneSignal status in Dashboard:', {
+    initialized: oneSignalInitialized,
+    subscribed: oneSignalSubscribed,
+    loading: oneSignalLoading,
+    error: oneSignalError,
+    userHasProfile: !!user
+  });
+  
+  // Set the subscription state
+  setIsSubscribed(oneSignalSubscribed);
+  
+  // Show/hide notification banner
+  if (user) {
+    if (oneSignalLoading) {
+      // Still loading, keep banner hidden until we know status
+      setShowNotificationBanner(false);
+    } else if (oneSignalError) {
+      // Error loading OneSignal, don't show banner
+      setShowNotificationBanner(false);
+      console.error('OneSignal error:', oneSignalError);
+    } else if (oneSignalSubscribed) {
+      // Already subscribed, hide banner
+      setShowNotificationBanner(false);
+    } else {
+      // Not subscribed, show banner
+      setShowNotificationBanner(true);
+    }
+  } else {
+    // No user, hide banner
+    setShowNotificationBanner(false);
+  }
+}, [oneSignalInitialized, oneSignalSubscribed, oneSignalLoading, oneSignalError, user]);
 
   // Fetch website settings
   const { data: websiteSettings } = useQuery({

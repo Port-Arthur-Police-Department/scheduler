@@ -347,46 +347,46 @@ const App = () => {
           try {
             // Initialize OneSignal with PROMPT ENABLED
             await window.OneSignal.init({
-              appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-              safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-              
-              // CRITICAL: GitHub Pages paths
-              serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
-              serviceWorkerParam: { scope: '/scheduler/' },
-              
-              // CRITICAL: Auto prompt settings
-              promptOptions: {
-                slidedown: {
-                  enabled: true,
-                  autoPrompt: true,
-                  timeDelay: 3,
-                  pageViews: 1,
-                  actionMessage: "Get police department shift alerts",
-                  acceptButtonText: "ALLOW",
-                  cancelButtonText: "NO THANKS"
-                }
-              },
-              
-              // Welcome notification
-              welcomeNotification: {
-                disable: false,
-                title: "Port Arthur PD Notifications",
-                message: "You'll receive shift alerts and emergency notifications"
-              },
-              
-              // Disable notify button
-              notifyButton: {
-                enable: false
-              },
-              
-              // Important settings for GitHub Pages
-              allowLocalhostAsSecureOrigin: true,
-              autoResubscribe: true,
-              persistNotification: false,
-              
-              // Make sure autoRegister is enabled
-              autoRegister: true
-            });
+  appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
+  safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
+  
+  // CRITICAL: Point to your public OneSignal files
+  serviceWorkerPath: '/scheduler/OneSignalSDKWorker.js',
+  serviceWorkerParam: { scope: '/scheduler/' },
+  
+  // IMPORTANT: For GitHub Pages deployment
+  httpPermissionRequest: {
+    enable: true
+  },
+  
+  promptOptions: {
+    slidedown: {
+      enabled: true,
+      autoPrompt: false, // Manual control
+      timeDelay: 3,
+      pageViews: 1,
+      actionMessage: "Get police department shift alerts",
+      acceptButtonText: "ALLOW",
+      cancelButtonText: "NO THANKS"
+    }
+  },
+  
+  welcomeNotification: {
+    disable: false,
+    title: "Port Arthur PD Notifications",
+    message: "You'll receive shift alerts and emergency notifications"
+  },
+  
+  notifyButton: {
+    enable: false
+  },
+  
+  // GitHub Pages specific settings
+  allowLocalhostAsSecureOrigin: true,
+  autoResubscribe: true,
+  persistNotification: false,
+  autoRegister: true
+});
 
             console.log('✅ OneSignal initialized successfully');
             setOneSignalStatus(prev => ({ ...prev, initialized: true }));

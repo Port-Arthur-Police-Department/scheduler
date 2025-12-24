@@ -24,6 +24,7 @@ import MobileNavigation from "@/components/MobileNavigation";
 import { WebsiteSettings } from '@/components/admin/WebsiteSettings';
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { ChangePassword } from "@/components/profile/ChangePassword";
+import { StaffManagementMobile } from "@/components/admin/StaffManagementMobile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -625,7 +626,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       case "vacancies":
         return isAdminOrSupervisor ? <VacancyManagement /> : <VacancyAlerts userId={user!.id} isAdminOrSupervisor={false} />;
       case "staff":
-        return <StaffManagement />;
+  // Use mobile version on mobile devices
+        return isMobile ? <StaffManagementMobile /> : <StaffManagement />;
       case "requests":
         return <TimeOffRequests userId={user!.id} isAdminOrSupervisor={isAdminOrSupervisor} />;
       case "settings":

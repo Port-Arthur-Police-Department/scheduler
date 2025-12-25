@@ -1,46 +1,91 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
+import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
-
-// Custom plugin to copy files to dist root
-const copyFilesToRoot = () => {
-  return {
-    name: 'copy-files-to-root',
-    closeBundle() {
-      const sourceDir = resolve(__dirname, 'public');
-      const targetDir = resolve(__dirname, 'dist');
-      
-      // Ensure dist directory exists
-      if (!existsSync(targetDir)) {
-        mkdirSync(targetDir, { recursive: true });
-      }
-      
-      // Files to copy to root
-      const filesToCopy = [
-        'OneSignalSDKWorker.js',
-        'OneSignalSDKUpdaterWorker.js', 
-        'manifest.json',
-        'service-worker.js'
-      ];
-      
-      filesToCopy.forEach(file => {
-        const sourceFile = resolve(sourceDir, file);
-        const targetFile = resolve(targetDir, file);
-        
-        if (existsSync(sourceFile)) {
-          copyFileSync(sourceFile, targetFile);
-          console.log(`✅ Copied ${file} to dist root`);
-        }
-      });
-    }
-  };
-};
 
 export default defineConfig({
   plugins: [
     react(),
-    copyFilesToRoot() // Add this plugin
+    VitePWA({
+      strategies: 'generateSW',
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      
+      // CRITICAL: Generate correct service worker file names
+      srcDir: 'src',
+      filename: 'service-worker.js', // Changed from 'sw.js'
+      
+      // Enable manifest for PWA
+      manifest: {
+        name: 'Police Department Scheduler',
+        short_name: 'PD Scheduler',
+        description: 'Police Department Shift Scheduler for Port Arthur PD',
+        theme_color: '#1e40af',
+        background_color: '#ffffff',
+        display: 'standalone',
+        scope: '/scheduler/',
+        start_url: '/scheduler/',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: '/scheduler/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        
+        // CRITICAL: Exclude OneSignal workers from being cached
+        exclude: [
+          /OneSignalSDKWorker\.js$/,
+          /OneSignalSDKUpdaterWorker\.js$/,
+          /\.map$/,
+          /manifest\.webmanifest$/
+        ],
+        
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'onesignal-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 7
+              }
+            }
+          }
+        ]
+      },
+      
+      // Add dev options
+      devOptions: {
+        enabled: false,
+        type: 'module'
+      }
+    })
   ],
   base: '/scheduler/',
   

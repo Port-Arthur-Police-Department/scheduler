@@ -2,7 +2,7 @@
   "name": "Port Arthur PD Scheduler",
   "short_name": "PAPD Scheduler",
   "description": "Officer scheduling system for Port Arthur Police Department - 129+ officers",
-  "start_url": "/",  // Changed from /scheduler/
+  "start_url": "/", 
   "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",

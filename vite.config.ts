@@ -11,23 +11,43 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       
-      // Remove manifest from here since you have static manifest.json
-      manifest: false,
+      // STEP 2: Add manifest configuration here
+      manifest: {
+        name: 'Port Arthur PD Scheduler',
+        short_name: 'PAPD Scheduler',
+        description: 'Officer scheduling system for Port Arthur Police Department - 129+ officers',
+        theme_color: '#1e40af',
+        background_color: '#0f172a',
+        display: 'standalone',
+        scope: '/scheduler/',
+        start_url: '/scheduler/',
+        icons: [
+          {
+            src: 'icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: 'icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      },
       
       srcDir: 'src',
-      filename: 'service-worker.js', // CRITICAL: This must be service-worker.js
+      filename: 'service-worker.js',
       
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
         navigateFallback: '/scheduler/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        
-        // IMPORTANT: Include manifest in cache
         globIgnores: [
           '**/OneSignalSDKWorker.js',
           '**/OneSignalSDKUpdaterWorker.js'
         ],
-        
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,

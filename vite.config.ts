@@ -7,85 +7,47 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      strategies: 'generateSW',
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      
-      // CRITICAL: Generate correct service worker file names
-      srcDir: 'src',
-      filename: 'service-worker.js', // Changed from 'sw.js'
-      
-      // Enable manifest for PWA
-      manifest: {
-        name: 'Police Department Scheduler',
-        short_name: 'PD Scheduler',
-        description: 'Police Department Shift Scheduler for Port Arthur PD',
-        theme_color: '#1e40af',
-        background_color: '#ffffff',
-        display: 'standalone',
-        scope: '/scheduler/',
-        start_url: '/scheduler/',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
+  strategies: 'generateSW',
+  registerType: 'autoUpdate',
+  injectRegister: 'auto',
+  
+  // Remove manifest from here since you have static manifest.json
+  manifest: false,
+  
+  srcDir: 'src',
+  filename: 'service-worker.js', // CRITICAL: This must be service-worker.js
+  
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+    navigateFallback: '/scheduler/index.html',
+    navigateFallbackDenylist: [/^\/api\//],
+    
+    // IMPORTANT: Include manifest in cache
+    globIgnores: [
+      '**/OneSignalSDKWorker.js',
+      '**/OneSignalSDKUpdaterWorker.js'
+    ],
+    
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'onesignal-cache',
+          expiration: {
+            maxEntries: 10,
+            maxAgeSeconds: 60 * 60 * 24 * 30
           }
-        ]
-      },
-      
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: '/scheduler/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        
-        // CRITICAL: Exclude OneSignal workers from being cached
-        exclude: [
-          /OneSignalSDKWorker\.js$/,
-          /OneSignalSDKUpdaterWorker\.js$/,
-          /\.map$/,
-          /manifest\.webmanifest$/
-        ],
-        
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'onesignal-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 30
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 7
-              }
-            }
-          }
-        ]
-      },
-      
-      // Add dev options
-      devOptions: {
-        enabled: false,
-        type: 'module'
+        }
       }
-    })
+    ]
+  },
+  
+  devOptions: {
+    enabled: false,
+    type: 'module'
+  }
+})
   ],
   base: '/scheduler/',
   

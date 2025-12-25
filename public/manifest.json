@@ -2,8 +2,8 @@
   "name": "Port Arthur PD Scheduler",
   "short_name": "PAPD Scheduler",
   "description": "Officer scheduling system for Port Arthur Police Department - 129+ officers",
-  "start_url": "/scheduler/",
-  "scope": "/scheduler/",
+  "start_url": "/",  // Changed from /scheduler/
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#1e40af",
@@ -11,22 +11,22 @@
   "orientation": "portrait-primary",
   "lang": "en-US",
   "dir": "ltr",
-  "id": "/scheduler/",
+  "id": "/",
   "icons": [
     {
-      "src": "/scheduler/public/icons/icon-192.png",
+      "src": "/public/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/scheduler/public/icons/icon-512.png",
+      "src": "/public/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/scheduler/public/icons/icon-144.png",
+      "src": "/public/icons/icon-144.png",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
@@ -54,14 +54,14 @@
   ],
   "screenshots": [
     {
-      "src": "/scheduler/screenshot-desktop.png",
+      "src": "/public/screenshot-desktop.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Desktop view of the scheduler"
     },
     {
-      "src": "/scheduler/screenshot-mobile.png",
+      "src": "/public/screenshot-mobile.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",

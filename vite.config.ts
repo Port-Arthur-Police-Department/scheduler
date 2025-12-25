@@ -11,34 +11,59 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       
-      // Use your static manifest.json
+      // CRITICAL: Use relative paths that work in production
       manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',
         description: 'Officer scheduling system for Port Arthur Police Department - 129+ officers',
-        start_url: '/scheduler/',
-        scope: '/scheduler/',
-        display: 'standalone',
-        background_color: '#0f172a',
         theme_color: '#1e40af',
+        background_color: '#0f172a',
+        display: 'standalone',
+        scope: '/scheduler/',
+        start_url: '/scheduler/',
+        id: '/scheduler/',
+        orientation: 'portrait-primary',
+        
+        // KEY FIX: Use paths relative to public folder
         icons: [
           {
-            src: '/scheduler/icons/icon-192.png',
+            src: 'icons/icon-192.png', // Relative to public folder
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/scheduler/icons/icon-512.png',
+            src: 'icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/scheduler/icons/icon-144.png',
+            src: 'icons/icon-144.png',
             sizes: '144x144',
             type: 'image/png',
             purpose: 'any'
+          }
+        ],
+        
+        shortcuts: [
+          {
+            name: 'Daily Schedule',
+            short_name: 'Schedule',
+            description: 'View today\'s riding list',
+            url: '/scheduler/#/daily-schedule'
+          },
+          {
+            name: 'The Book',
+            short_name: 'Book',
+            description: 'Weekly schedule management',
+            url: '/scheduler/#/weekly-schedule'
+          },
+          {
+            name: 'Notifications',
+            short_name: 'Alerts',
+            description: 'Emergency notifications',
+            url: '/scheduler/#/dashboard?tab=notifications'
           }
         ]
       },
@@ -71,10 +96,12 @@ export default defineConfig({
       
       devOptions: {
         enabled: false,
-        type: 'module'
+        type: 'module',
+        navigateFallback: 'index.html'
       }
     })
   ],
+  
   base: '/scheduler/',
   
   build: {
@@ -83,11 +110,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
-      },
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom']
-        }
       }
     }
   },

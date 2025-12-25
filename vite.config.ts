@@ -11,7 +11,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       
-      // STEP 2: Add manifest configuration here
+      // Complete manifest configuration
       manifest: {
         name: 'Port Arthur PD Scheduler',
         short_name: 'PAPD Scheduler',
@@ -21,6 +21,12 @@ export default defineConfig({
         display: 'standalone',
         scope: '/scheduler/',
         start_url: '/scheduler/',
+        id: '/scheduler/',
+        orientation: 'portrait-primary',
+        lang: 'en-US',
+        dir: 'ltr',
+        categories: ['productivity', 'business'],
+        
         icons: [
           {
             src: 'icons/icon-192.png',
@@ -33,6 +39,89 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          },
+          {
+            src: 'icons/icon-144.png',
+            sizes: '144x144',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'icons/icon-384.png',
+            sizes: '384x384',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'icons/icon-96.png',
+            sizes: '96x96',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'icons/icon-72.png',
+            sizes: '72x72',
+            type: 'image/png',
+            purpose: 'any'
+          }
+        ],
+        
+        shortcuts: [
+          {
+            name: 'Daily Schedule',
+            short_name: 'Schedule',
+            description: 'View today\'s riding list',
+            url: '/scheduler/#/daily-schedule',
+            icons: [
+              {
+                src: 'icons/shortcut-schedule.png',
+                sizes: '96x96',
+                type: 'image/png'
+              }
+            ]
+          },
+          {
+            name: 'The Book',
+            short_name: 'Book',
+            description: 'Weekly schedule management',
+            url: '/scheduler/#/weekly-schedule',
+            icons: [
+              {
+                src: 'icons/shortcut-book.png',
+                sizes: '96x96',
+                type: 'image/png'
+              }
+            ]
+          },
+          {
+            name: 'Notifications',
+            short_name: 'Alerts',
+            description: 'Emergency notifications',
+            url: '/scheduler/#/dashboard?tab=notifications',
+            icons: [
+              {
+                src: 'icons/shortcut-alerts.png',
+                sizes: '96x96',
+                type: 'image/png'
+              }
+            ]
+          }
+        ],
+        
+        screenshots: [
+          {
+            src: 'screenshots/desktop.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Desktop view of the scheduler'
+          },
+          {
+            src: 'screenshots/mobile.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Mobile view of the scheduler'
           }
         ]
       },
@@ -59,16 +148,49 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
+          },
+          {
+            urlPattern: /\.(?:js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'static-resources',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 7
+              }
+            }
           }
         ]
       },
       
       devOptions: {
         enabled: false,
-        type: 'module'
-      }
+        type: 'module',
+        navigateFallback: 'index.html'
+      },
+      
+      // Include assets for PWA
+      includeAssets: [
+        'icons/*.png',
+        'screenshots/*.png',
+        'fonts/*.woff2',
+        'robots.txt',
+        'favicon.ico'
+      ]
     })
   ],
+  
   base: '/scheduler/',
   
   build: {
@@ -88,7 +210,8 @@ export default defineConfig({
   
   server: {
     port: 3000,
-    open: true
+    open: true,
+    host: true
   },
   
   resolve: {

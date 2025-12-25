@@ -10,58 +10,103 @@ export default defineConfig({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      includeAssets: ['icons/*.png', 'vite.svg'],
       
-      // Include manifest configuration here to ensure it's generated correctly
       manifest: {
         name: "Port Arthur PD Scheduler",
         short_name: "PAPD Scheduler",
-        description: "Officer scheduling system for Port Arthur Police Department - 129+ officers",
-        start_url: "/scheduler/",
-        scope: "/scheduler/",
-        display: "standalone",
-        background_color: "#0f172a",
+        description: "Officer scheduling system for Port Arthur Police Department",
         theme_color: "#1e40af",
-        categories: ["productivity", "business"],
+        background_color: "#0f172a",
+        display: "standalone",
         orientation: "portrait-primary",
-        lang: "en-US",
-        dir: "ltr",
+        scope: "/scheduler/",
+        start_url: "/scheduler/",
+        id: "/scheduler/", // Important for scope isolation
+        categories: ["productivity", "business"],
+        
         icons: [
           {
-            src: "icons/icon-192.png",
-            sizes: "192x192",
+            src: "icons/icon-72x72.png",
+            sizes: "72x72",
             type: "image/png",
-            purpose: "any maskable"
+            purpose: "maskable any"
           },
           {
-            src: "icons/icon-512.png",
-            sizes: "512x512",
+            src: "icons/icon-96x96.png",
+            sizes: "96x96",
             type: "image/png",
-            purpose: "any maskable"
+            purpose: "maskable any"
           },
           {
-            src: "icons/icon-144.png",
+            src: "icons/icon-128x128.png",
+            sizes: "128x128",
+            type: "image/png",
+            purpose: "maskable any"
+          },
+          {
+            src: "icons/icon-144x144.png",
             sizes: "144x144",
             type: "image/png",
-            purpose: "any"
+            purpose: "maskable any"
+          },
+          {
+            src: "icons/icon-152x152.png",
+            sizes: "152x152",
+            type: "image/png",
+            purpose: "maskable any"
+          },
+          {
+            src: "icons/icon-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable any"
+          },
+          {
+            src: "icons/icon-384x384.png",
+            sizes: "384x384",
+            type: "image/png",
+            purpose: "maskable any"
+          },
+          {
+            src: "icons/icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable any"
+          }
+        ],
+        
+        screenshots: [
+          {
+            src: "screenshots/desktop.png",
+            sizes: "1280x720",
+            type: "image/png",
+            form_factor: "wide",
+            label: "Desktop View"
+          }
+        ],
+        
+        shortcuts: [
+          {
+            name: "Daily Schedule",
+            short_name: "Schedule",
+            description: "View today's riding list",
+            url: "/scheduler/#/daily-schedule",
+            icons: [{ src: "icons/icon-96x96.png", sizes: "96x96" }]
           }
         ]
       },
       
-      srcDir: 'src',
-      filename: 'service-worker.js',
-      
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf,json}'],
         navigateFallback: '/scheduler/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        globIgnores: [
-          '**/OneSignalSDKWorker.js',
-          '**/OneSignalSDKUpdaterWorker.js'
-        ],
+        navigateFallbackDenylist: [/^\/api\//, /^\/_/],
+        cleanupOutdatedCaches: true,
+        
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
               cacheName: 'onesignal-cache',
               expiration: {
@@ -74,29 +119,30 @@ export default defineConfig({
       },
       
       devOptions: {
-        enabled: false,
-        type: 'module'
+        enabled: true, // Enable in development for testing
+        type: 'module',
+        navigateFallback: 'index.html'
       }
     })
   ],
+  
   base: '/scheduler/',
   
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
       }
-    },
-    // Copy public directory correctly
-    assetsDir: '.',
-    copyPublicDir: true
+    }
   },
   
   server: {
     port: 3000,
-    open: true
+    open: true,
+    host: true
   },
   
   resolve: {

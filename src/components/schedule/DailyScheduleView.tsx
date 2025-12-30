@@ -20,6 +20,8 @@ import { PREDEFINED_POSITIONS, RANK_ORDER } from "@/constants/positions";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEffect } from "react";
 
 
 interface DailyScheduleViewProps {
@@ -635,12 +637,24 @@ const handleEditPTO = (ptoRecord: any) => {
 };
 
 // Add Officer Form Component - NOW PROPERLY SEPARATED
+// Add Officer Form Component - NOW PROPERLY SEPARATED WITH PARTIAL SHIFT SUPPORT
 const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
   const [selectedOfficerId, setSelectedOfficerId] = useState("");
   const [position, setPosition] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [customPosition, setCustomPosition] = useState("");
+  const [isPartialShift, setIsPartialShift] = useState(false);
+  const [customStartTime, setCustomStartTime] = useState("");
+  const [customEndTime, setCustomEndTime] = useState("");
+
+  // Set default times when shift is selected
+  useEffect(() => {
+    if (shift) {
+      setCustomStartTime(shift.start_time);
+      setCustomEndTime(shift.end_time);
+    }
+  }, [shift]);
 
   const { data: officers, isLoading } = useQuery({
     queryKey: ["available-officers", shiftId, date],
@@ -648,7 +662,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
       // Get all profiles
       const { data: profiles, error } = await supabase
         .from("profiles")
-        .select("id, full_name, badge_number")
+        .select("id, full_name, badge_number, rank")
         .order("full_name");
 
       if (error) throw error;
@@ -658,12 +672,32 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
 
   const predefinedPositions = PREDEFINED_POSITIONS;
 
+  // Helper function to calculate hours
+  const calculateHours = (start: string, end: string) => {
+    const [startHour, startMin] = start.split(":").map(Number);
+    const [endHour, endMin] = end.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    return (endMinutes - startMinutes) / 60;
+  };
+
   const addOfficerMutation = useMutation({
     mutationFn: async () => {
       const finalPosition = position === "Other (Custom)" ? customPosition : position;
       
       if (!finalPosition) {
         throw new Error("Please select or enter a position");
+      }
+      
+      // Validate custom times if partial shift
+      if (isPartialShift) {
+        if (!customStartTime || !customEndTime) {
+          throw new Error("Please enter both start and end times for partial shift");
+        }
+        if (customStartTime >= customEndTime && shift.start_time <= shift.end_time) {
+          // Only validate for non-night shifts (night shifts cross midnight)
+          throw new Error("End time must be after start time");
+        }
       }
       
       // Check if officer already has a schedule exception for this date and shift
@@ -680,7 +714,12 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
         throw new Error("Officer already has a schedule for this date and shift");
       }
 
-      // Create schedule exception
+      // Calculate hours worked
+      const startTime = isPartialShift ? customStartTime : shift.start_time;
+      const endTime = isPartialShift ? customEndTime : shift.end_time;
+      const hoursWorked = calculateHours(startTime, endTime);
+
+      // Create schedule exception with custom times
       const { data, error } = await supabase
         .from("schedule_exceptions")
         .insert({
@@ -689,13 +728,31 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
           shift_type_id: shiftId,
           position_name: finalPosition,
           unit_number: unitNumber,
-          notes: notes,
-          is_off: false
+          notes: notes || `${isPartialShift ? 'Partial' : 'Full'} overtime shift`,
+          is_off: false,
+          is_extra_shift: true,
+          schedule_type: "exception",
+          custom_start_time: isPartialShift ? customStartTime : null,
+          custom_end_time: isPartialShift ? customEndTime : null,
+          is_partial_shift: isPartialShift,
+          hours_worked: hoursWorked
         })
         .select()
         .single();
 
       if (error) throw error;
+      
+      // Log to audit
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        await supabase.from('audit_logs').insert({
+          user_email: currentUser.email,
+          action_type: 'extra_shift_created',
+          table_name: 'schedule_exceptions',
+          description: `Added ${isPartialShift ? 'partial' : 'full'} extra shift (${hoursWorked} hours)`
+        });
+      }
+      
       return data;
     },
     onSuccess: () => {
@@ -716,6 +773,20 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
     addOfficerMutation.mutate();
   };
 
+  // Generate time options for dropdown
+  const generateTimeOptions = () => {
+    const options = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute of ["00", "30"]) {
+        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+        options.push(time);
+      }
+    }
+    return options;
+  };
+
+  const timeOptions = generateTimeOptions();
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -727,7 +798,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
           <SelectContent>
             {officers?.map((officer) => (
               <SelectItem key={officer.id} value={officer.id}>
-                {officer.full_name} ({officer.badge_number})
+                {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
               </SelectItem>
             ))}
           </SelectContent>
@@ -760,6 +831,67 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
         )}
       </div>
 
+      {/* Shift Hours Selection */}
+      <div className="space-y-2">
+        <Label>Shift Hours</Label>
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isPartialShift"
+              checked={isPartialShift}
+              onCheckedChange={(checked) => {
+                setIsPartialShift(checked === true);
+              }}
+            />
+            <Label htmlFor="isPartialShift" className="cursor-pointer">
+              {isPartialShift ? "Partial/Custom Hours" : `Full Shift (${shift?.start_time} - ${shift?.end_time})`}
+            </Label>
+          </div>
+          
+          {isPartialShift && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Start Time</Label>
+                <Select value={customStartTime} onValueChange={setCustomStartTime}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px]">
+                    {timeOptions.map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>End Time</Label>
+                <Select value={customEndTime} onValueChange={setCustomEndTime}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px]">
+                    {timeOptions.map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          
+          {/* Display calculated hours */}
+          {customStartTime && customEndTime && (
+            <div className="text-sm text-muted-foreground">
+              Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="unitNumber">Unit Number (Optional)</Label>
         <Input
@@ -774,7 +906,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
         <Label htmlFor="notes">Notes (Optional)</Label>
         <Input
           id="notes"
-          placeholder="Enter notes"
+          placeholder="Enter notes (e.g., reason for overtime)"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -1111,32 +1243,38 @@ recurringData
           customTime = `${e.custom_start_time} - ${e.custom_end_time}`;
         }
 
-        const officerData = {
-          scheduleId: e.id,
-          officerId: e.officer_id,
-          name: e.profiles?.full_name || "Unknown",
-          badge: e.profiles?.badge_number,
-          rank: officerRank,
-          isPPO: isProbationary,
-          position: e.position_name || defaultAssignment?.position_name,
-          unitNumber: e.unit_number || defaultAssignment?.unit_number,
-          notes: e.notes,
-          type: isRegularRecurring ? "recurring" : "exception" as const,
-          originalScheduleId: null,
-          customTime: customTime,
-          hasPTO: !!ptoException,
-          ptoData: ptoException ? {
-            id: ptoException.id,
-            ptoType: ptoException.reason,
-            startTime: ptoException.custom_start_time || shift.start_time,
-            endTime: ptoException.custom_end_time || shift.end_time,
-            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-          } : undefined,
-          isPartnership: e.is_partnership,
-          partnerOfficerId: e.partner_officer_id,
-          shift: shift,
-          isExtraShift: !isRegularRecurring
-        };
+const officerData = {
+  scheduleId: e.id,
+  officerId: e.officer_id,
+  name: e.profiles?.full_name || "Unknown",
+  badge: e.profiles?.badge_number,
+  rank: officerRank,
+  isPPO: isProbationary,
+  position: e.position_name || defaultAssignment?.position_name,
+  unitNumber: e.unit_number || defaultAssignment?.unit_number,
+  notes: e.notes,
+  type: isRegularRecurring ? "recurring" : "exception" as const,
+  originalScheduleId: null,
+  customTime: customTime,
+  // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
+  custom_start_time: e.custom_start_time,
+  custom_end_time: e.custom_end_time,
+  hours_worked: e.hours_worked,
+  is_partial_shift: e.is_partial_shift,
+  // END OF ADDED LINES
+  hasPTO: !!ptoException,
+  ptoData: ptoException ? {
+    id: ptoException.id,
+    ptoType: ptoException.reason,
+    startTime: ptoException.custom_start_time || shift.start_time,
+    endTime: ptoException.custom_end_time || shift.end_time,
+    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+  } : undefined,
+  isPartnership: e.is_partnership,
+  partnerOfficerId: e.partner_officer_id,
+  shift: shift,
+  isExtraShift: !isRegularRecurring
+};
 
         allOfficersMap.set(officerKey, officerData);
       });

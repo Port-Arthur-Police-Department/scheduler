@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with internal profile fetching
+// Updated WeeklyView.tsx with proper cache invalidation
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
@@ -18,6 +18,7 @@ interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
   officerProfiles?: Map<string, any>; // Optional prop
   queryKey?: any[]; // Add queryKey to invalidate
+  refetchScheduleData?: () => Promise<void>; // Add refetch function prop
 }
 
 // Helper function to calculate service credit
@@ -88,6 +89,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   onDateChange,
   officerProfiles, // Optional prop
   queryKey = ['weekly-schedule', selectedShiftId], // Default queryKey
+  refetchScheduleData, // Optional refetch function from parent
 }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -145,6 +147,26 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   }, [weekPickerOpen, currentWeekStart]);
 
+  // Helper function to invalidate all schedule queries
+  const invalidateScheduleQueries = () => {
+    // Invalidate the main schedule query
+    queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId] });
+    queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] });
+    
+    // Invalidate the mobile schedule query if it exists
+    queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+    
+    // Invalidate any date-specific queries
+    queryClient.invalidateQueries({ queryKey: ['schedule', selectedShiftId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-exceptions', selectedShiftId] });
+    queryClient.invalidateQueries({ queryKey: ['recurring-schedules', selectedShiftId] });
+    
+    // Invalidate officer profiles
+    queryClient.invalidateQueries({ queryKey: ['officer-profiles-weekly'] });
+    
+    console.log('Invalidated all schedule queries');
+  };
+
   // Handler for PTO assignment with cache invalidation
   const handleAssignPTO = async (schedule: any, date: string, officerId: string, officerName: string) => {
     if (!onEventHandlers.onAssignPTO) return;
@@ -155,21 +177,20 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onAssignPTO(schedule, date, officerId, officerName);
       
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKey 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['officer-profiles-weekly'] 
-      });
+      // Invalidate all schedule queries
+      invalidateScheduleQueries();
       
-      // Force refetch
-      await queryClient.refetchQueries({ 
-        queryKey: queryKey 
-      });
+      // If parent provides a refetch function, use it
+      if (refetchScheduleData) {
+        await refetchScheduleData();
+      } else {
+        // Force refetch of all schedule queries
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
+          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
+        ]);
+      }
       
       toast.success("PTO assigned successfully");
     } catch (error) {
@@ -188,21 +209,20 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onRemovePTO(schedule, date, officerId);
       
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKey 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['officer-profiles-weekly'] 
-      });
+      // Invalidate all schedule queries
+      invalidateScheduleQueries();
       
-      // Force refetch
-      await queryClient.refetchQueries({ 
-        queryKey: queryKey 
-      });
+      // If parent provides a refetch function, use it
+      if (refetchScheduleData) {
+        await refetchScheduleData();
+      } else {
+        // Force refetch of all schedule queries
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
+          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
+        ]);
+      }
       
       toast.success("PTO removed successfully");
     } catch (error) {
@@ -249,23 +269,29 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onEditAssignment(officerWithSchedule, dateStr);
       
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKey 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['officer-profiles-weekly'] 
-      });
+      // IMPORTANT: Invalidate all schedule queries BEFORE showing success
+      invalidateScheduleQueries();
       
-      // Force refetch
-      await queryClient.refetchQueries({ 
-        queryKey: queryKey 
-      });
+      // If parent provides a refetch function, use it
+      if (refetchScheduleData) {
+        await refetchScheduleData();
+      } else {
+        // Force immediate refetch of all schedule queries
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
+          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
+        ]);
+      }
       
       toast.success("Assignment updated successfully");
+      
+      // Add a small delay to ensure UI updates
+      setTimeout(() => {
+        // Trigger a state update to force re-render
+        setCurrentWeekStart(prev => new Date(prev.getTime()));
+      }, 100);
+      
     } catch (error) {
       toast.error("Failed to update assignment");
       console.error('Error updating assignment:', error);
@@ -282,23 +308,29 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onRemoveOfficer(scheduleId, type, officerData);
       
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKey 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['officer-profiles-weekly'] 
-      });
+      // Invalidate all schedule queries
+      invalidateScheduleQueries();
       
-      // Force refetch
-      await queryClient.refetchQueries({ 
-        queryKey: queryKey 
-      });
+      // If parent provides a refetch function, use it
+      if (refetchScheduleData) {
+        await refetchScheduleData();
+      } else {
+        // Force refetch of all schedule queries
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
+          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
+          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
+        ]);
+      }
       
       toast.success("Officer removed successfully");
+      
+      // Add a small delay to ensure UI updates
+      setTimeout(() => {
+        // Trigger a state update to force re-render
+        setCurrentWeekStart(prev => new Date(prev.getTime()));
+      }, 100);
+      
     } catch (error) {
       toast.error("Failed to remove officer");
       console.error('Error removing officer:', error);

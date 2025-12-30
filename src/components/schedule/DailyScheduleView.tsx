@@ -895,74 +895,91 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
         )}
       </div>
 
-      {/* Shift Hours Selection */}
-      <div className="space-y-2">
-        <Label>Shift Hours</Label>
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isPartialShift"
-              checked={isPartialShift}
-              onCheckedChange={(checked) => {
-                setIsPartialShift(checked === true);
-              }}
-            />
-            <Label htmlFor="isPartialShift" className="cursor-pointer">
-              {isPartialShift ? "Partial/Custom Hours" : `Full Shift ${formatShiftDisplay(shift?.start_time || '??:??', shift?.end_time || '??:??')}`}
-            </Label>
-          </div>
-          
-          {/* Warning for midnight-crossing shifts */}
-          {isPartialShift && shift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
-            <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-              ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
-              Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
-            </div>
-          )}
-          
-          {isPartialShift && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Start Time</Label>
-                <Select value={customStartTime} onValueChange={setCustomStartTime}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[200px]">
-                    {timeOptions.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>End Time</Label>
-                <Select value={customEndTime} onValueChange={setCustomEndTime}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[200px]">
-                    {timeOptions.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-          
-          {/* Display calculated hours */}
-          {customStartTime && customEndTime && (
-            <div className="text-sm text-muted-foreground">
-              Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
-            </div>
-          )}
+{/* Shift Hours Selection */}
+<div className="space-y-2">
+  <Label>Shift Hours</Label>
+  <div className="space-y-3">
+    {/* Full Shift Option */}
+    <div className="flex items-center space-x-2">
+      <Checkbox
+        id="fullShift"
+        checked={!isPartialShift}
+        onCheckedChange={(checked) => {
+          if (checked) {
+            setIsPartialShift(false);
+          }
+        }}
+      />
+      <Label htmlFor="fullShift" className="cursor-pointer">
+        Full Shift {formatShiftDisplay(shift?.start_time || '??:??', shift?.end_time || '??:??')}
+      </Label>
+    </div>
+    
+    {/* Partial Shift Option */}
+    <div className="flex items-center space-x-2">
+      <Checkbox
+        id="partialShift"
+        checked={isPartialShift}
+        onCheckedChange={(checked) => {
+          setIsPartialShift(checked === true);
+        }}
+      />
+      <Label htmlFor="partialShift" className="cursor-pointer">
+        Partial/Custom Hours
+      </Label>
+    </div>
+    
+    {/* Warning for midnight-crossing shifts */}
+    {isPartialShift && shift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
+      <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 ml-6">
+        ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
+        Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
+      </div>
+    )}
+    
+    {isPartialShift && (
+      <div className="grid grid-cols-2 gap-4 ml-6">
+        <div className="space-y-2">
+          <Label>Start Time</Label>
+          <Select value={customStartTime} onValueChange={setCustomStartTime}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {timeOptions.map((time) => (
+                <SelectItem key={time} value={time}>
+                  {time}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>End Time</Label>
+          <Select value={customEndTime} onValueChange={setCustomEndTime}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {timeOptions.map((time) => (
+                <SelectItem key={time} value={time}>
+                  {time}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
+    )}
+    
+    {/* Display calculated hours */}
+    {isPartialShift && customStartTime && customEndTime && (
+      <div className="text-sm text-muted-foreground ml-6">
+        Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
+      </div>
+    )}
+  </div>
+</div>
 
       <div className="space-y-2">
         <Label htmlFor="unitNumber">Unit Number (Optional)</Label>

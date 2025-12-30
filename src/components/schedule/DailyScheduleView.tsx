@@ -636,7 +636,6 @@ const handleEditPTO = (ptoRecord: any) => {
   );
 };
 
-// Add Officer Form Component - NOW PROPERLY SEPARATED
 // Add Officer Form Component - NOW PROPERLY SEPARATED WITH PARTIAL SHIFT SUPPORT
 const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
   const [selectedOfficerId, setSelectedOfficerId] = useState("");
@@ -672,12 +671,36 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
 
   const predefinedPositions = PREDEFINED_POSITIONS;
 
-  // Helper function to calculate hours
+  // Helper function to check if a shift crosses midnight
+  const doesShiftCrossMidnight = (startTime: string, endTime: string): boolean => {
+    const [startHour] = startTime.split(":").map(Number);
+    const [endHour] = endTime.split(":").map(Number);
+    return endHour < startHour;
+  };
+
+  // Helper to format shift display with next day indicator
+  const formatShiftDisplay = (startTime: string, endTime: string): string => {
+    const crossesMidnight = doesShiftCrossMidnight(startTime, endTime);
+    if (crossesMidnight) {
+      return `${startTime} - ${endTime} (next day)`;
+    }
+    return `${startTime} - ${endTime}`;
+  };
+
+  // Helper function to calculate hours correctly (handles midnight crossing)
   const calculateHours = (start: string, end: string) => {
     const [startHour, startMin] = start.split(":").map(Number);
     const [endHour, endMin] = end.split(":").map(Number);
+    
+    // Convert to minutes from start of day
     const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
+    let endMinutes = endHour * 60 + endMin;
+    
+    // If end time is less than start time, it crosses midnight (add 24 hours)
+    if (endMinutes < startMinutes) {
+      endMinutes += 24 * 60; // Add 24 hours in minutes
+    }
+    
     return (endMinutes - startMinutes) / 60;
   };
 
@@ -694,9 +717,19 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
         if (!customStartTime || !customEndTime) {
           throw new Error("Please enter both start and end times for partial shift");
         }
-        if (customStartTime >= customEndTime && shift.start_time <= shift.end_time) {
-          // Only validate for non-night shifts (night shifts cross midnight)
+        
+        // Check if shift crosses midnight
+        const shiftCrossesMidnight = doesShiftCrossMidnight(shift.start_time, shift.end_time);
+        const customCrossesMidnight = doesShiftCrossMidnight(customStartTime, customEndTime);
+        
+        // For shifts that don't cross midnight, end must be after start
+        if (!shiftCrossesMidnight && !customCrossesMidnight && customStartTime >= customEndTime) {
           throw new Error("End time must be after start time");
+        }
+        
+        // If original shift crosses midnight but custom doesn't, warn but allow
+        if (shiftCrossesMidnight && !customCrossesMidnight) {
+          console.log("⚠️ Original shift crosses midnight but custom times don't");
         }
       }
       
@@ -844,9 +877,17 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
               }}
             />
             <Label htmlFor="isPartialShift" className="cursor-pointer">
-              {isPartialShift ? "Partial/Custom Hours" : `Full Shift (${shift?.start_time} - ${shift?.end_time})`}
+              {isPartialShift ? "Partial/Custom Hours" : `Full Shift ${formatShiftDisplay(shift?.start_time || '??:??', shift?.end_time || '??:??')}`}
             </Label>
           </div>
+          
+          {/* Warning for midnight-crossing shifts */}
+          {isPartialShift && shift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
+            <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+              ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
+              Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
+            </div>
+          )}
           
           {isPartialShift && (
             <div className="grid grid-cols-2 gap-4">

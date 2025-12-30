@@ -68,3 +68,7 @@ I need help applying this same logic to the mobile version. Specifically:
 3. Ensure the mobile shift selector starts with their assigned shift selected
 
 Please help me modify the mobile version to match the desktop functionality.
+
+## To help with making changes, use this prompt
+
+* I need help with making these changes, can you make the changes in full code blocks and give me the code to copy and paste in my project with the start and end code line so I know what code to replace with  the new code?

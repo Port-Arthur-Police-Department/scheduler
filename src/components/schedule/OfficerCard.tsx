@@ -146,35 +146,41 @@ export const OfficerCard = ({
 						)}
 					</div>
 				</div>
-				<div className="flex items-center gap-2 text-sm text-muted-foreground">
-					{officer.customTime && (
-						<Badge variant="secondary" className="text-xs">
-							{officer.customTime}
-						</Badge>
-					)}
-					{officer.type === "recurring" && (
-						<Badge variant="secondary" className="text-xs">
-							Regular
-						</Badge>
-					)}
-					{officer.type === "exception" && (
-						<Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
-							Extra Shift
-						</Badge>
-					)}
-					{/* Show partial PTO indicator */}
-					{officer.hasPTO && !officer.ptoData?.isFullShift && (
-						<Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
-							Partial PTO
-						</Badge>
-					)}
-					{/* Partnership indicator badge */}
-					{officer.isPartnership && (
-						<Badge className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
-							Partnership
-						</Badge>
-					)}
-				</div>
+<div className="flex items-center gap-2 text-sm text-muted-foreground">
+  {officer.customTime && (
+    <Badge variant="secondary" className="text-xs">
+      {officer.customTime}
+    </Badge>
+  )}
+  {/* ADD THIS FOR PARTIAL OVERTIME */}
+  {officer.isExtraShift && officer.custom_start_time && officer.custom_end_time && (
+    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">
+      {officer.custom_start_time} - {officer.custom_end_time}
+    </Badge>
+  )}
+  {officer.type === "recurring" && (
+    <Badge variant="secondary" className="text-xs">
+      Regular
+    </Badge>
+  )}
+  {officer.type === "exception" && (
+    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
+      Extra Shift
+    </Badge>
+  )}
+  {/* Show partial PTO indicator */}
+  {officer.hasPTO && !officer.ptoData?.isFullShift && (
+    <Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
+      Partial PTO
+    </Badge>
+  )}
+  {/* Partnership indicator badge */}
+  {officer.isPartnership && (
+    <Badge className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
+      Partnership
+    </Badge>
+  )}
+</div>
 			</div>
 
 			{/* Unit & Notes - Middle Section */}

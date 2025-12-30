@@ -213,13 +213,41 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  const handleEditAssignment = async (officer: any, dateStr: string) => {
+  const handleEditAssignment = async (officerData: any, dateStr: string) => {
     if (!onEventHandlers.onEditAssignment) return;
     
     try {
       toast.loading("Updating assignment...");
       
-      await onEventHandlers.onEditAssignment(officer, dateStr);
+      // Get the specific day's schedule for this officer to extract scheduleId
+      const dayOfficer = officerData?.weeklySchedule?.[dateStr];
+      const scheduleId = dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId;
+      
+      console.log('handleEditAssignment called with:', {
+        officerId: officerData.officerId,
+        officerName: officerData.officerName,
+        dateStr,
+        dayOfficer,
+        scheduleId,
+        scheduleType: dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType
+      });
+      
+      if (!scheduleId) {
+        console.error('No scheduleId found for officer:', officerData.officerId, 'on date:', dateStr);
+        toast.error("Cannot update assignment: Schedule ID not found");
+        return;
+      }
+      
+      // Create a complete officer object with schedule ID
+      const officerWithSchedule = {
+        ...officerData,
+        scheduleId: scheduleId,
+        scheduleType: dayOfficer?.shiftInfo?.scheduleType || 'exception',
+        date: dateStr,
+        shiftInfo: dayOfficer?.shiftInfo
+      };
+      
+      await onEventHandlers.onEditAssignment(officerWithSchedule, dateStr);
       
       // Invalidate all relevant queries
       queryClient.invalidateQueries({ 
@@ -319,81 +347,90 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-// ============ UPDATED SECTION: Extract and organize officer data ============
-const allOfficers = new Map();
-const recurringSchedulesByOfficer = new Map();
+  // ============ UPDATED SECTION: Extract and organize officer data ============
+  const allOfficers = new Map();
+  const recurringSchedulesByOfficer = new Map();
 
-// Extract recurring schedule patterns
-schedules.recurring?.forEach((recurring: any) => {
-  if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
-    recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
-  }
-  recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
-});
-
-// Process daily schedules - FIXED: Service credit should be calculated here
-schedules.dailySchedules?.forEach(day => {
-  day.officers.forEach((officer: any) => {
-    if (!allOfficers.has(officer.officerId)) {
-      // IMPORTANT: The officer object from parent might not have hire/promotion dates
-      // We need to extract them from profiles if available
-      let profileData = null;
-      
-      // Try to get profile data from different sources
-      // Option 1: Check if officer has direct profile data
-      if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
-        profileData = {
-          hire_date: officer.hire_date,
-          promotion_date_sergeant: officer.promotion_date_sergeant,
-          promotion_date_lieutenant: officer.promotion_date_lieutenant,
-          service_credit_override: officer.service_credit_override || 0
-        };
-      }
-      // Option 2: Check if officerProfiles prop has the data
-      else if (officerProfiles && officerProfiles.has(officer.officerId)) {
-        profileData = officerProfiles.get(officer.officerId);
-      }
-      // Option 3: Use officer data as is (may be incomplete)
-      else {
-        profileData = {
-          hire_date: officer.hire_date || null,
-          promotion_date_sergeant: officer.promotion_date_sergeant || null,
-          promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
-          service_credit_override: officer.service_credit_override || 0
-        };
-      }
-
-      // Calculate service credit with available data
-      const serviceCredit = calculateServiceCredit(
-        profileData.hire_date,
-        profileData.service_credit_override || 0,
-        profileData.promotion_date_sergeant,
-        profileData.promotion_date_lieutenant,
-        officer.rank // Pass the rank for logic
-      );
-      
-      // Store officer with calculated service credit
-      allOfficers.set(officer.officerId, {
-        ...officer,
-        service_credit: serviceCredit, // Use calculated service credit
-        hire_date: profileData.hire_date,
-        promotion_date_sergeant: profileData.promotion_date_sergeant,
-        promotion_date_lieutenant: profileData.promotion_date_lieutenant,
-        service_credit_override: profileData.service_credit_override || 0,
-        recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-        weeklySchedule: {} as Record<string, any>
-      });
+  // Extract recurring schedule patterns
+  schedules.recurring?.forEach((recurring: any) => {
+    if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+      recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
     }
-    
-    // Store daily schedule for this officer
-    const daySchedule = {
-      ...officer,
-      isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false
-    };
-    
-    allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
+    recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
   });
-});
+
+  // Process daily schedules - FIXED: Include all necessary data
+  schedules.dailySchedules?.forEach(day => {
+    day.officers.forEach((officer: any) => {
+      if (!allOfficers.has(officer.officerId)) {
+        // IMPORTANT: The officer object from parent might not have hire/promotion dates
+        // We need to extract them from profiles if available
+        let profileData = null;
+        
+        // Try to get profile data from different sources
+        // Option 1: Check if officer has direct profile data
+        if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+          profileData = {
+            hire_date: officer.hire_date,
+            promotion_date_sergeant: officer.promotion_date_sergeant,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant,
+            service_credit_override: officer.service_credit_override || 0
+          };
+        }
+        // Option 2: Check if officerProfiles prop has the data
+        else if (effectiveOfficerProfiles && effectiveOfficerProfiles.has(officer.officerId)) {
+          profileData = effectiveOfficerProfiles.get(officer.officerId);
+        }
+        // Option 3: Use officer data as is (may be incomplete)
+        else {
+          profileData = {
+            hire_date: officer.hire_date || null,
+            promotion_date_sergeant: officer.promotion_date_sergeant || null,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
+            service_credit_override: officer.service_credit_override || 0
+          };
+        }
+
+        // Calculate service credit with available data
+        const serviceCredit = calculateServiceCredit(
+          profileData.hire_date,
+          profileData.service_credit_override || 0,
+          profileData.promotion_date_sergeant,
+          profileData.promotion_date_lieutenant,
+          officer.rank // Pass the rank for logic
+        );
+        
+        // Store officer with calculated service credit
+        allOfficers.set(officer.officerId, {
+          ...officer,
+          service_credit: serviceCredit, // Use calculated service credit
+          hire_date: profileData.hire_date,
+          promotion_date_sergeant: profileData.promotion_date_sergeant,
+          promotion_date_lieutenant: profileData.promotion_date_lieutenant,
+          service_credit_override: profileData.service_credit_override || 0,
+          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+          weeklySchedule: {} as Record<string, any>
+        });
+      }
+      
+      // Store daily schedule for this officer with ALL necessary data
+      // CRITICAL: Make sure we're passing through the schedule ID and other metadata
+      const daySchedule = {
+        ...officer,
+        scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId, // Extract schedule ID
+        scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType,
+        isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false,
+        shiftInfo: {
+          ...officer.shiftInfo,
+          // Ensure scheduleId is in shiftInfo as well
+          scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
+          scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType
+        }
+      };
+      
+      allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
+    });
+  });
 
   console.log(`Processed ${allOfficers.size} officers with profiles`);
 
@@ -644,25 +681,28 @@ schedules.dailySchedules?.forEach(day => {
                   SC: {officer.service_credit?.toFixed(1) || '0.0'}
                 </div>
               </div>
-              {weekDays.map(({ dateStr }) => (
-                <ScheduleCell
-                  key={dateStr}
-                  officer={officer.weeklySchedule[dateStr]}
-                  dateStr={dateStr}
-                  officerId={officer.officerId}
-                  officerName={officer.officerName}
-                  isAdminOrSupervisor={isAdminOrSupervisor}
-                  onAssignPTO={handleAssignPTO}
-                  onRemovePTO={handleRemovePTO}
-                  onEditAssignment={handleEditAssignment}
-                  onRemoveOfficer={() => handleRemoveOfficer(
-                    officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleId,
-                    officer.weeklySchedule[dateStr]?.shiftInfo?.scheduleType,
-                    officer
-                  )}
-                  isUpdating={mutations.removeOfficerMutation.isPending}
-                />
-              ))}
+              {weekDays.map(({ dateStr }) => {
+                const dayOfficer = officer.weeklySchedule[dateStr];
+                return (
+                  <ScheduleCell
+                    key={dateStr}
+                    officer={dayOfficer}
+                    dateStr={dateStr}
+                    officerId={officer.officerId}
+                    officerName={officer.officerName}
+                    isAdminOrSupervisor={isAdminOrSupervisor}
+                    onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+                    onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+                    onEditAssignment={() => handleEditAssignment(officer, dateStr)}
+                    onRemoveOfficer={() => handleRemoveOfficer(
+                      dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                      (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
+                      officer
+                    )}
+                    isUpdating={mutations.removeOfficerMutation.isPending}
+                  />
+                );
+              })}
             </div>
           ))}
 
@@ -717,12 +757,12 @@ schedules.dailySchedules?.forEach(day => {
                       officerId={officer.officerId}
                       officerName={officer.officerName}
                       isAdminOrSupervisor={isAdminOrSupervisor}
-                      onAssignPTO={handleAssignPTO}
-                      onRemovePTO={handleRemovePTO}
-                      onEditAssignment={handleEditAssignment}
+                      onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+                      onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+                      onEditAssignment={() => handleEditAssignment(officer, dateStr)}
                       onRemoveOfficer={() => handleRemoveOfficer(
-                        dayOfficer?.shiftInfo?.scheduleId,
-                        dayOfficer?.shiftInfo?.scheduleType,
+                        dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                        (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
                         officer
                       )}
                       isUpdating={mutations.removeOfficerMutation.isPending}
@@ -802,12 +842,12 @@ schedules.dailySchedules?.forEach(day => {
                         officerId={officer.officerId}
                         officerName={officer.officerName}
                         isAdminOrSupervisor={isAdminOrSupervisor}
-                        onAssignPTO={handleAssignPTO}
-                        onRemovePTO={handleRemovePTO}
-                        onEditAssignment={handleEditAssignment}
+                        onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+                        onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+                        onEditAssignment={() => handleEditAssignment(officer, dateStr)}
                         onRemoveOfficer={() => handleRemoveOfficer(
-                          dayOfficer?.shiftInfo?.scheduleId,
-                          dayOfficer?.shiftInfo?.scheduleType,
+                          dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                          (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
                           officer
                         )}
                         isUpdating={mutations.removeOfficerMutation.isPending}

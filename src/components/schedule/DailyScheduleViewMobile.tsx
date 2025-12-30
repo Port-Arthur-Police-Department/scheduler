@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"; 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { usePDFExport } from "@/hooks/usePDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { getScheduleData } from "./DailyScheduleView";
@@ -57,6 +60,8 @@ export const DailyScheduleViewMobile = ({
   const [selectedShift, setSelectedShift] = useState<any>(null);
   const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift); // Initialize with userCurrentShift
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
+  const [addOfficerDialogOpen, setAddOfficerDialogOpen] = useState(false);
+  const [selectedShiftForAdd, setSelectedShiftForAdd] = useState<any>(null);
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
@@ -245,6 +250,12 @@ export const DailyScheduleViewMobile = ({
     }
   };
 
+  // Handle add officer button click
+  const handleAddOfficerClick = (shiftData: any) => {
+    setSelectedShiftForAdd(shiftData.shift);
+    setAddOfficerDialogOpen(true);
+  };
+
   if (shiftsLoading) {
     return (
       <Card className="mx-4 mt-4">
@@ -373,7 +384,12 @@ return (
                     {/* Shift Actions */}
                     <div className="flex gap-2 pt-2">
                       {canEdit && (
-                        <Button size="sm" variant="outline" className="flex-1">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => handleAddOfficerClick(shiftData)}
+                        >
                           <UserPlus className="h-4 w-4 mr-1" />
                           Add Officer
                         </Button>
@@ -479,11 +495,24 @@ return (
         isLoading={updateScheduleMutation.isPending}
         allShifts={allShifts}
       />
+
+      {/* Add Officer Dialog */}
+      <AddOfficerDialogMobile
+        open={addOfficerDialogOpen}
+        onOpenChange={setAddOfficerDialogOpen}
+        shift={selectedShiftForAdd}
+        date={dateStr}
+        onSuccess={() => {
+          setAddOfficerDialogOpen(false);
+          setSelectedShiftForAdd(null);
+          refetchSchedule();
+        }}
+      />
     </div>
   );
 };
 
-// Mobile Officer Section Component - UPDATED with background colors
+// Mobile Officer Section Component - UPDATED with background colors and partial shift display
 interface OfficerSectionMobileProps {
   title: string;
   officers: any[];
@@ -617,6 +646,12 @@ const getSectionStyle = () => {
                       Extra
                     </Badge>
                   )}
+                  {/* ADD THIS FOR PARTIAL OVERTIME DISPLAY */}
+                  {officer.isExtraShift && officer.custom_start_time && officer.custom_end_time && (
+                    <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 border-orange-300">
+                      {officer.custom_start_time} - {officer.custom_end_time}
+                    </Badge>
+                  )}
                 </div>
               </div>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -652,6 +687,19 @@ const getSectionStyle = () => {
                   <div className="flex items-center gap-2 p-2 bg-muted rounded">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">{officer.customTime}</span>
+                  </div>
+                )}
+
+                {/* Partial Overtime Details */}
+                {officer.isExtraShift && officer.custom_start_time && officer.custom_end_time && officer.hours_worked && (
+                  <div className="flex items-center gap-2 p-2 bg-orange-50 rounded border border-orange-200">
+                    <Clock className="h-4 w-4 text-orange-600" />
+                    <div>
+                      <p className="text-sm font-medium text-orange-800">Partial Overtime</p>
+                      <p className="text-sm text-orange-700">
+                        {officer.custom_start_time} - {officer.custom_end_time} ({officer.hours_worked} hours)
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -724,8 +772,6 @@ interface PTOSectionMobileProps {
   ptoRecords: any[];
   canEdit: boolean;
 }
-
-// In DailyScheduleViewMobile.tsx, update the PTOSectionMobile component:
 
 const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps) => {
   const { data: websiteSettings } = useWebsiteSettings();
@@ -928,5 +974,351 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
         </ScrollArea>
       </SheetContent>
     </Sheet>
+  );
+};
+
+// Add Officer Dialog for Mobile with partial shift support
+interface AddOfficerDialogMobileProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  shift: any;
+  date: string;
+  onSuccess: () => void;
+}
+
+const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: AddOfficerDialogMobileProps) => {
+  const [selectedOfficerId, setSelectedOfficerId] = useState("");
+  const [position, setPosition] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
+  const [notes, setNotes] = useState("");
+  const [customPosition, setCustomPosition] = useState("");
+  const [isPartialShift, setIsPartialShift] = useState(false);
+  const [customStartTime, setCustomStartTime] = useState("");
+  const [customEndTime, setCustomEndTime] = useState("");
+
+  const { data: officers, isLoading } = useQuery({
+    queryKey: ["available-officers-mobile", shift?.id, date],
+    queryFn: async () => {
+      if (!shift) return [];
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number, rank")
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!shift,
+  });
+
+  // Set default times when dialog opens
+  useEffect(() => {
+    if (open && shift) {
+      setCustomStartTime(shift.start_time);
+      setCustomEndTime(shift.end_time);
+      setIsPartialShift(false);
+      setSelectedOfficerId("");
+      setPosition("");
+      setCustomPosition("");
+      setUnitNumber("");
+      setNotes("");
+    }
+  }, [open, shift]);
+
+  // Helper function to check if a shift crosses midnight
+  const doesShiftCrossMidnight = (startTime: string, endTime: string): boolean => {
+    const [startHour] = startTime.split(":").map(Number);
+    const [endHour] = endTime.split(":").map(Number);
+    return endHour < startHour;
+  };
+
+  // Helper to format shift display with next day indicator
+  const formatShiftDisplay = (startTime: string, endTime: string): string => {
+    const crossesMidnight = doesShiftCrossMidnight(startTime, endTime);
+    if (crossesMidnight) {
+      return `${startTime} - ${endTime} (next day)`;
+    }
+    return `${startTime} - ${endTime}`;
+  };
+
+  // Updated calculateHours function to handle midnight crossing
+  const calculateHours = (start: string, end: string) => {
+    const [startHour, startMin] = start.split(":").map(Number);
+    const [endHour, endMin] = end.split(":").map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    let endMinutes = endHour * 60 + endMin;
+    
+    // Handle shifts crossing midnight
+    if (endMinutes < startMinutes) {
+      endMinutes += 24 * 60;
+    }
+    
+    return (endMinutes - startMinutes) / 60;
+  };
+
+  const addOfficerMutation = useMutation({
+    mutationFn: async () => {
+      if (!shift) throw new Error("No shift selected");
+      
+      const finalPosition = position === "Other (Custom)" ? customPosition : position;
+      
+      if (!finalPosition) {
+        throw new Error("Please select or enter a position");
+      }
+      
+      if (!selectedOfficerId) {
+        throw new Error("Please select an officer");
+      }
+      
+      // Validate custom times if partial shift
+      if (isPartialShift) {
+        if (!customStartTime || !customEndTime) {
+          throw new Error("Please enter both start and end times");
+        }
+        
+        // Check if shift crosses midnight
+        const shiftCrossesMidnight = doesShiftCrossMidnight(shift.start_time, shift.end_time);
+        const customCrossesMidnight = doesShiftCrossMidnight(customStartTime, customEndTime);
+        
+        // For shifts that don't cross midnight, end must be after start
+        if (!shiftCrossesMidnight && !customCrossesMidnight && customStartTime >= customEndTime) {
+          throw new Error("End time must be after start time");
+        }
+        
+        // If original shift crosses midnight but custom doesn't, warn but allow
+        if (shiftCrossesMidnight && !customCrossesMidnight) {
+          console.log("⚠️ Original shift crosses midnight but custom times don't");
+        }
+      }
+      
+      // Check for existing schedule
+      const { data: existingExceptions } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", selectedOfficerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift.id);
+
+      if (existingExceptions && existingExceptions.length > 0) {
+        throw new Error("Officer already has a schedule for this date and shift");
+      }
+
+      // Calculate hours worked
+      const startTime = isPartialShift ? customStartTime : shift.start_time;
+      const endTime = isPartialShift ? customEndTime : shift.end_time;
+      const hoursWorked = calculateHours(startTime, endTime);
+
+      // Create schedule exception
+      const { error } = await supabase
+        .from("schedule_exceptions")
+        .insert({
+          officer_id: selectedOfficerId,
+          date: date,
+          shift_type_id: shift.id,
+          position_name: finalPosition,
+          unit_number: unitNumber,
+          notes: notes || `${isPartialShift ? 'Partial' : 'Full'} overtime shift`,
+          is_off: false,
+          is_extra_shift: true,
+          schedule_type: "exception",
+          custom_start_time: isPartialShift ? customStartTime : null,
+          custom_end_time: isPartialShift ? customEndTime : null,
+          is_partial_shift: isPartialShift,
+          hours_worked: hoursWorked
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Officer added to schedule");
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to add officer");
+    }
+  });
+
+  // Generate time options
+  const generateTimeOptions = () => {
+    const options = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute of ["00", "30"]) {
+        options.push(`${hour.toString().padStart(2, '0')}:${minute}`);
+      }
+    }
+    return options;
+  };
+
+  const timeOptions = generateTimeOptions();
+
+  if (!shift) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Officer to Shift</DialogTitle>
+          <DialogDescription>
+            Add an officer to {shift.name} {formatShiftDisplay(shift.start_time, shift.end_time)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Officer Selection */}
+          <div className="space-y-2">
+            <Label>Officer</Label>
+            <Select value={selectedOfficerId} onValueChange={setSelectedOfficerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select officer" />
+              </SelectTrigger>
+              <SelectContent>
+                {officers?.map((officer) => (
+                  <SelectItem key={officer.id} value={officer.id}>
+                    {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Position Selection */}
+          <div className="space-y-2">
+            <Label>Position</Label>
+            <Select value={position} onValueChange={setPosition}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select position" />
+              </SelectTrigger>
+              <SelectContent>
+                {PREDEFINED_POSITIONS.map((pos) => (
+                  <SelectItem key={pos} value={pos}>
+                    {pos}
+                  </SelectItem>
+                ))}
+                <SelectItem value="Other (Custom)">Other (Custom)</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {position === "Other (Custom)" && (
+              <Input
+                placeholder="Enter custom position"
+                value={customPosition}
+                onChange={(e) => setCustomPosition(e.target.value)}
+                className="mt-2"
+              />
+            )}
+          </div>
+
+          {/* Shift Hours Selection */}
+          <div className="space-y-2">
+            <Label>Shift Hours</Label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isPartialShift"
+                  checked={isPartialShift}
+                  onCheckedChange={(checked) => {
+                    setIsPartialShift(checked === true);
+                  }}
+                />
+                <Label htmlFor="isPartialShift" className="cursor-pointer">
+                  {isPartialShift ? "Partial/Custom Hours" : `Full Shift ${formatShiftDisplay(shift.start_time, shift.end_time)}`}
+                </Label>
+              </div>
+              
+              {/* Warning for midnight-crossing shifts */}
+              {isPartialShift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
+                <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                  ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
+                  Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
+                </div>
+              )}
+              
+              {isPartialShift && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Start Time</Label>
+                    <Select value={customStartTime} onValueChange={setCustomStartTime}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[200px]">
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>End Time</Label>
+                    <Select value={customEndTime} onValueChange={setCustomEndTime}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[200px]">
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+              
+              {/* Display calculated hours */}
+              {customStartTime && customEndTime && (
+                <div className="text-sm text-muted-foreground">
+                  Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Unit Number */}
+          <div className="space-y-2">
+            <Label htmlFor="unitNumber">Unit Number (Optional)</Label>
+            <Input
+              id="unitNumber"
+              placeholder="Enter unit number"
+              value={unitNumber}
+              onChange={(e) => setUnitNumber(e.target.value)}
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <Input
+              id="notes"
+              placeholder="Enter notes (e.g., reason for overtime)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-2">
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => onOpenChange(false)}
+              disabled={addOfficerMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="flex-1" 
+              onClick={() => addOfficerMutation.mutate()}
+              disabled={!selectedOfficerId || !position || addOfficerMutation.isPending}
+            >
+              {addOfficerMutation.isPending ? "Adding..." : "Add Officer"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -95,8 +95,8 @@ export const DailyScheduleView = ({
   } = useScheduleMutations(dateStr);
 
 
-// UPDATED: Include filterShiftId in query key
-const { data: scheduleData, isLoading } = useQuery({
+// UPDATED: Include filterShiftId in query key AND add refetch function
+const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
   queryKey: ["daily-schedule", dateStr, filterShiftId],
   queryFn: () => getScheduleData(selectedDate, filterShiftId),
 });
@@ -131,6 +131,8 @@ const { data: scheduleData, isLoading } = useQuery({
         userEmail,
         `Changed position from "${officer.position}" to "${position}" for ${officer.name}`
       );
+      // Refresh the schedule
+      refetchSchedule();
     }
   });
 };
@@ -159,6 +161,8 @@ const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
         userEmail,
         `Changed unit from "${officer.unitNumber || 'None'}" to "${unitNumber}" for ${officer.name}`
       );
+      // Refresh the schedule
+      refetchSchedule();
     }
   });
 };
@@ -185,6 +189,8 @@ const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
         userEmail,
         `Updated notes for ${officer.name}`
       );
+      // Refresh the schedule
+      refetchSchedule();
     }
   });
 };
@@ -217,6 +223,11 @@ const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
     },
     partnerOfficerId: partnerOfficerId,
     action: 'create'
+  }, {
+    onSuccess: () => {
+      // Refresh the schedule after partnership creation
+      refetchSchedule();
+    }
   });
 };
 
@@ -278,6 +289,11 @@ const handleRemovePartnership = (officer: any) => {
     },
     partnerOfficerId: partnerIdToRemove,
     action: 'remove'
+  }, {
+    onSuccess: () => {
+      // Refresh the schedule after partnership removal
+      refetchSchedule();
+    }
   });
 };
 
@@ -333,6 +349,8 @@ const handleSavePTOUnitNumber = (ptoRecord: any, unitNumber: string) => {
         userEmail,
         `Changed unit number for PTO for ${ptoRecord.name}`
       );
+      // Refresh the schedule
+      refetchSchedule();
     }
   });
 };
@@ -351,6 +369,8 @@ const handleSavePTONotes = (ptoRecord: any, notes: string) => {
         userEmail,
         `Updated PTO notes for ${ptoRecord.name}`
       );
+      // Refresh the schedule
+      refetchSchedule();
     }
   });
 };
@@ -605,6 +625,10 @@ const handleEditPTO = (ptoRecord: any) => {
           officer={selectedOfficer}
           shift={selectedShift}
           date={dateStr}
+          onSuccess={() => {
+            // Refresh schedule after PTO assignment
+            refetchSchedule();
+          }}
         />
       )}
 
@@ -629,6 +653,7 @@ const handleEditPTO = (ptoRecord: any) => {
               setAddOfficerDialogOpen(false);
               setSelectedShiftForAdd(null);
             }}
+            refetchSchedule={refetchSchedule} // ADD THIS LINE - CRITICAL FOR AUTO-REFRESH
           />
         </DialogContent>
       </Dialog>
@@ -637,7 +662,7 @@ const handleEditPTO = (ptoRecord: any) => {
 };
 
 // Add Officer Form Component - NOW PROPERLY SEPARATED WITH PARTIAL SHIFT SUPPORT
-const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
+const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSchedule }: any) => {
   const [selectedOfficerId, setSelectedOfficerId] = useState("");
   const [position, setPosition] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
@@ -790,6 +815,12 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift }: any) => {
     },
     onSuccess: () => {
       toast.success("Officer added to schedule successfully");
+      
+      // Call the refetch function to update the UI immediately
+      if (refetchSchedule) {
+        refetchSchedule();
+      }
+      
       onSuccess();
     },
     onError: (error: any) => {
@@ -1284,38 +1315,37 @@ recurringData
           customTime = `${e.custom_start_time} - ${e.custom_end_time}`;
         }
 
-const officerData = {
-  scheduleId: e.id,
-  officerId: e.officer_id,
-  name: e.profiles?.full_name || "Unknown",
-  badge: e.profiles?.badge_number,
-  rank: officerRank,
-  isPPO: isProbationary,
-  position: e.position_name || defaultAssignment?.position_name,
-  unitNumber: e.unit_number || defaultAssignment?.unit_number,
-  notes: e.notes,
-  type: isRegularRecurring ? "recurring" : "exception" as const,
-  originalScheduleId: null,
-  customTime: customTime,
-  // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
-  custom_start_time: e.custom_start_time,
-  custom_end_time: e.custom_end_time,
-  hours_worked: e.hours_worked,
-  is_partial_shift: e.is_partial_shift,
-  // END OF ADDED LINES
-  hasPTO: !!ptoException,
-  ptoData: ptoException ? {
-    id: ptoException.id,
-    ptoType: ptoException.reason,
-    startTime: ptoException.custom_start_time || shift.start_time,
-    endTime: ptoException.custom_end_time || shift.end_time,
-    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-  } : undefined,
-  isPartnership: e.is_partnership,
-  partnerOfficerId: e.partner_officer_id,
-  shift: shift,
-  isExtraShift: !isRegularRecurring
-};
+        const officerData = {
+          scheduleId: e.id,
+          officerId: e.officer_id,
+          name: e.profiles?.full_name || "Unknown",
+          badge: e.profiles?.badge_number,
+          rank: officerRank,
+          isPPO: isProbationary,
+          position: e.position_name || defaultAssignment?.position_name,
+          unitNumber: e.unit_number || defaultAssignment?.unit_number,
+          notes: e.notes,
+          type: isRegularRecurring ? "recurring" : "exception" as const,
+          originalScheduleId: null,
+          customTime: customTime,
+          hasPTO: !!ptoException,
+          ptoData: ptoException ? {
+            id: ptoException.id,
+            ptoType: ptoException.reason,
+            startTime: ptoException.custom_start_time || shift.start_time,
+            endTime: ptoException.custom_end_time || shift.end_time,
+            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+          } : undefined,
+          isPartnership: e.is_partnership,
+          partnerOfficerId: e.partner_officer_id,
+          shift: shift,
+          isExtraShift: !isRegularRecurring,
+          // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
+          custom_start_time: e.custom_start_time,
+          custom_end_time: e.custom_end_time,
+          hours_worked: e.hours_worked,
+          is_partial_shift: e.is_partial_shift,
+        };
 
         allOfficersMap.set(officerKey, officerData);
       });

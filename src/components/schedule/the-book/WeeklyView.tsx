@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with proper cache invalidation
+// Updated WeeklyView.tsx with enhanced error handling
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
 import { format, addDays, isSameDay, startOfWeek, addWeeks, subWeeks } from "date-fns";
@@ -94,9 +94,17 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
+  const [localSchedules, setLocalSchedules] = useState(schedules);
   
   // Get query client for cache invalidation
   const queryClient = useQueryClient();
+
+  // Sync local state with prop changes
+  useEffect(() => {
+    if (schedules) {
+      setLocalSchedules(schedules);
+    }
+  }, [schedules]);
 
   // Fetch officer profiles if not provided as prop
   const { data: fetchedOfficerProfiles, isLoading: isLoadingProfiles } = useQuery({
@@ -341,7 +349,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  if (!schedules) {
+  if (!localSchedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
@@ -381,108 +389,129 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ FIXED SECTION: Extract and organize officer data ============
+  // ============ ENHANCED SECTION: Extract and organize officer data with better error handling ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
-  // Extract recurring schedule patterns
-  schedules.recurring?.forEach((recurring: any) => {
-    if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
-      recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
-    }
-    recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
-  });
-
-  // Process daily schedules - FIXED: Include all necessary data
-  schedules.dailySchedules?.forEach(day => {
-    day.officers.forEach((officer: any) => {
-      if (!allOfficers.has(officer.officerId)) {
-        // IMPORTANT: The officer object from parent might not have hire/promotion dates
-        // We need to extract them from profiles if available
-        let profileData: any = null;
-        
-        // Try to get profile data from different sources
-        // Option 1: Check if officer has direct profile data
-        if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
-          profileData = {
-            hire_date: officer.hire_date,
-            promotion_date_sergeant: officer.promotion_date_sergeant,
-            promotion_date_lieutenant: officer.promotion_date_lieutenant,
-            service_credit_override: officer.service_credit_override || 0
-          };
-        }
-        // Option 2: Check if officerProfiles prop has the data - FIXED with type checking
-        else if (effectiveOfficerProfiles && 
-                 effectiveOfficerProfiles instanceof Map && 
-                 effectiveOfficerProfiles.has(officer.officerId)) {
-          profileData = effectiveOfficerProfiles.get(officer.officerId);
-        }
-        // Option 3: Use officer data as is (may be incomplete)
-        else {
-          profileData = {
-            hire_date: officer.hire_date || null,
-            promotion_date_sergeant: officer.promotion_date_sergeant || null,
-            promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
-            service_credit_override: officer.service_credit_override || 0
-          };
-        }
-
-        // Calculate service credit with available data
-        const serviceCredit = calculateServiceCredit(
-          profileData?.hire_date || null,
-          profileData?.service_credit_override || 0,
-          profileData?.promotion_date_sergeant || null,
-          profileData?.promotion_date_lieutenant || null,
-          officer.rank // Pass the rank for logic
-        );
-        
-        // Store officer with calculated service credit
-        allOfficers.set(officer.officerId, {
-          ...officer,
-          service_credit: serviceCredit, // Use calculated service credit
-          hire_date: profileData?.hire_date || null,
-          promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
-          promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
-          service_credit_override: profileData?.service_credit_override || 0,
-          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-          weeklySchedule: {} as Record<string, any>
-        });
+  // Safely extract recurring schedule patterns
+  if (localSchedules.recurring) {
+    localSchedules.recurring.forEach((recurring: any) => {
+      if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+        recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
       }
-      
-      // Store daily schedule for this officer with ALL necessary data
-      // CRITICAL: Make sure we're passing through the schedule ID and other metadata
-      const daySchedule = {
-        ...officer,
-        scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId, // Extract schedule ID
-        scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType,
-        isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false,
-        shiftInfo: {
-          ...officer.shiftInfo,
-          // Ensure scheduleId is in shiftInfo as well
-          scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
-          scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType
-        }
-      };
-      
-      const currentOfficer = allOfficers.get(officer.officerId);
-      if (currentOfficer) {
-        currentOfficer.weeklySchedule[day.date] = daySchedule;
-      }
+      recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
     });
-  });
+  }
+
+  // Process daily schedules with enhanced safety
+  if (localSchedules.dailySchedules) {
+    localSchedules.dailySchedules.forEach(day => {
+      // Ensure day.officers exists and is an array
+      if (!day.officers || !Array.isArray(day.officers)) {
+        console.warn('No officers array found for day:', day.date);
+        return;
+      }
+      
+      day.officers.forEach((officer: any) => {
+        if (!officer || !officer.officerId) {
+          console.warn('Invalid officer data found:', officer);
+          return;
+        }
+        
+        if (!allOfficers.has(officer.officerId)) {
+          // IMPORTANT: The officer object from parent might not have hire/promotion dates
+          // We need to extract them from profiles if available
+          let profileData: any = null;
+          
+          // Try to get profile data from different sources
+          // Option 1: Check if officer has direct profile data
+          if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+            profileData = {
+              hire_date: officer.hire_date,
+              promotion_date_sergeant: officer.promotion_date_sergeant,
+              promotion_date_lieutenant: officer.promotion_date_lieutenant,
+              service_credit_override: officer.service_credit_override || 0
+            };
+          }
+          // Option 2: Check if officerProfiles prop has the data
+          else if (effectiveOfficerProfiles && 
+                   effectiveOfficerProfiles instanceof Map && 
+                   effectiveOfficerProfiles.has(officer.officerId)) {
+            profileData = effectiveOfficerProfiles.get(officer.officerId);
+          }
+          // Option 3: Use officer data as is (may be incomplete)
+          else {
+            profileData = {
+              hire_date: officer.hire_date || null,
+              promotion_date_sergeant: officer.promotion_date_sergeant || null,
+              promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
+              service_credit_override: officer.service_credit_override || 0
+            };
+          }
+
+          // Calculate service credit with available data
+          const serviceCredit = calculateServiceCredit(
+            profileData?.hire_date || null,
+            profileData?.service_credit_override || 0,
+            profileData?.promotion_date_sergeant || null,
+            profileData?.promotion_date_lieutenant || null,
+            officer.rank // Pass the rank for logic
+          );
+          
+          // Store officer with calculated service credit
+          allOfficers.set(officer.officerId, {
+            ...officer,
+            service_credit: serviceCredit, // Use calculated service credit
+            hire_date: profileData?.hire_date || null,
+            promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
+            promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
+            service_credit_override: profileData?.service_credit_override || 0,
+            recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+            weeklySchedule: {} as Record<string, any>
+          });
+        }
+        
+        // Store daily schedule for this officer with ALL necessary data
+        // CRITICAL: Make sure we're passing through the schedule ID and other metadata
+        const daySchedule = {
+          ...officer,
+          scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId, // Extract schedule ID
+          scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType,
+          isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false,
+          shiftInfo: {
+            ...officer.shiftInfo,
+            // Ensure scheduleId is in shiftInfo as well
+            scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
+            scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType
+          }
+        };
+        
+        const currentOfficer = allOfficers.get(officer.officerId);
+        if (currentOfficer) {
+          // Ensure weeklySchedule exists
+          if (!currentOfficer.weeklySchedule) {
+            currentOfficer.weeklySchedule = {};
+          }
+          currentOfficer.weeklySchedule[day.date] = daySchedule;
+        }
+      });
+    });
+  }
 
   console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
   // Categorize officers with UPDATED supervisor sorting
   // First get all supervisors
   const allSupervisors = Array.from(allOfficers.values())
-    .filter(o => isSupervisorByRank(o));
+    .filter(o => o && isSupervisorByRank(o));
 
   // Separate Lieutenants and Sergeants
   const lieutenants = allSupervisors.filter(o => 
-    o.rank?.toLowerCase().includes('lieutenant') || 
-    o.rank?.toLowerCase().includes('lt') ||
-    o.rank?.toLowerCase().includes('chief')
+    o && o.rank && (
+      o.rank.toLowerCase().includes('lieutenant') || 
+      o.rank.toLowerCase().includes('lt') ||
+      o.rank.toLowerCase().includes('chief')
+    )
   ).sort((a, b) => {
     // Sort Lieutenants by service credit DESCENDING (highest first)
     const aCredit = a.service_credit || 0;
@@ -491,12 +520,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return bCredit - aCredit; // Descending
     }
     // If same service credit, sort by last name
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+    return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
   });
 
   const sergeants = allSupervisors.filter(o => 
-    o.rank?.toLowerCase().includes('sergeant') || 
-    o.rank?.toLowerCase().includes('sgt')
+    o && o.rank && (
+      o.rank.toLowerCase().includes('sergeant') || 
+      o.rank.toLowerCase().includes('sgt')
+    )
   ).sort((a, b) => {
     // Sort Sergeants by service credit DESCENDING (highest first)
     const aCredit = a.service_credit || 0;
@@ -505,35 +536,35 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return bCredit - aCredit; // Descending
     }
     // If same service credit, sort by last name
-    return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+    return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
   });
 
   // Combine with Lieutenants first, then Sergeants
   const supervisors = [...lieutenants, ...sergeants];
 
   const allOfficersList = Array.from(allOfficers.values())
-    .filter(o => !isSupervisorByRank(o));
+    .filter(o => o && !isSupervisorByRank(o));
 
   const ppos = allOfficersList
-    .filter(o => o.rank?.toLowerCase() === 'probationary')
+    .filter(o => o && o.rank && o.rank.toLowerCase() === 'probationary')
     .sort((a, b) => {
       const aCredit = a.service_credit || 0;
       const bCredit = b.service_credit || 0;
       if (bCredit !== aCredit) {
         return bCredit - aCredit;
       }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
     });
 
   const regularOfficers = allOfficersList
-    .filter(o => o.rank?.toLowerCase() !== 'probationary')
+    .filter(o => o && o.rank && o.rank.toLowerCase() !== 'probationary')
     .sort((a, b) => {
       const aCredit = a.service_credit || 0;
       const bCredit = b.service_credit || 0;
       if (bCredit !== aCredit) {
         return bCredit - aCredit;
       }
-      return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
     });
 
   // Debug: Check sorting results
@@ -543,18 +574,17 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     lieutenants: lieutenants.length,
     sergeants: sergeants.length,
     regularOfficers: regularOfficers.length,
-    ppos: ppos.length,
-    sampleLieutenants: lieutenants.slice(0, 3).map(l => ({
-      name: l.officerName,
-      rank: l.rank,
-      serviceCredit: l.service_credit
-    })),
-    sampleSergeants: sergeants.slice(0, 3).map(s => ({
-      name: s.officerName,
-      rank: s.rank,
-      serviceCredit: s.service_credit
-    }))
+    ppos: ppos.length
   });
+
+  // Safeguard for rendering
+  const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
+    if (!officer || !officer.weeklySchedule) {
+      console.warn('Officer or weeklySchedule is undefined:', officer);
+      return null;
+    }
+    return officer.weeklySchedule[dateStr];
+  };
 
   return (
     <div className="space-y-4">
@@ -635,10 +665,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             <div className="p-2 font-semibold border-r">Empl#</div>
             <div className="p-2 font-semibold border-r">NAME</div>
             {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
-              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
               // Get minimum staffing for this day of week and shift
-              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
               
@@ -685,10 +715,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             <div className="p-2 border-r"></div>
             <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
             {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
               // Get minimum staffing from database
-              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
               
               // Count supervisors, excluding full-day PTO AND special assignments
@@ -714,14 +744,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
               <div className="p-2 border-r font-medium">
-                {getLastName(officer.officerName)}
+                {getLastName(officer.officerName || '')}
                 <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
                 <div className="text-xs text-muted-foreground">
                   SC: {officer.service_credit?.toFixed(1) || '0.0'}
                 </div>
               </div>
               {weekDays.map(({ dateStr }) => {
-                const dayOfficer = officer.weeklySchedule[dateStr];
+                const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
                 return (
                   <ScheduleCell
                     key={dateStr}
@@ -750,10 +780,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             <div className="p-2 border-r"></div>
             <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
             {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
               // Get minimum staffing from database
-              const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
               const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
               
               // Count only non-PPO officers, excluding full-day PTO AND special assignments
@@ -781,13 +811,13 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 style={{ backgroundColor: weeklyColors.officer?.bg, color: weeklyColors.officer?.text }}>
                 <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
                 <div className="p-2 border-r font-medium">
-                  {getLastName(officer.officerName)}
+                  {getLastName(officer.officerName || '')}
                   <div className="text-xs text-muted-foreground">
                     SC: {officer.service_credit?.toFixed(1) || '0.0'}
                   </div>
                 </div>
                 {weekDays.map(({ dateStr }) => {
-                  const dayOfficer = officer.weeklySchedule[dateStr];
+                  const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
                   return (
                     <ScheduleCell
                       key={dateStr}
@@ -821,7 +851,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 <div className="p-2 border-r"></div>
                 <div className="p-2 border-r text-sm font-medium">PPO</div>
                 {weekDays.map(({ dateStr }) => {
-                  const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
+                  const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
                   
                   // Count PPOs, excluding only full-day PTO
                   const ppoCount = daySchedule?.officers?.filter((officer: any) => {
@@ -846,7 +876,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                   style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
                   <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
                   <div className="p-2 border-r font-medium flex items-center gap-2">
-                    {getLastName(officer.officerName)}
+                    {getLastName(officer.officerName || '')}
                     <Badge 
                       variant="outline" 
                       className="text-xs border-blue-300"
@@ -862,7 +892,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                     </div>
                   </div>
                   {weekDays.map(({ dateStr }) => {
-                    const dayOfficer = officer.weeklySchedule[dateStr];
+                    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
                     
                     // Extract partner information from position for PPOs
                     let partnerInfo = null;

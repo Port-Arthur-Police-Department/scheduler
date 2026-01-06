@@ -124,8 +124,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     enabled: !officerProfiles, // Only fetch if not provided
   });
 
-  // Use either provided prop or fetched data
-  const effectiveOfficerProfiles = officerProfiles || fetchedOfficerProfiles || new Map();
+  // Use either provided prop or fetched data - ensure it's always a Map
+  const effectiveOfficerProfiles = React.useMemo(() => {
+    return officerProfiles || fetchedOfficerProfiles || new Map();
+  }, [officerProfiles, fetchedOfficerProfiles]);
 
   // Sync with parent when date changes
   useEffect(() => {
@@ -343,7 +345,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
-  if (isLoadingProfiles && !officerProfiles) {
+  if (isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) {
     return <div className="text-center py-8">Loading officer data...</div>;
   }
 
@@ -379,7 +381,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ UPDATED SECTION: Extract and organize officer data ============
+  // ============ FIXED SECTION: Extract and organize officer data ============
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 
@@ -397,7 +399,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       if (!allOfficers.has(officer.officerId)) {
         // IMPORTANT: The officer object from parent might not have hire/promotion dates
         // We need to extract them from profiles if available
-        let profileData = null;
+        let profileData: any = null;
         
         // Try to get profile data from different sources
         // Option 1: Check if officer has direct profile data
@@ -409,8 +411,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             service_credit_override: officer.service_credit_override || 0
           };
         }
-        // Option 2: Check if officerProfiles prop has the data
-        else if (effectiveOfficerProfiles && effectiveOfficerProfiles.has(officer.officerId)) {
+        // Option 2: Check if officerProfiles prop has the data - FIXED with type checking
+        else if (effectiveOfficerProfiles && 
+                 effectiveOfficerProfiles instanceof Map && 
+                 effectiveOfficerProfiles.has(officer.officerId)) {
           profileData = effectiveOfficerProfiles.get(officer.officerId);
         }
         // Option 3: Use officer data as is (may be incomplete)
@@ -425,10 +429,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
         // Calculate service credit with available data
         const serviceCredit = calculateServiceCredit(
-          profileData.hire_date,
-          profileData.service_credit_override || 0,
-          profileData.promotion_date_sergeant,
-          profileData.promotion_date_lieutenant,
+          profileData?.hire_date || null,
+          profileData?.service_credit_override || 0,
+          profileData?.promotion_date_sergeant || null,
+          profileData?.promotion_date_lieutenant || null,
           officer.rank // Pass the rank for logic
         );
         
@@ -436,10 +440,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         allOfficers.set(officer.officerId, {
           ...officer,
           service_credit: serviceCredit, // Use calculated service credit
-          hire_date: profileData.hire_date,
-          promotion_date_sergeant: profileData.promotion_date_sergeant,
-          promotion_date_lieutenant: profileData.promotion_date_lieutenant,
-          service_credit_override: profileData.service_credit_override || 0,
+          hire_date: profileData?.hire_date || null,
+          promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
+          promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
+          service_credit_override: profileData?.service_credit_override || 0,
           recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
           weeklySchedule: {} as Record<string, any>
         });
@@ -460,11 +464,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         }
       };
       
-      allOfficers.get(officer.officerId).weeklySchedule[day.date] = daySchedule;
+      const currentOfficer = allOfficers.get(officer.officerId);
+      if (currentOfficer) {
+        currentOfficer.weeklySchedule[day.date] = daySchedule;
+      }
     });
   });
 
-  console.log(`Processed ${allOfficers.size} officers with profiles`);
+  console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
   // Categorize officers with UPDATED supervisor sorting
   // First get all supervisors

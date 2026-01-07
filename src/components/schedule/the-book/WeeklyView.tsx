@@ -586,6 +586,33 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     return officer.weeklySchedule[dateStr];
   };
 
+  // Helper function to safely get minimum staffing data
+  const getMinimumStaffing = (dayOfWeek: number) => {
+    if (!localSchedules.minimumStaffing) {
+      return { minimumOfficers: 0, minimumSupervisors: 1 };
+    }
+    
+    // Check if minimumStaffing is a Map
+    if (localSchedules.minimumStaffing instanceof Map) {
+      const dayStaffing = localSchedules.minimumStaffing.get(dayOfWeek);
+      if (dayStaffing instanceof Map) {
+        const shiftStaffing = dayStaffing.get(selectedShiftId);
+        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
+      }
+    }
+    
+    // Check if minimumStaffing is an object
+    if (typeof localSchedules.minimumStaffing === 'object') {
+      const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
+      if (dayStaffing && typeof dayStaffing === 'object') {
+        const shiftStaffing = dayStaffing[selectedShiftId];
+        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
+      }
+    }
+    
+    return { minimumOfficers: 0, minimumSupervisors: 1 };
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -667,10 +694,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
               const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
-              // Get minimum staffing for this day of week and shift
-              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-              const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
-              const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+              // Get minimum staffing for this day of week and shift using safe function
+              const minStaffing = getMinimumStaffing(dayOfWeek);
+              const minimumOfficers = minStaffing.minimumOfficers || 0;
+              const minimumSupervisors = minStaffing.minimumSupervisors || 1;
               
               // Calculate counts excluding full-day PTO AND special assignments
               const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
@@ -717,9 +744,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             {weekDays.map(({ dateStr, dayOfWeek }) => {
               const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
-              // Get minimum staffing from database
-              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-              const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+              // Get minimum staffing using safe function
+              const minStaffing = getMinimumStaffing(dayOfWeek);
+              const minimumSupervisors = minStaffing.minimumSupervisors || 1;
               
               // Count supervisors, excluding full-day PTO AND special assignments
               const supervisorCount = daySchedule?.officers?.filter((officer: any) => {
@@ -782,9 +809,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             {weekDays.map(({ dateStr, dayOfWeek }) => {
               const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
               
-              // Get minimum staffing from database
-              const minStaffingForDay = localSchedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-              const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
+              // Get minimum staffing using safe function
+              const minStaffing = getMinimumStaffing(dayOfWeek);
+              const minimumOfficers = minStaffing.minimumOfficers || 0;
               
               // Count only non-PPO officers, excluding full-day PTO AND special assignments
               const officerCount = daySchedule?.officers?.filter((officer: any) => {

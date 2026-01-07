@@ -14,6 +14,7 @@ interface PositionEditorProps {
 const predefinedPositions = [
   "Supervisor",
   "District 1",
+  "District 1/2",
   "District 2", 
   "District 3",
   "District 4",

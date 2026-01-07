@@ -187,6 +187,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onAssignPTO(schedule, date, officerId, officerName);
       
+      // Force a complete state reset
+      setCurrentWeekStart(prev => new Date(prev.getTime()));
+      
       // Invalidate all schedule queries
       invalidateScheduleQueries();
       
@@ -194,15 +197,18 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       if (refetchScheduleData) {
         await refetchScheduleData();
       } else {
-        // Force refetch of all schedule queries
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
-          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
-        ]);
+        // Force immediate refetch
+        await queryClient.refetchQueries({ 
+          queryKey: ['weekly-schedule', selectedShiftId],
+          type: 'active'
+        });
       }
       
-      toast.success("PTO assigned successfully");
+      // Add a small delay to ensure UI updates
+      setTimeout(() => {
+        toast.success("PTO assigned successfully");
+      }, 300);
+      
     } catch (error) {
       toast.error("Failed to assign PTO");
       console.error('Error assigning PTO:', error);
@@ -219,6 +225,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onRemovePTO(schedule, date, officerId);
       
+      // Force a complete state reset
+      setCurrentWeekStart(prev => new Date(prev.getTime()));
+      
       // Invalidate all schedule queries
       invalidateScheduleQueries();
       
@@ -226,15 +235,18 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       if (refetchScheduleData) {
         await refetchScheduleData();
       } else {
-        // Force refetch of all schedule queries
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
-          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
-        ]);
+        // Force immediate refetch
+        await queryClient.refetchQueries({ 
+          queryKey: ['weekly-schedule', selectedShiftId],
+          type: 'active'
+        });
       }
       
-      toast.success("PTO removed successfully");
+      // Add a small delay to ensure UI updates
+      setTimeout(() => {
+        toast.success("PTO removed successfully");
+      }, 300);
+      
     } catch (error) {
       toast.error("Failed to remove PTO");
       console.error('Error removing PTO:', error);
@@ -279,28 +291,27 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onEditAssignment(officerWithSchedule, dateStr);
       
-      // IMPORTANT: Invalidate all schedule queries BEFORE showing success
+      // Force a complete state reset
+      setCurrentWeekStart(prev => new Date(prev.getTime()));
+      
+      // Invalidate all schedule queries
       invalidateScheduleQueries();
       
       // If parent provides a refetch function, use it
       if (refetchScheduleData) {
         await refetchScheduleData();
       } else {
-        // Force immediate refetch of all schedule queries
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
-          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
-        ]);
+        // Force immediate refetch
+        await queryClient.refetchQueries({ 
+          queryKey: ['weekly-schedule', selectedShiftId],
+          type: 'active'
+        });
       }
-      
-      toast.success("Assignment updated successfully");
       
       // Add a small delay to ensure UI updates
       setTimeout(() => {
-        // Trigger a state update to force re-render
-        setCurrentWeekStart(prev => new Date(prev.getTime()));
-      }, 100);
+        toast.success("Assignment updated successfully");
+      }, 300);
       
     } catch (error) {
       toast.error("Failed to update assignment");
@@ -318,6 +329,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onRemoveOfficer(scheduleId, type, officerData);
       
+      // Force a complete state reset
+      setCurrentWeekStart(prev => new Date(prev.getTime()));
+      
       // Invalidate all schedule queries
       invalidateScheduleQueries();
       
@@ -325,21 +339,17 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       if (refetchScheduleData) {
         await refetchScheduleData();
       } else {
-        // Force refetch of all schedule queries
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId] }),
-          queryClient.refetchQueries({ queryKey: ['weekly-schedule', selectedShiftId, currentWeekStart.toISOString()] }),
-          queryClient.refetchQueries({ queryKey: ['officer-profiles-weekly'] }),
-        ]);
+        // Force immediate refetch
+        await queryClient.refetchQueries({ 
+          queryKey: ['weekly-schedule', selectedShiftId],
+          type: 'active'
+        });
       }
-      
-      toast.success("Officer removed successfully");
       
       // Add a small delay to ensure UI updates
       setTimeout(() => {
-        // Trigger a state update to force re-render
-        setCurrentWeekStart(prev => new Date(prev.getTime()));
-      }, 100);
+        toast.success("Officer removed successfully");
+      }, 300);
       
     } catch (error) {
       toast.error("Failed to remove officer");
@@ -458,10 +468,13 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             officer.rank // Pass the rank for logic
           );
           
-          // Store officer with calculated service credit
+          // Store officer with calculated service credit - IMPORTANT: Create fresh object
           allOfficers.set(officer.officerId, {
-            ...officer,
-            service_credit: serviceCredit, // Use calculated service credit
+            officerId: officer.officerId,
+            officerName: officer.officerName || officer.full_name || "Unknown",
+            badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
+            rank: officer.rank || "Officer",
+            service_credit: serviceCredit,
             hire_date: profileData?.hire_date || null,
             promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
             promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
@@ -471,18 +484,39 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
           });
         }
         
-        // Store daily schedule for this officer with ALL necessary data
-        // CRITICAL: Make sure we're passing through the schedule ID and other metadata
+        // Store daily schedule for this officer with FRESH data
+        // Determine if this is a recurring day
+        const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
+        
+        // Check if this is an exception (not a regular recurring day)
+        const isException = !isRecurringDay || 
+                           officer.scheduleType === 'exception' || 
+                           officer.shiftInfo?.scheduleType === 'exception';
+        
+        // Check if officer has PTO - ONLY if it's an exception
+        const hasPTO = isException && (officer.shiftInfo?.hasPTO || false);
+        
         const daySchedule = {
-          ...officer,
-          scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId, // Extract schedule ID
-          scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType,
-          isRegularRecurringDay: recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false,
+          officerId: officer.officerId,
+          officerName: officer.officerName || officer.full_name || "Unknown",
+          badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
+          rank: officer.rank || "Officer",
+          service_credit: allOfficers.get(officer.officerId)?.service_credit || 0,
+          date: day.date,
+          dayOfWeek: day.dayOfWeek,
+          scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
+          scheduleType: isException ? 'exception' : 'recurring',
+          isRegularRecurringDay: isRecurringDay && !hasPTO, // Only true if recurring and no PTO
           shiftInfo: {
-            ...officer.shiftInfo,
-            // Ensure scheduleId is in shiftInfo as well
             scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
-            scheduleType: officer.shiftInfo?.scheduleType || officer.scheduleType
+            scheduleType: isException ? 'exception' : 'recurring',
+            position: officer.shiftInfo?.position || officer.position || "",
+            unitNumber: officer.shiftInfo?.unitNumber,
+            notes: officer.shiftInfo?.notes,
+            isOff: hasPTO || officer.shiftInfo?.isOff || false,
+            hasPTO: hasPTO,
+            ptoData: hasPTO ? officer.shiftInfo?.ptoData : undefined,
+            reason: officer.shiftInfo?.reason
           }
         };
         
@@ -492,6 +526,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
           if (!currentOfficer.weeklySchedule) {
             currentOfficer.weeklySchedule = {};
           }
+          // Overwrite with fresh data - don't merge with old data
           currentOfficer.weeklySchedule[day.date] = daySchedule;
         }
       });
@@ -781,7 +816,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
                 return (
                   <ScheduleCell
-                    key={dateStr}
+                    key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
                     officer={dayOfficer}
                     dateStr={dateStr}
                     officerId={officer.officerId}
@@ -847,7 +882,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                   const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
                   return (
                     <ScheduleCell
-                      key={dateStr}
+                      key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
                       officer={dayOfficer}
                       dateStr={dateStr}
                       officerId={officer.officerId}
@@ -932,7 +967,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                     
                     return (
                       <ScheduleCell
-                        key={dateStr}
+                        key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
                         officer={dayOfficer}
                         dateStr={dateStr}
                         officerId={officer.officerId}

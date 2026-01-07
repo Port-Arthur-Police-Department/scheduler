@@ -23,6 +23,7 @@ const predefinedPositions = [
   "District 6",
   "District 7/8",
   "District 9",
+  "City-Wide",
   "Other (Custom)",
 ];
 

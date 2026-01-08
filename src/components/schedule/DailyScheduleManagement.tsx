@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, addDays, subDays, isToday } from "date-fns";
+import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 import { DailyScheduleView } from "./DailyScheduleView";
 
 interface DailyScheduleManagementProps {
@@ -70,11 +70,18 @@ export const DailyScheduleManagement = ({
     setSelectedDate(new Date());
   };
 
-  // Format date for display with more context
+  // Format date for display with relative day names
   const formatDateDisplay = (date: Date) => {
-    const today = isToday(date);
-    const dateFormat = today ? "Today, MMM d, yyyy" : "EEE, MMM d, yyyy";
-    return format(date, dateFormat);
+    if (isToday(date)) {
+      return `Today, ${format(date, "MMM d, yyyy")}`;
+    }
+    if (isTomorrow(date)) {
+      return `Tomorrow, ${format(date, "MMM d, yyyy")}`;
+    }
+    if (isYesterday(date)) {
+      return `Yesterday, ${format(date, "MMM d, yyyy")}`;
+    }
+    return format(date, "EEE, MMM d, yyyy");
   };
 
   return (

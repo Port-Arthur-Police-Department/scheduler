@@ -108,17 +108,6 @@ const TheBook = ({
       },
       isPending: false
     },
-  
-  // Destructure with safe fallbacks
-  const {
-    updatePositionMutation,
-    removeOfficerMutation = {
-      mutate: () => {
-        console.error("removeOfficerMutation not available");
-        toast.error("Cannot remove officer: System error");
-      },
-      isPending: false
-    },
     removePTOMutation = {
       mutate: () => {
         console.error("removePTOMutation not available");

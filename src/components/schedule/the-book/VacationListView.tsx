@@ -1,17 +1,18 @@
-// VacationListView.tsx - IMPROVED VERSION
-import React, { useState } from 'react';
+// VacationListView.tsx - CORRECTED VERSION WITH WEEKLYVIEW ORDERING
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfYear, endOfYear, parseISO, isSameDay, addDays, isAfter, isBefore } from "date-fns";
+import { format, parseISO, isSameDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plane, CalendarIcon, Filter, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plane, Download, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { getLastName, getRankAbbreviation } from "./utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface VacationListViewProps {
   selectedShiftId: string;
@@ -23,8 +24,54 @@ interface VacationBlock {
   startDate: Date;
   endDate: Date;
   daysCount: number;
+  type: string;
   dates: Date[];
 }
+
+// Helper function to calculate service credit for sorting (same as WeeklyView)
+const calculateServiceCredit = (
+  hireDate: string | null,
+  override: number = 0,
+  promotionDateSergeant: string | null = null,
+  promotionDateLieutenant: string | null = null,
+  currentRank: string | null = null
+) => {
+  if (override && override > 0) {
+    return override;
+  }
+  
+  let relevantDate: Date | null = null;
+  
+  if (currentRank) {
+    const rankLower = currentRank.toLowerCase();
+    
+    if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
+      relevantDate = new Date(promotionDateSergeant);
+    } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
+      relevantDate = new Date(promotionDateLieutenant);
+    } else if (rankLower.includes('chief') && promotionDateLieutenant) {
+      relevantDate = new Date(promotionDateLieutenant);
+    }
+  }
+  
+  if (!relevantDate && hireDate) {
+    relevantDate = new Date(hireDate);
+  }
+  
+  if (!relevantDate) return 0;
+  
+  try {
+    const now = new Date();
+    const years = now.getFullYear() - relevantDate.getFullYear();
+    const months = now.getMonth() - relevantDate.getMonth();
+    const days = now.getDate() - relevantDate.getDate();
+    const totalYears = years + (months / 12) + (days / 365);
+    return Math.max(0, Math.round(totalYears * 10) / 10);
+  } catch (error) {
+    console.error('Error calculating service credit:', error);
+    return 0;
+  }
+};
 
 export const VacationListView: React.FC<VacationListViewProps> = ({
   selectedShiftId,
@@ -32,12 +79,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   shiftTypes
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [viewType, setViewType] = useState<'summary' | 'detailed'>('summary');
   const [showAllVacations, setShowAllVacations] = useState<boolean>(true);
 
-  // Fetch vacation data with grouping for consecutive days
+  // Fetch vacation data and officer profiles for proper sorting
   const { data: vacationData, isLoading } = useQuery({
-    queryKey: ['vacation-list', selectedShiftId, selectedYear, showAllVacations],
+    queryKey: ['vacation-list', selectedShiftId, selectedYear],
     queryFn: async () => {
       if (!selectedShiftId) return null;
 
@@ -54,7 +100,10 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             full_name,
             badge_number,
             rank,
-            hire_date
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant,
+            service_credit_override
           )
         `)
         .eq("is_off", true)
@@ -65,14 +114,36 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
       if (error) throw error;
 
-      // Group PTO by officer and create vacation blocks for consecutive days
+      // Fetch all profiles for this shift to ensure we have complete data
+      const { data: allProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number, rank, hire_date, promotion_date_sergeant, promotion_date_lieutenant, service_credit_override");
+
+      const profilesMap = new Map();
+      allProfiles?.forEach(profile => {
+        profilesMap.set(profile.id, profile);
+      });
+
+      // Group PTO by officer and create vacation blocks
       const officersMap = new Map();
       
       ptoExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
+        const profile = profilesMap.get(officerId) || pto.profiles;
+        
         if (!officersMap.has(officerId)) {
+          // Calculate service credit for sorting
+          const serviceCredit = calculateServiceCredit(
+            profile?.hire_date || null,
+            profile?.service_credit_override || 0,
+            profile?.promotion_date_sergeant || null,
+            profile?.promotion_date_lieutenant || null,
+            profile?.rank || null
+          );
+          
           officersMap.set(officerId, {
-            officer: pto.profiles,
+            officer: profile,
+            serviceCredit,
             vacationDays: [],
             vacationBlocks: []
           });
@@ -86,47 +157,45 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         });
       });
 
-      // Process each officer's vacation days to create blocks of consecutive days
+      // Process each officer's vacation days to create blocks
       officersMap.forEach((officerData, officerId) => {
         // Sort dates ascending
         officerData.vacationDays.sort((a, b) => a.date.getTime() - b.date.getTime());
         
         const blocks: VacationBlock[] = [];
-        let currentBlock: Date[] = [];
+        let currentBlock: {date: Date, type: string}[] = [];
         
         officerData.vacationDays.forEach((day, index) => {
           if (currentBlock.length === 0) {
-            currentBlock.push(day.date);
+            currentBlock.push(day);
           } else {
-            const lastDate = currentBlock[currentBlock.length - 1];
-            const currentDate = day.date;
-            const diffInDays = Math.abs((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+            const lastDate = currentBlock[currentBlock.length - 1].date;
+            const diffInDays = Math.abs((day.date.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
             
-            if (diffInDays === 1) {
-              // Consecutive day, add to current block
-              currentBlock.push(currentDate);
+            if (diffInDays === 1 && day.ptoType === currentBlock[0].ptoType) {
+              currentBlock.push(day);
             } else {
-              // Non-consecutive, finalize current block and start new one
               if (currentBlock.length > 0) {
                 blocks.push({
-                  startDate: currentBlock[0],
-                  endDate: currentBlock[currentBlock.length - 1],
+                  startDate: currentBlock[0].date,
+                  endDate: currentBlock[currentBlock.length - 1].date,
                   daysCount: currentBlock.length,
-                  dates: [...currentBlock]
+                  type: currentBlock[0].ptoType,
+                  dates: currentBlock.map(item => item.date)
                 });
               }
-              currentBlock = [currentDate];
+              currentBlock = [day];
             }
           }
         });
         
-        // Don't forget the last block
         if (currentBlock.length > 0) {
           blocks.push({
-            startDate: currentBlock[0],
-            endDate: currentBlock[currentBlock.length - 1],
+            startDate: currentBlock[0].date,
+            endDate: currentBlock[currentBlock.length - 1].date,
             daysCount: currentBlock.length,
-            dates: [...currentBlock]
+            type: currentBlock[0].ptoType,
+            dates: currentBlock.map(item => item.date)
           });
         }
         
@@ -134,24 +203,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         officerData.totalDays = officerData.vacationDays.length;
       });
 
-      // Convert to array and sort by total days descending
-      const officersArray = Array.from(officersMap.values()).sort((a, b) => 
-        b.totalDays - a.totalDays
-      );
-
-      // Get all unique months with vacation data for column headers
-      const monthsWithVacations = new Set<string>();
-      ptoExceptions?.forEach(pto => {
-        const date = parseISO(pto.date);
-        const monthKey = format(date, 'MMM yyyy');
-        monthsWithVacations.add(monthKey);
-      });
-
-      const sortedMonths = Array.from(monthsWithVacations).sort((a, b) => {
-        const dateA = new Date(a);
-        const dateB = new Date(b);
-        return dateA.getTime() - dateB.getTime();
-      });
+      // Convert to array
+      const officersArray = Array.from(officersMap.values());
 
       return {
         officers: officersArray,
@@ -161,12 +214,93 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
           averageDays: officersArray.length > 0 ? 
             (ptoExceptions?.length || 0) / officersArray.length : 0
         },
-        months: sortedMonths,
         rawData: ptoExceptions || []
       };
     },
     enabled: !!selectedShiftId,
   });
+
+  // Sort officers like WeeklyView.tsx
+  const sortedOfficers = useMemo(() => {
+    if (!vacationData?.officers) return [];
+    
+    const officers = [...vacationData.officers];
+    
+    // First, get all supervisors
+    const allSupervisors = officers.filter(o => 
+      o.officer && isSupervisorByRank(o.officer)
+    );
+
+    // Separate Lieutenants and Sergeants like WeeklyView
+    const lieutenants = allSupervisors.filter(o => 
+      o.officer.rank && (
+        o.officer.rank.toLowerCase().includes('lieutenant') || 
+        o.officer.rank.toLowerCase().includes('lt') ||
+        o.officer.rank.toLowerCase().includes('chief')
+      )
+    ).sort((a, b) => {
+      // Sort Lieutenants by service credit DESCENDING (highest first)
+      const aCredit = a.serviceCredit || 0;
+      const bCredit = b.serviceCredit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit; // Descending
+      }
+      // If same service credit, sort by last name
+      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+    });
+
+    const sergeants = allSupervisors.filter(o => 
+      o.officer.rank && (
+        o.officer.rank.toLowerCase().includes('sergeant') || 
+        o.officer.rank.toLowerCase().includes('sgt')
+      )
+    ).sort((a, b) => {
+      // Sort Sergeants by service credit DESCENDING (highest first)
+      const aCredit = a.serviceCredit || 0;
+      const bCredit = b.serviceCredit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit; // Descending
+      }
+      // If same service credit, sort by last name
+      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+    });
+
+    // Combine with Lieutenants first, then Sergeants
+    const supervisors = [...lieutenants, ...sergeants];
+
+    // Get all non-supervisors
+    const allOfficersList = officers.filter(o => 
+      !o.officer || !isSupervisorByRank(o.officer)
+    );
+
+    // Separate PPOs and regular officers
+    const ppos = allOfficersList.filter(o => 
+      o.officer?.rank?.toLowerCase() === 'probationary'
+    ).sort((a, b) => {
+      const aCredit = a.serviceCredit || 0;
+      const bCredit = b.serviceCredit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      // If same service credit, sort by last name
+      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+    });
+
+    const regularOfficers = allOfficersList.filter(o => 
+      o.officer?.rank?.toLowerCase() !== 'probationary'
+    ).sort((a, b) => {
+      const aCredit = a.serviceCredit || 0;
+      const bCredit = b.serviceCredit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      // If same service credit, sort by last name
+      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+    });
+
+    // Return in WeeklyView order
+    return [...supervisors, ...regularOfficers, ...ppos];
+  }, [vacationData?.officers]);
 
   const handleExport = () => {
     toast.info("Export feature coming soon!");
@@ -174,39 +308,40 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
   const formatDateRange = (startDate: Date, endDate: Date) => {
     if (isSameDay(startDate, endDate)) {
-      return format(startDate, 'M/d/yy');
+      return format(startDate, 'MMM d');
     }
-    return `${format(startDate, 'M/d/yy')} - ${format(endDate, 'M/d/yy')}`;
-  };
-
-  const getPTOColor = (ptoType: string) => {
-    switch (ptoType?.toLowerCase()) {
-      case 'vacation':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'sick':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'holiday':
-        return 'bg-orange-50 text-orange-700 border-orange-200';
-      case 'comp':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
-      default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
-    }
+    return `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')}`;
   };
 
   const getPTOBadge = (ptoType: string) => {
     switch (ptoType?.toLowerCase()) {
       case 'vacation':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Vac</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Vac</Badge>;
       case 'sick':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sick</Badge>;
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Sick</Badge>;
       case 'holiday':
-        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Hol</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>;
       case 'comp':
-        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Comp</Badge>;
+        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-purple-200">Comp</Badge>;
       default:
         return <Badge variant="outline">{ptoType}</Badge>;
     }
+  };
+
+  const getOfficerTypeColor = (officer: any) => {
+    if (!officer) return '';
+    
+    const rank = officer.rank?.toLowerCase() || '';
+    
+    if (isSupervisorByRank(officer)) {
+      return 'bg-green-50 border-l-4 border-green-500';
+    }
+    
+    if (rank === 'probationary') {
+      return 'bg-blue-50 border-l-4 border-blue-500';
+    }
+    
+    return 'border-l-4 border-gray-200';
   };
 
   return (
@@ -216,7 +351,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <Plane className="h-5 w-5" />
-              Vacation List
+              Vacation List - {selectedYear}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-3">
               <div className="text-sm font-medium text-muted-foreground">
@@ -265,26 +400,19 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
               </div>
             </div>
 
-            {/* View Toggle */}
+            {/* Show All Toggle - Shows officers with no vacation too */}
             <div className="space-y-2">
-              <Label>View</Label>
-              <Tabs value={viewType} onValueChange={(v) => setViewType(v as 'summary' | 'detailed')} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full">
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
-                  <TabsTrigger value="detailed">Detailed</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            {/* Show All Toggle */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label className="flex items-center gap-2 cursor-pointer">
                 <Switch
                   checked={showAllVacations}
                   onCheckedChange={setShowAllVacations}
+                  id="show-all-toggle"
                 />
-                Show All
+                <span className="text-sm">Show All Officers</span>
               </Label>
+              <p className="text-xs text-muted-foreground pl-10">
+                {showAllVacations ? 'Showing all officers' : 'Showing only officers with vacation'}
+              </p>
             </div>
 
             {/* Summary Stats */}
@@ -299,6 +427,14 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                   <div className="text-2xl font-bold">{vacationData?.summary?.totalDays || 0}</div>
                   <div className="text-sm text-muted-foreground">Days</div>
                 </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">
+                    {vacationData?.summary?.averageDays 
+                      ? vacationData.summary.averageDays.toFixed(1) 
+                      : '0.0'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Avg Days</div>
+                </div>
               </div>
             </div>
           </div>
@@ -307,194 +443,147 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
-              Please select a shift from the Weekly or Monthly tab first
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Please select a shift from the Weekly or Monthly tab first</p>
             </div>
           ) : isLoading ? (
-            <div className="text-center py-8">Loading vacation data...</div>
-          ) : viewType === 'summary' ? (
             <div className="space-y-4">
-              {/* Officer Vacation Summary Table */}
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border-b text-sm">
-                  <div className="col-span-2">Badge #</div>
-                  <div className="col-span-3">Officer</div>
-                  <div className="col-span-2">Rank</div>
-                  <div className="col-span-2">Total Days</div>
-                  <div className="col-span-3">Vacation Periods</div>
-                </div>
-                
-                <div className="max-h-[600px] overflow-y-auto">
-                  {vacationData?.officers.map(({ officer, totalDays, vacationBlocks }) => (
-                    <div key={officer.id} className="grid grid-cols-12 p-3 border-b hover:bg-muted/30 items-center">
-                      <div className="col-span-2 font-mono">{officer.badge_number}</div>
-                      <div className="col-span-3 font-medium">{getLastName(officer.full_name)}</div>
-                      <div className="col-span-2">
-                        <Badge variant="outline">{getRankAbbreviation(officer.rank)}</Badge>
-                      </div>
-                      <div className="col-span-2 font-bold text-lg">{totalDays}</div>
-                      <div className="col-span-3">
-                        <div className="flex flex-wrap gap-2">
-                          {vacationBlocks.map((block, index) => (
-                            <div 
-                              key={index}
-                              className={`px-3 py-1 rounded-md border text-sm whitespace-nowrap ${getPTOColor('vacation')}`}
-                              title={`${block.daysCount} day(s)`}
-                            >
-                              {formatDateRange(block.startDate, block.endDate)}
-                              {block.daysCount > 1 && (
-                                <Badge variant="secondary" className="ml-2 text-xs">
-                                  {block.daysCount}
-                                </Badge>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {vacationData?.officers.length === 0 && (
-                    <div className="p-8 text-center text-muted-foreground">
-                      No vacation data found for {selectedYear}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-64 w-full" />
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Detailed View - Similar to Weekly Schedule */}
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-14 bg-muted/50 p-3 font-semibold border-b text-sm">
-                  <div className="col-span-2">Badge #</div>
-                  <div className="col-span-3">Officer</div>
-                  <div className="col-span-2">Rank</div>
-                  {vacationData?.months.map(month => (
-                    <div key={month} className="text-center py-1 px-2 border-x">
-                      {month}
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="max-h-[600px] overflow-y-auto">
-                  {vacationData?.officers.map(({ officer, vacationDays, vacationBlocks }) => {
-                    // Create a map of month to vacation days for this officer
-                    const monthMap = new Map();
-                    
-                    vacationDays.forEach(({ date, ptoType }) => {
-                      const monthKey = format(date, 'MMM yyyy');
-                      if (!monthMap.has(monthKey)) {
-                        monthMap.set(monthKey, []);
-                      }
-                      monthMap.get(monthKey).push({ date, ptoType });
-                    });
-                    
-                    return (
-                      <div key={officer.id} className="grid grid-cols-14 p-3 border-b hover:bg-muted/30 items-center text-sm">
-                        <div className="col-span-2 font-mono">{officer.badge_number}</div>
-                        <div className="col-span-3 font-medium">{getLastName(officer.full_name)}</div>
-                        <div className="col-span-2">
-                          <Badge variant="outline">{getRankAbbreviation(officer.rank)}</Badge>
-                        </div>
-                        
-                        {vacationData.months.map(month => {
-                          const daysInMonth = monthMap.get(month) || [];
-                          if (daysInMonth.length === 0) {
-                            return (
-                              <div key={month} className="text-center py-1 px-2 border-x">
-                                -
-                              </div>
-                            );
-                          }
-                          
-                          // Group consecutive days within this month
-                          const sortedDays = daysInMonth.sort((a, b) => a.date.getTime() - b.date.getTime());
-                          const blocksInMonth: {start: Date, end: Date, type: string}[] = [];
-                          let currentBlock: Date[] = [];
-                          
-                          sortedDays.forEach(({ date }) => {
-                            if (currentBlock.length === 0) {
-                              currentBlock.push(date);
-                            } else {
-                              const lastDate = currentBlock[currentBlock.length - 1];
-                              const diffInDays = Math.abs((date.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-                              
-                              if (diffInDays === 1) {
-                                currentBlock.push(date);
-                              } else {
-                                if (currentBlock.length > 0) {
-                                  blocksInMonth.push({
-                                    start: currentBlock[0],
-                                    end: currentBlock[currentBlock.length - 1],
-                                    type: sortedDays.find(d => isSameDay(d.date, currentBlock[0]))?.ptoType || 'Vacation'
-                                  });
-                                }
-                                currentBlock = [date];
-                              }
-                            }
-                          });
-                          
-                          if (currentBlock.length > 0) {
-                            blocksInMonth.push({
-                              start: currentBlock[0],
-                              end: currentBlock[currentBlock.length - 1],
-                              type: sortedDays.find(d => isSameDay(d.date, currentBlock[0]))?.ptoType || 'Vacation'
-                            });
-                          }
-                          
-                          return (
-                            <div key={month} className="text-center py-1 px-2 border-x">
-                              <div className="flex flex-col gap-1 items-center">
-                                {blocksInMonth.map((block, idx) => (
-                                  <div key={idx} className="flex items-center gap-1">
-                                    {getPTOBadge(block.type)}
-                                    <span className="text-xs">
-                                      {isSameDay(block.start, block.end) 
-                                        ? format(block.start, 'd')
-                                        : `${format(block.start, 'd')}-${format(block.end, 'd')}`}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
+              {/* Header */}
+              <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border rounded-t-lg text-sm">
+                <div className="col-span-1">#</div>
+                <div className="col-span-3">Officer</div>
+                <div className="col-span-2">Rank</div>
+                <div className="col-span-1 text-center">Days</div>
+                <div className="col-span-5">Vacation Periods</div>
+              </div>
+              
+              {/* Officers List - Matches WeeklyView Order */}
+              <div className="max-h-[600px] overflow-y-auto border rounded-b-lg">
+                {sortedOfficers.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    No vacation data found for {selectedYear}
+                  </div>
+                ) : (
+                  sortedOfficers.map(({ officer, totalDays, vacationBlocks, serviceCredit }, index) => (
+                    <div 
+                      key={officer.id} 
+                      className={`grid grid-cols-12 p-3 border-b hover:bg-muted/30 items-center ${getOfficerTypeColor(officer)}`}
+                    >
+                      {/* Badge Number */}
+                      <div className="col-span-1 font-mono text-sm">
+                        {officer.badge_number || 'N/A'}
                       </div>
-                    );
-                  })}
-                  
-                  {vacationData?.officers.length === 0 && (
-                    <div className="p-8 text-center text-muted-foreground col-span-full">
-                      No vacation data found for {selectedYear}
+                      
+                      {/* Officer Name */}
+                      <div className="col-span-3">
+                        <div className="font-medium">{getLastName(officer.full_name)}</div>
+                        {serviceCredit > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            SC: {serviceCredit.toFixed(1)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Rank */}
+                      <div className="col-span-2">
+                        <Badge variant="outline" className={isSupervisorByRank(officer) ? 'border-green-300' : ''}>
+                          {getRankAbbreviation(officer.rank)}
+                        </Badge>
+                      </div>
+                      
+                      {/* Total Days */}
+                      <div className="col-span-1 text-center">
+                        {totalDays > 0 ? (
+                          <div className="font-bold text-lg">{totalDays}</div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">-</div>
+                        )}
+                      </div>
+                      
+                      {/* Vacation Periods */}
+                      <div className="col-span-5">
+                        {vacationBlocks.length > 0 ? (
+                          <div className="flex flex-col gap-2">
+                            {vacationBlocks.map((block, blockIndex) => (
+                              <div 
+                                key={blockIndex} 
+                                className="flex items-center justify-between gap-2 p-2 bg-card border rounded"
+                              >
+                                <div className="flex items-center gap-2">
+                                  {getPTOBadge(block.type)}
+                                  <span className="text-sm font-medium">
+                                    {formatDateRange(block.startDate, block.endDate)}
+                                  </span>
+                                  {block.daysCount > 1 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {block.daysCount}d
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {format(block.startDate, 'MM/dd')}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground italic p-2">
+                            No vacation scheduled
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
+                  ))
+                )}
+              </div>
+
+              {/* Footer Stats */}
+              <div className="flex justify-between items-center text-sm text-muted-foreground pt-2">
+                <div>
+                  Showing {sortedOfficers.length} officer{sortedOfficers.length !== 1 ? 's' : ''}
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div>
+                    <span>Supervisor</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300"></div>
+                    <span>PPO</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legend */}
+              <Separator className="my-4" />
+              <div className="pt-2">
+                <h4 className="font-semibold mb-3 text-sm">PTO Types</h4>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Vac</Badge>
+                    <span className="text-sm">Vacation</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Sick</Badge>
+                    <span className="text-sm">Sick Leave</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>
+                    <span className="text-sm">Holiday</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-purple-200">Comp</Badge>
+                    <span className="text-sm">Comp Time</span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
-          
-          {/* Legend */}
-          <div className="mt-6 pt-4 border-t">
-            <h4 className="font-semibold mb-2">Legend</h4>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Vac</Badge>
-                <span className="text-sm">Vacation</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sick</Badge>
-                <span className="text-sm">Sick Leave</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Hol</Badge>
-                <span className="text-sm">Holiday</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Comp</Badge>
-                <span className="text-sm">Comp Time</span>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

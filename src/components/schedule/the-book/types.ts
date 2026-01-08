@@ -98,6 +98,7 @@ export interface ScheduleData {
 export interface TheBookProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
   isAdminOrSupervisor?: boolean;
+  userCurrentShift?: string;
 }
 
 export interface ViewProps {

@@ -667,6 +667,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
             <ResponsiveTheBook 
               userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
               isAdminOrSupervisor={isAdminOrSupervisor}
+              userCurrentShift={userCurrentShift}
             />
           </div>
         );

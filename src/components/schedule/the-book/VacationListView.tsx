@@ -512,16 +512,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Debug info - remove in production */}
-              {ptoTypesDebug && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm mb-4">
-                  <p className="font-medium text-blue-800 mb-1">Debug Info:</p>
-                  <p className="text-blue-700">Available PTO types in database: {ptoTypesDebug.join(', ') || 'None'}</p>
-                  <p className="text-blue-700">Showing officers with vacation/holiday: {filteredAndSortedOfficers.length}</p>
-                  <p className="text-blue-700">Total vacation/holiday days: {vacationData?.summary?.totalDays || 0}</p>
-                </div>
-              )}
-
+            
               {/* Header */}
               <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border rounded-t-lg text-sm">
                 <div className="col-span-1">#</div>

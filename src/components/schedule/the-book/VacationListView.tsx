@@ -1,4 +1,4 @@
-// VacationListView.tsx - UPDATED FOR VACATION & HOLIDAY ONLY
+// VacationListView.tsx - FIXED VERSION
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO, isSameDay, isAfter, startOfDay } from "date-fns";
@@ -28,7 +28,7 @@ interface VacationBlock {
   dates: Date[];
 }
 
-// Helper function to calculate service credit for sorting (same as WeeklyView)
+// Helper function to calculate service credit
 const calculateServiceCredit = (
   hireDate: string | null,
   override: number = 0,
@@ -82,7 +82,30 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   const [onlyRemaining, setOnlyRemaining] = useState<boolean>(false);
   const today = startOfDay(new Date());
 
-  // Fetch vacation data and officer profiles for proper sorting
+  // First, let's debug what PTO types are in the database
+  const { data: ptoTypesDebug } = useQuery({
+    queryKey: ['pto-types-debug', selectedShiftId, selectedYear],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("schedule_exceptions")
+        .select("reason")
+        .eq("is_off", true)
+        .eq("shift_type_id", selectedShiftId)
+        .limit(100);
+      
+      if (error) {
+        console.error('Error fetching PTO types:', error);
+        return [];
+      }
+      
+      const uniqueReasons = [...new Set(data.map(item => item.reason))];
+      console.log('Available PTO types in database:', uniqueReasons);
+      return uniqueReasons;
+    },
+    enabled: !!selectedShiftId,
+  });
+
+  // Fetch vacation data
   const { data: vacationData, isLoading } = useQuery({
     queryKey: ['vacation-list', selectedShiftId, selectedYear],
     queryFn: async () => {
@@ -91,7 +114,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
 
-      // Fetch only Vacation and Holiday PTO exceptions
+      // Fetch all PTO exceptions first (we'll filter later)
       const { data: ptoExceptions, error } = await supabase
         .from("schedule_exceptions")
         .select(`
@@ -111,12 +134,31 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         .gte("date", startDate)
         .lte("date", endDate)
         .eq("shift_type_id", selectedShiftId)
-        .in("reason", ["Vacation", "Holiday"]) // Only Vacation and Holiday types
         .order("date", { ascending: true });
 
       if (error) throw error;
 
-      // Fetch all profiles for this shift to ensure we have complete data
+      console.log('Total PTO exceptions fetched:', ptoExceptions?.length);
+      console.log('PTO reason distribution:', 
+        ptoExceptions?.reduce((acc, pto) => {
+          acc[pto.reason] = (acc[pto.reason] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      );
+
+      // Filter for vacation/holiday types (case insensitive)
+      const vacationAndHolidayExceptions = ptoExceptions?.filter(pto => {
+        if (!pto.reason) return false;
+        const reason = pto.reason.toLowerCase();
+        return reason.includes('vacation') || 
+               reason.includes('holiday') ||
+               reason === 'vac' ||
+               reason === 'hol';
+      });
+
+      console.log('Filtered vacation/holiday exceptions:', vacationAndHolidayExceptions?.length);
+
+      // Fetch all profiles for this shift
       const { data: allProfiles } = await supabase
         .from("profiles")
         .select("id, full_name, badge_number, rank, hire_date, promotion_date_sergeant, promotion_date_lieutenant, service_credit_override");
@@ -129,12 +171,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       // Group PTO by officer and create vacation blocks
       const officersMap = new Map();
       
-      ptoExceptions?.forEach(pto => {
+      vacationAndHolidayExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
         const profile = profilesMap.get(officerId) || pto.profiles;
         
         if (!officersMap.has(officerId)) {
-          // Calculate service credit for sorting
           const serviceCredit = calculateServiceCredit(
             profile?.hire_date || null,
             profile?.service_credit_override || 0,
@@ -153,15 +194,24 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         
         const officerData = officersMap.get(officerId);
         const date = parseISO(pto.date);
+        
+        // Normalize PTO type
+        let ptoType = pto.reason || 'Vacation';
+        const ptoLower = ptoType.toLowerCase();
+        if (ptoLower.includes('vacation') || ptoLower === 'vac') {
+          ptoType = 'Vacation';
+        } else if (ptoLower.includes('holiday') || ptoLower === 'hol') {
+          ptoType = 'Holiday';
+        }
+        
         officerData.vacationDays.push({
           date,
-          ptoType: pto.reason || 'Vacation'
+          ptoType
         });
       });
 
       // Process each officer's vacation days to create blocks
       officersMap.forEach((officerData, officerId) => {
-        // Sort dates ascending
         officerData.vacationDays.sort((a, b) => a.date.getTime() - b.date.getTime());
         
         const blocks: VacationBlock[] = [];
@@ -205,18 +255,18 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         officerData.totalDays = officerData.vacationDays.length;
       });
 
-      // Convert to array
       const officersArray = Array.from(officersMap.values());
+      console.log('Processed officers with vacation:', officersArray.length);
 
       return {
         officers: officersArray,
         summary: {
           totalOfficers: officersArray.length,
-          totalDays: ptoExceptions?.length || 0,
+          totalDays: vacationAndHolidayExceptions?.length || 0,
           averageDays: officersArray.length > 0 ? 
-            (ptoExceptions?.length || 0) / officersArray.length : 0
+            (vacationAndHolidayExceptions?.length || 0) / officersArray.length : 0
         },
-        rawData: ptoExceptions || []
+        rawData: vacationAndHolidayExceptions || []
       };
     },
     enabled: !!selectedShiftId,
@@ -228,15 +278,12 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     
     let officers = [...vacationData.officers];
     
-    // Apply "Only Remaining" filter if enabled
     if (onlyRemaining) {
       officers = officers.map(officer => {
-        // Filter vacation blocks to only include future dates
         const futureBlocks = officer.vacationBlocks.filter(block => 
-          isAfter(block.endDate, today) // Keep if end date is in the future
+          isAfter(block.endDate, today)
         );
         
-        // Recalculate total days for filtered blocks
         const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
         
         return {
@@ -244,7 +291,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
           vacationBlocks: futureBlocks,
           totalDays: totalFutureDays
         };
-      }).filter(officer => officer.totalDays > 0); // Remove officers with no future vacation
+      }).filter(officer => officer.totalDays > 0);
     }
     
     // Sort like WeeklyView.tsx
@@ -252,7 +299,6 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       o.officer && isSupervisorByRank(o.officer)
     );
 
-    // Separate Lieutenants and Sergeants like WeeklyView
     const lieutenants = allSupervisors.filter(o => 
       o.officer.rank && (
         o.officer.rank.toLowerCase().includes('lieutenant') || 
@@ -262,9 +308,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     ).sort((a, b) => {
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
+      if (bCredit !== aCredit) return bCredit - aCredit;
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -276,9 +320,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     ).sort((a, b) => {
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
+      if (bCredit !== aCredit) return bCredit - aCredit;
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -293,9 +335,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     ).sort((a, b) => {
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
+      if (bCredit !== aCredit) return bCredit - aCredit;
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -304,9 +344,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     ).sort((a, b) => {
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
+      if (bCredit !== aCredit) return bCredit - aCredit;
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -325,14 +363,14 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   };
 
   const getPTOBadge = (ptoType: string) => {
-    switch (ptoType?.toLowerCase()) {
-      case 'vacation':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Vac</Badge>;
-      case 'holiday':
-        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>;
-      default:
-        return <Badge variant="outline">{ptoType}</Badge>;
+    const ptoLower = ptoType.toLowerCase();
+    if (ptoLower.includes('vacation') || ptoLower === 'vac') {
+      return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Vac</Badge>;
     }
+    if (ptoLower.includes('holiday') || ptoLower === 'hol') {
+      return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>;
+    }
+    return <Badge variant="outline">{ptoType}</Badge>;
   };
 
   const getOfficerTypeColor = (officer: any) => {
@@ -351,7 +389,6 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     return 'border-l-4 border-gray-200';
   };
 
-  // Calculate summary stats for filtered view
   const filteredSummary = useMemo(() => {
     const totalDays = filteredAndSortedOfficers.reduce((sum, officer) => sum + officer.totalDays, 0);
     const totalOfficers = filteredAndSortedOfficers.length;
@@ -439,7 +476,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
               </p>
             </div>
 
-            {/* Summary Stats - Shows filtered stats */}
+            {/* Summary Stats */}
             <div className="space-y-2">
               <Label>Summary</Label>
               <div className="flex items-center gap-4">
@@ -475,6 +512,16 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Debug info - remove in production */}
+              {ptoTypesDebug && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm mb-4">
+                  <p className="font-medium text-blue-800 mb-1">Debug Info:</p>
+                  <p className="text-blue-700">Available PTO types in database: {ptoTypesDebug.join(', ') || 'None'}</p>
+                  <p className="text-blue-700">Showing officers with vacation/holiday: {filteredAndSortedOfficers.length}</p>
+                  <p className="text-blue-700">Total vacation/holiday days: {vacationData?.summary?.totalDays || 0}</p>
+                </div>
+              )}
+
               {/* Header */}
               <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border rounded-t-lg text-sm">
                 <div className="col-span-1">#</div>
@@ -484,13 +531,16 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 <div className="col-span-5">Vacation/Holiday Periods</div>
               </div>
               
-              {/* Officers List - Matches WeeklyView Order */}
+              {/* Officers List */}
               <div className="max-h-[600px] overflow-y-auto border rounded-b-lg">
                 {filteredAndSortedOfficers.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     {onlyRemaining 
                       ? 'No future vacation or holiday dates found for ' + selectedYear
                       : 'No vacation or holiday data found for ' + selectedYear}
+                    <p className="text-xs mt-2">
+                      Check if there are PTO exceptions marked as "Vacation" or "Holiday" in the schedule.
+                    </p>
                   </div>
                 ) : (
                   filteredAndSortedOfficers.map(({ officer, totalDays, vacationBlocks, serviceCredit }, index) => (
@@ -533,11 +583,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                             return (
                               <div 
                                 key={blockIndex} 
-                                className={`flex items-center justify-between gap-2 p-2 border rounded ${!isFuture ? 'opacity-60' : ''}`}
+                                className={`flex items-center justify-between gap-2 p-2 border rounded ${!isFuture && !onlyRemaining ? 'opacity-60' : ''}`}
                               >
                                 <div className="flex items-center gap-2">
                                   {getPTOBadge(block.type)}
-                                  <span className={`text-sm font-medium ${!isFuture ? 'line-through' : ''}`}>
+                                  <span className={`text-sm font-medium ${!isFuture && !onlyRemaining ? 'line-through' : ''}`}>
                                     {formatDateRange(block.startDate, block.endDate)}
                                   </span>
                                   {block.daysCount > 1 && (
@@ -548,7 +598,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                   {format(block.startDate, 'MM/dd')}
-                                  {!isFuture && ' (past)'}
+                                  {!isFuture && !onlyRemaining && ' (past)'}
                                 </div>
                               </div>
                             );
@@ -593,8 +643,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">
-                  <p>Note: Only Vacation and Holiday PTO types are shown in this list.</p>
-                  <p className="mt-1">When "Only Remaining" is enabled, past dates are faded and marked with "(past)".</p>
+                  <p>Note: Shows only Vacation and Holiday PTO types.</p>
+                  <p className="mt-1">When "Only Remaining" is enabled, past dates are hidden. When disabled, past dates are faded.</p>
                 </div>
               </div>
             </div>

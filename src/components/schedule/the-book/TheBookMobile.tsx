@@ -29,9 +29,10 @@ import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 interface TheBookMobileProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
   isAdminOrSupervisor?: boolean;
+  userCurrentShift?: string;
 }
 
-const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: TheBookMobileProps) => {
+const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, userCurrentShift }: TheBookMobileProps) => {
   const [activeView, setActiveView] = useState<"weekly" | "monthly" | "force-list" | "vacation-list" | "beat-preferences">("weekly");
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -74,12 +75,24 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false }: Th
     },
   });
 
-  // Initialize with first shift
-  useEffect(() => {
-    if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
-      setSelectedShiftId(shiftTypes[0].id);
+// Auto-select user's assigned shift if they have one
+useEffect(() => {
+  if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
+    // Only auto-select if user has a specific assigned shift (not "all")
+    if (userCurrentShift && userCurrentShift !== "all") {
+      // Check if userCurrentShift exists in available shifts
+      const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
+      if (userShiftExists) {
+        console.log("📱 Mobile: Setting user's assigned shift:", userCurrentShift);
+        setSelectedShiftId(userCurrentShift);
+      } else {
+        console.log("⚠️ Mobile: User's assigned shift not found. No auto-selection.");
+        // Don't auto-select anything - user must choose
+      }
     }
-  }, [shiftTypes]);
+    // If userCurrentShift is "all" or undefined, don't auto-select
+  }
+}, [shiftTypes, userCurrentShift, selectedShiftId]);
 
   // Setup mutations
   const mutationsResult = useWeeklyScheduleMutations(

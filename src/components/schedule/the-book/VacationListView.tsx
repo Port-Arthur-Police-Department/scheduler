@@ -1,22 +1,29 @@
-// VacationListView.tsx - FIXED VERSION
+// VacationListView.tsx - IMPROVED VERSION
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfYear, endOfYear, eachMonthOfInterval, isSameMonth, parseISO } from "date-fns";
+import { format, startOfYear, endOfYear, parseISO, isSameDay, addDays, isAfter, isBefore } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plane, CalendarIcon, Filter, Download } from "lucide-react";
+import { Plane, CalendarIcon, Filter, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation } from "./utils";
-import TheBookMobile from "./TheBookMobile";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface VacationListViewProps {
   selectedShiftId: string;
   setSelectedShiftId: (shiftId: string) => void;
   shiftTypes: any[];
+}
+
+interface VacationBlock {
+  startDate: Date;
+  endDate: Date;
+  daysCount: number;
+  dates: Date[];
 }
 
 export const VacationListView: React.FC<VacationListViewProps> = ({
@@ -25,9 +32,10 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   shiftTypes
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [showAllVacations, setShowAllVacations] = useState<boolean>(false);
+  const [viewType, setViewType] = useState<'summary' | 'detailed'>('summary');
+  const [showAllVacations, setShowAllVacations] = useState<boolean>(true);
 
-  // Fetch vacation data
+  // Fetch vacation data with grouping for consecutive days
   const { data: vacationData, isLoading } = useQuery({
     queryKey: ['vacation-list', selectedShiftId, selectedYear, showAllVacations],
     queryFn: async () => {
@@ -45,98 +53,172 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             id,
             full_name,
             badge_number,
-            rank
+            rank,
+            hire_date
           )
         `)
         .eq("is_off", true)
         .gte("date", startDate)
         .lte("date", endDate)
-        .eq("shift_type_id", selectedShiftId);
+        .eq("shift_type_id", selectedShiftId)
+        .order("date", { ascending: true });
 
       if (error) throw error;
 
-      // Group PTO by officer and month - FIXED: Use parseISO for proper date handling
-      const ptoByOfficer = new Map();
-      const ptoByMonth = new Map();
-
+      // Group PTO by officer and create vacation blocks for consecutive days
+      const officersMap = new Map();
+      
       ptoExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
-        const date = parseISO(pto.date);
-        const monthKey = format(date, "yyyy-MM"); // Use date-fns format for consistency
-        
-        // Initialize officer data
-        if (!ptoByOfficer.has(officerId)) {
-          ptoByOfficer.set(officerId, {
+        if (!officersMap.has(officerId)) {
+          officersMap.set(officerId, {
             officer: pto.profiles,
-            ptoDays: new Map(),
-            totalDays: 0
+            vacationDays: [],
+            vacationBlocks: []
           });
         }
-
-        // Initialize month data
-        if (!ptoByMonth.has(monthKey)) {
-          ptoByMonth.set(monthKey, {
-            month: monthKey,
-            monthDate: date, // Store the actual date object for proper formatting
-            officers: new Set(),
-            totalDays: 0
-          });
-        }
-
-        const officerData = ptoByOfficer.get(officerId);
-        const monthData = ptoByMonth.get(monthKey);
-
-        // Count days
-        officerData.totalDays += 1;
-        officerData.ptoDays.set(monthKey, (officerData.ptoDays.get(monthKey) || 0) + 1);
         
-        monthData.officers.add(officerId);
-        monthData.totalDays += 1;
+        const officerData = officersMap.get(officerId);
+        const date = parseISO(pto.date);
+        officerData.vacationDays.push({
+          date,
+          ptoType: pto.reason || 'Vacation'
+        });
       });
 
-      // Sort months chronologically
-      const sortedPtoByMonth = Array.from(ptoByMonth.values()).sort((a, b) => 
-        a.monthDate.getTime() - b.monthDate.getTime()
-      );
+      // Process each officer's vacation days to create blocks of consecutive days
+      officersMap.forEach((officerData, officerId) => {
+        // Sort dates ascending
+        officerData.vacationDays.sort((a, b) => a.date.getTime() - b.date.getTime());
+        
+        const blocks: VacationBlock[] = [];
+        let currentBlock: Date[] = [];
+        
+        officerData.vacationDays.forEach((day, index) => {
+          if (currentBlock.length === 0) {
+            currentBlock.push(day.date);
+          } else {
+            const lastDate = currentBlock[currentBlock.length - 1];
+            const currentDate = day.date;
+            const diffInDays = Math.abs((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (diffInDays === 1) {
+              // Consecutive day, add to current block
+              currentBlock.push(currentDate);
+            } else {
+              // Non-consecutive, finalize current block and start new one
+              if (currentBlock.length > 0) {
+                blocks.push({
+                  startDate: currentBlock[0],
+                  endDate: currentBlock[currentBlock.length - 1],
+                  daysCount: currentBlock.length,
+                  dates: [...currentBlock]
+                });
+              }
+              currentBlock = [currentDate];
+            }
+          }
+        });
+        
+        // Don't forget the last block
+        if (currentBlock.length > 0) {
+          blocks.push({
+            startDate: currentBlock[0],
+            endDate: currentBlock[currentBlock.length - 1],
+            daysCount: currentBlock.length,
+            dates: [...currentBlock]
+          });
+        }
+        
+        officerData.vacationBlocks = blocks;
+        officerData.totalDays = officerData.vacationDays.length;
+      });
 
-      // Sort officers within each month by total days
-      const sortedPtoByOfficer = Array.from(ptoByOfficer.values()).sort((a, b) => 
+      // Convert to array and sort by total days descending
+      const officersArray = Array.from(officersMap.values()).sort((a, b) => 
         b.totalDays - a.totalDays
       );
 
+      // Get all unique months with vacation data for column headers
+      const monthsWithVacations = new Set<string>();
+      ptoExceptions?.forEach(pto => {
+        const date = parseISO(pto.date);
+        const monthKey = format(date, 'MMM yyyy');
+        monthsWithVacations.add(monthKey);
+      });
+
+      const sortedMonths = Array.from(monthsWithVacations).sort((a, b) => {
+        const dateA = new Date(a);
+        const dateB = new Date(b);
+        return dateA.getTime() - dateB.getTime();
+      });
+
       return {
-        ptoExceptions: ptoExceptions || [],
-        ptoByOfficer: sortedPtoByOfficer,
-        ptoByMonth: sortedPtoByMonth,
+        officers: officersArray,
         summary: {
-          totalOfficers: ptoByOfficer.size,
+          totalOfficers: officersArray.length,
           totalDays: ptoExceptions?.length || 0,
-          averageDays: ptoExceptions?.length ? (ptoExceptions.length / ptoByOfficer.size) : 0
-        }
+          averageDays: officersArray.length > 0 ? 
+            (ptoExceptions?.length || 0) / officersArray.length : 0
+        },
+        months: sortedMonths,
+        rawData: ptoExceptions || []
       };
     },
     enabled: !!selectedShiftId,
-  });
-
-  const months = eachMonthOfInterval({
-    start: startOfYear(new Date(selectedYear, 0, 1)),
-    end: endOfYear(new Date(selectedYear, 0, 1))
   });
 
   const handleExport = () => {
     toast.info("Export feature coming soon!");
   };
 
+  const formatDateRange = (startDate: Date, endDate: Date) => {
+    if (isSameDay(startDate, endDate)) {
+      return format(startDate, 'M/d/yy');
+    }
+    return `${format(startDate, 'M/d/yy')} - ${format(endDate, 'M/d/yy')}`;
+  };
+
+  const getPTOColor = (ptoType: string) => {
+    switch (ptoType?.toLowerCase()) {
+      case 'vacation':
+        return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'sick':
+        return 'bg-red-50 text-red-700 border-red-200';
+      case 'holiday':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'comp':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getPTOBadge = (ptoType: string) => {
+    switch (ptoType?.toLowerCase()) {
+      case 'vacation':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Vac</Badge>;
+      case 'sick':
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sick</Badge>;
+      case 'holiday':
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Hol</Badge>;
+      case 'comp':
+        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Comp</Badge>;
+      default:
+        return <Badge variant="outline">{ptoType}</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <Plane className="h-5 w-5" />
               Vacation List
             </CardTitle>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="text-sm font-medium text-muted-foreground">
                 Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
               </div>
@@ -147,22 +229,51 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             {/* Year Selector */}
             <div className="space-y-2">
               <Label htmlFor="year-select">Year</Label>
-              <select 
-                id="year-select"
-                value={selectedYear.toString()}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                {[2023, 2024, 2025, 2026].map((year) => (
-                  <option key={year} value={year.toString()}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  onClick={() => setSelectedYear(prev => prev - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <select 
+                  id="year-select"
+                  value={selectedYear.toString()}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  {[2023, 2024, 2025, 2026, 2027].map((year) => (
+                    <option key={year} value={year.toString()}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  onClick={() => setSelectedYear(prev => prev + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* View Toggle */}
+            <div className="space-y-2">
+              <Label>View</Label>
+              <Tabs value={viewType} onValueChange={(v) => setViewType(v as 'summary' | 'detailed')} className="w-full">
+                <TabsList className="grid grid-cols-2 w-full">
+                  <TabsTrigger value="summary">Summary</TabsTrigger>
+                  <TabsTrigger value="detailed">Detailed</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
             {/* Show All Toggle */}
@@ -172,7 +283,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                   checked={showAllVacations}
                   onCheckedChange={setShowAllVacations}
                 />
-                Show All Vacations (Including Past)
+                Show All
               </Label>
             </div>
 
@@ -200,82 +311,190 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           ) : isLoading ? (
             <div className="text-center py-8">Loading vacation data...</div>
-          ) : (
-            <div className="space-y-6">
-              {/* Monthly Overview */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Monthly Overview - {selectedYear}</h3>
-                <div className="grid grid-cols-6 gap-2">
-                  {months.map((month) => {
-                    const monthKey = format(month, "yyyy-MM");
-                    const monthData = vacationData?.ptoByMonth.find(m => m.month === monthKey);
-                    const isCurrentMonth = isSameMonth(month, new Date());
-                    
-                    return (
-                      <div 
-                        key={monthKey} 
-                        className={`text-center p-3 border rounded-lg ${isCurrentMonth ? 'bg-primary/10 border-primary' : ''}`}
-                      >
-                        <div className="font-medium">{format(month, "MMM")}</div>
-                        <div className="text-2xl font-bold mt-1">{monthData?.totalDays || 0}</div>
-                        <div className="text-xs text-muted-foreground">days</div>
-                        <div className="text-xs mt-1">{monthData?.officers.size || 0} officers</div>
+          ) : viewType === 'summary' ? (
+            <div className="space-y-4">
+              {/* Officer Vacation Summary Table */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border-b text-sm">
+                  <div className="col-span-2">Badge #</div>
+                  <div className="col-span-3">Officer</div>
+                  <div className="col-span-2">Rank</div>
+                  <div className="col-span-2">Total Days</div>
+                  <div className="col-span-3">Vacation Periods</div>
+                </div>
+                
+                <div className="max-h-[600px] overflow-y-auto">
+                  {vacationData?.officers.map(({ officer, totalDays, vacationBlocks }) => (
+                    <div key={officer.id} className="grid grid-cols-12 p-3 border-b hover:bg-muted/30 items-center">
+                      <div className="col-span-2 font-mono">{officer.badge_number}</div>
+                      <div className="col-span-3 font-medium">{getLastName(officer.full_name)}</div>
+                      <div className="col-span-2">
+                        <Badge variant="outline">{getRankAbbreviation(officer.rank)}</Badge>
                       </div>
-                    );
-                  })}
+                      <div className="col-span-2 font-bold text-lg">{totalDays}</div>
+                      <div className="col-span-3">
+                        <div className="flex flex-wrap gap-2">
+                          {vacationBlocks.map((block, index) => (
+                            <div 
+                              key={index}
+                              className={`px-3 py-1 rounded-md border text-sm whitespace-nowrap ${getPTOColor('vacation')}`}
+                              title={`${block.daysCount} day(s)`}
+                            >
+                              {formatDateRange(block.startDate, block.endDate)}
+                              {block.daysCount > 1 && (
+                                <Badge variant="secondary" className="ml-2 text-xs">
+                                  {block.daysCount}
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {vacationData?.officers.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      No vacation data found for {selectedYear}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Officer Vacation Details */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Officer Vacation Details</h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border-b">
-                    <div className="col-span-3">Officer</div>
-                    <div className="col-span-2">Badge #</div>
-                    <div className="col-span-2">Rank</div>
-                    <div className="col-span-2">Total Days</div>
-                    <div className="col-span-3">Months</div>
-                  </div>
-                  
-                  <div className="max-h-[400px] overflow-y-auto">
-                    {vacationData?.ptoByOfficer.map(({ officer, totalDays, ptoDays }) => (
-                      <div key={officer.id} className="grid grid-cols-12 p-3 border-b hover:bg-muted/30">
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Detailed View - Similar to Weekly Schedule */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-14 bg-muted/50 p-3 font-semibold border-b text-sm">
+                  <div className="col-span-2">Badge #</div>
+                  <div className="col-span-3">Officer</div>
+                  <div className="col-span-2">Rank</div>
+                  {vacationData?.months.map(month => (
+                    <div key={month} className="text-center py-1 px-2 border-x">
+                      {month}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="max-h-[600px] overflow-y-auto">
+                  {vacationData?.officers.map(({ officer, vacationDays, vacationBlocks }) => {
+                    // Create a map of month to vacation days for this officer
+                    const monthMap = new Map();
+                    
+                    vacationDays.forEach(({ date, ptoType }) => {
+                      const monthKey = format(date, 'MMM yyyy');
+                      if (!monthMap.has(monthKey)) {
+                        monthMap.set(monthKey, []);
+                      }
+                      monthMap.get(monthKey).push({ date, ptoType });
+                    });
+                    
+                    return (
+                      <div key={officer.id} className="grid grid-cols-14 p-3 border-b hover:bg-muted/30 items-center text-sm">
+                        <div className="col-span-2 font-mono">{officer.badge_number}</div>
                         <div className="col-span-3 font-medium">{getLastName(officer.full_name)}</div>
-                        <div className="col-span-2">{officer.badge_number}</div>
                         <div className="col-span-2">
                           <Badge variant="outline">{getRankAbbreviation(officer.rank)}</Badge>
                         </div>
-                        <div className="col-span-2 font-bold">{totalDays}</div>
-                        <div className="col-span-3">
-                          <div className="flex flex-wrap gap-1">
-                            {Array.from(ptoDays.entries()).map(([month, days]) => {
-                              // Use parseISO to properly parse the month string
-                              const monthDate = parseISO(`${month}-01`);
-                              return (
-                                <Badge key={month} variant="secondary" className="text-xs">
-                                  {format(monthDate, "MMM")}: {days}
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        
+                        {vacationData.months.map(month => {
+                          const daysInMonth = monthMap.get(month) || [];
+                          if (daysInMonth.length === 0) {
+                            return (
+                              <div key={month} className="text-center py-1 px-2 border-x">
+                                -
+                              </div>
+                            );
+                          }
+                          
+                          // Group consecutive days within this month
+                          const sortedDays = daysInMonth.sort((a, b) => a.date.getTime() - b.date.getTime());
+                          const blocksInMonth: {start: Date, end: Date, type: string}[] = [];
+                          let currentBlock: Date[] = [];
+                          
+                          sortedDays.forEach(({ date }) => {
+                            if (currentBlock.length === 0) {
+                              currentBlock.push(date);
+                            } else {
+                              const lastDate = currentBlock[currentBlock.length - 1];
+                              const diffInDays = Math.abs((date.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+                              
+                              if (diffInDays === 1) {
+                                currentBlock.push(date);
+                              } else {
+                                if (currentBlock.length > 0) {
+                                  blocksInMonth.push({
+                                    start: currentBlock[0],
+                                    end: currentBlock[currentBlock.length - 1],
+                                    type: sortedDays.find(d => isSameDay(d.date, currentBlock[0]))?.ptoType || 'Vacation'
+                                  });
+                                }
+                                currentBlock = [date];
+                              }
+                            }
+                          });
+                          
+                          if (currentBlock.length > 0) {
+                            blocksInMonth.push({
+                              start: currentBlock[0],
+                              end: currentBlock[currentBlock.length - 1],
+                              type: sortedDays.find(d => isSameDay(d.date, currentBlock[0]))?.ptoType || 'Vacation'
+                            });
+                          }
+                          
+                          return (
+                            <div key={month} className="text-center py-1 px-2 border-x">
+                              <div className="flex flex-col gap-1 items-center">
+                                {blocksInMonth.map((block, idx) => (
+                                  <div key={idx} className="flex items-center gap-1">
+                                    {getPTOBadge(block.type)}
+                                    <span className="text-xs">
+                                      {isSameDay(block.start, block.end) 
+                                        ? format(block.start, 'd')
+                                        : `${format(block.start, 'd')}-${format(block.end, 'd')}`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                    
-                    {vacationData?.ptoByOfficer.length === 0 && (
-                      <div className="p-8 text-center text-muted-foreground">
-                        No vacation data found for {selectedYear}
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })}
+                  
+                  {vacationData?.officers.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground col-span-full">
+                      No vacation data found for {selectedYear}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* REMOVED: PTO Balance Summary Section */}
-              
             </div>
           )}
+          
+          {/* Legend */}
+          <div className="mt-6 pt-4 border-t">
+            <h4 className="font-semibold mb-2">Legend</h4>
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Vac</Badge>
+                <span className="text-sm">Vacation</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sick</Badge>
+                <span className="text-sm">Sick Leave</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Hol</Badge>
+                <span className="text-sm">Holiday</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Comp</Badge>
+                <span className="text-sm">Comp Time</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

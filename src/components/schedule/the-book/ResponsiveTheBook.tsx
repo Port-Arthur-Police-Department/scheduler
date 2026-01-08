@@ -6,11 +6,13 @@ import { useIsMobile } from '@/hooks/use-mobile';
 interface ResponsiveTheBookProps {
   userRole?: 'officer' | 'supervisor' | 'admin';
   isAdminOrSupervisor?: boolean;
+  userCurrentShift?: string; // ADD THIS
 }
 
 export const ResponsiveTheBook: React.FC<ResponsiveTheBookProps> = ({
   userRole,
-  isAdminOrSupervisor
+  isAdminOrSupervisor,
+  userCurrentShift = "all" // ADD THIS with default
 }) => {
   const isMobile = useIsMobile();
 
@@ -19,6 +21,7 @@ export const ResponsiveTheBook: React.FC<ResponsiveTheBookProps> = ({
       <TheBookMobile 
         userRole={userRole}
         isAdminOrSupervisor={isAdminOrSupervisor}
+        userCurrentShift={userCurrentShift} // PASS TO MOBILE
       />
     );
   }
@@ -27,6 +30,7 @@ export const ResponsiveTheBook: React.FC<ResponsiveTheBookProps> = ({
     <TheBook 
       userRole={userRole}
       isAdminOrSupervisor={isAdminOrSupervisor}
+      userCurrentShift={userCurrentShift} // PASS TO DESKTOP
     />
   );
 };

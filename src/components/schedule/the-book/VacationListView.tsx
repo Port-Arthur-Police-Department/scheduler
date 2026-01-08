@@ -1,13 +1,13 @@
-// VacationListView.tsx - CORRECTED VERSION WITH WEEKLYVIEW ORDERING
+// VacationListView.tsx - UPDATED FOR VACATION & HOLIDAY ONLY
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, parseISO, isSameDay } from "date-fns";
+import { format, parseISO, isSameDay, isAfter, startOfDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plane, Download, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Plane, Download, ChevronLeft, ChevronRight, Calendar, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
@@ -79,7 +79,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
   shiftTypes
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [showAllVacations, setShowAllVacations] = useState<boolean>(true);
+  const [onlyRemaining, setOnlyRemaining] = useState<boolean>(false);
+  const today = startOfDay(new Date());
 
   // Fetch vacation data and officer profiles for proper sorting
   const { data: vacationData, isLoading } = useQuery({
@@ -90,7 +91,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       const startDate = `${selectedYear}-01-01`;
       const endDate = `${selectedYear}-12-31`;
 
-      // Fetch PTO exceptions
+      // Fetch only Vacation and Holiday PTO exceptions
       const { data: ptoExceptions, error } = await supabase
         .from("schedule_exceptions")
         .select(`
@@ -110,6 +111,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         .gte("date", startDate)
         .lte("date", endDate)
         .eq("shift_type_id", selectedShiftId)
+        .in("reason", ["Vacation", "Holiday"]) // Only Vacation and Holiday types
         .order("date", { ascending: true });
 
       if (error) throw error;
@@ -220,13 +222,32 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     enabled: !!selectedShiftId,
   });
 
-  // Sort officers like WeeklyView.tsx
-  const sortedOfficers = useMemo(() => {
+  // Filter and sort officers
+  const filteredAndSortedOfficers = useMemo(() => {
     if (!vacationData?.officers) return [];
     
-    const officers = [...vacationData.officers];
+    let officers = [...vacationData.officers];
     
-    // First, get all supervisors
+    // Apply "Only Remaining" filter if enabled
+    if (onlyRemaining) {
+      officers = officers.map(officer => {
+        // Filter vacation blocks to only include future dates
+        const futureBlocks = officer.vacationBlocks.filter(block => 
+          isAfter(block.endDate, today) // Keep if end date is in the future
+        );
+        
+        // Recalculate total days for filtered blocks
+        const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
+        
+        return {
+          ...officer,
+          vacationBlocks: futureBlocks,
+          totalDays: totalFutureDays
+        };
+      }).filter(officer => officer.totalDays > 0); // Remove officers with no future vacation
+    }
+    
+    // Sort like WeeklyView.tsx
     const allSupervisors = officers.filter(o => 
       o.officer && isSupervisorByRank(o.officer)
     );
@@ -239,13 +260,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         o.officer.rank.toLowerCase().includes('chief')
       )
     ).sort((a, b) => {
-      // Sort Lieutenants by service credit DESCENDING (highest first)
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
       if (bCredit !== aCredit) {
-        return bCredit - aCredit; // Descending
+        return bCredit - aCredit;
       }
-      // If same service credit, sort by last name
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -255,25 +274,20 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         o.officer.rank.toLowerCase().includes('sgt')
       )
     ).sort((a, b) => {
-      // Sort Sergeants by service credit DESCENDING (highest first)
       const aCredit = a.serviceCredit || 0;
       const bCredit = b.serviceCredit || 0;
       if (bCredit !== aCredit) {
-        return bCredit - aCredit; // Descending
+        return bCredit - aCredit;
       }
-      // If same service credit, sort by last name
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
-    // Combine with Lieutenants first, then Sergeants
     const supervisors = [...lieutenants, ...sergeants];
 
-    // Get all non-supervisors
     const allOfficersList = officers.filter(o => 
       !o.officer || !isSupervisorByRank(o.officer)
     );
 
-    // Separate PPOs and regular officers
     const ppos = allOfficersList.filter(o => 
       o.officer?.rank?.toLowerCase() === 'probationary'
     ).sort((a, b) => {
@@ -282,7 +296,6 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       if (bCredit !== aCredit) {
         return bCredit - aCredit;
       }
-      // If same service credit, sort by last name
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
@@ -294,13 +307,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       if (bCredit !== aCredit) {
         return bCredit - aCredit;
       }
-      // If same service credit, sort by last name
       return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
     });
 
-    // Return in WeeklyView order
     return [...supervisors, ...regularOfficers, ...ppos];
-  }, [vacationData?.officers]);
+  }, [vacationData?.officers, onlyRemaining, today]);
 
   const handleExport = () => {
     toast.info("Export feature coming soon!");
@@ -317,12 +328,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     switch (ptoType?.toLowerCase()) {
       case 'vacation':
         return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Vac</Badge>;
-      case 'sick':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Sick</Badge>;
       case 'holiday':
         return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>;
-      case 'comp':
-        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-purple-200">Comp</Badge>;
       default:
         return <Badge variant="outline">{ptoType}</Badge>;
     }
@@ -343,6 +350,18 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
     
     return 'border-l-4 border-gray-200';
   };
+
+  // Calculate summary stats for filtered view
+  const filteredSummary = useMemo(() => {
+    const totalDays = filteredAndSortedOfficers.reduce((sum, officer) => sum + officer.totalDays, 0);
+    const totalOfficers = filteredAndSortedOfficers.length;
+    
+    return {
+      totalOfficers,
+      totalDays,
+      averageDays: totalOfficers > 0 ? (totalDays / totalOfficers) : 0
+    };
+  }, [filteredAndSortedOfficers]);
 
   return (
     <div className="space-y-4">
@@ -400,38 +419,41 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
               </div>
             </div>
 
-            {/* Show All Toggle - Shows officers with no vacation too */}
+            {/* Only Remaining Toggle */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 cursor-pointer">
                 <Switch
-                  checked={showAllVacations}
-                  onCheckedChange={setShowAllVacations}
-                  id="show-all-toggle"
+                  checked={onlyRemaining}
+                  onCheckedChange={setOnlyRemaining}
+                  id="only-remaining-toggle"
                 />
-                <span className="text-sm">Show All Officers</span>
+                <span className="text-sm flex items-center gap-2">
+                  <Filter className="h-3 w-3" />
+                  Only Remaining
+                </span>
               </Label>
               <p className="text-xs text-muted-foreground pl-10">
-                {showAllVacations ? 'Showing all officers' : 'Showing only officers with vacation'}
+                {onlyRemaining 
+                  ? 'Showing only future vacation/holiday dates' 
+                  : 'Showing all vacation/holiday dates for ' + selectedYear}
               </p>
             </div>
 
-            {/* Summary Stats */}
+            {/* Summary Stats - Shows filtered stats */}
             <div className="space-y-2">
               <Label>Summary</Label>
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{vacationData?.summary?.totalOfficers || 0}</div>
+                  <div className="text-2xl font-bold">{filteredSummary.totalOfficers}</div>
                   <div className="text-sm text-muted-foreground">Officers</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{vacationData?.summary?.totalDays || 0}</div>
+                  <div className="text-2xl font-bold">{filteredSummary.totalDays}</div>
                   <div className="text-sm text-muted-foreground">Days</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">
-                    {vacationData?.summary?.averageDays 
-                      ? vacationData.summary.averageDays.toFixed(1) 
-                      : '0.0'}
+                    {filteredSummary.averageDays > 0 ? filteredSummary.averageDays.toFixed(1) : '0.0'}
                   </div>
                   <div className="text-sm text-muted-foreground">Avg Days</div>
                 </div>
@@ -459,17 +481,19 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 <div className="col-span-3">Officer</div>
                 <div className="col-span-2">Rank</div>
                 <div className="col-span-1 text-center">Days</div>
-                <div className="col-span-5">Vacation Periods</div>
+                <div className="col-span-5">Vacation/Holiday Periods</div>
               </div>
               
               {/* Officers List - Matches WeeklyView Order */}
               <div className="max-h-[600px] overflow-y-auto border rounded-b-lg">
-                {sortedOfficers.length === 0 ? (
+                {filteredAndSortedOfficers.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
-                    No vacation data found for {selectedYear}
+                    {onlyRemaining 
+                      ? 'No future vacation or holiday dates found for ' + selectedYear
+                      : 'No vacation or holiday data found for ' + selectedYear}
                   </div>
                 ) : (
-                  sortedOfficers.map(({ officer, totalDays, vacationBlocks, serviceCredit }, index) => (
+                  filteredAndSortedOfficers.map(({ officer, totalDays, vacationBlocks, serviceCredit }, index) => (
                     <div 
                       key={officer.id} 
                       className={`grid grid-cols-12 p-3 border-b hover:bg-muted/30 items-center ${getOfficerTypeColor(officer)}`}
@@ -498,25 +522,22 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                       
                       {/* Total Days */}
                       <div className="col-span-1 text-center">
-                        {totalDays > 0 ? (
-                          <div className="font-bold text-lg">{totalDays}</div>
-                        ) : (
-                          <div className="text-muted-foreground text-sm">-</div>
-                        )}
+                        <div className="font-bold text-lg">{totalDays}</div>
                       </div>
                       
-                      {/* Vacation Periods */}
+                      {/* Vacation/Holiday Periods */}
                       <div className="col-span-5">
-                        {vacationBlocks.length > 0 ? (
-                          <div className="flex flex-col gap-2">
-                            {vacationBlocks.map((block, blockIndex) => (
+                        <div className="flex flex-col gap-2">
+                          {vacationBlocks.map((block, blockIndex) => {
+                            const isFuture = isAfter(block.endDate, today);
+                            return (
                               <div 
                                 key={blockIndex} 
-                                className="flex items-center justify-between gap-2 p-2 bg-card border rounded"
+                                className={`flex items-center justify-between gap-2 p-2 border rounded ${!isFuture ? 'opacity-60' : ''}`}
                               >
                                 <div className="flex items-center gap-2">
                                   {getPTOBadge(block.type)}
-                                  <span className="text-sm font-medium">
+                                  <span className={`text-sm font-medium ${!isFuture ? 'line-through' : ''}`}>
                                     {formatDateRange(block.startDate, block.endDate)}
                                   </span>
                                   {block.daysCount > 1 && (
@@ -527,15 +548,12 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                   {format(block.startDate, 'MM/dd')}
+                                  {!isFuture && ' (past)'}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-muted-foreground italic p-2">
-                            No vacation scheduled
-                          </div>
-                        )}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -545,7 +563,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
               {/* Footer Stats */}
               <div className="flex justify-between items-center text-sm text-muted-foreground pt-2">
                 <div>
-                  Showing {sortedOfficers.length} officer{sortedOfficers.length !== 1 ? 's' : ''}
+                  Showing {filteredAndSortedOfficers.length} officer{filteredAndSortedOfficers.length !== 1 ? 's' : ''}
+                  {onlyRemaining && ' (future dates only)'}
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -569,17 +588,13 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                     <span className="text-sm">Vacation</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Sick</Badge>
-                    <span className="text-sm">Sick Leave</span>
-                  </div>
-                  <div className="flex items-center gap-2">
                     <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">Hol</Badge>
                     <span className="text-sm">Holiday</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-purple-200">Comp</Badge>
-                    <span className="text-sm">Comp Time</span>
-                  </div>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  <p>Note: Only Vacation and Holiday PTO types are shown in this list.</p>
+                  <p className="mt-1">When "Only Remaining" is enabled, past dates are faded and marked with "(past)".</p>
                 </div>
               </div>
             </div>

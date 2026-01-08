@@ -12,7 +12,7 @@ interface ResponsiveTheBookProps {
 export const ResponsiveTheBook: React.FC<ResponsiveTheBookProps> = ({
   userRole,
   isAdminOrSupervisor,
-  userCurrentShift = "all" // ADD THIS with default
+  userCurrentShift
 }) => {
   const isMobile = useIsMobile();
 

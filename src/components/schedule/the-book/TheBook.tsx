@@ -79,24 +79,6 @@ const TheBook = ({
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [editingAssignment, setEditingAssignment] = useState<{ officer: any; dateStr: string } | null>(null);
   const mutationsResult = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
-
-    useEffect(() => {
-    if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
-      // Only auto-select if user has a specific assigned shift (not "all")
-      if (userCurrentShift && userCurrentShift !== "all") {
-        // Check if userCurrentShift exists in available shifts
-        const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
-        if (userShiftExists) {
-          console.log("🎯 Desktop: Setting user's assigned shift:", userCurrentShift);
-          setSelectedShiftId(userCurrentShift);
-        } else {
-          console.log("⚠️ Desktop: User's assigned shift not found. No auto-selection.");
-          // Don't auto-select anything - user must choose
-        }
-      }
-      // If userCurrentShift is "all" or undefined, don't auto-select
-    }
-  }, [shiftTypes, userCurrentShift, selectedShiftId]);
   
   // Destructure with safe fallbacks
   const {
@@ -153,6 +135,25 @@ const TheBook = ({
     },
   });
 
+  // ADD THE useEffect HERE - AFTER shiftTypes query
+  useEffect(() => {
+    if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
+      // Only auto-select if user has a specific assigned shift (not "all")
+      if (userCurrentShift && userCurrentShift !== "all") {
+        // Check if userCurrentShift exists in available shifts
+        const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
+        if (userShiftExists) {
+          console.log("🎯 Desktop: Setting user's assigned shift:", userCurrentShift);
+          setSelectedShiftId(userCurrentShift);
+        } else {
+          console.log("⚠️ Desktop: User's assigned shift not found. No auto-selection.");
+          // Don't auto-select anything - user must choose
+        }
+      }
+      // If userCurrentShift is "all" or undefined, don't auto-select
+    }
+  }, [shiftTypes, userCurrentShift, selectedShiftId]);
+
   // Fetch default assignments
   const { data: allDefaultAssignments } = useQuery({
     queryKey: ["all-default-assignments"],
@@ -171,6 +172,8 @@ const TheBook = ({
     },
     enabled: true, // Changed: Default assignments are officer-specific, not shift-specific
   });
+  
+  // ... rest of the code continues
 
   // Helper function to get default assignment
   const getDefaultAssignment = (officerId: string, date: string) => {

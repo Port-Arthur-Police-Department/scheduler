@@ -1,3 +1,4 @@
+// Import from the correct location
 import { getLastName } from "@/lib/utils";
 
 export interface OfficerForSorting {

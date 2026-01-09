@@ -11,6 +11,12 @@ import { MapPin, Star, Filter, Download, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+// Import sorting utilities
+import { 
+  sortOfficersConsistently, 
+  getServiceCreditForSorting,
+  type OfficerForSorting 
+} from "@/utils/sortingUtils";
 
 interface BeatPreferencesViewMobileProps {
   isAdminOrSupervisor: boolean;
@@ -45,6 +51,9 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
             full_name,
             badge_number,
             rank,
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant,
             service_credit_override
           )
         `)
@@ -73,35 +82,38 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
         !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
       );
       
-      const uniqueOfficers = Array.from(
-        new Map(nonSupervisorOfficers.map(officer => [officer.id, officer])).values()
-      );
+      // Convert to OfficerForSorting format
+      const officersForSorting: OfficerForSorting[] = nonSupervisorOfficers.map(officer => ({
+        id: officer.id,
+        full_name: officer.full_name,
+        officerName: officer.full_name,
+        badge_number: officer.badge_number,
+        badgeNumber: officer.badge_number,
+        rank: officer.rank,
+        service_credit: 0, // Will be calculated
+        hire_date: officer.hire_date,
+        service_credit_override: officer.service_credit_override || 0,
+        promotion_date_sergeant: officer.promotion_date_sergeant,
+        promotion_date_lieutenant: officer.promotion_date_lieutenant
+      }));
 
-      // Fetch service credits
-      const officersWithCredits = await Promise.all(
-        uniqueOfficers.map(async (officer) => {
-          const { data: creditData } = await supabase.rpc("get_service_credit", {
-            profile_id: officer.id,
-          });
-          return {
-            ...officer,
-            service_credit: creditData || 0,
-          };
-        })
-      );
+      // Sort officers consistently using the centralized utility
+      const sortedOfficers = sortOfficersConsistently(officersForSorting);
 
-      // Sort by service credit (highest to lowest)
-      const sortedOfficers = [...officersWithCredits].sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        if (bCredit !== aCredit) {
-          return bCredit - aCredit;
-        }
-        return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-      });
+      // Map back to original structure with preferences
+      const sortedOfficersWithData = sortedOfficers.map(sortedOfficer => {
+        const originalOfficer = nonSupervisorOfficers.find(o => o.id === sortedOfficer.id);
+        const prefs = preferences?.find(p => p.officer_id === sortedOfficer.id);
+        
+        return {
+          ...originalOfficer,
+          service_credit: sortedOfficer.service_credit, // Use calculated service credit
+          preferences: prefs || null
+        };
+      }).filter(Boolean);
 
       return {
-        officers: sortedOfficers,
+        officers: sortedOfficersWithData,
         preferences: preferences || []
       };
     },
@@ -234,7 +246,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
           <div>
             <h3 className="font-semibold mb-2">Officers ({beatData.officers.length})</h3>
             <div className="space-y-2">
-              {beatData.officers.slice(0, 10).map((officer) => {
+              {beatData.officers.slice(0, 10).map((officer: any) => {
                 const prefs = getOfficerPreferences(officer.id);
                 const hasPrefs = prefs && (prefs.first_choice || prefs.second_choice || prefs.third_choice);
                 

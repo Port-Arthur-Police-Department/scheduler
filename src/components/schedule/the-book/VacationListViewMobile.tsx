@@ -12,6 +12,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, isSameDay, isAfter, startOfDay } from "date-fns";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Separator } from "@/components/ui/separator";
+// Import sorting utilities
+import { 
+  sortOfficersConsistently, 
+  getServiceCreditForSorting,
+  type OfficerForSorting 
+} from "@/utils/sortingUtils";
 
 interface VacationListViewMobileProps {
   selectedShiftId: string;
@@ -26,51 +32,6 @@ interface VacationBlock {
   type: string;
   dates: Date[];
 }
-
-// Helper function to calculate service credit
-const calculateServiceCredit = (
-  hireDate: string | null,
-  override: number = 0,
-  promotionDateSergeant: string | null = null,
-  promotionDateLieutenant: string | null = null,
-  currentRank: string | null = null
-) => {
-  if (override && override > 0) {
-    return override;
-  }
-  
-  let relevantDate: Date | null = null;
-  
-  if (currentRank) {
-    const rankLower = currentRank.toLowerCase();
-    
-    if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
-      relevantDate = new Date(promotionDateSergeant);
-    } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
-      relevantDate = new Date(promotionDateLieutenant);
-    } else if (rankLower.includes('chief') && promotionDateLieutenant) {
-      relevantDate = new Date(promotionDateLieutenant);
-    }
-  }
-  
-  if (!relevantDate && hireDate) {
-    relevantDate = new Date(hireDate);
-  }
-  
-  if (!relevantDate) return 0;
-  
-  try {
-    const now = new Date();
-    const years = now.getFullYear() - relevantDate.getFullYear();
-    const months = now.getMonth() - relevantDate.getMonth();
-    const days = now.getDate() - relevantDate.getDate();
-    const totalYears = years + (months / 12) + (days / 365);
-    return Math.max(0, Math.round(totalYears * 10) / 10);
-  } catch (error) {
-    console.error('Error calculating service credit:', error);
-    return 0;
-  }
-};
 
 export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
   selectedShiftId,
@@ -146,13 +107,17 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
         const profile = profilesMap.get(officerId) || pto.profiles;
         
         if (!officersMap.has(officerId)) {
-          const serviceCredit = calculateServiceCredit(
-            profile?.hire_date || null,
-            profile?.service_credit_override || 0,
-            profile?.promotion_date_sergeant || null,
-            profile?.promotion_date_lieutenant || null,
-            profile?.rank || null
-          );
+          // Use the utility function to get service credit
+          const serviceCredit = getServiceCreditForSorting({
+            id: profile?.id,
+            full_name: profile?.full_name,
+            badge_number: profile?.badge_number,
+            rank: profile?.rank,
+            hire_date: profile?.hire_date,
+            service_credit_override: profile?.service_credit_override || 0,
+            promotion_date_sergeant: profile?.promotion_date_sergeant,
+            promotion_date_lieutenant: profile?.promotion_date_lieutenant
+          });
           
           officersMap.set(officerId, {
             officer: profile,
@@ -225,71 +190,43 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
         officerData.totalDays = officerData.vacationDays.length;
       });
 
-      const officersArray = Array.from(officersMap.values());
-      
-      // Sort like WeeklyView.tsx
-      const allSupervisors = officersArray.filter(o => 
-        o.officer && isSupervisorByRank(o.officer)
-      );
+      // Convert to OfficerForSorting format for consistent sorting
+      const officersForSorting: OfficerForSorting[] = Array.from(officersMap.values()).map(officerData => ({
+        id: officerData.officer?.id,
+        full_name: officerData.officer?.full_name,
+        officerName: officerData.officer?.full_name,
+        badge_number: officerData.officer?.badge_number,
+        badgeNumber: officerData.officer?.badge_number,
+        rank: officerData.officer?.rank,
+        service_credit: officerData.serviceCredit,
+        serviceCredit: officerData.serviceCredit,
+        hire_date: officerData.officer?.hire_date,
+        service_credit_override: officerData.officer?.service_credit_override || 0,
+        promotion_date_sergeant: officerData.officer?.promotion_date_sergeant,
+        promotion_date_lieutenant: officerData.officer?.promotion_date_lieutenant
+      }));
 
-      const lieutenants = allSupervisors.filter(o => 
-        o.officer.rank && (
-          o.officer.rank.toLowerCase().includes('lieutenant') || 
-          o.officer.rank.toLowerCase().includes('lt') ||
-          o.officer.rank.toLowerCase().includes('chief')
-        )
-      ).sort((a, b) => {
-        const aCredit = a.serviceCredit || 0;
-        const bCredit = b.serviceCredit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-      });
+      // Sort officers consistently using the centralized utility
+      const sortedOfficers = sortOfficersConsistently(officersForSorting);
 
-      const sergeants = allSupervisors.filter(o => 
-        o.officer.rank && (
-          o.officer.rank.toLowerCase().includes('sergeant') || 
-          o.officer.rank.toLowerCase().includes('sgt')
-        )
-      ).sort((a, b) => {
-        const aCredit = a.serviceCredit || 0;
-        const bCredit = b.serviceCredit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-      });
-
-      const supervisors = [...lieutenants, ...sergeants];
-
-      const allOfficersList = officersArray.filter(o => 
-        !o.officer || !isSupervisorByRank(o.officer)
-      );
-
-      const ppos = allOfficersList.filter(o => 
-        o.officer?.rank?.toLowerCase() === 'probationary'
-      ).sort((a, b) => {
-        const aCredit = a.serviceCredit || 0;
-        const bCredit = b.serviceCredit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-      });
-
-      const regularOfficers = allOfficersList.filter(o => 
-        o.officer?.rank?.toLowerCase() !== 'probationary'
-      ).sort((a, b) => {
-        const aCredit = a.serviceCredit || 0;
-        const bCredit = b.serviceCredit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-      });
-
-      const sortedOfficers = [...supervisors, ...regularOfficers, ...ppos];
+      // Map back to original structure with vacation data
+      const sortedOfficerData = sortedOfficers.map(sortedOfficer => {
+        const officerData = officersMap.get(sortedOfficer.id);
+        if (officerData) {
+          // Update with sorted service credit
+          officerData.serviceCredit = sortedOfficer.service_credit;
+          return officerData;
+        }
+        return null;
+      }).filter(Boolean);
 
       return {
-        officers: sortedOfficers,
+        officers: sortedOfficerData,
         summary: {
-          totalOfficers: sortedOfficers.length,
+          totalOfficers: sortedOfficerData.length,
           totalDays: vacationAndHolidayExceptions?.length || 0,
-          averageDays: sortedOfficers.length > 0 ? 
-            (vacationAndHolidayExceptions?.length || 0) / sortedOfficers.length : 0
+          averageDays: sortedOfficerData.length > 0 ? 
+            (vacationAndHolidayExceptions?.length || 0) / sortedOfficerData.length : 0
         },
         rawData: vacationAndHolidayExceptions || []
       };

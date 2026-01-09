@@ -275,107 +275,46 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
   // Filter and sort officers
   const filteredAndSortedOfficers = useMemo(() => {
-    if (!vacationData?.officers) return [];
-    
-    let officers = [...vacationData.officers];
-    
-    if (onlyRemaining) {
-      officers = officers.map(officer => {
-        const futureBlocks = officer.vacationBlocks.filter(block => 
-          isAfter(block.endDate, today)
-        );
-        
-        const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
-        
-        return {
-          ...officer,
-          vacationBlocks: futureBlocks,
-          totalDays: totalFutureDays
-        };
-      }).filter(officer => officer.totalDays > 0);
-    }
-    
-    // Categorize officers with UPDATED supervisor sorting
-    // First get all supervisors
-    const allSupervisors = officers.filter(o => 
-      o.officer && isSupervisorByRank(o.officer)
-    );
-
-    // Separate Lieutenants and Sergeants
-    const lieutenants = allSupervisors.filter(o => 
-      o.officer.rank && (
-        o.officer.rank.toLowerCase().includes('lieutenant') || 
-        o.officer.rank.toLowerCase().includes('lt') ||
-        o.officer.rank.toLowerCase().includes('chief')
-      )
-    ).sort((a, b) => {
-      // Sort Lieutenants by service credit DESCENDING (highest first)
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit; // Descending
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.officer.badge_number) || 9999;
-      const bBadge = parseInt(b.officer.badge_number) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
-
-    const sergeants = allSupervisors.filter(o => 
-      o.officer.rank && (
-        o.officer.rank.toLowerCase().includes('sergeant') || 
-        o.officer.rank.toLowerCase().includes('sgt')
-      )
-    ).sort((a, b) => {
-      // Sort Sergeants by service credit DESCENDING (highest first)
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit; // Descending
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.officer.badge_number) || 9999;
-      const bBadge = parseInt(b.officer.badge_number) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
-
-    // Combine with Lieutenants first, then Sergeants
-    const supervisors = [...lieutenants, ...sergeants];
-
-    const allOfficersList = officers.filter(o => 
-      !o.officer || !isSupervisorByRank(o.officer)
-    );
-
-    const ppos = allOfficersList.filter(o => 
-      o.officer?.rank?.toLowerCase() === 'probationary'
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.officer.badge_number) || 9999;
-      const bBadge = parseInt(b.officer.badge_number) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
-
-    const regularOfficers = allOfficersList.filter(o => 
-      o.officer?.rank?.toLowerCase() !== 'probationary'
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.officer.badge_number) || 9999;
-      const bBadge = parseInt(b.officer.badge_number) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
-
-    return [...supervisors, ...regularOfficers, ...ppos];
-  }, [vacationData?.officers, onlyRemaining, today]);
+  if (!vacationData?.officers) return [];
+  
+  let officers = [...vacationData.officers];
+  
+  if (onlyRemaining) {
+    officers = officers.map(officer => {
+      const futureBlocks = officer.vacationBlocks.filter(block => 
+        isAfter(block.endDate, today)
+      );
+      
+      const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
+      
+      return {
+        ...officer,
+        vacationBlocks: futureBlocks,
+        totalDays: totalFutureDays
+      };
+    }).filter(officer => officer.totalDays > 0);
+  }
+  
+  // Convert to format for sorting
+  const officersForSorting = officers.map(officer => ({
+    id: officer.officer?.id,
+    full_name: officer.officer?.full_name,
+    badge_number: officer.officer?.badge_number,
+    badgeNumber: officer.officer?.badge_number, // For compatibility
+    rank: officer.officer?.rank,
+    service_credit: officer.serviceCredit,
+    serviceCredit: officer.serviceCredit // For compatibility
+  }));
+  
+  // Sort consistently
+  const sorted = sortOfficersConsistently(officersForSorting);
+  
+  // Map back to original structure
+  return sorted.map(sortedOfficer => {
+    const originalOfficer = officers.find(o => o.officer?.id === sortedOfficer.id);
+    return originalOfficer!;
+  });
+}, [vacationData?.officers, onlyRemaining, today]);
 
   const handleExport = () => {
     toast.info("Export feature coming soon!");

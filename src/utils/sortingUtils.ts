@@ -7,6 +7,60 @@ const getLastName = (fullName: string = ""): string => {
   return parts[parts.length - 1] || "";
 };
 
+// Helper function to calculate service credit (same as in WeeklyView)
+const calculateServiceCredit = (
+  hireDate: string | null,
+  override: number = 0,
+  promotionDateSergeant: string | null = null,
+  promotionDateLieutenant: string | null = null,
+  currentRank: string | null = null
+): number => {
+  // If there's an override, use it
+  if (override && override > 0) {
+    return override;
+  }
+  
+  // Determine which date to use based on rank and promotion dates
+  let relevantDate: Date | null = null;
+  
+  if (currentRank) {
+    const rankLower = currentRank.toLowerCase();
+    
+    // Check if officer is a supervisor rank
+    if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
+      relevantDate = new Date(promotionDateSergeant);
+    } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
+      relevantDate = new Date(promotionDateLieutenant);
+    } else if (rankLower.includes('chief') && promotionDateLieutenant) {
+      // Chiefs usually come from Lieutenant rank
+      relevantDate = new Date(promotionDateLieutenant);
+    }
+  }
+  
+  // If no relevant promotion date found, use hire date
+  if (!relevantDate && hireDate) {
+    relevantDate = new Date(hireDate);
+  }
+  
+  if (!relevantDate) return 0;
+  
+  try {
+    const now = new Date();
+    const years = now.getFullYear() - relevantDate.getFullYear();
+    const months = now.getMonth() - relevantDate.getMonth();
+    const days = now.getDate() - relevantDate.getDate();
+    
+    // Calculate decimal years
+    const totalYears = years + (months / 12) + (days / 365);
+    
+    // Round to 1 decimal place
+    return Math.max(0, Math.round(totalYears * 10) / 10);
+  } catch (error) {
+    console.error('Error calculating service credit:', error);
+    return 0;
+  }
+};
+
 export interface OfficerForSorting {
   id: string;
   full_name?: string;
@@ -35,10 +89,25 @@ export const getBadgeNumberForSorting = (officer: OfficerForSorting): number => 
 
 /**
  * Get service credit for sorting (handles different property names)
+ * Uses existing value if available, otherwise calculates it
  */
 export const getServiceCreditForSorting = (officer: OfficerForSorting): number => {
-  const credit = officer.service_credit !== undefined ? officer.service_credit : officer.serviceCredit;
-  return credit || 0;
+  // First check if service_credit or serviceCredit is already provided
+  if (officer.service_credit !== undefined) {
+    return officer.service_credit;
+  }
+  if (officer.serviceCredit !== undefined) {
+    return officer.serviceCredit;
+  }
+  
+  // If not provided, calculate it using the available data
+  return calculateServiceCredit(
+    officer.hire_date || null,
+    officer.service_credit_override || 0,
+    officer.promotion_date_sergeant || null,
+    officer.promotion_date_lieutenant || null,
+    officer.rank || null
+  );
 };
 
 /**
@@ -71,6 +140,10 @@ export const isPPO = (officer: OfficerForSorting): boolean => {
 export const sortOfficersConsistently = (officers: OfficerForSorting[]): OfficerForSorting[] => {
   if (!officers || officers.length === 0) return [];
   
+  // Debug logging (remove in production)
+  console.log('=== Sorting Officers Consistently ===');
+  console.log('Total officers to sort:', officers.length);
+  
   // Separate officers into categories
   const lieutenantsAndChiefs: OfficerForSorting[] = [];
   const sergeants: OfficerForSorting[] = [];
@@ -91,12 +164,21 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
     }
   });
 
+  console.log('Categories found:', {
+    lieutenantsAndChiefs: lieutenantsAndChiefs.length,
+    sergeants: sergeants.length,
+    regularOfficers: regularOfficers.length,
+    ppos: ppos.length
+  });
+
   // Sort function for each category
   const sortCategory = (a: OfficerForSorting, b: OfficerForSorting): number => {
     // First by service credit (DESCENDING - highest first)
     const aCredit = getServiceCreditForSorting(a);
     const bCredit = getServiceCreditForSorting(b);
+    
     if (bCredit !== aCredit) {
+      console.log(`Service credit sort: ${a.full_name || a.officerName} (${aCredit}) vs ${b.full_name || b.officerName} (${bCredit}) -> ${bCredit - aCredit}`);
       return bCredit - aCredit;
     }
     
@@ -104,6 +186,7 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
     const aBadge = getBadgeNumberForSorting(a);
     const bBadge = getBadgeNumberForSorting(b);
     if (aBadge !== bBadge) {
+      console.log(`Badge sort (equal credits): ${a.full_name || a.officerName} (${aBadge}) vs ${b.full_name || b.officerName} (${bBadge}) -> ${aBadge - bBadge}`);
       return aBadge - bBadge;
     }
     
@@ -119,6 +202,8 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
   regularOfficers.sort(sortCategory);
   ppos.sort(sortCategory);
 
+  console.log('=== Sorting Complete ===');
+  
   // Combine in correct order
   return [...lieutenantsAndChiefs, ...sergeants, ...regularOfficers, ...ppos];
 };
@@ -175,4 +260,14 @@ export const sortForForceList = (officers: OfficerForSorting[], getForceCount: (
   ppos.sort(sortForceList);
 
   return [...supervisors, ...regularOfficers, ...ppos];
+};
+
+// Export all functions
+export {
+  getBadgeNumberForSorting,
+  getServiceCreditForSorting,
+  isSupervisor,
+  isPPO,
+  sortOfficersConsistently,
+  sortForForceList
 };

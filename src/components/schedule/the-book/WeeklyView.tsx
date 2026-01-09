@@ -536,82 +536,25 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
   console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
-  // Categorize officers with UPDATED supervisor sorting
-  // First get all supervisors
-  const allSupervisors = Array.from(allOfficers.values())
-    .filter(o => o && isSupervisorByRank(o));
+  // Convert allOfficers Map to array for sorting
+const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
 
-  // Separate Lieutenants and Sergeants
-  const lieutenants = allSupervisors.filter(o => 
-    o && o.rank && (
-      o.rank.toLowerCase().includes('lieutenant') || 
-      o.rank.toLowerCase().includes('lt') ||
-      o.rank.toLowerCase().includes('chief')
-    )
-  ).sort((a, b) => {
-    // Sort Lieutenants by service credit DESCENDING (highest first)
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending
-    }
-    // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-    const aBadge = parseInt(a.badgeNumber) || 9999;
-    const bBadge = parseInt(b.badgeNumber) || 9999;
-    return aBadge - bBadge; // Ascending
-  });
+// Sort officers consistently
+const sortedOfficers = sortOfficersConsistently(allOfficersArray);
 
-  const sergeants = allSupervisors.filter(o => 
-    o && o.rank && (
-      o.rank.toLowerCase().includes('sergeant') || 
-      o.rank.toLowerCase().includes('sgt')
-    )
-  ).sort((a, b) => {
-    // Sort Sergeants by service credit DESCENDING (highest first)
-    const aCredit = a.service_credit || 0;
-    const bCredit = b.service_credit || 0;
-    if (bCredit !== aCredit) {
-      return bCredit - aCredit; // Descending
-    }
-    // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-    const aBadge = parseInt(a.badgeNumber) || 9999;
-    const bBadge = parseInt(b.badgeNumber) || 9999;
-    return aBadge - bBadge; // Ascending
-  });
+// Now categorize the sorted officers
+const supervisors = sortedOfficers.filter(officer => 
+  isSupervisorByRank(officer)
+);
 
-  // Combine with Lieutenants first, then Sergeants
-  const supervisors = [...lieutenants, ...sergeants];
+const regularOfficers = sortedOfficers.filter(officer => 
+  !isSupervisorByRank(officer) && 
+  officer.rank?.toLowerCase() !== 'probationary'
+);
 
-  const allOfficersList = Array.from(allOfficers.values())
-    .filter(o => o && !isSupervisorByRank(o));
-
-  const ppos = allOfficersList
-    .filter(o => o && o.rank && o.rank.toLowerCase() === 'probationary')
-    .sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.badgeNumber) || 9999;
-      const bBadge = parseInt(b.badgeNumber) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
-
-  const regularOfficers = allOfficersList
-    .filter(o => o && o.rank && o.rank.toLowerCase() !== 'probationary')
-    .sort((a, b) => {
-      const aCredit = a.service_credit || 0;
-      const bCredit = b.service_credit || 0;
-      if (bCredit !== aCredit) {
-        return bCredit - aCredit;
-      }
-      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
-      const aBadge = parseInt(a.badgeNumber) || 9999;
-      const bBadge = parseInt(b.badgeNumber) || 9999;
-      return aBadge - bBadge; // Ascending
-    });
+const ppos = sortedOfficers.filter(officer => 
+  officer.rank?.toLowerCase() === 'probationary'
+);
 
   // Debug: Check sorting results
   console.log('Sorting results:', {

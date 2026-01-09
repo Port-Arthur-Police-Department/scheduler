@@ -11,7 +11,8 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner"; // Added toast for feedback
+import { toast } from "sonner"; 
+import { sortOfficersConsistently } from "@/utils/sortingUtils";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {

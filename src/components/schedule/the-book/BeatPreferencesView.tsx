@@ -14,6 +14,7 @@ import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useBeatPreferencesPDFExport } from "@/hooks/useBeatPreferencesPDFExport";
 import TheBookMobile from "./TheBookMobile";
+import { sortOfficersConsistently } from "@/utils/sortingUtils";
 
 interface BeatPreference {
   id?: string;

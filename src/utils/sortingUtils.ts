@@ -1,5 +1,9 @@
-// Import from the correct location
-import { getLastName } from "@/lib/utils";
+// Add getLastName function directly in this file
+const getLastName = (fullName: string = ""): string => {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] || "";
+};
 
 export interface OfficerForSorting {
   id: string;
@@ -15,6 +19,9 @@ export interface OfficerForSorting {
   promotion_date_lieutenant?: string | null;
   service_credit_override?: number;
 }
+
+// Your other functions remain the same...
+// getBadgeNumberForSorting, getServiceCreditForSorting, etc.
 
 /**
  * Get badge number for sorting (handles different property names)

@@ -72,3 +72,5 @@ Please help me modify the mobile version to match the desktop functionality.
 ## To help with making changes, use this prompt
 
 * I need help with making these changes, can you make the changes in full code blocks and give me the code to copy and paste in my project with the start and end code line so I know what code to replace with  the new code?
+
+## I'll update both the desktop and mobile versions to sort officers by service credit (descending) and then by badge number (ascending, lower number = higher seniority) when service credit is equal.

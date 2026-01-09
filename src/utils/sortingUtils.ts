@@ -7,7 +7,8 @@ const getLastName = (fullName: string = ""): string => {
   return parts[parts.length - 1] || "";
 };
 
-// Helper function to calculate service credit (same as in WeeklyView)
+// In src/utils/sortingUtils.ts, update the calculateServiceCredit function:
+
 const calculateServiceCredit = (
   hireDate: string | null,
   override: number = 0,
@@ -15,10 +16,22 @@ const calculateServiceCredit = (
   promotionDateLieutenant: string | null = null,
   currentRank: string | null = null
 ): number => {
-  // If there's an override, use it
-  if (override && override > 0) {
+  console.log('calculateServiceCredit called with:', { 
+    hireDate, 
+    override, 
+    hasOverride: override !== undefined && override !== null && override > 0,
+    promotionDateSergeant, 
+    promotionDateLieutenant, 
+    currentRank 
+  });
+  
+  // If there's an override and it's greater than 0, use it
+  if (override !== undefined && override !== null && override > 0) {
+    console.log(`Using override: ${override} (instead of calculating)`);
     return override;
   }
+  
+  console.log('No override or override is 0, calculating from dates...');
   
   // Determine which date to use based on rank and promotion dates
   let relevantDate: Date | null = null;
@@ -42,7 +55,10 @@ const calculateServiceCredit = (
     relevantDate = new Date(hireDate);
   }
   
-  if (!relevantDate) return 0;
+  if (!relevantDate) {
+    console.log('No relevant date found, returning 0');
+    return 0;
+  }
   
   try {
     const now = new Date();
@@ -54,7 +70,9 @@ const calculateServiceCredit = (
     const totalYears = years + (months / 12) + (days / 365);
     
     // Round to 1 decimal place
-    return Math.max(0, Math.round(totalYears * 10) / 10);
+    const result = Math.max(0, Math.round(totalYears * 10) / 10);
+    console.log(`Calculated service credit: ${result} from date: ${relevantDate.toISOString().split('T')[0]}`);
+    return result;
   } catch (error) {
     console.error('Error calculating service credit:', error);
     return 0;
@@ -92,22 +110,35 @@ export const getBadgeNumberForSorting = (officer: OfficerForSorting): number => 
  * Uses existing value if available, otherwise calculates it
  */
 export const getServiceCreditForSorting = (officer: OfficerForSorting): number => {
+  console.log('getServiceCreditForSorting called for:', {
+    name: officer.full_name || officer.officerName,
+    existingServiceCredit: officer.service_credit,
+    existingServiceCreditAlt: officer.serviceCredit,
+    override: officer.service_credit_override,
+    hasOverride: officer.service_credit_override !== undefined && officer.service_credit_override !== null && officer.service_credit_override > 0
+  });
+  
   // First check if service_credit or serviceCredit is already provided
   if (officer.service_credit !== undefined) {
+    console.log(`Using existing service_credit: ${officer.service_credit}`);
     return officer.service_credit;
   }
   if (officer.serviceCredit !== undefined) {
+    console.log(`Using existing serviceCredit: ${officer.serviceCredit}`);
     return officer.serviceCredit;
   }
   
   // If not provided, calculate it using the available data
-  return calculateServiceCredit(
+  const calculated = calculateServiceCredit(
     officer.hire_date || null,
     officer.service_credit_override || 0,
     officer.promotion_date_sergeant || null,
     officer.promotion_date_lieutenant || null,
     officer.rank || null
   );
+  
+  console.log(`Final calculated service credit: ${calculated} for ${officer.full_name || officer.officerName}`);
+  return calculated;
 };
 
 /**

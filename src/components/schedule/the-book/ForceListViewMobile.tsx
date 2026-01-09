@@ -70,11 +70,13 @@ const shouldExcludeFromForceList = (rank: string): boolean => {
   if (!rank) return false;
   const rankLower = rank.toLowerCase();
   
-  // Exclude Lieutenants, Chiefs, and Deputy Chiefs from force list
+  // Exclude Lieutenants, Chiefs, Deputy Chiefs, and PPOs/Probationary officers
   return rankLower.includes('lieutenant') || 
          rankLower.includes('lt') || 
          rankLower.includes('chief') || 
-         rankLower.includes('deputy');
+         rankLower.includes('deputy') ||
+         rankLower.includes('probationary') ||
+         rankLower.includes('ppo');
 };
 
 export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
@@ -133,13 +135,22 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         // Continue without forced dates
       }
 
-      // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs
+      // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs/PPOs
       const uniqueOfficersMap = new Map();
+      const excludedOfficers: any[] = [];
+      
       recurringSchedules?.forEach(schedule => {
-        if (schedule.profiles && !uniqueOfficersMap.has(schedule.profiles.id)) {
-          // Check if officer should be included (exclude Lieutenants/Chiefs)
-          if (!shouldExcludeFromForceList(schedule.profiles.rank)) {
-            uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+        if (schedule.profiles) {
+          // Check if officer should be included (exclude Lieutenants/Chiefs/PPOs)
+          if (shouldExcludeFromForceList(schedule.profiles.rank)) {
+            excludedOfficers.push({
+              name: schedule.profiles.full_name,
+              rank: schedule.profiles.rank
+            });
+          } else {
+            if (!uniqueOfficersMap.has(schedule.profiles.id)) {
+              uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+            }
           }
         }
       });
@@ -147,18 +158,13 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
       const officers = Array.from(uniqueOfficersMap.values());
 
       // Log excluded officers for debugging
-      const excludedOfficers = recurringSchedules?.filter(schedule => 
-        schedule.profiles && shouldExcludeFromForceList(schedule.profiles.rank)
-      ) || [];
-      
       if (excludedOfficers.length > 0) {
-        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs):', 
-          excludedOfficers.map(o => ({
-            name: o.profiles?.full_name,
-            rank: o.profiles?.rank
-          }))
+        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):', 
+          excludedOfficers
         );
       }
+
+      console.log(`📊 Included officers for force list: ${officers.length}`);
 
       // Fetch service credits for each officer via RPC
       console.log('🔄 Fetching service credits for officers...');
@@ -224,7 +230,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
     );
   }) || [];
 
-  // Categorize officers (Force list ONLY includes Sergeants as supervisors, NO Lieutenants/Chiefs)
+  // Categorize officers (Force list ONLY includes Sergeants as supervisors, NO Lieutenants/Chiefs/PPOs)
   const supervisors = filteredOfficers.filter(officer => {
     const rank = officer.rank?.toLowerCase() || '';
     // Only include Sergeants, NOT Lieutenants or Chiefs
@@ -239,22 +245,23 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
     const rank = officer.rank?.toLowerCase() || '';
     // Check if it's a sergeant
     const isSergeant = rank.includes('sergeant') || rank.includes('sgt');
-    const isPPO = rank === 'probationary';
     
-    // Include only if NOT a sergeant and NOT a PPO
-    return !isSergeant && !isPPO;
+    // Include only if NOT a sergeant (all others are regular officers)
+    return !isSergeant;
   });
 
-  const ppos = filteredOfficers.filter(officer => 
-    officer.rank?.toLowerCase() === 'probationary'
-  );
-
-  // Log sorting for debugging
+  // Log categories for debugging
   React.useEffect(() => {
     if (forceData?.officers && forceData.officers.length > 0) {
+      console.log('📋 Force List Officers Summary:');
+      console.log(`Total included: ${forceData.officers.length}`);
+      console.log(`Sergeants: ${supervisors.length}`);
+      console.log(`Regular Officers: ${regularOfficers.length}`);
+      
+      // Show first 15 officers
       console.log('📋 Force List Officers (first 15):');
       forceData.officers.slice(0, 15).forEach((officer, index) => {
-        console.log(`${index + 1}. ${officer.full_name} - SC: ${officer.service_credit?.toFixed(1)} - Badge: ${officer.badge_number} - Force Count: ${officer.forceCount}`);
+        console.log(`${index + 1}. ${officer.full_name} - Rank: ${officer.rank} - SC: ${officer.service_credit?.toFixed(1)} - Badge: ${officer.badge_number} - Force Count: ${officer.forceCount}`);
       });
       
       // Log any officers with service credit override
@@ -267,7 +274,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         })));
       }
     }
-  }, [forceData]);
+  }, [forceData, supervisors.length, regularOfficers.length]);
 
   return (
     <div className="space-y-4">
@@ -320,8 +327,8 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         </CardContent>
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Summary Stats - REMOVED PPOs COUNT */}
+      <div className="grid grid-cols-2 gap-2">
         <div className="bg-blue-50 p-3 rounded-lg text-center">
           <div className="text-xl font-bold">{supervisors.length}</div>
           <div className="text-xs text-muted-foreground">Sergeants</div>
@@ -329,10 +336,6 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         <div className="bg-gray-50 p-3 rounded-lg text-center">
           <div className="text-xl font-bold">{regularOfficers.length}</div>
           <div className="text-xs text-muted-foreground">Officers</div>
-        </div>
-        <div className="bg-green-50 p-3 rounded-lg text-center">
-          <div className="text-xl font-bold">{ppos.length}</div>
-          <div className="text-xs text-muted-foreground">PPOs</div>
         </div>
       </div>
 
@@ -431,44 +434,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
             </div>
           )}
 
-          {/* PPOs */}
-          {ppos.length > 0 && (
-            <div>
-              <h3 className="font-semibold mb-2">PPO Officers ({ppos.length})</h3>
-              <div className="space-y-2">
-                {ppos.map((officer) => (
-                  <Card key={officer.id} className="bg-blue-50">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <div className="font-medium">
-                            {getLastName(officer.full_name)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            #{officer.badge_number}
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="bg-blue-100">
-                          PPO
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Service:</span>
-                        <Badge variant="outline">
-                          {officer.service_credit?.toFixed(1) || '0.0'} yrs
-                        </Badge>
-                      </div>
-                      {officer.service_credit_override && officer.service_credit_override > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          (Override: {officer.service_credit_override} yrs)
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* REMOVED PPOs SECTION ENTIRELY */}
         </div>
       )}
 
@@ -490,10 +456,10 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
               <span>Service credit (sorted LEAST to MOST)</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="h-5 bg-blue-100">
-                PPO
+              <Badge variant="outline" className="h-5">
+                Sgt
               </Badge>
-              <span>Probationary Police Officer</span>
+              <span>Sergeants only (Lieutenants/Chiefs excluded)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-xs text-yellow-600">
@@ -503,9 +469,9 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
             <div className="flex items-center gap-2 mt-2">
               <div className="text-xs text-muted-foreground">
                 <strong>Important:</strong><br />
-                • Lieutenants and Chiefs are NOT included in force list<br />
-                • Only Sergeants are included as supervisors<br />
-                • PPOs are included in their own section
+                • Lieutenants and Chiefs are NOT included<br />
+                • PPOs/Probationary officers are NOT included<br />
+                • Only Sergeants and Regular Officers are included
               </div>
             </div>
             <div className="flex items-center gap-2 mt-2">

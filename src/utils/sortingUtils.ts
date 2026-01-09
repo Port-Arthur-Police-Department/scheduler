@@ -1,29 +1,16 @@
-// Update src/utils/sortingUtils.ts with better error handling:
+// src/utils/sortingUtils.ts
+// ... (all your other code above)
 
 /**
- * Sort officers with consistent logic:
- * 1. Supervisors first (Lieutenants/Chiefs → Sergeants)
- * 2. Regular officers
- * 3. PPOs
- * Within each group: Sort by service credit DESC, then badge number ASC
+ * Sort officers for Force List (least service credit first, then force count)
  */
-export const sortOfficersConsistently = (officers: OfficerForSorting[]): OfficerForSorting[] => {
+export const sortForForceList = (officers: OfficerForSorting[], getForceCount: (officerId: string) => number): OfficerForSorting[] => {
   if (!officers || officers.length === 0) return [];
   
-  // Debug: Log all officers with their data
-  console.log('=== Sorting Officers ===');
-  officers.forEach(officer => {
-    console.log(`Officer: ${officer.full_name || officer.officerName}`, {
-      rank: officer.rank,
-      serviceCredit: getServiceCreditForSorting(officer),
-      badgeNumber: getBadgeNumberForSorting(officer),
-      rawData: officer
-    });
-  });
+  console.log('=== Sorting for Force List ===');
   
-  // Separate officers into categories
-  const lieutenantsAndChiefs: OfficerForSorting[] = [];
-  const sergeants: OfficerForSorting[] = [];
+  // Categorize first
+  const supervisors: OfficerForSorting[] = [];
   const regularOfficers: OfficerForSorting[] = [];
   const ppos: OfficerForSorting[] = [];
 
@@ -32,55 +19,51 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
     
     if (rank.includes('probationary') || rank.includes('ppo')) {
       ppos.push(officer);
-    } else if (rank.includes('lieutenant') || rank.includes('lt') || rank.includes('chief')) {
-      lieutenantsAndChiefs.push(officer);
     } else if (rank.includes('sergeant') || rank.includes('sgt')) {
-      sergeants.push(officer);
-    } else {
+      supervisors.push(officer); // Force list only includes Sergeants as supervisors
+    } else if (!rank.includes('lieutenant') && !rank.includes('lt') && !rank.includes('chief')) {
       regularOfficers.push(officer);
     }
   });
 
-  console.log('Categories:', {
-    lieutenantsAndChiefs: lieutenantsAndChiefs.length,
-    sergeants: sergeants.length,
+  console.log('Force List Categories:', {
+    supervisors: supervisors.length,
     regularOfficers: regularOfficers.length,
     ppos: ppos.length
   });
 
-  // Sort function for each category
-  const sortCategory = (a: OfficerForSorting, b: OfficerForSorting): number => {
-    // First by service credit (DESCENDING - highest first)
+  // Sort function for Force List (LEAST service credit first)
+  const sortForceList = (a: OfficerForSorting, b: OfficerForSorting): number => {
+    // Primary: service credit (LEAST to most)
     const aCredit = getServiceCreditForSorting(a);
     const bCredit = getServiceCreditForSorting(b);
-    
-    if (bCredit !== aCredit) {
-      console.log(`Comparing credits: ${a.full_name || a.officerName} (${aCredit}) vs ${b.full_name || b.officerName} (${bCredit}) -> ${bCredit - aCredit}`);
-      return bCredit - aCredit;
+    if (aCredit !== bCredit) {
+      console.log(`Force List - Comparing credits: ${a.full_name || a.officerName} (${aCredit}) vs ${b.full_name || b.officerName} (${bCredit}) -> ${aCredit - bCredit}`);
+      return aCredit - bCredit;
     }
     
-    // Then by badge number (ASCENDING - lower number = higher seniority)
-    const aBadge = getBadgeNumberForSorting(a);
-    const bBadge = getBadgeNumberForSorting(b);
-    if (aBadge !== bBadge) {
-      console.log(`Equal credits, comparing badges: ${aBadge} vs ${bBadge} -> ${aBadge - bBadge}`);
-      return aBadge - bBadge;
+    // Secondary: force count (least to most)
+    const aForceCount = getForceCount(a.id);
+    const bForceCount = getForceCount(b.id);
+    if (aForceCount !== bForceCount) {
+      console.log(`Force List - Equal credits, comparing force count: ${aForceCount} vs ${bForceCount} -> ${aForceCount - bForceCount}`);
+      return aForceCount - bForceCount;
     }
     
-    // Finally by last name (A-Z)
+    // Tertiary: last name (A-Z)
     const aLastName = getLastName(a.full_name || a.officerName || '');
     const bLastName = getLastName(b.full_name || b.officerName || '');
     return aLastName.localeCompare(bLastName);
   };
 
-  // Sort each category
-  lieutenantsAndChiefs.sort(sortCategory);
-  sergeants.sort(sortCategory);
-  regularOfficers.sort(sortCategory);
-  ppos.sort(sortCategory);
+  supervisors.sort(sortForceList);
+  regularOfficers.sort(sortForceList);
+  ppos.sort(sortForceList);
 
-  console.log('=== Sorting Complete ===');
+  console.log('=== Force List Sorting Complete ===');
   
-  // Combine in correct order
-  return [...lieutenantsAndChiefs, ...sergeants, ...regularOfficers, ...ppos];
+  return [...supervisors, ...regularOfficers, ...ppos];
 };
+
+// Make sure you export it at the end
+export { sortOfficersConsistently, sortForForceList };

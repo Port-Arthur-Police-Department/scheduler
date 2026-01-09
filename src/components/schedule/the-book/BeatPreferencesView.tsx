@@ -135,27 +135,23 @@ export const BeatPreferencesView: React.FC<Props> = ({
     enabled: !!selectedShiftId,
   });
 
-  // Sort officers by service credit when data changes
-  useEffect(() => {
-    if (beatData?.officers) {
-      const sorted = [...beatData.officers].sort((a, b) => {
-        // Sort by service credit (highest to lowest)
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        
-        if (bCredit !== aCredit) {
-          return bCredit - aCredit; // Descending order (most to least)
-        }
-        
-        // If same service credit, sort by last name
-        return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-      });
-      
-      setSortedOfficers(sorted);
-    } else {
-      setSortedOfficers([]);
-    }
-  }, [beatData]);
+useEffect(() => {
+  if (beatData?.officers) {
+    // Convert officers to the expected format
+    const officersForSorting = beatData.officers.map(officer => ({
+      id: officer.id,
+      full_name: officer.full_name,
+      badge_number: officer.badge_number,
+      rank: officer.rank,
+      service_credit: officer.service_credit
+    }));
+    
+    const sorted = sortOfficersConsistently(officersForSorting);
+    setSortedOfficers(sorted as OfficerWithCredit[]);
+  } else {
+    setSortedOfficers([]);
+  }
+}, [beatData]);
 
   const handleExportPDF = async () => {
   try {

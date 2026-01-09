@@ -12,7 +12,7 @@ import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; 
-import { sortOfficersConsistently } from "@/utils/sortingUtils";
+import { sortOfficersConsistently, getServiceCreditForSorting } from "@/utils/sortingUtils";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -21,58 +21,6 @@ interface ExtendedViewProps extends ViewProps {
   queryKey?: any[]; // Add queryKey to invalidate
   refetchScheduleData?: () => Promise<void>; // Add refetch function prop
 }
-
-// Helper function to calculate service credit
-const calculateServiceCredit = (hireDate: string | null, 
-                               override: number = 0,
-                               promotionDateSergeant: string | null = null,
-                               promotionDateLieutenant: string | null = null,
-                               currentRank: string | null = null) => {
-  // If there's an override, use it
-  if (override && override > 0) {
-    return override;
-  }
-  
-  // Determine which date to use based on rank and promotion dates
-  let relevantDate: Date | null = null;
-  
-  if (currentRank) {
-    const rankLower = currentRank.toLowerCase();
-    
-    // Check if officer is a supervisor rank
-    if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
-      relevantDate = new Date(promotionDateSergeant);
-    } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
-      relevantDate = new Date(promotionDateLieutenant);
-    } else if (rankLower.includes('chief') && promotionDateLieutenant) {
-      // Chiefs usually come from Lieutenant rank
-      relevantDate = new Date(promotionDateLieutenant);
-    }
-  }
-  
-  // If no relevant promotion date found, use hire date
-  if (!relevantDate && hireDate) {
-    relevantDate = new Date(hireDate);
-  }
-  
-  if (!relevantDate) return 0;
-  
-  try {
-    const now = new Date();
-    const years = now.getFullYear() - relevantDate.getFullYear();
-    const months = now.getMonth() - relevantDate.getMonth();
-    const days = now.getDate() - relevantDate.getDate();
-    
-    // Calculate decimal years
-    const totalYears = years + (months / 12) + (days / 365);
-    
-    // Round to 1 decimal place
-    return Math.max(0, Math.round(totalYears * 10) / 10);
-  } catch (error) {
-    console.error('Error calculating service credit:', error);
-    return 0;
-  }
-};
 
 export const WeeklyView: React.FC<ExtendedViewProps> = ({
   currentDate: initialDate,
@@ -460,30 +408,21 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             };
           }
 
-          // Calculate service credit with available data
-          const serviceCredit = calculateServiceCredit(
-            profileData?.hire_date || null,
-            profileData?.service_credit_override || 0,
-            profileData?.promotion_date_sergeant || null,
-            profileData?.promotion_date_lieutenant || null,
-            officer.rank // Pass the rank for logic
-          );
-          
-          // Store officer with calculated service credit - IMPORTANT: Create fresh object
-          allOfficers.set(officer.officerId, {
-            officerId: officer.officerId,
-            officerName: officer.officerName || officer.full_name || "Unknown",
-            badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
-            rank: officer.rank || "Officer",
-            service_credit: serviceCredit,
-            hire_date: profileData?.hire_date || null,
-            promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
-            promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
-            service_credit_override: profileData?.service_credit_override || 0,
-            recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-            weeklySchedule: {} as Record<string, any>
-          });
-        }
+// Don't calculate service credit here - just pass the raw data
+// The sorting utility will handle calculation with override properly
+allOfficers.set(officer.officerId, {
+  officerId: officer.officerId,
+  officerName: officer.officerName || officer.full_name || "Unknown",
+  badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
+  rank: officer.rank || "Officer",
+  // REMOVE service_credit calculation here
+  hire_date: profileData?.hire_date || null,
+  promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
+  promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
+  service_credit_override: profileData?.service_credit_override || 0,
+  recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+  weeklySchedule: {} as Record<string, any>
+});
         
         // Store daily schedule for this officer with FRESH data
         // Determine if this is a recurring day
@@ -539,29 +478,66 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 // Convert allOfficers Map to array for sorting
 const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
 
-// Debug: Check what service credit values we have
-console.log('Officers before sorting:', allOfficersArray.map(o => ({
-  name: o.officerName,
-  badge: o.badgeNumber,
-  service_credit: o.service_credit,
+// Map to OfficerForSorting interface for the utility
+const officersForSorting = allOfficersArray.map(officer => ({
+  id: officer.officerId,
+  full_name: officer.officerName,
+  officerName: officer.officerName,
+  badge_number: officer.badgeNumber,
+  badgeNumber: officer.badgeNumber,
+  rank: officer.rank,
+  // Don't set service_credit here - let the utility calculate it
+  hire_date: officer.hire_date,
+  service_credit_override: officer.service_credit_override || 0,
+  promotion_date_sergeant: officer.promotion_date_sergeant,
+  promotion_date_lieutenant: officer.promotion_date_lieutenant
+}));
+
+// Debug: Check what data we're passing
+console.log('Officers for sorting:', officersForSorting.map(o => ({
+  name: o.full_name,
+  badge: o.badge_number,
+  override: o.service_credit_override,
   rank: o.rank
 })));
 
-// Sort officers consistently
-const sortedOfficers = sortOfficersConsistently(allOfficersArray);
+// Sort officers consistently - the utility will calculate service credit
+const sortedOfficers = sortOfficersConsistently(officersForSorting);
+
+// Debug: Check sorted results
+console.log('Sorted officers:', sortedOfficers.map(o => ({
+  name: o.full_name,
+  rank: o.rank,
+  serviceCredit: getServiceCreditForSorting(o) // Use utility to get calculated value
+})));
 
 // Now categorize the sorted officers
-// IMPORTANT: We need to preserve the original variable names that the rest of the code expects
-const supervisors = sortedOfficers.filter(officer => 
+// First, we need to map back from OfficerForSorting to our original officer structure
+const sortedOriginalOfficers = sortedOfficers.map(sortedOfficer => {
+  // Find the original officer data
+  const originalOfficer = allOfficersArray.find(o => o.officerId === sortedOfficer.id);
+  if (!originalOfficer) return null;
+  
+  // Get the calculated service credit from the utility
+  const service_credit = getServiceCreditForSorting(sortedOfficer);
+  
+  return {
+    ...originalOfficer,
+    service_credit: service_credit // Add the calculated service credit
+  };
+}).filter(Boolean);
+
+// Now categorize
+const supervisors = sortedOriginalOfficers.filter(officer => 
   isSupervisorByRank(officer)
 );
 
-const regularOfficers = sortedOfficers.filter(officer => 
+const regularOfficers = sortedOriginalOfficers.filter(officer => 
   !isSupervisorByRank(officer) && 
   officer.rank?.toLowerCase() !== 'probationary'
 );
 
-const ppos = sortedOfficers.filter(officer => 
+const ppos = sortedOriginalOfficers.filter(officer => 
   officer.rank?.toLowerCase() === 'probationary'
 );
 

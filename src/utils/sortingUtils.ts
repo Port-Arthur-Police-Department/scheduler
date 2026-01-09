@@ -261,13 +261,3 @@ export const sortForForceList = (officers: OfficerForSorting[], getForceCount: (
 
   return [...supervisors, ...regularOfficers, ...ppos];
 };
-
-// Export all functions
-export {
-  getBadgeNumberForSorting,
-  getServiceCreditForSorting,
-  isSupervisor,
-  isPPO,
-  sortOfficersConsistently,
-  sortForForceList
-};

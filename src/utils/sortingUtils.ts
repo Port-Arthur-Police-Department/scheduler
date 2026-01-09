@@ -1,16 +1,14 @@
-// sortingUtils.ts
-import { getLastName } from "./utils";
+import { getLastName } from "@/lib/utils";
 
 export interface OfficerForSorting {
-  // Common properties from different components
   id: string;
   full_name?: string;
-  officerName?: string; // Some components use officerName
+  officerName?: string;
   badge_number?: string;
-  badgeNumber?: string; // Some components use badgeNumber
+  badgeNumber?: string;
   rank?: string;
   service_credit?: number;
-  serviceCredit?: number; // Some components use serviceCredit
+  serviceCredit?: number;
   hire_date?: string | null;
   promotion_date_sergeant?: string | null;
   promotion_date_lieutenant?: string | null;

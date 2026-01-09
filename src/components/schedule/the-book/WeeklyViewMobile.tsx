@@ -10,6 +10,12 @@ import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+// Import sorting utilities
+import { 
+  sortOfficersConsistently, 
+  getServiceCreditForSorting,
+  type OfficerForSorting 
+} from "@/utils/sortingUtils";
 
 interface WeeklyViewMobileProps {
   currentWeekStart: Date;
@@ -27,48 +33,7 @@ interface WeeklyViewMobileProps {
   isUpdating?: boolean;
 }
 
-// Helper function to calculate service credit with promotion date support
-const calculateServiceCredit = (hireDate: string | null, 
-                               override: number = 0,
-                               promotionDateSergeant: string | null = null,
-                               promotionDateLieutenant: string | null = null,
-                               currentRank: string | null = null) => {
-  if (override && override > 0) {
-    return override;
-  }
-  
-  let relevantDate: Date | null = null;
-  
-  if (currentRank) {
-    const rankLower = currentRank.toLowerCase();
-    
-    if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
-      relevantDate = new Date(promotionDateSergeant);
-    } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
-      relevantDate = new Date(promotionDateLieutenant);
-    } else if (rankLower.includes('chief') && promotionDateLieutenant) {
-      relevantDate = new Date(promotionDateLieutenant);
-    }
-  }
-  
-  if (!relevantDate && hireDate) {
-    relevantDate = new Date(hireDate);
-  }
-  
-  if (!relevantDate) return 0;
-  
-  try {
-    const now = new Date();
-    const years = now.getFullYear() - relevantDate.getFullYear();
-    const months = now.getMonth() - relevantDate.getMonth();
-    const days = now.getDate() - relevantDate.getDate();
-    const totalYears = years + (months / 12) + (days / 365);
-    return Math.max(0, Math.round(totalYears * 10) / 10);
-  } catch (error) {
-    console.error('Error calculating service credit:', error);
-    return 0;
-  }
-};
+// Remove the old calculateServiceCredit function - we'll use the one from sortingUtils
 
 const getRelevantPromotionDate = (
   rank: string | undefined, 
@@ -230,14 +195,7 @@ const { data: scheduleData, isLoading, error } = useQuery({
           const overrideCredit = item.profiles?.service_credit_override || 0;
           const badgeNumber = item.profiles?.badge_number || '9999';
           
-          const serviceCredit = calculateServiceCredit(
-            hireDate, 
-            overrideCredit,
-            promotionDateSergeant,
-            promotionDateLieutenant,
-            item.profiles?.rank
-          );
-          
+          // We'll fetch service credit via RPC later, but store basic data
           if (!allOfficers.has(officerId)) {
             const relevantPromotionDate = getRelevantPromotionDate(
               item.profiles?.rank,
@@ -250,10 +208,12 @@ const { data: scheduleData, isLoading, error } = useQuery({
               officerName: item.profiles?.full_name || "Unknown",
               badgeNumber: badgeNumber,
               rank: item.profiles?.rank || "Officer",
-              service_credit: serviceCredit,
+              // We'll fetch service credit via RPC
+              service_credit: 0, // Initialize as 0, will be updated via RPC
               hire_date: hireDate,
               promotion_date_sergeant: promotionDateSergeant,
               promotion_date_lieutenant: promotionDateLieutenant,
+              service_credit_override: overrideCredit,
               promotion_date: relevantPromotionDate || hireDate,
               recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
               weeklySchedule: {} as Record<string, any>
@@ -267,7 +227,7 @@ const { data: scheduleData, isLoading, error } = useQuery({
             officerName: item.profiles?.full_name || "Unknown",
             badgeNumber: badgeNumber,
             rank: item.profiles?.rank || "Officer",
-            service_credit: serviceCredit,
+            service_credit: 0, // Will be updated via RPC
             date: day.dateStr,
             dayOfWeek: day.dayOfWeek,
             isRegularRecurringDay: false, // Exceptions are never "regular recurring"
@@ -309,14 +269,6 @@ const { data: scheduleData, isLoading, error } = useQuery({
           const overrideCredit = item.profiles?.service_credit_override || 0;
           const badgeNumber = item.profiles?.badge_number || '9999';
           
-          const serviceCredit = calculateServiceCredit(
-            hireDate, 
-            overrideCredit,
-            promotionDateSergeant,
-            promotionDateLieutenant,
-            item.profiles?.rank
-          );
-          
           if (!allOfficers.has(officerId)) {
             const relevantPromotionDate = getRelevantPromotionDate(
               item.profiles?.rank,
@@ -329,10 +281,11 @@ const { data: scheduleData, isLoading, error } = useQuery({
               officerName: item.profiles?.full_name || "Unknown",
               badgeNumber: badgeNumber,
               rank: item.profiles?.rank || "Officer",
-              service_credit: serviceCredit,
+              service_credit: 0, // Initialize as 0, will be updated via RPC
               hire_date: hireDate,
               promotion_date_sergeant: promotionDateSergeant,
               promotion_date_lieutenant: promotionDateLieutenant,
+              service_credit_override: overrideCredit,
               promotion_date: relevantPromotionDate || hireDate,
               recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
               weeklySchedule: {} as Record<string, any>
@@ -344,7 +297,7 @@ const { data: scheduleData, isLoading, error } = useQuery({
             officerName: item.profiles?.full_name || "Unknown",
             badgeNumber: badgeNumber,
             rank: item.profiles?.rank || "Officer",
-            service_credit: serviceCredit,
+            service_credit: 0, // Will be updated via RPC
             date: day.dateStr,
             dayOfWeek: day.dayOfWeek,
             isRegularRecurringDay: true, // This is a regular recurring day
@@ -365,59 +318,103 @@ const { data: scheduleData, isLoading, error } = useQuery({
 
       console.log('📊 Total unique officers found:', allOfficers.size);
 
-      // Categorize officers
-      const allSupervisors = Array.from(allOfficers.values())
-        .filter(o => isSupervisorByRank(o));
+      // Fetch service credits for all officers via RPC (same as ForceListView)
+      console.log('🔄 Fetching service credits via RPC...');
+      const officerIds = Array.from(allOfficers.values()).map(o => o.officerId);
+      const uniqueOfficerIds = [...new Set(officerIds)];
+      const serviceCreditsMap = new Map();
 
-      const lieutenants = allSupervisors.filter(o => 
-        o.rank?.toLowerCase().includes('lieutenant') || 
-        o.rank?.toLowerCase().includes('lt') ||
-        o.rank?.toLowerCase().includes('chief')
-      ).sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      if (uniqueOfficerIds.length > 0) {
+        for (const officerId of uniqueOfficerIds) {
+          try {
+            const { data, error } = await supabase
+              .rpc('get_service_credit', { profile_id: officerId });
+            
+            if (!error && data !== null) {
+              const creditValue = parseFloat(data);
+              serviceCreditsMap.set(officerId, isNaN(creditValue) ? 0 : creditValue);
+            } else {
+              console.log(`No service credit data for officer ${officerId}:`, error);
+              serviceCreditsMap.set(officerId, 0);
+            }
+          } catch (error) {
+            console.error(`Error fetching service credit for officer ${officerId}:`, error);
+            serviceCreditsMap.set(officerId, 0);
+          }
+        }
+      }
+
+      // Update officers with fetched service credits
+      allOfficers.forEach(officer => {
+        officer.service_credit = serviceCreditsMap.get(officer.officerId) || 0;
+        // Also update the weekly schedule entries
+        Object.values(officer.weeklySchedule).forEach((daySchedule: any) => {
+          daySchedule.service_credit = officer.service_credit;
+        });
       });
 
-      const sergeants = allSupervisors.filter(o => 
-        o.rank?.toLowerCase().includes('sergeant') || 
-        o.rank?.toLowerCase().includes('sgt')
-      ).sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        if (bCredit !== aCredit) return bCredit - aCredit;
-        return getLastName(a.officerName).localeCompare(getLastName(b.officerName));
+      // Convert to OfficerForSorting format for consistent sorting
+      const officersForSorting: OfficerForSorting[] = Array.from(allOfficers.values()).map(officer => ({
+        id: officer.officerId,
+        full_name: officer.officerName,
+        officerName: officer.officerName,
+        badge_number: officer.badgeNumber,
+        badgeNumber: officer.badgeNumber,
+        rank: officer.rank,
+        service_credit: officer.service_credit,
+        serviceCredit: officer.service_credit,
+        hire_date: officer.hire_date,
+        service_credit_override: officer.service_credit_override || 0,
+        promotion_date_sergeant: officer.promotion_date_sergeant,
+        promotion_date_lieutenant: officer.promotion_date_lieutenant
+      }));
+
+      // Sort officers consistently using the centralized utility
+      console.log('🔄 Sorting officers consistently...');
+      const sortedOfficers = sortOfficersConsistently(officersForSorting);
+
+      // Map back to original structure and categorize
+      const supervisors = sortedOfficers
+        .filter(officer => isSupervisorByRank({ rank: officer.rank }))
+        .map(officer => {
+          const originalOfficer = allOfficers.get(officer.id);
+          if (originalOfficer) {
+            originalOfficer.service_credit = officer.service_credit;
+          }
+          return originalOfficer;
+        })
+        .filter(Boolean);
+
+      const regularOfficers = sortedOfficers
+        .filter(officer => 
+          !isSupervisorByRank({ rank: officer.rank }) && 
+          officer.rank?.toLowerCase() !== 'probationary'
+        )
+        .map(officer => {
+          const originalOfficer = allOfficers.get(officer.id);
+          if (originalOfficer) {
+            originalOfficer.service_credit = officer.service_credit;
+          }
+          return originalOfficer;
+        })
+        .filter(Boolean);
+
+      const ppos = sortedOfficers
+        .filter(officer => officer.rank?.toLowerCase() === 'probationary')
+        .map(officer => {
+          const originalOfficer = allOfficers.get(officer.id);
+          if (originalOfficer) {
+            originalOfficer.service_credit = officer.service_credit;
+          }
+          return originalOfficer;
+        })
+        .filter(Boolean);
+
+      console.log('✅ Data processing complete with consistent sorting:', {
+        supervisors: supervisors.length,
+        regularOfficers: regularOfficers.length,
+        ppos: ppos.length
       });
-
-      const supervisors = [...lieutenants, ...sergeants];
-
-      const allOfficersList = Array.from(allOfficers.values())
-        .filter(o => !isSupervisorByRank(o));
-
-      const ppos = allOfficersList
-        .filter(o => o.rank?.toLowerCase() === 'probationary')
-        .sort((a, b) => {
-          const aCredit = a.service_credit || 0;
-          const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) return bCredit - aCredit;
-          const aBadge = parseInt(a.badgeNumber) || 9999;
-          const bBadge = parseInt(b.badgeNumber) || 9999;
-          return aBadge - bBadge;
-        });
-
-      const regularOfficers = allOfficersList
-        .filter(o => o.rank?.toLowerCase() !== 'probationary')
-        .sort((a, b) => {
-          const aCredit = a.service_credit || 0;
-          const bCredit = b.service_credit || 0;
-          if (bCredit !== aCredit) return bCredit - aCredit;
-          const aBadge = parseInt(a.badgeNumber) || 9999;
-          const bBadge = parseInt(b.badgeNumber) || 9999;
-          return aBadge - bBadge;
-        });
-
-      console.log('✅ Data processing complete');
 
       return {
         supervisors,
@@ -575,6 +572,9 @@ const { data: scheduleData, isLoading, error } = useQuery({
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
                 <div className="text-xs opacity-80">{getRankAbbreviation(officer.rank)}</div>
+                <div className="text-xs text-muted-foreground">
+                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                </div>
               </div>
               {weekDays.map(({ dateStr }) => {
                 const dayOfficer = officer.weeklySchedule[dateStr];
@@ -634,6 +634,9 @@ const { data: scheduleData, isLoading, error } = useQuery({
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
               <div className="p-2 border-r font-medium text-sm">
                 {getLastName(officer.officerName)}
+                <div className="text-xs text-muted-foreground">
+                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                </div>
               </div>
               {weekDays.map(({ dateStr }) => {
                 const dayOfficer = officer.weeklySchedule[dateStr];
@@ -694,6 +697,9 @@ const { data: scheduleData, isLoading, error } = useQuery({
                     <Badge variant="outline" className="text-xs border-blue-300 bg-blue-100">
                       PPO
                     </Badge>
+                    <div className="text-xs text-muted-foreground">
+                      SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                    </div>
                   </div>
                   {weekDays.map(({ dateStr }) => {
                     const dayOfficer = officer.weeklySchedule[dateStr];
@@ -725,42 +731,42 @@ const { data: scheduleData, isLoading, error } = useQuery({
         </div>
       </div>
 
-{/* Legend */}
-<Card>
-  <CardContent className="p-4">
-    <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
-    <div className="grid grid-cols-2 gap-2 text-xs">
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-green-50 border-l-2 border-green-400"></div>
-        <span>Recurring Day</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-blue-50 border-l-2 border-blue-400"></div>
-        <span>Vacation (Vac)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-orange-50 border-l-2 border-orange-400"></div>
-        <span>Holiday (Hol)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-red-50 border-l-2 border-red-400"></div>
-        <span>Sick (Sick)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
-        <span>Comp (Comp)</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
-        <span>Special Assignment</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded bg-gray-100 border-l-2 border-gray-300"></div>
-        <span>Not Scheduled</span>
-      </div>
-    </div>
-  </CardContent>
-</Card>
+      {/* Legend */}
+      <Card>
+        <CardContent className="p-4">
+          <h3 className="font-semibold mb-3 text-sm">Quick Legend</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-green-50 border-l-2 border-green-400"></div>
+              <span>Recurring Day</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-blue-50 border-l-2 border-blue-400"></div>
+              <span>Vacation (Vac)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-orange-50 border-l-2 border-orange-400"></div>
+              <span>Holiday (Hol)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-red-50 border-l-2 border-red-400"></div>
+              <span>Sick (Sick)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
+              <span>Comp (Comp)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-purple-50 border-l-2 border-purple-400"></div>
+              <span>Special Assignment</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-gray-100 border-l-2 border-gray-300"></div>
+              <span>Not Scheduled</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

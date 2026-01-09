@@ -10,6 +10,11 @@ import { Users, ChevronLeft, ChevronRight, CalendarIcon, Filter, Search } from "
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, startOfYear, endOfYear } from "date-fns";
 import { getLastName, getRankAbbreviation } from "./utils";
+import { 
+  getBadgeNumberForSorting,
+  getServiceCreditForSorting,
+  type OfficerForSorting 
+} from "@/utils/sortingUtils";
 
 interface ForceListViewMobileProps {
   selectedShiftId: string;
@@ -17,6 +22,41 @@ interface ForceListViewMobileProps {
   shiftTypes: any[];
   isAdminOrSupervisor: boolean;
 }
+
+// Custom sort function for Force List
+const sortForceListOfficers = (officers: OfficerForSorting[]) => {
+  return [...officers].sort((a, b) => {
+    // Primary: service credit (LEAST to most - ascending)
+    const aCredit = getServiceCreditForSorting(a);
+    const bCredit = getServiceCreditForSorting(b);
+    
+    if (aCredit !== bCredit) {
+      console.log(`Service credit sort: ${a.full_name} (${aCredit}) vs ${b.full_name} (${bCredit}) -> ${aCredit - bCredit}`);
+      return aCredit - bCredit;
+    }
+    
+    // Secondary: badge number (DESCENDING - higher badge number = lower seniority = should be higher in force list)
+    const aBadge = getBadgeNumberForSorting(a);
+    const bBadge = getBadgeNumberForSorting(b);
+    if (aBadge !== bBadge) {
+      console.log(`Badge sort (equal credits): ${a.full_name} (${aBadge}) vs ${b.full_name} (${bBadge}) -> ${bBadge - aBadge} (DESCENDING)`);
+      return bBadge - aBadge; // DESCENDING - higher badge number first
+    }
+    
+    // Tertiary: last name (A-Z)
+    const getLastNameFromFullName = (name: string = ""): string => {
+      if (!name) return "";
+      const parts = name.trim().split(/\s+/);
+      return parts[parts.length - 1] || "";
+    };
+    
+    const aLastName = getLastNameFromFullName(a.full_name);
+    const bLastName = getLastNameFromFullName(b.full_name);
+    const lastNameCompare = aLastName.localeCompare(bLastName);
+    console.log(`Last name sort (equal credits & badges): ${a.full_name} (${aLastName}) vs ${b.full_name} (${bLastName}) -> ${lastNameCompare}`);
+    return lastNameCompare;
+  });
+};
 
 export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
   selectedShiftId,
@@ -46,8 +86,10 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
             full_name,
             badge_number,
             rank,
-            service_credit_override,
-            hire_date
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant,
+            service_credit_override
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -72,38 +114,54 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         // Continue without forced dates
       }
 
-      // Process officers
-      const officers = recurringSchedules?.map(schedule => schedule.profiles).filter(Boolean) || [];
-      const uniqueOfficers = Array.from(
-        new Map(officers.map(officer => [officer.id, officer])).values()
-      );
+      // Process officers - get unique officers
+      const uniqueOfficersMap = new Map();
+      recurringSchedules?.forEach(schedule => {
+        if (schedule.profiles && !uniqueOfficersMap.has(schedule.profiles.id)) {
+          uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+        }
+      });
+      
+      const officers = Array.from(uniqueOfficersMap.values());
 
-      // Fetch service credits
-      const officersWithCredits = await Promise.all(
-        uniqueOfficers.map(async (officer) => {
-          const { data: creditData } = await supabase.rpc("get_service_credit", {
-            profile_id: officer.id,
-          });
-          return {
-            ...officer,
-            service_credit: creditData || 0,
-            forceCount: forcedDates?.filter(fd => fd.officer_id === officer.id).length || 0
-          };
-        })
-      );
+      // Convert to OfficerForSorting format
+      const officersForSorting: OfficerForSorting[] = officers.map(officer => ({
+        id: officer.id,
+        full_name: officer.full_name,
+        officerName: officer.full_name,
+        badge_number: officer.badge_number,
+        badgeNumber: officer.badge_number,
+        rank: officer.rank,
+        service_credit: 0, // Will be calculated
+        hire_date: officer.hire_date,
+        service_credit_override: officer.service_credit_override || 0,
+        promotion_date_sergeant: officer.promotion_date_sergeant,
+        promotion_date_lieutenant: officer.promotion_date_lieutenant
+      }));
 
-      // Sort by service credit (least to most)
-      const sortedOfficers = [...officersWithCredits].sort((a, b) => {
-        const aCredit = parseFloat(a.service_credit?.toFixed(1) || "0");
-        const bCredit = parseFloat(b.service_credit?.toFixed(1) || "0");
-        return aCredit - bCredit;
+      // Sort for Force List using custom sort function
+      console.log('🔄 Sorting for Force List...');
+      const sortedOfficers = sortForceListOfficers(officersForSorting);
+
+      // Add force counts to sorted officers
+      const officersWithData = sortedOfficers.map(officer => {
+        const forceCount = forcedDates?.filter(fd => fd.officer_id === officer.id).length || 0;
+        
+        // Calculate actual service credit for display
+        const serviceCredit = getServiceCreditForSorting(officer);
+        
+        return {
+          ...officer,
+          service_credit: serviceCredit,
+          forceCount
+        };
       });
 
       return {
-        officers: sortedOfficers,
+        officers: officersWithData,
         forcedDates: forcedDates || [],
         summary: {
-          totalOfficers: sortedOfficers.length,
+          totalOfficers: officersWithData.length,
           totalForced: forcedDates?.length || 0
         }
       };
@@ -123,7 +181,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
     );
   }) || [];
 
-  // Categorize officers
+  // Categorize officers (Force list only includes Sergeants as supervisors)
   const supervisors = filteredOfficers.filter(officer => 
     officer.rank?.toLowerCase().includes('sergeant') || 
     officer.rank?.toLowerCase().includes('sgt')
@@ -138,6 +196,16 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
   const ppos = filteredOfficers.filter(officer => 
     officer.rank?.toLowerCase() === 'probationary'
   );
+
+  // Log sorting for debugging
+  React.useEffect(() => {
+    if (forceData?.officers && forceData.officers.length > 0) {
+      console.log('📋 Force List Officers (first 10):');
+      forceData.officers.slice(0, 10).forEach((officer, index) => {
+        console.log(`${index + 1}. ${officer.full_name} - SC: ${officer.service_credit?.toFixed(1)} - Badge: ${officer.badge_number} - Force Count: ${officer.forceCount}`);
+      });
+    }
+  }, [forceData]);
 
   return (
     <div className="space-y-4">
@@ -342,13 +410,21 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
               <Badge variant="outline" className="h-5">
                 0.5 yrs
               </Badge>
-              <span>Service credit (sorted least to most)</span>
+              <span>Service credit (sorted LEAST to MOST)</span>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="h-5 bg-blue-100">
                 PPO
               </Badge>
               <span>Probationary Police Officer</span>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="text-xs text-muted-foreground">
+                <strong>Sorting Priority:</strong><br />
+                1. Service Credit (least to most)<br />
+                2. Badge Number (higher to lower when service credits equal)<br />
+                3. Last Name (A-Z)
+              </div>
             </div>
           </div>
         </CardContent>

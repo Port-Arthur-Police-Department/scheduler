@@ -536,13 +536,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
   console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
-  // Convert allOfficers Map to array for sorting
+// Convert allOfficers Map to array for sorting
 const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
 
 // Sort officers consistently
 const sortedOfficers = sortOfficersConsistently(allOfficersArray);
 
 // Now categorize the sorted officers
+// IMPORTANT: We need to preserve the original variable names that the rest of the code expects
 const supervisors = sortedOfficers.filter(officer => 
   isSupervisorByRank(officer)
 );
@@ -556,15 +557,13 @@ const ppos = sortedOfficers.filter(officer =>
   officer.rank?.toLowerCase() === 'probationary'
 );
 
-  // Debug: Check sorting results
-  console.log('Sorting results:', {
-    totalOfficers: allOfficers.size,
-    supervisors: supervisors.length,
-    lieutenants: lieutenants.length,
-    sergeants: sergeants.length,
-    regularOfficers: regularOfficers.length,
-    ppos: ppos.length
-  });
+// Debug log to verify
+console.log('Sorted officers:', {
+  total: sortedOfficers.length,
+  supervisors: supervisors.length,
+  regularOfficers: regularOfficers.length,
+  ppos: ppos.length
+});
 
   // Safeguard for rendering
   const safeGetWeeklySchedule = (officer: any, dateStr: string) => {

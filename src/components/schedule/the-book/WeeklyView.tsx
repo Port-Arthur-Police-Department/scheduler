@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with enhanced error handling
+// Updated WeeklyView.tsx with enhanced error handling and RPC service credit fetching
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
 import { format, addDays, isSameDay, startOfWeek, addWeeks } from "date-fns";
@@ -44,6 +44,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
   const [localSchedules, setLocalSchedules] = useState(schedules);
+  
+  // State for service credits fetching (same as ForceListView)
+  const [serviceCreditsMap, setServiceCreditsMap] = useState<Map<string, number>>(new Map());
+  const [isLoadingServiceCredits, setIsLoadingServiceCredits] = useState(false);
   
   // Get query client for cache invalidation
   const queryClient = useQueryClient();
@@ -419,8 +423,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             promotionLieutenant: profileData?.promotion_date_lieutenant
           });
 
-          // Don't calculate service credit here - just pass the raw data
-          // The sorting utility will handle calculation with override properly
+          // Don't calculate service credit here - we'll fetch via RPC like ForceListView
           allOfficers.set(officer.officerId, {
             officerId: officer.officerId,
             officerName: officer.officerName || officer.full_name || "Unknown",
@@ -431,7 +434,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
             service_credit_override: profileData?.service_credit_override || 0,
             recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-            weeklySchedule: {} as Record<string, any>
+            weeklySchedule: {} as Record<string, any>,
+            service_credit: 0 // Initialize with 0, will be updated via RPC
           });
         }
         
@@ -452,7 +456,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
           officerName: officer.officerName || officer.full_name || "Unknown",
           badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
           rank: officer.rank || "Officer",
-          service_credit: 0, // Will be calculated by sorting utility
+          service_credit: 0, // Will be fetched via RPC
           date: day.date,
           dayOfWeek: day.dayOfWeek,
           scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
@@ -486,8 +490,63 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
   console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
+  // NEW: Fetch service credits for all officers the same way as ForceListView
+  useEffect(() => {
+    const fetchServiceCredits = async () => {
+      if (allOfficers.size === 0) return;
+      
+      setIsLoadingServiceCredits(true);
+      const officerIds = Array.from(allOfficers.values()).map(o => o.officerId);
+      const uniqueOfficerIds = [...new Set(officerIds)];
+      
+      const credits = new Map();
+      
+      if (uniqueOfficerIds.length > 0) {
+        console.log(`Fetching service credits for ${uniqueOfficerIds.length} officers via RPC...`);
+        // Use the same RPC function as ForceList
+        for (const officerId of uniqueOfficerIds) {
+          try {
+            const { data, error } = await supabase
+              .rpc('get_service_credit', { profile_id: officerId });
+            
+            if (!error && data !== null) {
+              const creditValue = parseFloat(data);
+              credits.set(officerId, isNaN(creditValue) ? 0 : creditValue);
+              console.log(`Service credit for officer ${officerId}: ${data}`);
+            } else {
+              console.log(`No service credit data for officer ${officerId}:`, error);
+              credits.set(officerId, 0);
+            }
+          } catch (error) {
+            console.error(`Error fetching service credit for officer ${officerId}:`, error);
+            credits.set(officerId, 0);
+          }
+        }
+      }
+      
+      setServiceCreditsMap(credits);
+      setIsLoadingServiceCredits(false);
+      console.log(`Service credits map updated with ${credits.size} entries`);
+    };
+    
+    fetchServiceCredits();
+  }, [allOfficers.size]); // Re-fetch when number of officers changes
+
   // Convert allOfficers Map to array for sorting
   const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
+
+  // If we have service credits from RPC, use them
+  if (serviceCreditsMap.size > 0 && !isLoadingServiceCredits) {
+    console.log('Using RPC service credits (with override) for sorting');
+    
+    // Update officers with fetched service credits
+    allOfficersArray.forEach(officer => {
+      officer.service_credit = serviceCreditsMap.get(officer.officerId) || 0;
+      console.log(`Officer ${officer.officerName}: service_credit = ${officer.service_credit}`);
+    });
+  } else if (isLoadingServiceCredits) {
+    console.log('Loading service credits via RPC...');
+  }
 
   // Map to OfficerForSorting interface for the utility
   const officersForSorting = allOfficersArray.map(officer => ({
@@ -497,31 +556,30 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     badge_number: officer.badgeNumber,
     badgeNumber: officer.badgeNumber,
     rank: officer.rank,
-    // Don't set service_credit here - let the utility calculate it
+    service_credit: officer.service_credit || 0, // Use the RPC-fetched credit
     hire_date: officer.hire_date,
     service_credit_override: officer.service_credit_override || 0,
     promotion_date_sergeant: officer.promotion_date_sergeant,
     promotion_date_lieutenant: officer.promotion_date_lieutenant
   }));
 
-  // Debug: Check what data we're passing
-  console.log('Officers for sorting:', officersForSorting.map(o => ({
+  // Debug: Check what data we're passing with service credits
+  console.log('Officers with service credits:', officersForSorting.map(o => ({
     name: o.full_name,
-    badge: o.badge_number,
-    override: o.service_credit_override,
-    overrideType: typeof o.service_credit_override,
-    rank: o.rank
+    service_credit: o.service_credit,
+    hasOverride: o.service_credit_override > 0,
+    override: o.service_credit_override
   })));
 
-  // Sort officers consistently - the utility will calculate service credit
+  // Sort officers consistently - the utility will use the service_credit we provided
   const sortedOfficers = sortOfficersConsistently(officersForSorting);
 
   // Debug: Check sorted results
-  console.log('Sorted officers with calculated service credits:', sortedOfficers.map(o => ({
+  console.log('Sorted officers with RPC service credits:', sortedOfficers.map(o => ({
     name: o.full_name,
     rank: o.rank,
-    serviceCredit: getServiceCreditForSorting(o),
-    calculatedServiceCredit: getServiceCreditForSorting(o) // Use utility to get calculated value
+    serviceCredit: o.service_credit, // Should be RPC-fetched value
+    calculatedServiceCredit: getServiceCreditForSorting(o) // Use utility to verify
   })));
 
   // Now categorize the sorted officers
@@ -531,12 +589,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     const originalOfficer = allOfficersArray.find(o => o.officerId === sortedOfficer.id);
     if (!originalOfficer) return null;
     
-    // Get the calculated service credit from the utility
-    const service_credit = getServiceCreditForSorting(sortedOfficer);
-    
     return {
       ...originalOfficer,
-      service_credit: service_credit // Add the calculated service credit
+      service_credit: sortedOfficer.service_credit // Use the RPC-fetched service credit
     };
   }).filter(Boolean);
 

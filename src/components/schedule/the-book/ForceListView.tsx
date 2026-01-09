@@ -258,55 +258,88 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     return isNaN(num) ? '0.0' : num.toFixed(1);
   };
 
-  // Categorize officers - Force List only includes Sergeants as supervisors
-  const supervisors = forceListData?.officers?.filter(officer => {
-    const rank = officer?.rank?.toLowerCase() || '';
-    // Only include Sergeants (Sgt)
-    return rank.includes('sergeant') || rank.includes('sgt');
-  }) || [];
+// In ForceListView.tsx, replace the entire sorting section:
 
-  const regularOfficers = forceListData?.officers?.filter(officer => {
-    const rank = officer?.rank?.toLowerCase() || '';
-    // Exclude Sergeants, PPOs, Lieutenants, Deputy Chiefs, Chiefs
-    return !rank.includes('sergeant') && 
-           !rank.includes('sgt') &&
-           !rank.includes('probationary') &&
-           !rank.includes('lieutenant') &&
-           !rank.includes('lt') &&
-           !rank.includes('deputy') &&
-           !rank.includes('chief');
-  }) || [];
+// Remove these lines:
+// Categorize officers - Force List only includes Sergeants as supervisors
+const supervisors = forceListData?.officers?.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  // Only include Sergeants (Sgt)
+  return rank.includes('sergeant') || rank.includes('sgt');
+}) || [];
 
-  const ppos = forceListData?.officers?.filter(officer => 
-    officer.rank?.toLowerCase() === 'probationary'
-  ) || [];
+const regularOfficers = forceListData?.officers?.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  // Exclude Sergeants, PPOs, Lieutenants, Deputy Chiefs, Chiefs
+  return !rank.includes('sergeant') && 
+         !rank.includes('sgt') &&
+         !rank.includes('probationary') &&
+         !rank.includes('lieutenant') &&
+         !rank.includes('lt') &&
+         !rank.includes('deputy') &&
+         !rank.includes('chief');
+}) || [];
 
-  // Sort by service credit (least to most) - FIXED VERSION
-  const sortByServiceCredit = (a: any, b: any) => {
-    // Get service credits
-    const aCredit = parseFloat(formatServiceCredit(a.service_credit));
-    const bCredit = parseFloat(formatServiceCredit(b.service_credit));
-    
-    // Primary sort: service credit (least to most)
-    if (aCredit !== bCredit) {
-      return aCredit - bCredit;
-    }
-    
-    // Secondary sort: force count (least to most)
-    const aForceCount = getForceCount(a.id);
-    const bForceCount = getForceCount(b.id);
-    if (aForceCount !== bForceCount) {
-      return aForceCount - bForceCount;
-    }
-    
-    // Tertiary sort: last name (A-Z)
-    return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
-  };
+const ppos = forceListData?.officers?.filter(officer => 
+  officer.rank?.toLowerCase() === 'probationary'
+) || [];
 
-  // Sort all categories by service credit
-  const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
-  const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
-  const sortedPPOs = [...ppos].sort(sortByServiceCredit);
+// Sort by service credit (least to most) - FIXED VERSION
+const sortByServiceCredit = (a: any, b: any) => {
+  // Get service credits
+  const aCredit = parseFloat(formatServiceCredit(a.service_credit));
+  const bCredit = parseFloat(formatServiceCredit(b.service_credit));
+  
+  // Primary sort: service credit (least to most)
+  if (aCredit !== bCredit) {
+    return aCredit - bCredit;
+  }
+  
+  // Secondary sort: force count (least to most)
+  const aForceCount = getForceCount(a.id);
+  const bForceCount = getForceCount(b.id);
+  if (aForceCount !== bForceCount) {
+    return aForceCount - bForceCount;
+  }
+  
+  // Tertiary sort: last name (A-Z)
+  return getLastName(a.full_name).localeCompare(getLastName(b.full_name));
+};
+
+// Sort all categories by service credit
+const sortedSupervisors = [...supervisors].sort(sortByServiceCredit);
+const sortedRegularOfficers = [...regularOfficers].sort(sortByServiceCredit);
+const sortedPPOs = [...ppos].sort(sortByServiceCredit);
+
+// With this:
+import { sortForForceList } from "./sortingUtils";
+
+// After getting forceListData...
+const allOfficers = forceListData?.officers || [];
+
+// Sort officers for force list
+const sortedOfficers = sortForForceList(allOfficers, getForceCount);
+
+// Now categorize the sorted officers
+const sortedSupervisors = sortedOfficers.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  return rank.includes('sergeant') || rank.includes('sgt');
+});
+
+const sortedRegularOfficers = sortedOfficers.filter(officer => {
+  const rank = officer?.rank?.toLowerCase() || '';
+  return !rank.includes('sergeant') && 
+         !rank.includes('sgt') &&
+         !rank.includes('probationary') &&
+         !rank.includes('lieutenant') &&
+         !rank.includes('lt') &&
+         !rank.includes('deputy') &&
+         !rank.includes('chief');
+});
+
+const sortedPPOs = sortedOfficers.filter(officer => 
+  officer.rank?.toLowerCase() === 'probationary'
+);
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({

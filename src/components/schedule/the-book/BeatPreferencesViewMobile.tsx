@@ -9,12 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { MapPin, Star, Filter, Download, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
+import { getLastName, getRankAbbreviation, isSupervisorByRank, toOfficerForSorting } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 // Import sorting utilities
 import { 
   sortOfficersConsistently, 
-  getServiceCreditForSorting,
   type OfficerForSorting 
 } from "@/utils/sortingUtils";
 
@@ -75,42 +74,68 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
         // Return empty preferences if table doesn't exist
       }
 
-      const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
+      // Get unique officers (remove duplicates)
+      const uniqueOfficersMap = new Map();
+      recurringSchedules?.forEach(schedule => {
+        if (schedule.profiles && !uniqueOfficersMap.has(schedule.profiles.id)) {
+          uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+        }
+      });
+      
+      const officers = Array.from(uniqueOfficersMap.values());
       
       // Filter out supervisors and PPOs
       const nonSupervisorOfficers = officers.filter(officer => 
         !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
       );
       
+      // Fetch service credits for officers
+      const officersWithCredits = await Promise.all(
+        nonSupervisorOfficers.map(async (officer) => {
+          try {
+            const { data: creditData } = await supabase.rpc("get_service_credit", {
+              profile_id: officer.id,
+            });
+            return {
+              ...officer,
+              service_credit: creditData || 0,
+            };
+          } catch (error) {
+            console.error(`Error fetching service credit for officer ${officer.id}:`, error);
+            return {
+              ...officer,
+              service_credit: 0,
+            };
+          }
+        })
+      );
+
       // Convert to OfficerForSorting format
-      const officersForSorting: OfficerForSorting[] = nonSupervisorOfficers.map(officer => ({
-        id: officer.id,
-        full_name: officer.full_name,
-        officerName: officer.full_name,
-        badge_number: officer.badge_number,
-        badgeNumber: officer.badge_number,
-        rank: officer.rank,
-        service_credit: 0, // Will be calculated
-        hire_date: officer.hire_date,
-        service_credit_override: officer.service_credit_override || 0,
-        promotion_date_sergeant: officer.promotion_date_sergeant,
-        promotion_date_lieutenant: officer.promotion_date_lieutenant
-      }));
+      const officersForSorting: OfficerForSorting[] = officersWithCredits.map(officer => 
+        toOfficerForSorting(officer)
+      );
 
       // Sort officers consistently using the centralized utility
       const sortedOfficers = sortOfficersConsistently(officersForSorting);
 
       // Map back to original structure with preferences
       const sortedOfficersWithData = sortedOfficers.map(sortedOfficer => {
-        const originalOfficer = nonSupervisorOfficers.find(o => o.id === sortedOfficer.id);
+        const originalOfficer = officersWithCredits.find(o => o.id === sortedOfficer.id);
         const prefs = preferences?.find(p => p.officer_id === sortedOfficer.id);
         
         return {
           ...originalOfficer,
-          service_credit: sortedOfficer.service_credit, // Use calculated service credit
+          service_credit: sortedOfficer.service_credit, // Use sorted service credit
           preferences: prefs || null
         };
       }).filter(Boolean);
+
+      console.log('Beat preferences - Officers found:', {
+        totalRecurring: recurringSchedules?.length,
+        uniqueOfficers: officers.length,
+        nonSupervisorOfficers: nonSupervisorOfficers.length,
+        sortedOfficers: sortedOfficersWithData.length
+      });
 
       return {
         officers: sortedOfficersWithData,

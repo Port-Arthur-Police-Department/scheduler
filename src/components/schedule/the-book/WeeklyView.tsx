@@ -612,8 +612,6 @@ const regularOfficers = allOfficersList.filter(o =>
   const bBadge = parseInt(b.officer.badge_number) || 9999;
   return aBadge - bBadge; // Ascending
 });
-      return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
-    });
 
   // Debug: Check sorting results
   console.log('Sorting results:', {

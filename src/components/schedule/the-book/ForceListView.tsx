@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { getLastName, getRankAbbreviation } from "./utils";
 import { auditLogger } from "@/lib/auditLogger";
 import TheBookMobile from "./TheBookMobile";
+import { sortForForceList } from "@/utils/sortingUtils";
 
 interface ForcedDate {
   id?: string;

@@ -65,6 +65,18 @@ const sortForceListOfficers = (officers: any[]) => {
   });
 };
 
+// Helper to check if officer should be excluded from force list
+const shouldExcludeFromForceList = (rank: string): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  
+  // Exclude Lieutenants, Chiefs, and Deputy Chiefs from force list
+  return rankLower.includes('lieutenant') || 
+         rankLower.includes('lt') || 
+         rankLower.includes('chief') || 
+         rankLower.includes('deputy');
+};
+
 export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
   selectedShiftId,
   setSelectedShiftId,
@@ -121,15 +133,32 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         // Continue without forced dates
       }
 
-      // Process officers - get unique officers
+      // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs
       const uniqueOfficersMap = new Map();
       recurringSchedules?.forEach(schedule => {
         if (schedule.profiles && !uniqueOfficersMap.has(schedule.profiles.id)) {
-          uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+          // Check if officer should be included (exclude Lieutenants/Chiefs)
+          if (!shouldExcludeFromForceList(schedule.profiles.rank)) {
+            uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
+          }
         }
       });
       
       const officers = Array.from(uniqueOfficersMap.values());
+
+      // Log excluded officers for debugging
+      const excludedOfficers = recurringSchedules?.filter(schedule => 
+        schedule.profiles && shouldExcludeFromForceList(schedule.profiles.rank)
+      ) || [];
+      
+      if (excludedOfficers.length > 0) {
+        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs):', 
+          excludedOfficers.map(o => ({
+            name: o.profiles?.full_name,
+            rank: o.profiles?.rank
+          }))
+        );
+      }
 
       // Fetch service credits for each officer via RPC
       console.log('🔄 Fetching service credits for officers...');
@@ -195,17 +224,26 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
     );
   }) || [];
 
-  // Categorize officers (Force list only includes Sergeants as supervisors)
-  const supervisors = filteredOfficers.filter(officer => 
-    officer.rank?.toLowerCase().includes('sergeant') || 
-    officer.rank?.toLowerCase().includes('sgt')
-  );
+  // Categorize officers (Force list ONLY includes Sergeants as supervisors, NO Lieutenants/Chiefs)
+  const supervisors = filteredOfficers.filter(officer => {
+    const rank = officer.rank?.toLowerCase() || '';
+    // Only include Sergeants, NOT Lieutenants or Chiefs
+    return (rank.includes('sergeant') || rank.includes('sgt')) && 
+           !rank.includes('lieutenant') && 
+           !rank.includes('lt') && 
+           !rank.includes('chief') && 
+           !rank.includes('deputy');
+  });
 
-  const regularOfficers = filteredOfficers.filter(officer => 
-    !officer.rank?.toLowerCase().includes('sergeant') &&
-    !officer.rank?.toLowerCase().includes('sgt') &&
-    !officer.rank?.toLowerCase().includes('probationary')
-  );
+  const regularOfficers = filteredOfficers.filter(officer => {
+    const rank = officer.rank?.toLowerCase() || '';
+    // Check if it's a sergeant
+    const isSergeant = rank.includes('sergeant') || rank.includes('sgt');
+    const isPPO = rank === 'probationary';
+    
+    // Include only if NOT a sergeant and NOT a PPO
+    return !isSergeant && !isPPO;
+  });
 
   const ppos = filteredOfficers.filter(officer => 
     officer.rank?.toLowerCase() === 'probationary'
@@ -310,7 +348,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Supervisors */}
+          {/* Supervisors (Sergeants only) */}
           {supervisors.length > 0 && (
             <div>
               <h3 className="font-semibold mb-2">Sergeants ({supervisors.length})</h3>
@@ -349,7 +387,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
             </div>
           )}
 
-          {/* Regular Officers */}
+          {/* Regular Officers (No Sergeants, No PPOs) */}
           {regularOfficers.length > 0 && (
             <div>
               <h3 className="font-semibold mb-2">Officers ({regularOfficers.length})</h3>
@@ -460,6 +498,14 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
             <div className="flex items-center gap-2">
               <div className="text-xs text-yellow-600">
                 (Override: X yrs) - Manual service credit override applied
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="text-xs text-muted-foreground">
+                <strong>Important:</strong><br />
+                • Lieutenants and Chiefs are NOT included in force list<br />
+                • Only Sergeants are included as supervisors<br />
+                • PPOs are included in their own section
               </div>
             </div>
             <div className="flex items-center gap-2 mt-2">

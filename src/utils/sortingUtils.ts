@@ -1,73 +1,4 @@
-// Add getLastName function directly in this file
-const getLastName = (fullName: string = ""): string => {
-  if (!fullName) return "";
-  const parts = fullName.trim().split(/\s+/);
-  return parts[parts.length - 1] || "";
-};
-
-export interface OfficerForSorting {
-  id: string;
-  full_name?: string;
-  officerName?: string;
-  badge_number?: string;
-  badgeNumber?: string;
-  rank?: string;
-  service_credit?: number;
-  serviceCredit?: number;
-  hire_date?: string | null;
-  promotion_date_sergeant?: string | null;
-  promotion_date_lieutenant?: string | null;
-  service_credit_override?: number;
-}
-
-// Your other functions remain the same...
-// getBadgeNumberForSorting, getServiceCreditForSorting, etc.
-
-/**
- * Get badge number for sorting (handles different property names)
- */
-export const getBadgeNumberForSorting = (officer: OfficerForSorting): number => {
-  const badgeNum = officer.badge_number || officer.badgeNumber;
-  if (!badgeNum) return 9999;
-  
-  const parsed = parseInt(badgeNum);
-  return isNaN(parsed) ? 9999 : parsed;
-};
-
-/**
- * Get service credit for sorting (handles different property names)
- */
-export const getServiceCreditForSorting = (officer: OfficerForSorting): number => {
-  const credit = officer.service_credit !== undefined ? officer.service_credit : officer.serviceCredit;
-  console.log('Service credit for officer:', {
-    id: officer.id,
-    name: officer.full_name || officer.officerName,
-    service_credit: officer.service_credit,
-    serviceCredit: officer.serviceCredit,
-    final: credit || 0
-  });
-  return credit || 0;
-};
-
-/**
- * Check if officer is a supervisor
- */
-export const isSupervisor = (officer: OfficerForSorting): boolean => {
-  const rank = officer.rank?.toLowerCase() || '';
-  return rank.includes('lieutenant') || 
-         rank.includes('lt') ||
-         rank.includes('chief') ||
-         rank.includes('sergeant') ||
-         rank.includes('sgt');
-};
-
-/**
- * Check if officer is a PPO
- */
-export const isPPO = (officer: OfficerForSorting): boolean => {
-  const rank = officer.rank?.toLowerCase() || '';
-  return rank === 'probationary' || rank.includes('ppo');
-};
+// Update src/utils/sortingUtils.ts with better error handling:
 
 /**
  * Sort officers with consistent logic:
@@ -77,6 +8,19 @@ export const isPPO = (officer: OfficerForSorting): boolean => {
  * Within each group: Sort by service credit DESC, then badge number ASC
  */
 export const sortOfficersConsistently = (officers: OfficerForSorting[]): OfficerForSorting[] => {
+  if (!officers || officers.length === 0) return [];
+  
+  // Debug: Log all officers with their data
+  console.log('=== Sorting Officers ===');
+  officers.forEach(officer => {
+    console.log(`Officer: ${officer.full_name || officer.officerName}`, {
+      rank: officer.rank,
+      serviceCredit: getServiceCreditForSorting(officer),
+      badgeNumber: getBadgeNumberForSorting(officer),
+      rawData: officer
+    });
+  });
+  
   // Separate officers into categories
   const lieutenantsAndChiefs: OfficerForSorting[] = [];
   const sergeants: OfficerForSorting[] = [];
@@ -97,12 +41,21 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
     }
   });
 
+  console.log('Categories:', {
+    lieutenantsAndChiefs: lieutenantsAndChiefs.length,
+    sergeants: sergeants.length,
+    regularOfficers: regularOfficers.length,
+    ppos: ppos.length
+  });
+
   // Sort function for each category
   const sortCategory = (a: OfficerForSorting, b: OfficerForSorting): number => {
     // First by service credit (DESCENDING - highest first)
     const aCredit = getServiceCreditForSorting(a);
     const bCredit = getServiceCreditForSorting(b);
+    
     if (bCredit !== aCredit) {
+      console.log(`Comparing credits: ${a.full_name || a.officerName} (${aCredit}) vs ${b.full_name || b.officerName} (${bCredit}) -> ${bCredit - aCredit}`);
       return bCredit - aCredit;
     }
     
@@ -110,6 +63,7 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
     const aBadge = getBadgeNumberForSorting(a);
     const bBadge = getBadgeNumberForSorting(b);
     if (aBadge !== bBadge) {
+      console.log(`Equal credits, comparing badges: ${aBadge} vs ${bBadge} -> ${aBadge - bBadge}`);
       return aBadge - bBadge;
     }
     
@@ -125,56 +79,8 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
   regularOfficers.sort(sortCategory);
   ppos.sort(sortCategory);
 
+  console.log('=== Sorting Complete ===');
+  
   // Combine in correct order
   return [...lieutenantsAndChiefs, ...sergeants, ...regularOfficers, ...ppos];
-};
-
-/**
- * Sort officers for Force List (least service credit first, then force count)
- */
-export const sortForForceList = (officers: OfficerForSorting[], getForceCount: (officerId: string) => number): OfficerForSorting[] => {
-  // Categorize first
-  const supervisors: OfficerForSorting[] = [];
-  const regularOfficers: OfficerForSorting[] = [];
-  const ppos: OfficerForSorting[] = [];
-
-  officers.forEach(officer => {
-    const rank = officer.rank?.toLowerCase() || '';
-    
-    if (rank.includes('probationary') || rank.includes('ppo')) {
-      ppos.push(officer);
-    } else if (rank.includes('sergeant') || rank.includes('sgt')) {
-      supervisors.push(officer); // Force list only includes Sergeants as supervisors
-    } else if (!rank.includes('lieutenant') && !rank.includes('lt') && !rank.includes('chief')) {
-      regularOfficers.push(officer);
-    }
-  });
-
-  // Sort function for Force List (LEAST service credit first)
-  const sortForceList = (a: OfficerForSorting, b: OfficerForSorting): number => {
-    // Primary: service credit (LEAST to most)
-    const aCredit = getServiceCreditForSorting(a);
-    const bCredit = getServiceCreditForSorting(b);
-    if (aCredit !== bCredit) {
-      return aCredit - bCredit;
-    }
-    
-    // Secondary: force count (least to most)
-    const aForceCount = getForceCount(a.id);
-    const bForceCount = getForceCount(b.id);
-    if (aForceCount !== bForceCount) {
-      return aForceCount - bForceCount;
-    }
-    
-    // Tertiary: last name (A-Z)
-    const aLastName = getLastName(a.full_name || a.officerName || '');
-    const bLastName = getLastName(b.full_name || b.officerName || '');
-    return aLastName.localeCompare(bLastName);
-  };
-
-  supervisors.sort(sortForceList);
-  regularOfficers.sort(sortForceList);
-  ppos.sort(sortForceList);
-
-  return [...supervisors, ...regularOfficers, ...ppos];
 };

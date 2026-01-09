@@ -1,6 +1,14 @@
 // src/components/schedule/the-book/utils.ts
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
 import { getLastName as getLastNameFromUtils } from "@/utils/scheduleUtils";
+// Import sorting utilities
+import { 
+  sortOfficersConsistently, 
+  getServiceCreditForSorting,
+  type OfficerForSorting,
+  isSupervisor as isSupervisorFromSortingUtils,
+  isPPO as isPPOFromSortingUtils
+} from "@/utils/sortingUtils";
 
 // Re-export from scheduleUtils
 export { getLastNameFromUtils as getLastName };
@@ -30,6 +38,16 @@ export const isSupervisorByRank = (officer: any): boolean => {
   const rank = officer.rank?.toLowerCase() || '';
   const rankPriority = getRankPriority(officer.rank);
   return rankPriority < RANK_ORDER.Officer;
+};
+
+// Alias to use the sorting utils version
+export const isSupervisor = (officer: any): boolean => {
+  return isSupervisorFromSortingUtils(officer);
+};
+
+// Alias to use the sorting utils version
+export const isPPO = (officer: any): boolean => {
+  return isPPOFromSortingUtils(officer);
 };
 
 export const isSpecialAssignment = (position: string | undefined): boolean => {
@@ -67,23 +85,89 @@ export const calculateStaffingCounts = (categorizedOfficers: any) => {
   return { supervisorCount, officerCount };
 };
 
+// DEPRECATED: Use sortOfficersConsistently from sortingUtils.ts instead
+// Keeping for backward compatibility but marking as deprecated
 export const categorizeAndSortOfficers = (officers: any[]) => {
-  const supervisors = officers
+  console.warn('categorizeAndSortOfficers is deprecated. Use sortOfficersConsistently from sortingUtils.ts instead.');
+  
+  // Convert to OfficerForSorting format and use the centralized utility
+  const officersForSorting: OfficerForSorting[] = officers.map(officer => ({
+    id: officer.id || officer.officerId,
+    full_name: officer.full_name || officer.officerName,
+    officerName: officer.officerName || officer.full_name,
+    badge_number: officer.badge_number || officer.badgeNumber,
+    badgeNumber: officer.badgeNumber || officer.badge_number,
+    rank: officer.rank,
+    service_credit: officer.service_credit || officer.serviceCredit,
+    serviceCredit: officer.serviceCredit || officer.service_credit,
+    hire_date: officer.hire_date,
+    service_credit_override: officer.service_credit_override || 0,
+    promotion_date_sergeant: officer.promotion_date_sergeant,
+    promotion_date_lieutenant: officer.promotion_date_lieutenant
+  }));
+  
+  const sortedOfficers = sortOfficersConsistently(officersForSorting);
+  
+  // Map back and categorize
+  const supervisors = sortedOfficers
+    .filter(officer => isSupervisorFromSortingUtils(officer))
+    .map(officer => {
+      const originalOfficer = officers.find(o => 
+        o.id === officer.id || o.officerId === officer.id
+      );
+      return originalOfficer ? { ...originalOfficer, service_credit: officer.service_credit } : null;
+    })
+    .filter(Boolean);
+  
+  const ppos = sortedOfficers
+    .filter(officer => isPPOFromSortingUtils(officer))
+    .map(officer => {
+      const originalOfficer = officers.find(o => 
+        o.id === officer.id || o.officerId === officer.id
+      );
+      return originalOfficer ? { ...originalOfficer, service_credit: officer.service_credit } : null;
+    })
+    .filter(Boolean);
+  
+  const regularOfficers = sortedOfficers
     .filter(officer => 
-      officer.shiftInfo?.position?.toLowerCase().includes('supervisor') ||
-      officer.position?.toLowerCase().includes('supervisor') ||
-      isSupervisorByRank(officer)
-    );
-  
-  const ppos = officers.filter(officer => officer.rank?.toLowerCase() === 'probationary');
-  
-  const regularOfficers = officers.filter(officer => {
-    const rank = officer.rank?.toLowerCase() || '';
-    const position = officer.shiftInfo?.position?.toLowerCase() || '';
-    const isSup = isSupervisorByRank(officer) || position.includes('supervisor');
-    
-    return !isSup && rank !== 'probationary';
-  });
+      !isSupervisorFromSortingUtils(officer) && 
+      !isPPOFromSortingUtils(officer)
+    )
+    .map(officer => {
+      const originalOfficer = officers.find(o => 
+        o.id === officer.id || o.officerId === officer.id
+      );
+      return originalOfficer ? { ...originalOfficer, service_credit: officer.service_credit } : null;
+    })
+    .filter(Boolean);
 
   return { supervisors, officers: regularOfficers, ppos };
+};
+
+// Helper to convert any officer object to OfficerForSorting format
+export const toOfficerForSorting = (officer: any): OfficerForSorting => ({
+  id: officer.id || officer.officerId || officer.profile?.id,
+  full_name: officer.full_name || officer.officerName || officer.profile?.full_name,
+  officerName: officer.officerName || officer.full_name || officer.profile?.full_name,
+  badge_number: officer.badge_number || officer.badgeNumber || officer.profile?.badge_number,
+  badgeNumber: officer.badgeNumber || officer.badge_number || officer.profile?.badge_number,
+  rank: officer.rank || officer.profile?.rank,
+  service_credit: officer.service_credit || officer.serviceCredit || officer.profile?.service_credit,
+  serviceCredit: officer.serviceCredit || officer.service_credit || officer.profile?.service_credit,
+  hire_date: officer.hire_date || officer.profile?.hire_date,
+  service_credit_override: officer.service_credit_override || officer.profile?.service_credit_override || 0,
+  promotion_date_sergeant: officer.promotion_date_sergeant || officer.profile?.promotion_date_sergeant,
+  promotion_date_lieutenant: officer.promotion_date_lieutenant || officer.profile?.promotion_date_lieutenant
+});
+
+// New function: categorize sorted officers (use after sortOfficersConsistently)
+export const categorizeSortedOfficers = (sortedOfficers: OfficerForSorting[]) => {
+  const supervisors = sortedOfficers.filter(officer => isSupervisorFromSortingUtils(officer));
+  const ppos = sortedOfficers.filter(officer => isPPOFromSortingUtils(officer));
+  const regularOfficers = sortedOfficers.filter(officer => 
+    !isSupervisorFromSortingUtils(officer) && !isPPOFromSortingUtils(officer)
+  );
+  
+  return { supervisors, regularOfficers, ppos };
 };

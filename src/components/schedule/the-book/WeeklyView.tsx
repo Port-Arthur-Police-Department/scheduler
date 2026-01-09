@@ -613,7 +613,7 @@ const regularOfficers = allOfficersList.filter(o =>
   return aBadge - bBadge; // Ascending
 }
   return getLastName(a.officerName || '').localeCompare(getLastName(b.officerName || ''));
-616|      });
+});
 
   // Debug: Check sorting results
   console.log('Sorting results:', {

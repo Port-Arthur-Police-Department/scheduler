@@ -362,118 +362,119 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     });
   }
 
-  // Process daily schedules with enhanced safety
-  if (localSchedules.dailySchedules) {
-    localSchedules.dailySchedules.forEach(day => {
-      // Ensure day.officers exists and is an array
-      if (!day.officers || !Array.isArray(day.officers)) {
-        console.warn('No officers array found for day:', day.date);
+// Process daily schedules with enhanced safety
+if (localSchedules.dailySchedules) {
+  localSchedules.dailySchedules.forEach(day => {
+    // Ensure day.officers exists and is an array
+    if (!day.officers || !Array.isArray(day.officers)) {
+      console.warn('No officers array found for day:', day.date);
+      return;
+    }
+    
+    day.officers.forEach((officer: any) => {
+      if (!officer || !officer.officerId) {
+        console.warn('Invalid officer data found:', officer);
         return;
       }
       
-      day.officers.forEach((officer: any) => {
-        if (!officer || !officer.officerId) {
-          console.warn('Invalid officer data found:', officer);
-          return;
+      if (!allOfficers.has(officer.officerId)) {
+        // IMPORTANT: The officer object from parent might not have hire/promotion dates
+        // We need to extract them from profiles if available
+        let profileData: any = null;
+        
+        // Try to get profile data from different sources
+        // Option 1: Check if officer has direct profile data
+        if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+          profileData = {
+            hire_date: officer.hire_date,
+            promotion_date_sergeant: officer.promotion_date_sergeant,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant,
+            service_credit_override: officer.service_credit_override || 0
+          };
         }
-        
-        if (!allOfficers.has(officer.officerId)) {
-          // IMPORTANT: The officer object from parent might not have hire/promotion dates
-          // We need to extract them from profiles if available
-          let profileData: any = null;
-          
-          // Try to get profile data from different sources
-          // Option 1: Check if officer has direct profile data
-          if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
-            profileData = {
-              hire_date: officer.hire_date,
-              promotion_date_sergeant: officer.promotion_date_sergeant,
-              promotion_date_lieutenant: officer.promotion_date_lieutenant,
-              service_credit_override: officer.service_credit_override || 0
-            };
-          }
-          // Option 2: Check if officerProfiles prop has the data
-          else if (effectiveOfficerProfiles && 
-                   effectiveOfficerProfiles instanceof Map && 
-                   effectiveOfficerProfiles.has(officer.officerId)) {
-            profileData = effectiveOfficerProfiles.get(officer.officerId);
-          }
-          // Option 3: Use officer data as is (may be incomplete)
-          else {
-            profileData = {
-              hire_date: officer.hire_date || null,
-              promotion_date_sergeant: officer.promotion_date_sergeant || null,
-              promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
-              service_credit_override: officer.service_credit_override || 0
-            };
-          }
+        // Option 2: Check if officerProfiles prop has the data
+        else if (effectiveOfficerProfiles && 
+                 effectiveOfficerProfiles instanceof Map && 
+                 effectiveOfficerProfiles.has(officer.officerId)) {
+          profileData = effectiveOfficerProfiles.get(officer.officerId);
+        }
+        // Option 3: Use officer data as is (may be incomplete)
+        else {
+          profileData = {
+            hire_date: officer.hire_date || null,
+            promotion_date_sergeant: officer.promotion_date_sergeant || null,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
+            service_credit_override: officer.service_credit_override || 0
+          };
+        }
 
-// Don't calculate service credit here - just pass the raw data
-// The sorting utility will handle calculation with override properly
-allOfficers.set(officer.officerId, {
-  officerId: officer.officerId,
-  officerName: officer.officerName || officer.full_name || "Unknown",
-  badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
-  rank: officer.rank || "Officer",
-  // REMOVE service_credit calculation here
-  hire_date: profileData?.hire_date || null,
-  promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
-  promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
-  service_credit_override: profileData?.service_credit_override || 0,
-  recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-  weeklySchedule: {} as Record<string, any>
-});
-        
-        // Store daily schedule for this officer with FRESH data
-        // Determine if this is a recurring day
-        const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
-        
-        // Check if this is an exception (not a regular recurring day)
-        const isException = !isRecurringDay || 
-                           officer.scheduleType === 'exception' || 
-                           officer.shiftInfo?.scheduleType === 'exception';
-        
-        // Check if officer has PTO - ONLY if it's an exception
-        const hasPTO = isException && (officer.shiftInfo?.hasPTO || false);
-        
-        const daySchedule = {
+        // Don't calculate service credit here - just pass the raw data
+        // The sorting utility will handle calculation with override properly
+        allOfficers.set(officer.officerId, {
           officerId: officer.officerId,
           officerName: officer.officerName || officer.full_name || "Unknown",
           badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
           rank: officer.rank || "Officer",
-          service_credit: allOfficers.get(officer.officerId)?.service_credit || 0,
-          date: day.date,
-          dayOfWeek: day.dayOfWeek,
-          scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
+          // REMOVE service_credit calculation here
+          hire_date: profileData?.hire_date || null,
+          promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
+          promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
+          service_credit_override: profileData?.service_credit_override || 0,
+          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+          weeklySchedule: {} as Record<string, any>
+        });
+      }
+      
+      // Store daily schedule for this officer with FRESH data
+      // Determine if this is a recurring day
+      const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
+      
+      // Check if this is an exception (not a regular recurring day)
+      const isException = !isRecurringDay || 
+                         officer.scheduleType === 'exception' || 
+                         officer.shiftInfo?.scheduleType === 'exception';
+      
+      // Check if officer has PTO - ONLY if it's an exception
+      const hasPTO = isException && (officer.shiftInfo?.hasPTO || false);
+      
+      const daySchedule = {
+        officerId: officer.officerId,
+        officerName: officer.officerName || officer.full_name || "Unknown",
+        badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
+        rank: officer.rank || "Officer",
+        service_credit: allOfficers.get(officer.officerId)?.service_credit || 0,
+        date: day.date,
+        dayOfWeek: day.dayOfWeek,
+        scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
+        scheduleType: isException ? 'exception' : 'recurring',
+        isRegularRecurringDay: isRecurringDay && !hasPTO, // Only true if recurring and no PTO
+        shiftInfo: {
+          scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
           scheduleType: isException ? 'exception' : 'recurring',
-          isRegularRecurringDay: isRecurringDay && !hasPTO, // Only true if recurring and no PTO
-          shiftInfo: {
-            scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
-            scheduleType: isException ? 'exception' : 'recurring',
-            position: officer.shiftInfo?.position || officer.position || "",
-            unitNumber: officer.shiftInfo?.unitNumber,
-            notes: officer.shiftInfo?.notes,
-            isOff: hasPTO || officer.shiftInfo?.isOff || false,
-            hasPTO: hasPTO,
-            ptoData: hasPTO ? officer.shiftInfo?.ptoData : undefined,
-            reason: officer.shiftInfo?.reason
-          }
-        };
-        
-        const currentOfficer = allOfficers.get(officer.officerId);
-        if (currentOfficer) {
-          // Ensure weeklySchedule exists
-          if (!currentOfficer.weeklySchedule) {
-            currentOfficer.weeklySchedule = {};
-          }
-          // Overwrite with fresh data - don't merge with old data
-          currentOfficer.weeklySchedule[day.date] = daySchedule;
+          position: officer.shiftInfo?.position || officer.position || "",
+          unitNumber: officer.shiftInfo?.unitNumber,
+          notes: officer.shiftInfo?.notes,
+          isOff: hasPTO || officer.shiftInfo?.isOff || false,
+          hasPTO: hasPTO,
+          ptoData: hasPTO ? officer.shiftInfo?.ptoData : undefined,
+          reason: officer.shiftInfo?.reason
         }
-      });
+      };
+      
+      const currentOfficer = allOfficers.get(officer.officerId);
+      if (currentOfficer) {
+        // Ensure weeklySchedule exists
+        if (!currentOfficer.weeklySchedule) {
+          currentOfficer.weeklySchedule = {};
+        }
+        // Overwrite with fresh data - don't merge with old data
+        currentOfficer.weeklySchedule[day.date] = daySchedule;
+      }
     });
-  }
+  });
+} // <-- This closing brace was likely missing or misplaced
 
-  console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
+console.log(`Processed ${allOfficers.size} officers with profiles. Profiles available: ${effectiveOfficerProfiles && effectiveOfficerProfiles instanceof Map ? 'Yes' : 'No'}`);
 
 // Convert allOfficers Map to array for sorting
 const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
@@ -542,8 +543,8 @@ const ppos = sortedOriginalOfficers.filter(officer =>
 );
 
 // Debug log to verify
-console.log('Sorted officers:', {
-  total: sortedOfficers.length,
+console.log('Sorting results:', {
+  totalOfficers: allOfficers.size,
   supervisors: supervisors.length,
   regularOfficers: regularOfficers.length,
   ppos: ppos.length

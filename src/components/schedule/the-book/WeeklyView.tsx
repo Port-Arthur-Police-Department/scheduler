@@ -539,6 +539,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 // Convert allOfficers Map to array for sorting
 const allOfficersArray = Array.from(allOfficers.values()).filter(o => o);
 
+// Debug: Check what service credit values we have
+console.log('Officers before sorting:', allOfficersArray.map(o => ({
+  name: o.officerName,
+  badge: o.badgeNumber,
+  service_credit: o.service_credit,
+  rank: o.rank
+})));
+
 // Sort officers consistently
 const sortedOfficers = sortOfficersConsistently(allOfficersArray);
 

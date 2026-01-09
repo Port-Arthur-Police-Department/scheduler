@@ -39,6 +39,13 @@ export const getBadgeNumberForSorting = (officer: OfficerForSorting): number => 
  */
 export const getServiceCreditForSorting = (officer: OfficerForSorting): number => {
   const credit = officer.service_credit !== undefined ? officer.service_credit : officer.serviceCredit;
+  console.log('Service credit for officer:', {
+    id: officer.id,
+    name: officer.full_name || officer.officerName,
+    service_credit: officer.service_credit,
+    serviceCredit: officer.serviceCredit,
+    final: credit || 0
+  });
   return credit || 0;
 };
 

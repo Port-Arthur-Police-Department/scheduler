@@ -294,60 +294,82 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       }).filter(officer => officer.totalDays > 0);
     }
     
-    // Sort like WeeklyView.tsx
-    const allSupervisors = officers.filter(o => 
-      o.officer && isSupervisorByRank(o.officer)
-    );
+  // Categorize officers with UPDATED supervisor sorting
+  // First get all supervisors
+  const allSupervisors = Array.from(allOfficers.values())
+    .filter(o => o && isSupervisorByRank(o));
 
-    const lieutenants = allSupervisors.filter(o => 
-      o.officer.rank && (
-        o.officer.rank.toLowerCase().includes('lieutenant') || 
-        o.officer.rank.toLowerCase().includes('lt') ||
-        o.officer.rank.toLowerCase().includes('chief')
-      )
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+  // Separate Lieutenants and Sergeants
+  const lieutenants = allSupervisors.filter(o => 
+    o && o.rank && (
+      o.rank.toLowerCase().includes('lieutenant') || 
+      o.rank.toLowerCase().includes('lt') ||
+      o.rank.toLowerCase().includes('chief')
+    )
+  ).sort((a, b) => {
+    // Sort Lieutenants by service credit DESCENDING (highest first)
+    const aCredit = a.service_credit || 0;
+    const bCredit = b.service_credit || 0;
+    if (bCredit !== aCredit) {
+      return bCredit - aCredit; // Descending
+    }
+    // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
+    const aBadge = parseInt(a.badgeNumber) || 9999;
+    const bBadge = parseInt(b.badgeNumber) || 9999;
+    return aBadge - bBadge; // Ascending
+  });
+
+  const sergeants = allSupervisors.filter(o => 
+    o && o.rank && (
+      o.rank.toLowerCase().includes('sergeant') || 
+      o.rank.toLowerCase().includes('sgt')
+    )
+  ).sort((a, b) => {
+    // Sort Sergeants by service credit DESCENDING (highest first)
+    const aCredit = a.service_credit || 0;
+    const bCredit = b.service_credit || 0;
+    if (bCredit !== aCredit) {
+      return bCredit - aCredit; // Descending
+    }
+    // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
+    const aBadge = parseInt(a.badgeNumber) || 9999;
+    const bBadge = parseInt(b.badgeNumber) || 9999;
+    return aBadge - bBadge; // Ascending
+  });
+
+  // Combine with Lieutenants first, then Sergeants
+  const supervisors = [...lieutenants, ...sergeants];
+
+  const allOfficersList = Array.from(allOfficers.values())
+    .filter(o => o && !isSupervisorByRank(o));
+
+  const ppos = allOfficersList
+    .filter(o => o && o.rank && o.rank.toLowerCase() === 'probationary')
+    .sort((a, b) => {
+      const aCredit = a.service_credit || 0;
+      const bCredit = b.service_credit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
+      const aBadge = parseInt(a.badgeNumber) || 9999;
+      const bBadge = parseInt(b.badgeNumber) || 9999;
+      return aBadge - bBadge; // Ascending
     });
 
-    const sergeants = allSupervisors.filter(o => 
-      o.officer.rank && (
-        o.officer.rank.toLowerCase().includes('sergeant') || 
-        o.officer.rank.toLowerCase().includes('sgt')
-      )
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
+  const regularOfficers = allOfficersList
+    .filter(o => o && o.rank && o.rank.toLowerCase() !== 'probationary')
+    .sort((a, b) => {
+      const aCredit = a.service_credit || 0;
+      const bCredit = b.service_credit || 0;
+      if (bCredit !== aCredit) {
+        return bCredit - aCredit;
+      }
+      // If same service credit, sort by badge number ASCENDING (lower = higher seniority)
+      const aBadge = parseInt(a.badgeNumber) || 9999;
+      const bBadge = parseInt(b.badgeNumber) || 9999;
+      return aBadge - bBadge; // Ascending
     });
-
-    const supervisors = [...lieutenants, ...sergeants];
-
-    const allOfficersList = officers.filter(o => 
-      !o.officer || !isSupervisorByRank(o.officer)
-    );
-
-    const ppos = allOfficersList.filter(o => 
-      o.officer?.rank?.toLowerCase() === 'probationary'
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-    });
-
-    const regularOfficers = allOfficersList.filter(o => 
-      o.officer?.rank?.toLowerCase() !== 'probationary'
-    ).sort((a, b) => {
-      const aCredit = a.serviceCredit || 0;
-      const bCredit = b.serviceCredit || 0;
-      if (bCredit !== aCredit) return bCredit - aCredit;
-      return getLastName(a.officer.full_name || '').localeCompare(getLastName(b.officer.full_name || ''));
-    });
-
     return [...supervisors, ...regularOfficers, ...ppos];
   }, [vacationData?.officers, onlyRemaining, today]);
 

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { sortOfficersConsistently } from "@/utils/sortingUtils";
 
 interface VacationListViewProps {
   selectedShiftId: string;

@@ -15,8 +15,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getLastName, getRankAbbreviation } from "./utils";
 import { auditLogger } from "@/lib/auditLogger";
-import TheBookMobile from "./TheBookMobile";
-import { sortForForceList } from "@/utils/sortingUtils";
 
 interface ForcedDate {
   id?: string;
@@ -33,6 +31,59 @@ interface ForceListViewProps {
   shiftTypes: any[];
   isAdminOrSupervisor: boolean;
 }
+
+// Helper to check if officer should be excluded from force list
+const shouldExcludeFromForceList = (rank: string): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  
+  // Exclude Lieutenants, Chiefs, Deputy Chiefs, and PPOs/Probationary officers
+  return rankLower.includes('lieutenant') || 
+         rankLower.includes('lt') || 
+         rankLower.includes('chief') || 
+         rankLower.includes('deputy') ||
+         rankLower.includes('probationary') ||
+         rankLower.includes('ppo');
+};
+
+// Custom sort function for Force List
+const sortForceListOfficers = (officers: any[], getForceCount: (officerId: string) => number) => {
+  return [...officers].sort((a, b) => {
+    // Primary: service credit (LEAST to most - ascending)
+    const aCredit = a.service_credit || 0;
+    const bCredit = b.service_credit || 0;
+    
+    if (aCredit !== bCredit) {
+      return aCredit - bCredit;
+    }
+    
+    // Secondary: badge number (DESCENDING - higher badge number = lower seniority = should be higher in force list)
+    const getBadgeNumber = (officer: any): number => {
+      const badgeNum = officer.badge_number || officer.badgeNumber;
+      if (!badgeNum) return 9999;
+      
+      const parsed = parseInt(badgeNum);
+      return isNaN(parsed) ? 9999 : parsed;
+    };
+    
+    const aBadge = getBadgeNumber(a);
+    const bBadge = getBadgeNumber(b);
+    if (aBadge !== bBadge) {
+      return bBadge - aBadge; // DESCENDING - higher badge number first
+    }
+    
+    // Tertiary: last name (A-Z)
+    const getLastNameFromFullName = (name: string = ""): string => {
+      if (!name) return "";
+      const parts = name.trim().split(/\s+/);
+      return parts[parts.length - 1] || "";
+    };
+    
+    const aLastName = getLastNameFromFullName(a.full_name);
+    const bLastName = getLastNameFromFullName(b.full_name);
+    return aLastName.localeCompare(bLastName);
+  });
+};
 
 export const ForceListView: React.FC<ForceListViewProps> = ({
   selectedShiftId,
@@ -170,7 +221,9 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
             badge_number,
             rank,
             service_credit_override,
-            hire_date
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant
           )
         `)
         .eq("shift_type_id", selectedShiftId)
@@ -182,49 +235,73 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         throw recurringError;
       }
 
-      // Get unique officers from recurring schedules that are active during the selected year
-      const officers = recurringSchedules
-        ?.map(schedule => schedule.profiles)
-        .filter(Boolean) || [];
+      // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs/PPOs
+      const uniqueOfficersMap = new Map();
+      const excludedOfficers: any[] = [];
       
-      const uniqueOfficers = Array.from(
-        new Map(officers.map(officer => [officer.id, officer])).values()
-      );
-
-      // Fetch service credits for all officers
-      const officerIds = uniqueOfficers.map(o => o.id);
-      const serviceCredits = new Map();
-      
-      if (officerIds.length > 0) {
-        // Use your existing service credit RPC function
-        for (const officerId of officerIds) {
-          try {
-            const { data, error } = await supabase
-              .rpc('get_service_credit', { profile_id: officerId });
-            
-            if (!error && data !== null) {
-              // Ensure data is a number and format to one decimal
-              const creditValue = parseFloat(data);
-              serviceCredits.set(officerId, isNaN(creditValue) ? 0 : creditValue);
-            } else {
-              serviceCredits.set(officerId, 0);
+      recurringSchedules?.forEach(schedule => {
+        if (schedule.profiles) {
+          // Check if officer should be included (exclude Lieutenants/Chiefs/PPOs)
+          if (shouldExcludeFromForceList(schedule.profiles.rank)) {
+            excludedOfficers.push({
+              name: schedule.profiles.full_name,
+              rank: schedule.profiles.rank
+            });
+          } else {
+            if (!uniqueOfficersMap.has(schedule.profiles.id)) {
+              uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
             }
-          } catch (error) {
-            console.error(`Error fetching service credit for officer ${officerId}:`, error);
-            serviceCredits.set(officerId, 0);
           }
         }
+      });
+      
+      const officers = Array.from(uniqueOfficersMap.values());
+
+      // Log excluded officers for debugging
+      if (excludedOfficers.length > 0) {
+        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):', 
+          excludedOfficers
+        );
       }
 
-      // Add service credits to each officer object
-      const officersWithCredits = uniqueOfficers.map(officer => ({
-        ...officer,
-        service_credit: serviceCredits.get(officer.id) || 0
-      }));
+      console.log(`📊 Included officers for force list: ${officers.length}`);
+
+      // Fetch service credits for each officer via RPC
+      console.log('🔄 Fetching service credits for officers...');
+      const officersWithCredits = await Promise.all(
+        officers.map(async (officer) => {
+          try {
+            const { data: creditData, error: creditError } = await supabase
+              .rpc('get_service_credit', { profile_id: officer.id });
+            
+            if (creditError) {
+              console.error(`Error fetching service credit for ${officer.full_name}:`, creditError);
+              return {
+                ...officer,
+                service_credit: 0
+              };
+            }
+            
+            const serviceCredit = parseFloat(creditData) || 0;
+            console.log(`Officer ${officer.full_name} - Service Credit: ${serviceCredit}`);
+            
+            return {
+              ...officer,
+              service_credit: serviceCredit
+            };
+          } catch (error) {
+            console.error(`Error fetching service credit for ${officer.full_name}:`, error);
+            return {
+              ...officer,
+              service_credit: 0
+            };
+          }
+        })
+      );
 
       return {
         officers: officersWithCredits || [],
-        totalCount: uniqueOfficers.length
+        totalCount: officersWithCredits.length
       };
     },
     enabled: !!selectedShiftId,
@@ -259,32 +336,30 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
     return isNaN(num) ? '0.0' : num.toFixed(1);
   };
 
-// After getting forceListData...
-const allOfficers = forceListData?.officers || [];
+  // After getting forceListData...
+  const allOfficers = forceListData?.officers || [];
 
-// Sort officers for force list
-const sortedOfficers = sortForForceList(allOfficers, getForceCount);
+  // Sort officers for force list
+  const sortedOfficers = sortForceListOfficers(allOfficers, getForceCount);
 
-// Now categorize the sorted officers
-const sortedSupervisors = sortedOfficers.filter(officer => {
-  const rank = officer?.rank?.toLowerCase() || '';
-  return rank.includes('sergeant') || rank.includes('sgt');
-});
+  // Now categorize the sorted officers
+  const sortedSupervisors = sortedOfficers.filter(officer => {
+    const rank = officer?.rank?.toLowerCase() || '';
+    return (rank.includes('sergeant') || rank.includes('sgt')) && 
+           !rank.includes('lieutenant') && 
+           !rank.includes('lt') && 
+           !rank.includes('chief') && 
+           !rank.includes('deputy');
+  });
 
-const sortedRegularOfficers = sortedOfficers.filter(officer => {
-  const rank = officer?.rank?.toLowerCase() || '';
-  return !rank.includes('sergeant') && 
-         !rank.includes('sgt') &&
-         !rank.includes('probationary') &&
-         !rank.includes('lieutenant') &&
-         !rank.includes('lt') &&
-         !rank.includes('deputy') &&
-         !rank.includes('chief');
-});
-
-const sortedPPOs = sortedOfficers.filter(officer => 
-  officer.rank?.toLowerCase() === 'probationary'
-);
+  const sortedRegularOfficers = sortedOfficers.filter(officer => {
+    const rank = officer?.rank?.toLowerCase() || '';
+    // Check if it's a sergeant
+    const isSergeant = rank.includes('sergeant') || rank.includes('sgt');
+    
+    // Include only if NOT a sergeant (all others are regular officers)
+    return !isSergeant;
+  });
 
   const handlePreviousWeek = () => {
     setFilters(prev => ({
@@ -658,95 +733,7 @@ const sortedPPOs = sortedOfficers.filter(officer =>
                   </div>
                 )}
 
-                {/* PPO Section */}
-                {sortedPPOs.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-lg font-semibold border-b pb-2 mt-4">
-                      PPO Officers ({sortedPPOs.length})
-                    </div>
-                    {sortedPPOs.map((officer) => {
-                      const forcedDates = getOfficerForcedDates(officer.id);
-                      const forceCount = getForceCount(officer.id);
-                      
-                      return (
-                        <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center bg-blue-50">
-                          <div className="col-span-2">
-                            <div className="font-medium">
-                              {getLastName(officer.full_name)}
-                              <Badge variant="outline" className="ml-2 text-xs bg-blue-100">
-                                PPO
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="col-span-1">
-                            {officer.badge_number}
-                          </div>
-                          <div className="col-span-1">
-                            <Badge variant="secondary" className="text-xs">
-                              PPO
-                            </Badge>
-                          </div>
-                          <div className="col-span-1 text-center">
-                            <Badge variant="outline" className="text-xs font-mono">
-                              {formatServiceCredit(officer.service_credit)}
-                            </Badge>
-                          </div>
-                          <div className="col-span-1 text-center">
-                            <Badge 
-                              variant={forceCount === 0 ? "outline" : "default"}
-                              className={forceCount === 0 ? "" : "bg-blue-600"}
-                            >
-                              {forceCount}
-                            </Badge>
-                          </div>
-                          <div className="col-span-2">
-                            <div className="flex flex-wrap gap-1">
-                              {forcedDates.map((forcedDate) => (
-                                <Badge 
-                                  key={forcedDate.id}
-                                  variant="outline"
-                                  className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
-                                >
-                                  {format(parseISO(forcedDate.forced_date), "MMM d")}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-3 w-3 ml-1 hover:bg-red-100 hover:text-red-600"
-                                    onClick={() => forcedDate.id && handleDeleteForcedDate(forcedDate.id)}
-                                    title="Remove forced date"
-                                  >
-                                    <X className="h-2 w-2" />
-                                  </Button>
-                                </Badge>
-                              ))}
-                              {forcedDates.length === 0 && (
-                                <span className="text-sm text-muted-foreground italic">Never forced</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="col-span-1">
-                            {isAdminOrSupervisor ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleAddForcedDate(officer.id, officer.full_name)}
-                                title="Add forced date"
-                                className="bg-white"
-                              >
-                                <Clock className="h-3 w-3 mr-1" />
-                                Force
-                              </Button>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {/* REMOVED PPOs Section */}
               </div>
 
               {/* Forced Date Entry Modal */}
@@ -833,9 +820,8 @@ const sortedPPOs = sortedOfficers.filter(officer =>
                 </div>
               )}
 
-
-              {/* Summary Statistics */}
-              <div className="grid grid-cols-4 gap-4 pt-4 border-t">
+              {/* Summary Statistics - REMOVED PPOs COUNT */}
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold">{sortedSupervisors.length}</div>
                   <div className="text-sm text-muted-foreground">Sergeants</div>
@@ -845,12 +831,8 @@ const sortedPPOs = sortedOfficers.filter(officer =>
                   <div className="text-sm text-muted-foreground">Officers</div>
                 </div>
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold">{sortedPPOs.length}</div>
-                  <div className="text-sm text-muted-foreground">PPOs</div>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold">
-                    {sortedSupervisors.length + sortedRegularOfficers.length + sortedPPOs.length}
+                    {sortedSupervisors.length + sortedRegularOfficers.length}
                   </div>
                   <div className="text-sm text-muted-foreground">Total Force</div>
                 </div>
@@ -875,6 +857,27 @@ const sortedPPOs = sortedOfficers.filter(officer =>
                     3
                   </Badge>
                   <span className="text-sm">Force count (shows total forced shifts)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="h-5">
+                    Sgt
+                  </Badge>
+                  <span className="text-sm">Sergeants only (Lieutenants/Chiefs/PPOs excluded)</span>
+                </div>
+              </div>
+
+              {/* Force List Info */}
+              <div className="p-4 border rounded-lg bg-blue-50">
+                <h4 className="font-semibold mb-2">Force List Information</h4>
+                <div className="text-sm space-y-1">
+                  <p><strong>Included:</strong> Sergeants and Regular Officers only</p>
+                  <p><strong>Excluded:</strong> Lieutenants, Chiefs, Deputy Chiefs, and PPOs/Probationary officers</p>
+                  <p><strong>Sorting Priority:</strong></p>
+                  <ol className="list-decimal pl-5 space-y-1">
+                    <li>Service Credit (least to most)</li>
+                    <li>Badge Number (higher to lower when service credits equal)</li>
+                    <li>Last Name (A-Z)</li>
+                  </ol>
                 </div>
               </div>
             </div>

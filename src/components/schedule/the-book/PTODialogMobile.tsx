@@ -57,25 +57,27 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
     }
   };
 
-  const handleSave = () => {
-    const ptoData = {
-      officerId,
-      date,
-      shiftTypeId,
-      ptoType: selectedPtoType,
-      isFullShift: selectedIsFullDay,
-      // For full day, use the shift times
-      startTime: selectedIsFullDay ? shiftStartTime : selectedStartTime,
-      endTime: selectedIsFullDay ? shiftEndTime : selectedEndTime,
-      isOff: true,
-      reason: selectedPtoType,
-      custom_start_time: selectedIsFullDay ? null : selectedStartTime,
-      custom_end_time: selectedIsFullDay ? null : selectedEndTime,
-    };
-    
-    console.log('📱 Saving PTO data:', ptoData);
-    onSave(ptoData);
+const handleSave = () => {
+  const ptoData = {
+    officerId,
+    date,
+    shiftTypeId,
+    ptoType: selectedPtoType,
+    isFullShift: selectedIsFullDay,
+    // For full day, use the shift times
+    startTime: selectedIsFullDay ? shiftStartTime : selectedStartTime,
+    endTime: selectedIsFullDay ? shiftEndTime : selectedEndTime,
+    isOff: true,
+    reason: selectedPtoType,
+    custom_start_time: selectedIsFullDay ? null : selectedStartTime,
+    custom_end_time: selectedIsFullDay ? null : selectedEndTime,
   };
+  
+  console.log('📱 Saving PTO data:', ptoData);
+  onSave(ptoData);
+  // Note: The dialog should be closed by the parent component (TheBook.tsx)
+  // after the save operation completes successfully
+};
 
   // Generate time options based on shift times
   const generateTimeOptions = () => {

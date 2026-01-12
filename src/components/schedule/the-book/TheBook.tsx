@@ -1,4 +1,4 @@
-// src/components/schedule/the-book/TheBook.tsx
+// src/components/schedule/the-book/TheBook.tsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +33,6 @@ import { useUser } from "@/contexts/UserContext";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
-import { PTOAssignmentDialog } from "../PTOAssignmentDialog";
 import { auditLogger } from "@/lib/auditLogger";
 
 // Import view components
@@ -44,7 +43,7 @@ import { VacationListView } from "./VacationListView";
 import { BeatPreferencesView } from "./BeatPreferencesView";
 import { ScheduleExportDialog } from "./ScheduleExportDialog";
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
-//import { AssignmentEditDialog } from "./AssignmentEditDialog";
+import { PTODialogMobile } from "./PTODialogMobile";
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";
@@ -75,9 +74,28 @@ const TheBook = ({
   const [activeView, setActiveView] = useState<TheBookView>("weekly");
   const [selectedShiftId, setSelectedShiftId] = useState<string>("");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  
+  // SIMPLIFIED Dialog states (like mobile)
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
-  const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
-  const [editingAssignment, setEditingAssignment] = useState<{ officer: any; dateStr: string } | null>(null);
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  
+  const [selectedOfficerForPTO, setSelectedOfficerForPTO] = useState<{
+    id: string;
+    name: string;
+    date: string;
+    schedule: any;
+    shiftStartTime?: string;
+    shiftEndTime?: string;
+  } | null>(null);
+
+  const [editingAssignment, setEditingAssignment] = useState<{
+    officer: any;
+    dateStr: string;
+    shiftTypeId?: string;
+    officerId?: string;
+    officerName?: string;
+  } | null>(null);
+
   const mutationsResult = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
   
   // Destructure with safe fallbacks
@@ -173,8 +191,6 @@ const TheBook = ({
     enabled: true, // Changed: Default assignments are officer-specific, not shift-specific
   });
   
-  // ... rest of the code continues
-
   // Helper function to get default assignment
   const getDefaultAssignment = (officerId: string, date: string) => {
     if (!allDefaultAssignments) return null;
@@ -576,294 +592,385 @@ const TheBook = ({
     navigate(`/daily-schedule?date=${dateStr}&shift=${selectedShiftId}`);
   };
 
-// Helper function to invalidate schedule queries - UPDATE THIS FUNCTION
-const invalidateScheduleQueries = () => {
-  try {
-    console.log('🔄 Invalidating schedule queries...');
-    
-    // Invalidate the main schedule query
-    queryClient.invalidateQueries({ 
-      queryKey: scheduleQueryKey,
-      refetchType: 'all'
-    });
-    
-    // Also invalidate the mutation hook's query key
-    if (mutationQueryKey) {
+  // Helper function to invalidate schedule queries
+  const invalidateScheduleQueries = () => {
+    try {
+      console.log('🔄 Invalidating schedule queries...');
+      
+      // Invalidate the main schedule query
       queryClient.invalidateQueries({ 
-        queryKey: mutationQueryKey,
+        queryKey: scheduleQueryKey,
         refetchType: 'all'
       });
-    }
-    
-    // Invalidate officer profiles query
-    queryClient.invalidateQueries({ 
-      queryKey: ['officer-profiles-weekly'],
-      refetchType: 'all'
-    });
-    
-    console.log('✅ Cache invalidated for schedule queries');
-  } catch (error) {
-    console.error('❌ Error invalidating schedule queries:', error);
-  }
-};
-
-  // Event handlers
-const handleEditAssignment = (officer: any, dateStr: string) => {
-  console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
-  console.log('Full officer object:', officer);
-  console.log('Officer shiftInfo:', officer?.shiftInfo);
-  console.log('Date:', dateStr);
-  
-  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
-  console.log('Found officerId:', officerId);
-  
-  // Make sure we have all the necessary data
-  const officerData = {
-    ...officer,
-    officerId: officerId,
-    shiftInfo: {
-      ...officer?.shiftInfo,
-      // Store current position for comparison
-      currentPosition: officer?.shiftInfo?.position || ''
+      
+      // Also invalidate the mutation hook's query key
+      if (mutationQueryKey) {
+        queryClient.invalidateQueries({ 
+          queryKey: mutationQueryKey,
+          refetchType: 'all'
+        });
+      }
+      
+      // Invalidate officer profiles query
+      queryClient.invalidateQueries({ 
+        queryKey: ['officer-profiles-weekly'],
+        refetchType: 'all'
+      });
+      
+      console.log('✅ Cache invalidated for schedule queries');
+    } catch (error) {
+      console.error('❌ Error invalidating schedule queries:', error);
     }
   };
-  
-  console.log('Prepared officer data for editing:', officerData);
-  
-  setEditingAssignment({ 
-    officer: officerData, 
-    dateStr 
-  });
-};
 
+  // FIXED: PTO Assignment Handler (simplified like mobile)
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
-    setSelectedSchedule({
-      scheduleId: schedule.scheduleId,
-      type: schedule.scheduleType,
-      date,
-      shift: schedule.shift,
-      officerId,
-      officerName,
-      ...(schedule.hasPTO && schedule.ptoData ? { existingPTO: schedule.ptoData } : {})
+    console.log('🎯 handleAssignPTO called (desktop):', { schedule, date, officerId, officerName });
+    
+    // Get the current shift times (like mobile does)
+    const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
+    const shiftStartTime = currentShift?.start_time || "08:00";
+    const shiftEndTime = currentShift?.end_time || "17:00";
+    
+    setSelectedOfficerForPTO({
+      id: officerId,
+      name: officerName,
+      date: date,
+      schedule: schedule,
+      shiftStartTime: shiftStartTime,
+      shiftEndTime: shiftEndTime
     });
     setPtoDialogOpen(true);
   };
 
-const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
-  console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
-  
-  if (!schedule?.ptoData?.id) {
-    console.error('❌ Missing PTO data:', { 
-      hasSchedule: !!schedule, 
-      hasPTOData: !!schedule?.ptoData,
-      ptoDataId: schedule?.ptoData?.id 
-    });
-    toast.error("Cannot remove PTO: Missing PTO data");
-    return;
-  }
-
-  if (!officerId) {
-    console.error('❌ Missing officer ID');
-    toast.error("Cannot remove PTO: Missing officer ID");
-    return;
-  }
-
-  let officerName = "Unknown Officer";
-  try {
-    const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
-    if (daySchedule) {
-      const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
-      officerName = officerData?.officerName || officerName;
-    }
-  } catch (error) {
-    console.error("Error getting officer name:", error);
-  }
-
-  const ptoMutationData = {
-    id: schedule.ptoData.id,
-    officerId: officerId,
-    date: date,
-    shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
-    ptoType: schedule.ptoData.ptoType || "PTO",
-    startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
-    endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
+  // Helper function to get PTO column name (like mobile)
+  const getPTOColumn = (ptoType: string): string | null => {
+    const ptoTypes = {
+      'vacation': 'vacation_hours',
+      'sick': 'sick_hours',
+      'holiday': 'holiday_hours',
+      'comp': 'comp_time_hours',
+      'other': 'other_pto_hours'
+    };
+    return ptoTypes[ptoType as keyof typeof ptoTypes] || null;
   };
 
-  console.log('📋 Calling removePTOMutation with:', ptoMutationData);
+  // Helper function to calculate hours used (like mobile)
+  const calculateHoursUsed = (startTime: string, endTime: string): number => {
+    try {
+      const [startHour, startMin] = startTime.split(":").map(Number);
+      const [endHour, endMin] = endTime.split(":").map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      return (endMinutes - startMinutes) / 60;
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+      return 8; // Default to 8 hours
+    }
+  };
 
-  // FIRST: Directly update the cache to remove PTO styling immediately
-  queryClient.setQueryData(scheduleQueryKey, (oldData: any) => {
-    if (!oldData) return oldData;
-    
-    const newData = JSON.parse(JSON.stringify(oldData));
-    
-    // Find and update the specific day and officer
-    if (newData.dailySchedules) {
-      newData.dailySchedules = newData.dailySchedules.map((day: any) => {
-        if (day.date === date) {
-          return {
-            ...day,
-            officers: day.officers.map((officer: any) => {
-              if (officer.officerId === officerId) {
-                // Remove PTO data from this officer
-                const updatedOfficer = {
-                  ...officer,
-                  shiftInfo: {
-                    ...officer.shiftInfo,
-                    hasPTO: false,
-                    ptoData: undefined,
-                    isOff: false // CRITICAL: Make sure isOff is false
-                  }
-                };
-                
-                console.log('🔄 Updated officer in cache:', updatedOfficer);
-                return updatedOfficer;
+  // FIXED: PTO Save Handler (simplified like mobile)
+  const handleSavePTO = async (ptoData: any) => {
+    if (!selectedOfficerForPTO || !selectedShiftId) {
+      toast.error("Missing required information");
+      return;
+    }
+
+    console.log('💾 Saving PTO (desktop):', ptoData);
+
+    try {
+      toast.loading("Assigning PTO...");
+
+      // For full day PTO, we should use the shift times or 00:00-23:59
+      const startTime = ptoData.isFullShift 
+        ? (ptoData.startTime || "00:00") 
+        : ptoData.startTime;
+      
+      const endTime = ptoData.isFullShift 
+        ? (ptoData.endTime || "23:59") 
+        : ptoData.endTime;
+
+      // Check if there's already a schedule exception for this officer on this date
+      const { data: existingExceptions, error: checkError } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", selectedOfficerForPTO.id)
+        .eq("date", selectedOfficerForPTO.date)
+        .eq("shift_type_id", selectedShiftId);
+
+      if (checkError) throw checkError;
+
+      let exceptionId;
+
+      if (existingExceptions && existingExceptions.length > 0) {
+        // Update existing exception
+        const { error: updateError } = await supabase
+          .from("schedule_exceptions")
+          .update({
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
+            position_name: null,
+            unit_number: null,
+            notes: `PTO: ${ptoData.ptoType}`
+          })
+          .eq("id", existingExceptions[0].id);
+
+        if (updateError) throw updateError;
+        exceptionId = existingExceptions[0].id;
+      } else {
+        // Create new exception
+        const { data: newException, error: insertError } = await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: selectedOfficerForPTO.id,
+            date: selectedOfficerForPTO.date,
+            shift_type_id: selectedShiftId,
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
+            position_name: null,
+            unit_number: null,
+            notes: `PTO: ${ptoData.ptoType}`
+          })
+          .select("id")
+          .single();
+
+        if (insertError) throw insertError;
+        exceptionId = newException.id;
+      }
+
+      // Deduct from PTO balance if enabled
+      if (websiteSettings?.show_pto_balances) {
+        const ptoColumn = getPTOColumn(ptoData.ptoType);
+        if (ptoColumn) {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", selectedOfficerForPTO.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+          } else if (profile) {
+            // For full day PTO, calculate hours based on shift times or 8 hours
+            let hoursUsed;
+            if (ptoData.isFullShift) {
+              // Try to calculate based on actual shift times if available
+              const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
+              if (currentShift?.start_time && currentShift?.end_time) {
+                hoursUsed = calculateHoursUsed(currentShift.start_time, currentShift.end_time);
+              } else {
+                hoursUsed = 8; // Default to 8 hours for full day
               }
-              return officer;
-            })
-          };
+            } else {
+              hoursUsed = calculateHoursUsed(startTime, endTime);
+            }
+            
+            const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+            
+            const { error: updateBalanceError } = await supabase
+              .from("profiles")
+              .update({
+                [ptoColumn]: Math.max(0, (currentBalance || 0) - hoursUsed),
+              })
+              .eq("id", selectedOfficerForPTO.id);
+
+            if (updateBalanceError) {
+              console.error('Error updating PTO balance:', updateBalanceError);
+            }
+          }
         }
-        return day;
+      }
+
+      // Log audit trail
+      try {
+        auditLogger.logPTOAssignment(
+          selectedOfficerForPTO.id,
+          ptoData.ptoType,
+          selectedOfficerForPTO.date,
+          userEmail,
+          `Assigned ${ptoData.ptoType} PTO via desktop`
+        );
+      } catch (logError) {
+        console.error('Failed to log PTO audit:', logError);
+      }
+
+      // Force refresh the schedule
+      invalidateScheduleQueries();
+      
+      // Close dialog
+      setPtoDialogOpen(false);
+      setSelectedOfficerForPTO(null);
+      
+      toast.success("PTO assigned successfully");
+
+    } catch (error: any) {
+      console.error('❌ Error assigning PTO:', error);
+      toast.error(error.message || "Failed to assign PTO");
+    } finally {
+      toast.dismiss();
+    }
+  };
+
+  const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
+    console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
+    
+    if (!schedule?.ptoData?.id) {
+      console.error('❌ Missing PTO data:', { 
+        hasSchedule: !!schedule, 
+        hasPTOData: !!schedule?.ptoData,
+        ptoDataId: schedule?.ptoData?.id 
       });
+      toast.error("Cannot remove PTO: Missing PTO data");
+      return;
+    }
+
+    if (!officerId) {
+      console.error('❌ Missing officer ID');
+      toast.error("Cannot remove PTO: Missing officer ID");
+      return;
+    }
+
+    let officerName = "Unknown Officer";
+    try {
+      const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
+      if (daySchedule) {
+        const officerData = daySchedule.officers.find((o: any) => o.officerId === officerId);
+        officerName = officerData?.officerName || officerName;
+      }
+    } catch (error) {
+      console.error("Error getting officer name:", error);
+    }
+
+    const ptoMutationData = {
+      id: schedule.ptoData.id,
+      officerId: officerId,
+      date: date,
+      shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
+      ptoType: schedule.ptoData.ptoType || "PTO",
+      startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
+      endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
+    };
+
+    console.log('📋 Calling removePTOMutation with:', ptoMutationData);
+
+    // Call the mutation
+    safeRemovePTOMutation.mutate(ptoMutationData, {
+      onSuccess: () => {
+        // Force cache invalidation
+        invalidateScheduleQueries();
+        
+        try {
+          auditLogger.logPTORemoval(
+            officerId,
+            ptoMutationData.ptoType,
+            date,
+            userEmail,
+            `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
+          );
+          console.log('📋 PTO removal logged to audit trail');
+        } catch (logError) {
+          console.error('Failed to log PTO removal audit:', logError);
+        }
+        
+        toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
+      },
+      onError: (error) => {
+        console.error('❌ Error removing PTO:', error);
+        toast.error(`Failed to remove PTO: ${error.message}`);
+      }
+    });
+  };
+
+  // FIXED: Assignment Edit Handler (simplified like mobile)
+  const handleEditAssignment = (officer: any, dateStr: string) => {
+    console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
+    console.log('Full officer object:', officer);
+    console.log('Officer shiftInfo:', officer?.shiftInfo);
+    console.log('Date:', dateStr);
+    
+    const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+    console.log('Found officerId:', officerId);
+    
+    // Make sure we have all the necessary data
+    const officerData = {
+      ...officer,
+      officerId: officerId,
+      shiftInfo: {
+        ...officer?.shiftInfo,
+        currentPosition: officer?.shiftInfo?.position || ''
+      }
+    };
+    
+    console.log('Prepared officer data for editing:', officerData);
+    
+    setEditingAssignment({ 
+      officer: officerData, 
+      dateStr,
+      shiftTypeId: selectedShiftId,
+      officerId: officerId,
+      officerName: officerData.officerName
+    });
+  };
+
+  // FIXED: Save Assignment Handler (handles new assignments properly)
+  const handleSaveAssignment = (assignmentData: any) => {
+    console.log('💾 Saving assignment (desktop):', assignmentData);
+    
+    // Check if this is a new assignment (no scheduleId)
+    const isNewAssignment = !assignmentData.scheduleId || assignmentData.scheduleId === 'new';
+    
+    if (isNewAssignment) {
+      console.log('➕ Creating new assignment (no existing schedule)');
+      
+      // For new assignments, we need to create a schedule exception
+      const newAssignmentData = {
+        officerId: assignmentData.officerId,
+        date: assignmentData.date,
+        shiftTypeId: assignmentData.shiftTypeId || selectedShiftId,
+        positionName: assignmentData.positionName,
+        unitNumber: assignmentData.unitNumber || undefined,
+        notes: assignmentData.notes || undefined,
+        isOff: false,
+        type: 'exception' as const,
+        scheduleId: null // This indicates it's a new assignment
+      };
+      
+      console.log('🚀 Creating new assignment with:', newAssignmentData);
     }
     
-    return newData;
-  });
-
-  // SECOND: Call the mutation
-  safeRemovePTOMutation.mutate(ptoMutationData, {
-    onSuccess: () => {
-      // THIRD: Force cache invalidation to ensure fresh data
-      invalidateScheduleQueries();
-      
-      // FOURTH: Force immediate refetch
-      queryClient.refetchQueries({ 
-        queryKey: scheduleQueryKey,
-        exact: true 
-      }).then(() => {
-        console.log('✅ Schedule data refetched after PTO removal');
-      });
-      
-      try {
-        auditLogger.logPTORemoval(
-          officerId,
-          ptoMutationData.ptoType,
-          date,
-          userEmail,
-          `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
-        );
-        console.log('📋 PTO removal logged to audit trail');
-      } catch (logError) {
-        console.error('Failed to log PTO removal audit:', logError);
+    // Call the mutation (updatePositionMutation should handle both updates and creates)
+    updatePositionMutation.mutate(assignmentData, {
+      onSuccess: () => {
+        // Force cache invalidation
+        invalidateScheduleQueries();
+        
+        // Log audit trail
+        try {
+          auditLogger.logPositionChange(
+            assignmentData.officerId,
+            editingAssignment?.officerName || "Unknown Officer",
+            editingAssignment?.officer?.shiftInfo?.currentPosition || 'Unknown',
+            assignmentData.positionName,
+            userEmail,
+            `Changed position for ${editingAssignment?.officerName || 'Unknown'} on ${assignmentData.date}`
+          );
+        } catch (logError) {
+          console.error('Failed to log position change audit:', logError);
+        }
+        
+        setEditingAssignment(null);
+        toast.success("Assignment updated successfully");
+      },
+      onError: (error) => {
+        console.error('❌ Error updating assignment:', error);
+        toast.error(error.message || "Failed to update assignment");
       }
-      
-      toast.success(`PTO (${ptoMutationData.ptoType}) removed successfully`);
-    },
-    onError: (error) => {
-      console.error('❌ Error removing PTO:', error);
-      toast.error(`Failed to remove PTO: ${error.message}`);
-    }
-  });
-};
-
-const handleSaveAssignment = () => {
-  if (!editingAssignment) return;
-
-  const { officer, dateStr } = editingAssignment;
-  
-  console.log('💾 Saving assignment (desktop):', { officer, dateStr });
-  console.log('Officer shiftInfo:', officer.shiftInfo);
-  
-  const officerId = officer?.officerId || 
-                    officer?.officer_id || 
-                    officer?.id ||
-                    'unknown-id';
-  
-  const officerName = officer?.officerName || 
-                      officer?.full_name || 
-                      officer?.profiles?.full_name ||
-                      'Unknown Officer';
-  
-  // Get the updated position from the dialog (this is critical!)
-  // The dialog should have updated the officer.shiftInfo.position
-  const positionName = officer.shiftInfo?.position || '';
-  const unitNumber = officer.shiftInfo?.unitNumber || '';
-  const notes = officer.shiftInfo?.notes || '';
-  
-  console.log('📝 Assignment data to save:', {
-    officerId,
-    officerName,
-    positionName,
-    unitNumber,
-    notes,
-    scheduleId: officer.shiftInfo?.scheduleId,
-    scheduleType: officer.shiftInfo?.scheduleType,
-    dateStr,
-    selectedShiftId
-  });
-  
-  if (!officerId || officerId === 'unknown-id') {
-    console.error('Could not find officer ID in:', officer);
-    toast.error("Cannot save: Officer ID not found");
-    return;
-  }
-  
-  if (!positionName) {
-    console.error('Missing position name');
-    toast.error("Cannot save: Position name is required");
-    return;
-  }
-  
-  // Prepare the complete mutation data
-  const mutationData = {
-    scheduleId: officer.shiftInfo?.scheduleId,
-    type: officer.shiftInfo?.scheduleType as "recurring" | "exception",
-    positionName: positionName,
-    date: dateStr,
-    officerId: officerId,
-    shiftTypeId: selectedShiftId,
-    currentPosition: officer.shiftInfo?.currentPosition || positionName,
-    unitNumber: unitNumber || undefined,
-    notes: notes || undefined
+    });
   };
-  
-  console.log('🚀 Calling updatePositionMutation with:', mutationData);
-  
-  updatePositionMutation.mutate(mutationData, {
-    onSuccess: () => {
-      // Force cache invalidation
-      invalidateScheduleQueries();
-      
-      // Force immediate refetch
-      queryClient.refetchQueries({ 
-        queryKey: scheduleQueryKey,
-        exact: true 
-      }).then(() => {
-        console.log('✅ Schedule data refetched after assignment update');
-      });
-      
-      try {
-        auditLogger.logPositionChange(
-          officerId,
-          officerName,
-          officer.shiftInfo?.currentPosition || 'Unknown',
-          positionName,
-          userEmail,
-          `Changed position for ${officerName} on ${dateStr}`
-        );
-      } catch (logError) {
-        console.error('Failed to log position change audit:', logError);
-      }
-      
-      setEditingAssignment(null);
-      toast.success("Assignment updated successfully");
-    },
-    onError: (error) => {
-      console.error('❌ Error updating assignment:', error);
-      toast.error(error.message || "Failed to update assignment");
-    }
-  });
-};
 
   const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     safeRemoveOfficerMutation.mutate({
@@ -894,7 +1001,7 @@ const handleSaveAssignment = () => {
     });
   };
 
-  // Prepare common props for view components - UPDATED to include officerProfiles
+  // Prepare common props for view components
   const viewProps = {
     currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
     selectedShiftId,
@@ -902,9 +1009,7 @@ const handleSaveAssignment = () => {
     shiftTypes: shiftTypes || [],
     isAdminOrSupervisor,
     weeklyColors,
-    // ADD currentWeekStart prop for WeeklyView
     currentWeekStart: currentWeekStart,
-    // ADD queryKey for cache invalidation in WeeklyView
     queryKey: scheduleQueryKey,
     onDateChange: (date: Date) => {
       if (activeView === "weekly") {
@@ -927,14 +1032,14 @@ const handleSaveAssignment = () => {
     mutations: {
       removeOfficerMutation: safeRemoveOfficerMutation,
       removePTOMutation: safeRemovePTOMutation,
-      updatePositionMutation, // Make sure this is included
+      updatePositionMutation,
     },
     navigateToDailySchedule,
     getLastName,
     getRankAbbreviation,
     getRankPriority,
     isSupervisorByRank,
-    officerProfiles: schedules?.officerProfiles || new Map(), // CRITICAL: Pass profiles to WeeklyView
+    officerProfiles: schedules?.officerProfiles || new Map(),
   };
 
   const renderView = () => {
@@ -1102,49 +1207,34 @@ const handleSaveAssignment = () => {
         <TheBookMobile userRole={userRole} isAdminOrSupervisor={isAdminOrSupervisor} />
       </div>
 
-      {/* Dialogs */}
-<AssignmentEditDialogMobile
-  editingAssignment={editingAssignment}
-  onClose={() => setEditingAssignment(null)}
-  onSave={(assignmentData) => {
-    console.log('💾 Saving assignment from mobile dialog:', assignmentData);
-    
-    updatePositionMutation.mutate(assignmentData, {
-      onSuccess: () => {
-        // Force cache invalidation
-        queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
-        
-        // Force immediate refetch
-        queryClient.refetchQueries({ 
-          queryKey: scheduleQueryKey,
-          exact: true 
-        });
-        
-        // Log audit
-        try {
-          auditLogger.logPositionChange(
-            assignmentData.officerId,
-            editingAssignment?.officer?.officerName || 'Unknown Officer',
-            editingAssignment?.officer?.shiftInfo?.position || 'Unknown',
-            assignmentData.positionName,
-            userEmail,
-            `Updated assignment via desktop`
-          );
-        } catch (logError) {
-          console.error('Failed to log assignment audit:', logError);
-        }
-        
-        setEditingAssignment(null);
-        toast.success("Assignment updated successfully");
-      },
-      onError: (error) => {
-        console.error('❌ Error updating assignment:', error);
-        toast.error(error.message || "Failed to update assignment");
-      }
-    });
-  }}
-  isUpdating={updatePositionMutation.isPending}
-/>
+      {/* FIXED: Assignment Edit Dialog (same as mobile) */}
+      <AssignmentEditDialogMobile
+        editingAssignment={editingAssignment}
+        onClose={() => setEditingAssignment(null)}
+        onSave={handleSaveAssignment}
+        isUpdating={updatePositionMutation.isPending}
+      />
+
+      {/* FIXED: PTO Dialog (same as mobile) */}
+      {selectedOfficerForPTO && (
+        <PTODialogMobile
+          open={ptoDialogOpen}
+          onOpenChange={(open) => {
+            setPtoDialogOpen(open);
+            if (!open) {
+              setSelectedOfficerForPTO(null);
+            }
+          }}
+          officerName={selectedOfficerForPTO.name}
+          date={selectedOfficerForPTO.date}
+          officerId={selectedOfficerForPTO.id}
+          shiftTypeId={selectedShiftId}
+          shiftStartTime={selectedOfficerForPTO.shiftStartTime}
+          shiftEndTime={selectedOfficerForPTO.shiftEndTime}
+          onSave={handleSavePTO}
+          isUpdating={false}
+        />
+      )}
 
       <ScheduleExportDialog
         open={exportDialogOpen}
@@ -1154,38 +1244,6 @@ const handleSaveAssignment = () => {
         activeView={activeView}
         userEmail={userEmail}
       />
-
-{/* PTO Assignment Dialog */}
-{selectedSchedule && (
-  <PTOAssignmentDialog
-    open={ptoDialogOpen}
-    onOpenChange={(open) => {
-      setPtoDialogOpen(open);
-      if (!open) {
-        // Force cache invalidation when PTO dialog closes
-        invalidateScheduleQueries();
-        
-        // Force immediate refetch
-        queryClient.refetchQueries({ 
-          queryKey: scheduleQueryKey,
-          exact: true 
-        });
-        
-        setSelectedSchedule(null);
-      }
-    }}
-    officer={{
-      officerId: selectedSchedule.officerId,
-      name: selectedSchedule.officerName,
-      scheduleId: selectedSchedule.scheduleId,
-      type: selectedSchedule.type,
-      ...(selectedSchedule.existingPTO ? { existingPTO: selectedSchedule.existingPTO } : {})
-    }}
-    shift={selectedSchedule.shift}
-    date={selectedSchedule.date}
-    ptoBalancesEnabled={websiteSettings?.show_pto_balances}
-  />
-)}
     </>
   );
 };

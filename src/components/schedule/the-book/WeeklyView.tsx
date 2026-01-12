@@ -56,12 +56,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   useEffect(() => {
     if (schedules) {
       setLocalSchedules(schedules);
-      console.log('📊 WeeklyView schedules updated:', {
-        dailySchedulesCount: schedules.dailySchedules?.length,
-        hasPTO: schedules.dailySchedules?.some(day => 
-          day.officers?.some(officer => officer.shiftInfo?.hasPTO)
-        )
-      });
     }
   }, [schedules]);
 
@@ -393,17 +387,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         // CRITICAL FIX: Enhanced PTO detection like mobile version
         const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, day);
         
-        console.log('🔍 [WeeklyView] Officer PTO detection:', {
-          officerId: officer.officerId,
-          officerName: officer.officerName,
-          date: day.date,
-          hasPTO,
-          ptoType,
-          ptoData,
-          isException,
-          isRecurringDay
-        });
-        
         const daySchedule = {
           officerId: officer.officerId,
           officerName: officer.officerName || officer.full_name || "Unknown",
@@ -538,17 +521,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const ppos = sortedOriginalOfficers.filter(officer => 
     officer.rank?.toLowerCase() === 'probationary'
   );
-
-  // Debug: Check PTO detection
-  console.log('🔍 [WeeklyView] Final PTO check:', {
-    totalOfficers: allOfficers.size,
-    officersWithPTO: allOfficersArray.filter(o => 
-      Object.values(o.weeklySchedule || {}).some((day: any) => day.shiftInfo?.hasPTO)
-    ).length,
-    samplePTOOfficer: allOfficersArray.find(o => 
-      Object.values(o.weeklySchedule || {}).some((day: any) => day.shiftInfo?.hasPTO)
-    )
-  });
 
   // Safeguard for rendering
   const safeGetWeeklySchedule = (officer: any, dateStr: string) => {

@@ -155,18 +155,6 @@ export const ScheduleCell = ({
     );
   }
 
-  // DEBUG: Log what we're seeing
-  console.log('🔍 ScheduleCell Debug:', {
-    officerId,
-    officerName,
-    dateStr,
-    isOff,
-    hasPTO,
-    ptoData,
-    ptoType: ptoData?.ptoType,
-    position
-  });
-
   return (
     <div 
       className={`

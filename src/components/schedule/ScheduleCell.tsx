@@ -1,4 +1,4 @@
-// src/components/schedule/ScheduleCell.tsx - REMOVED SUPERVISOR BADGE
+// src/components/schedule/ScheduleCell.tsx - FIXED PTO DISPLAY
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Clock } from "lucide-react";
@@ -74,9 +74,10 @@ export const ScheduleCell = ({
     (position && !PREDEFINED_POSITIONS.includes(position))
   );
 
-  // PTO Logic
-  const isFullDayPTO = hasPTO && ptoData?.isFullShift;
-  const isPartialPTO = hasPTO && !ptoData?.isFullShift;
+  // PTO Logic - IMPORTANT: Fix these calculations
+  // PTO can be full day OR partial day, check both ptoData and hasPTO flag
+  const isFullDayPTO = hasPTO && (ptoData?.isFullShift === true || !ptoData?.isFullShift);
+  const isPartialPTO = hasPTO && ptoData?.isFullShift === false;
 
   // For PPOs, use partner display if available
   const displayPosition = isPPO && partnerInfo 
@@ -118,11 +119,12 @@ export const ScheduleCell = ({
 
   // Get background color based on officer status using color settings
   const getBackgroundColor = () => {
-    if (isOff) {
-      return weeklyColors.off?.bg || FALLBACK_COLORS.off.bg;
-    } else if (hasPTO) {
+    // IMPORTANT: Check for PTO FIRST, then isOff
+    if (hasPTO) {
       const ptoColors = getPTOColor(ptoData?.ptoType);
       return ptoColors.bg;
+    } else if (isOff) {
+      return weeklyColors.off?.bg || FALLBACK_COLORS.off.bg;
     } else if (isPPO) {
       return weeklyColors.ppo?.bg || FALLBACK_COLORS.ppo.bg;
     }
@@ -131,11 +133,12 @@ export const ScheduleCell = ({
 
   // Get text color based on officer status using color settings
   const getTextColor = () => {
-    if (isOff) {
-      return weeklyColors.off?.text || FALLBACK_COLORS.off.text;
-    } else if (hasPTO) {
+    // IMPORTANT: Check for PTO FIRST, then isOff
+    if (hasPTO) {
       const ptoColors = getPTOColor(ptoData?.ptoType);
       return ptoColors.text;
+    } else if (isOff) {
+      return weeklyColors.off?.text || FALLBACK_COLORS.off.text;
     } else if (isPPO) {
       return weeklyColors.ppo?.text || FALLBACK_COLORS.ppo.text;
     }
@@ -152,6 +155,18 @@ export const ScheduleCell = ({
     );
   }
 
+  // DEBUG: Log what we're seeing
+  console.log('🔍 ScheduleCell Debug:', {
+    officerId,
+    officerName,
+    dateStr,
+    isOff,
+    hasPTO,
+    ptoData,
+    ptoType: ptoData?.ptoType,
+    position
+  });
+
   return (
     <div 
       className={`
@@ -163,11 +178,10 @@ export const ScheduleCell = ({
         color: getTextColor()
       }}
     >
-      {isOff ? (
-        <div className="text-center font-medium">DD</div>
-      ) : hasPTO ? (
+      {/* FIXED: Check for PTO FIRST, then isOff, then normal assignment */}
+      {hasPTO ? (
         <div className="text-center">
-          {/* PTO Badge - NO SUPERVISOR BADGE IN WEEKLY VIEW */}
+          {/* PTO Badge - Show PTO type instead of DD */}
           <Badge 
             className="text-xs mb-1"
             style={{
@@ -192,7 +206,17 @@ export const ScheduleCell = ({
               Partial Day
             </div>
           )}
+          
+          {/* Show position for full day PTO if they have a position assigned (should be rare) */}
+          {isFullDayPTO && displayPosition && (
+            <div className="text-xs mt-1 truncate opacity-70 italic">
+              {displayPosition}
+            </div>
+          )}
         </div>
+      ) : isOff ? (
+        // This should only show for days off that are NOT PTO
+        <div className="text-center font-medium">DD</div>
       ) : (
         <div className="text-center">
           {/* Show "Extra Shift" for true extra days */}
@@ -233,7 +257,8 @@ export const ScheduleCell = ({
       {isAdminOrSupervisor && officer.shiftInfo && (
         <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           {/* PENCIL ICON - Edit Assignment */}
-          {!isOff && (
+          {/* Don't show edit for PTO days */}
+          {!isOff && !hasPTO && (
             <Button
               size="icon"
               variant="secondary"
@@ -266,7 +291,8 @@ export const ScheduleCell = ({
           )}
           
           {/* CLOCK ICON - PTO Management */}
-          {!isOff && (
+          {/* Show for days that are not off and not already PTO */}
+          {!isOff && !hasPTO && (
             <Button
               size="icon"
               variant="secondary"
@@ -275,13 +301,14 @@ export const ScheduleCell = ({
                 e.stopPropagation();
                 onAssignPTO(officer.shiftInfo, dateStr, officerId, officerName);
               }}
-              title={hasPTO ? "Edit PTO" : "Assign PTO"}
+              title="Assign PTO"
             >
               <Clock className="h-3 w-3" />
             </Button>
           )}
           
           {/* TRASH ICON - Remove PTO */}
+          {/* Show only for PTO days */}
           {hasPTO && (
             <Button
               size="icon"

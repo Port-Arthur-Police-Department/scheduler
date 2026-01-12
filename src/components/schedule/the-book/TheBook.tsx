@@ -1316,23 +1316,28 @@ const handleSaveAssignment = (assignmentData: any) => {
 
       {/* FIXED: PTO Dialog (same as mobile) */}
       {selectedOfficerForPTO && (
-        <PTODialogMobile
-          open={ptoDialogOpen}
-          onOpenChange={(open) => {
-            setPtoDialogOpen(open);
-            if (!open) {
-              setSelectedOfficerForPTO(null);
-            }
-          }}
-          officerName={selectedOfficerForPTO.name}
-          date={selectedOfficerForPTO.date}
-          officerId={selectedOfficerForPTO.id}
-          shiftTypeId={selectedShiftId}
-          shiftStartTime={selectedOfficerForPTO.shiftStartTime}
-          shiftEndTime={selectedOfficerForPTO.shiftEndTime}
-          onSave={handleSavePTO}
-          isUpdating={false}
-        />
+<PTODialogMobile
+  open={ptoDialogOpen}
+  onOpenChange={(open) => {
+    setPtoDialogOpen(open);
+    if (!open) {
+      setSelectedOfficerForPTO(null);
+    }
+  }}
+  officerName={selectedOfficerForPTO.name}
+  date={selectedOfficerForPTO.date}
+  officerId={selectedOfficerForPTO.id}
+  shiftTypeId={selectedShiftId}
+  shiftStartTime={selectedOfficerForPTO.shiftStartTime}
+  shiftEndTime={selectedOfficerForPTO.shiftEndTime}
+  onSave={handleSavePTO}
+  onSuccess={() => {
+    // This will be called after successful save
+    setPtoDialogOpen(false);
+    setSelectedOfficerForPTO(null);
+  }}
+  isUpdating={false}
+/>
       )}
 
       <ScheduleExportDialog

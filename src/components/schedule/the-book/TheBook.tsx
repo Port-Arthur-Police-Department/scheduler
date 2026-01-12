@@ -669,9 +669,9 @@ const TheBook = ({
     }
   };
 
-// FIXED: PTO Save Handler with auto-close dialog
+// SIMPLIFIED handleSavePTO in TheBook.tsx
 const handleSavePTO = async (ptoData: any) => {
-  console.log('💾 Saving PTO (desktop):', ptoData);
+  console.log('💾 Saving PTO for:', selectedOfficerForPTO?.name);
 
   if (!selectedOfficerForPTO || !selectedShiftId) {
     toast.error("Missing required information");
@@ -680,9 +680,8 @@ const handleSavePTO = async (ptoData: any) => {
 
   try {
     toast.loading("Assigning PTO...");
-    console.log('🔄 Starting PTO assignment process...');
 
-    // For full day PTO, we should use the shift times or 00:00-23:59
+    // Prepare PTO data
     const startTime = ptoData.isFullShift 
       ? (ptoData.startTime || "00:00") 
       : ptoData.startTime;
@@ -691,52 +690,28 @@ const handleSavePTO = async (ptoData: any) => {
       ? (ptoData.endTime || "23:59") 
       : ptoData.endTime;
 
-    console.log('⏰ PTO Times:', { startTime, endTime, isFullShift: ptoData.isFullShift });
-
-    // Check if there's already a schedule exception for this officer on this date
-    const { data: existingExceptions, error: checkError } = await supabase
+    // Create or update PTO exception
+    const { data: existingExceptions } = await supabase
       .from("schedule_exceptions")
-      .select("id, is_off, reason")
+      .select("id")
       .eq("officer_id", selectedOfficerForPTO.id)
       .eq("date", selectedOfficerForPTO.date)
       .eq("shift_type_id", selectedShiftId);
 
-    if (checkError) {
-      console.error('❌ Error checking existing exceptions:', checkError);
-      throw checkError;
-    }
-
-    console.log('📋 Existing exceptions found:', existingExceptions);
-
-    let exceptionId;
-
     if (existingExceptions && existingExceptions.length > 0) {
-      console.log('✏️ Updating existing exception');
-      // Update existing exception
-      const { error: updateError } = await supabase
+      // Update existing
+      await supabase
         .from("schedule_exceptions")
         .update({
           is_off: true,
           reason: ptoData.ptoType,
           custom_start_time: ptoData.isFullShift ? null : startTime,
           custom_end_time: ptoData.isFullShift ? null : endTime,
-          position_name: null,
-          unit_number: null,
-          notes: `PTO: ${ptoData.ptoType}`
         })
         .eq("id", existingExceptions[0].id);
-
-      if (updateError) {
-        console.error('❌ Error updating exception:', updateError);
-        throw updateError;
-      }
-      
-      exceptionId = existingExceptions[0].id;
-      console.log('✅ Updated existing exception ID:', exceptionId);
     } else {
-      console.log('➕ Creating new exception');
-      // Create new exception
-      const { data: newException, error: insertError } = await supabase
+      // Create new
+      await supabase
         .from("schedule_exceptions")
         .insert({
           officer_id: selectedOfficerForPTO.id,
@@ -746,113 +721,58 @@ const handleSavePTO = async (ptoData: any) => {
           reason: ptoData.ptoType,
           custom_start_time: ptoData.isFullShift ? null : startTime,
           custom_end_time: ptoData.isFullShift ? null : endTime,
-          position_name: null,
-          unit_number: null,
-          notes: `PTO: ${ptoData.ptoType}`
-        })
-        .select("id, officer_id, date, reason, is_off")
-        .single();
-
-      if (insertError) {
-        console.error('❌ Error creating exception:', insertError);
-        throw insertError;
-      }
-      
-      exceptionId = newException.id;
-      console.log('✅ Created new exception:', newException);
+        });
     }
 
-    // Deduct from PTO balance if enabled
+    // Handle PTO balance if enabled
     if (websiteSettings?.show_pto_balances) {
       const ptoColumn = getPTOColumn(ptoData.ptoType);
       if (ptoColumn) {
-        console.log('💰 Updating PTO balance for column:', ptoColumn);
-        
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from("profiles")
           .select("*")
           .eq("id", selectedOfficerForPTO.id)
           .single();
 
-        if (profileError) {
-          console.error('❌ Error fetching profile:', profileError);
-        } else if (profile) {
-          // For full day PTO, calculate hours based on shift times or 8 hours
-          let hoursUsed;
-          if (ptoData.isFullShift) {
-            // Try to calculate based on actual shift times if available
-            const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
-            if (currentShift?.start_time && currentShift?.end_time) {
-              hoursUsed = calculateHoursUsed(currentShift.start_time, currentShift.end_time);
-            } else {
-              hoursUsed = 8; // Default to 8 hours for full day
-            }
-          } else {
+        if (profile) {
+          let hoursUsed = 8; // Default
+          if (!ptoData.isFullShift) {
             hoursUsed = calculateHoursUsed(startTime, endTime);
           }
           
-          const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+          const currentBalance = profile[ptoColumn as keyof typeof profile] as number || 0;
           
-          const { error: updateBalanceError } = await supabase
+          await supabase
             .from("profiles")
             .update({
-              [ptoColumn]: Math.max(0, (currentBalance || 0) - hoursUsed),
+              [ptoColumn]: Math.max(0, currentBalance - hoursUsed),
             })
             .eq("id", selectedOfficerForPTO.id);
-
-          if (updateBalanceError) {
-            console.error('❌ Error updating PTO balance:', updateBalanceError);
-          }
         }
       }
     }
 
-    // Log audit trail
-    try {
-      auditLogger.logPTOAssignment(
-        selectedOfficerForPTO.id,
-        ptoData.ptoType,
-        selectedOfficerForPTO.date,
-        userEmail,
-        `Assigned ${ptoData.ptoType} PTO via desktop`
-      );
-      console.log('📝 Audit log created');
-    } catch (logError) {
-      console.error('❌ Failed to log PTO audit:', logError);
-    }
+    // Log audit
+    auditLogger.logPTOAssignment(
+      selectedOfficerForPTO.id,
+      ptoData.ptoType,
+      selectedOfficerForPTO.date,
+      userEmail,
+      `Assigned ${ptoData.ptoType} PTO`
+    );
 
-    // CRITICAL: Force immediate cache invalidation and refetch
-    console.log('🔄 Invalidating cache...');
-    await queryClient.invalidateQueries({ 
-      queryKey: scheduleQueryKey,
-      refetchType: 'all'
-    });
-    
-    // Also invalidate mobile query if it exists
-    await queryClient.invalidateQueries({ 
-      queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],
-      refetchType: 'all'
-    });
-    
-    // Force immediate refetch
-    console.log('🔄 Forcing immediate refetch...');
-    await queryClient.refetchQueries({ 
-      queryKey: scheduleQueryKey,
-      type: 'active'
-    });
-    
-    console.log('✅ PTO assignment successful, closing dialog...');
-    
-    // CRITICAL: Close the dialog FIRST
+    // CRITICAL: Close dialog FIRST
     setPtoDialogOpen(false);
     setSelectedOfficerForPTO(null);
+
+    // Then invalidate and show success
+    queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
     
-    // Then show success message
     toast.success(`${ptoData.ptoType} PTO assigned successfully`);
 
   } catch (error: any) {
-    console.error('❌ Error assigning PTO:', error);
     toast.error(error.message || "Failed to assign PTO");
+    console.error('PTO assignment error:', error);
   } finally {
     toast.dismiss();
   }

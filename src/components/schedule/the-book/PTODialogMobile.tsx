@@ -21,6 +21,7 @@ interface PTODialogMobileProps {
   // Add shift times for proper full day PTO
   shiftStartTime?: string;
   shiftEndTime?: string;
+  onSuccess?: () => void;
 }
 
 export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
@@ -34,6 +35,7 @@ export const PTODialogMobile: React.FC<PTODialogMobileProps> = ({
   shiftTypeId,
   shiftStartTime = "08:00", // Default to 8 AM if not provided
   shiftEndTime = "17:00",   // Default to 5 PM if not provided
+  onSuccess,
 }) => {
   const [selectedPtoType, setSelectedPtoType] = useState<string>("vacation");
   const [selectedIsFullDay, setSelectedIsFullDay] = useState<boolean>(true);

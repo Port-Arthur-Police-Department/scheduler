@@ -885,65 +885,87 @@ const TheBook = ({
     });
   };
 
-  // FIXED: Assignment Edit Handler (simplified like mobile)
-  const handleEditAssignment = (officer: any, dateStr: string) => {
-    console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
-    console.log('Full officer object:', officer);
-    console.log('Officer shiftInfo:', officer?.shiftInfo);
-    console.log('Date:', dateStr);
+// FIXED: Assignment Edit Handler - properly detects new assignments
+const handleEditAssignment = (officer: any, dateStr: string) => {
+  console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
+  console.log('Full officer object:', officer);
+  console.log('Officer shiftInfo:', officer?.shiftInfo);
+  console.log('Date:', dateStr);
+  
+  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+  const officerName = officer?.officerName || officer?.full_name || "Unknown Officer";
+  
+  console.log('Found officerId:', officerId);
+  console.log('Found officerName:', officerName);
+  
+  // Check if this is a NEW assignment (no scheduleId or no officer data at all)
+  const isNewAssignment = !officer || 
+                         !officer.shiftInfo || 
+                         !officer.shiftInfo.scheduleId ||
+                         officer.shiftInfo.scheduleId === 'new' ||
+                         officer.shiftInfo.scheduleType === 'new';
+  
+  console.log('Is this a new assignment?', isNewAssignment);
+  
+  // Prepare officer data for editing
+  const officerData = {
+    ...officer,
+    officerId: officerId,
+    officerName: officerName,
+    shiftInfo: {
+      ...officer?.shiftInfo,
+      currentPosition: officer?.shiftInfo?.position || '',
+      // For new assignments, ensure proper defaults
+      scheduleId: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleId,
+      scheduleType: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleType,
+      isOff: false // CRITICAL: New assignments should NOT be "off"
+    }
+  };
+  
+  console.log('Prepared officer data for editing:', officerData);
+  
+  setEditingAssignment({ 
+    officer: officerData, 
+    dateStr,
+    shiftTypeId: selectedShiftId,
+    officerId: officerId,
+    officerName: officerName
+  });
+};
+
+// FIXED: Save Assignment Handler (handles new assignments properly)
+const handleSaveAssignment = (assignmentData: any) => {
+  console.log('💾 Saving assignment (desktop):', assignmentData);
+  
+  // Check if this is a new assignment (no scheduleId or scheduleId is 'new')
+  const isNewAssignment = !assignmentData.scheduleId || 
+                         assignmentData.scheduleId === 'new' || 
+                         assignmentData.scheduleId === 'undefined' ||
+                         assignmentData.type === 'new';
+  
+  console.log('Is new assignment?', isNewAssignment, 'ScheduleId:', assignmentData.scheduleId);
+  
+  if (isNewAssignment) {
+    console.log('➕ Creating NEW assignment from scratch');
     
-    const officerId = officer?.officerId || officer?.officer_id || officer?.id;
-    console.log('Found officerId:', officerId);
-    
-    // Make sure we have all the necessary data
-    const officerData = {
-      ...officer,
-      officerId: officerId,
-      shiftInfo: {
-        ...officer?.shiftInfo,
-        currentPosition: officer?.shiftInfo?.position || ''
-      }
+    // For NEW assignments, we need to create a working schedule exception
+    const newAssignmentData = {
+      officerId: assignmentData.officerId || editingAssignment?.officerId,
+      date: assignmentData.date || editingAssignment?.dateStr,
+      shiftTypeId: assignmentData.shiftTypeId || selectedShiftId,
+      positionName: assignmentData.positionName,
+      unitNumber: assignmentData.unitNumber || undefined,
+      notes: assignmentData.notes || undefined,
+      isOff: false, // CRITICAL: This must be FALSE for working assignments
+      is_off: false, // CRITICAL: Use both camelCase and snake_case to be safe
+      type: 'exception' as const,
+      scheduleId: null // This indicates it's a new assignment
     };
     
-    console.log('Prepared officer data for editing:', officerData);
+    console.log('🚀 Creating NEW working assignment with:', newAssignmentData);
     
-    setEditingAssignment({ 
-      officer: officerData, 
-      dateStr,
-      shiftTypeId: selectedShiftId,
-      officerId: officerId,
-      officerName: officerData.officerName
-    });
-  };
-
-  // FIXED: Save Assignment Handler (handles new assignments properly)
-  const handleSaveAssignment = (assignmentData: any) => {
-    console.log('💾 Saving assignment (desktop):', assignmentData);
-    
-    // Check if this is a new assignment (no scheduleId)
-    const isNewAssignment = !assignmentData.scheduleId || assignmentData.scheduleId === 'new';
-    
-    if (isNewAssignment) {
-      console.log('➕ Creating new assignment (no existing schedule)');
-      
-      // For new assignments, we need to create a schedule exception
-      const newAssignmentData = {
-        officerId: assignmentData.officerId,
-        date: assignmentData.date,
-        shiftTypeId: assignmentData.shiftTypeId || selectedShiftId,
-        positionName: assignmentData.positionName,
-        unitNumber: assignmentData.unitNumber || undefined,
-        notes: assignmentData.notes || undefined,
-        isOff: false,
-        type: 'exception' as const,
-        scheduleId: null // This indicates it's a new assignment
-      };
-      
-      console.log('🚀 Creating new assignment with:', newAssignmentData);
-    }
-    
-    // Call the mutation (updatePositionMutation should handle both updates and creates)
-    updatePositionMutation.mutate(assignmentData, {
+    // Call mutation with corrected data
+    updatePositionMutation.mutate(newAssignmentData, {
       onSuccess: () => {
         // Force cache invalidation
         invalidateScheduleQueries();
@@ -951,26 +973,60 @@ const TheBook = ({
         // Log audit trail
         try {
           auditLogger.logPositionChange(
-            assignmentData.officerId,
+            newAssignmentData.officerId,
             editingAssignment?.officerName || "Unknown Officer",
-            editingAssignment?.officer?.shiftInfo?.currentPosition || 'Unknown',
-            assignmentData.positionName,
+            'None', // Was previously no assignment
+            newAssignmentData.positionName,
             userEmail,
-            `Changed position for ${editingAssignment?.officerName || 'Unknown'} on ${assignmentData.date}`
+            `Created new assignment ${newAssignmentData.positionName} for ${editingAssignment?.officerName || 'Unknown'} on ${newAssignmentData.date}`
           );
         } catch (logError) {
           console.error('Failed to log position change audit:', logError);
         }
         
         setEditingAssignment(null);
-        toast.success("Assignment updated successfully");
+        toast.success("New assignment created successfully");
       },
       onError: (error) => {
-        console.error('❌ Error updating assignment:', error);
-        toast.error(error.message || "Failed to update assignment");
+        console.error('❌ Error creating new assignment:', error);
+        toast.error(error.message || "Failed to create new assignment");
       }
     });
-  };
+    
+    return; // Exit early since we handled new assignment
+  }
+  
+  // For existing assignments (updates)
+  console.log('✏️ Updating EXISTING assignment');
+  
+  updatePositionMutation.mutate(assignmentData, {
+    onSuccess: () => {
+      // Force cache invalidation
+      invalidateScheduleQueries();
+      
+      // Log audit trail
+      try {
+        auditLogger.logPositionChange(
+          assignmentData.officerId,
+          editingAssignment?.officerName || "Unknown Officer",
+          editingAssignment?.officer?.shiftInfo?.currentPosition || 'Unknown',
+          assignmentData.positionName,
+          userEmail,
+          `Changed position for ${editingAssignment?.officerName || 'Unknown'} on ${assignmentData.date}`
+        );
+      } catch (logError) {
+        console.error('Failed to log position change audit:', logError);
+      }
+      
+      setEditingAssignment(null);
+      toast.success("Assignment updated successfully");
+    },
+    onError: (error) => {
+      console.error('❌ Error updating assignment:', error);
+      toast.error(error.message || "Failed to update assignment");
+    }
+  });
+};
 
   const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     safeRemoveOfficerMutation.mutate({

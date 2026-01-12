@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { PTO_TYPES } from "@/constants/positions";
 
 interface UpdatePositionParams {
-  scheduleId: string;
+  scheduleId?: string | null;
   type: "recurring" | "exception";
   positionName: string;
   date?: string;
@@ -19,21 +19,7 @@ interface UpdatePositionParams {
 interface RemoveOfficerParams {
   scheduleId: string;
   type: "recurring" | "exception";
-  officerData?: {
-    id: string;
-    name?: string;
-    [key: string]: any;
-  };
-}
-
-interface PTORemovalData {
-  id: string;
-  officerId: string;
-  date: string;
-  shiftTypeId: string;
-  ptoType: string;
-  startTime?: string;
-  endTime?: string;
+  officerData?: any;
 }
 
 export const useWeeklyScheduleMutations = (
@@ -52,65 +38,43 @@ export const useWeeklyScheduleMutations = (
     selectedShiftId
   ];
 
-  // Helper function to calculate hours between times
-  const calculateHours = (startTime: string, endTime: string): number => {
-    try {
-      const [startHour, startMin] = startTime.split(":").map(Number);
-      const [endHour, endMin] = endTime.split(":").map(Number);
-      const startMinutes = startHour * 60 + startMin;
-      const endMinutes = endHour * 60 + endMin;
-      return (endMinutes - startMinutes) / 60;
-    } catch (error) {
-      console.error('Error calculating hours:', error);
-      return 8; // Default to 8 hours
-    }
-  };
-
-  // Restore PTO balance to officer's profile
-  const restorePTOBalance = async (officerId: string, ptoType: string, hours: number) => {
-    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
-    
-    if (!ptoColumn) {
-      console.warn(`No PTO column found for type: ${ptoType}`);
-      return;
-    }
-
-    try {
-      // Get current balance
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select(ptoColumn)
-        .eq("id", officerId)
-        .single();
-
-      if (profileError) throw profileError;
-
-      const currentBalance = profile[ptoColumn as keyof typeof profile] as number || 0;
-      
-      // Update balance
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          [ptoColumn]: currentBalance + hours,
-        })
-        .eq("id", officerId);
-
-      if (updateError) throw updateError;
-    } catch (error) {
-      console.error('Error restoring PTO balance:', error);
-      throw new Error(`Failed to restore PTO balance: ${error.message}`);
-    }
-  };
-
-  // Update position mutation (unchanged)
+  // Define all mutations first
   const updatePositionMutation = useMutation({
     mutationFn: async (params: UpdatePositionParams) => {
       console.log('📝 Updating position:', params);
       
+      // Handle new assignments (when scheduleId is null/undefined)
+      if (!params.scheduleId) {
+        console.log('Creating new schedule exception for new assignment');
+        
+        // Validate required fields for new assignment
+        if (!params.officerId || !params.date || !params.shiftTypeId) {
+          throw new Error("Missing required fields for new assignment");
+        }
+
+        const { error } = await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: params.officerId,
+            date: params.date,
+            shift_type_id: params.shiftTypeId,
+            is_off: false, // CRITICAL: This is a WORKING assignment, not off
+            position_name: params.positionName,
+            unit_number: params.unitNumber || null,
+            notes: params.notes || null,
+            custom_start_time: null,
+            custom_end_time: null
+          });
+        
+        if (error) throw error;
+        return;
+      }
+      
       if (params.type === "recurring") {
+        // For recurring officers, update via exceptions table
         const { data: existingExceptions, error: checkError } = await supabase
           .from("schedule_exceptions")
-          .select("id")
+          .select("id, position_name, unit_number, notes")
           .eq("officer_id", params.officerId)
           .eq("date", params.date)
           .eq("shift_type_id", params.shiftTypeId)
@@ -118,16 +82,14 @@ export const useWeeklyScheduleMutations = (
 
         if (checkError) throw checkError;
 
-        const updateData = {
-          position_name: params.positionName,
-          unit_number: params.unitNumber,
-          notes: params.notes
-        };
-
         if (existingExceptions && existingExceptions.length > 0) {
           const { error } = await supabase
             .from("schedule_exceptions")
-            .update(updateData)
+            .update({
+              position_name: params.positionName,
+              unit_number: params.unitNumber,
+              notes: params.notes
+            })
             .eq("id", existingExceptions[0].id);
           
           if (error) throw error;
@@ -139,7 +101,9 @@ export const useWeeklyScheduleMutations = (
               date: params.date,
               shift_type_id: params.shiftTypeId,
               is_off: false,
-              ...updateData,
+              position_name: params.positionName,
+              unit_number: params.unitNumber,
+              notes: params.notes,
               custom_start_time: null,
               custom_end_time: null
             });
@@ -147,6 +111,7 @@ export const useWeeklyScheduleMutations = (
           if (error) throw error;
         }
       } else {
+        // Update existing exception
         const { error } = await supabase
           .from("schedule_exceptions")
           .update({
@@ -155,7 +120,7 @@ export const useWeeklyScheduleMutations = (
             notes: params.notes
           })
           .eq("id", params.scheduleId);
-          
+        
         if (error) throw error;
       }
     },
@@ -163,13 +128,13 @@ export const useWeeklyScheduleMutations = (
       toast.success("Position updated");
       queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('❌ Error updating position:', error);
       toast.error(error.message || "Failed to update position");
     },
   });
 
-  // Remove officer mutation (unchanged)
+  // Define removeOfficerMutation BEFORE using it
   const removeOfficerMutation = useMutation({
     mutationFn: async (params: RemoveOfficerParams) => {
       console.log('🗑️ Removing officer from schedule:', params);
@@ -179,6 +144,7 @@ export const useWeeklyScheduleMutations = (
       }
 
       if (params.type === "exception") {
+        // Delete from schedule_exceptions table
         const { error } = await supabase
           .from("schedule_exceptions")
           .delete()
@@ -186,6 +152,8 @@ export const useWeeklyScheduleMutations = (
 
         if (error) throw error;
       } else if (params.type === "recurring") {
+        // For recurring schedules, we need to end the recurring schedule
+        // by setting an end date (today's date)
         const { error } = await supabase
           .from("recurring_schedules")
           .update({
@@ -200,63 +168,127 @@ export const useWeeklyScheduleMutations = (
       toast.success("Officer removed from schedule");
       queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('❌ Error removing officer:', error);
       toast.error(error.message || "Failed to remove officer");
     },
   });
 
-  // Simplified and improved removePTOMutation
+  // Define removePTOMutation
   const removePTOMutation = useMutation({
-    mutationFn: async (ptoData: PTORemovalData) => {
+    mutationFn: async (ptoData: {
+      id: string;
+      officerId: string;
+      date: string;
+      shiftTypeId: string;
+      ptoType: string;
+      startTime: string;
+      endTime: string;
+    }) => {
       console.log('🗑️ Removing PTO:', ptoData);
       
       // Validate required fields
-      if (!ptoData.id || !ptoData.officerId) {
-        throw new Error("Missing required PTO data");
+      if (!ptoData.id) {
+        throw new Error("Missing PTO ID");
+      }
+      
+      if (!ptoData.officerId) {
+        throw new Error("Missing officer ID");
       }
 
-      // Fetch the PTO record first
+      // First, try to get the actual PTO exception from the database to ensure it exists
       const { data: ptoRecord, error: fetchError } = await supabase
         .from("schedule_exceptions")
-        .select("*")
+        .select("id, officer_id, date, shift_type_id, reason, custom_start_time, custom_end_time")
         .eq("id", ptoData.id)
         .single();
 
       if (fetchError) {
-        throw new Error(`PTO record not found: ${fetchError.message}`);
+        console.error('Error fetching PTO record:', fetchError);
+        // Try an alternative approach - look for any PTO for this officer on this date
+        const { data: alternativeRecords, error: altError } = await supabase
+          .from("schedule_exceptions")
+          .select("id, officer_id, date, shift_type_id, reason, custom_start_time, custom_end_time")
+          .eq("officer_id", ptoData.officerId)
+          .eq("date", ptoData.date)
+          .eq("is_off", true);
+
+        if (altError) {
+          throw new Error(`Could not find PTO record: ${fetchError.message}`);
+        }
+
+        if (!alternativeRecords || alternativeRecords.length === 0) {
+          throw new Error("No PTO record found for this officer and date");
+        }
+
+        // Use the first found record
+        const foundRecord = alternativeRecords[0];
+        console.log('Found alternative PTO record:', foundRecord);
+        
+        // Update ptoData with the found record's information
+        ptoData.id = foundRecord.id;
+        ptoData.shiftTypeId = foundRecord.shift_type_id || ptoData.shiftTypeId;
+        ptoData.ptoType = foundRecord.reason || ptoData.ptoType;
+        ptoData.startTime = foundRecord.custom_start_time || ptoData.startTime;
+        ptoData.endTime = foundRecord.custom_end_time || ptoData.endTime;
       }
-
-      // Verify this is actually a PTO record
-      if (!ptoRecord.is_off) {
-        throw new Error("Record is not marked as PTO");
-      }
-
-      // Get shift details or use provided times
-      const startTime = ptoData.startTime || ptoRecord.custom_start_time;
-      const endTime = ptoData.endTime || ptoRecord.custom_end_time;
-      const shiftTypeId = ptoData.shiftTypeId || ptoRecord.shift_type_id;
-
-      // If we have specific times, calculate hours; otherwise use default
-      let hoursToRestore = 8; // Default
       
-      if (startTime && endTime) {
-        hoursToRestore = calculateHours(startTime, endTime);
-      } else if (shiftTypeId) {
-        // Get shift times from shift_types table
-        const { data: shiftData } = await supabase
-          .from("shift_types")
-          .select("start_time, end_time")
-          .eq("id", shiftTypeId)
+      // Get shift details to calculate hours
+      const { data: shiftData, error: shiftError } = await supabase
+        .from("shift_types")
+        .select("start_time, end_time")
+        .eq("id", ptoData.shiftTypeId)
+        .single();
+
+      if (shiftError && !shiftError.message?.includes("No rows found")) {
+        console.error('Error fetching shift data:', shiftError);
+      }
+
+      // Use provided times or shift times
+      const startTime = ptoData.startTime || shiftData?.start_time || "00:00";
+      const endTime = ptoData.endTime || shiftData?.end_time || "23:59";
+
+      // Calculate hours to restore
+      const calculateHours = (start: string, end: string) => {
+        try {
+          const [startHour, startMin] = start.split(":").map(Number);
+          const [endHour, endMin] = end.split(":").map(Number);
+          const startMinutes = startHour * 60 + startMin;
+          const endMinutes = endHour * 60 + endMin;
+          return (endMinutes - startMinutes) / 60;
+        } catch (error) {
+          console.error('Error calculating hours:', error);
+          return 8; // Default to 8 hours if calculation fails
+        }
+      };
+
+      const hoursUsed = calculateHours(startTime, endTime);
+      const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
+      
+      if (ptoColumn) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", ptoData.officerId)
           .single();
 
-        if (shiftData?.start_time && shiftData?.end_time) {
-          hoursToRestore = calculateHours(shiftData.start_time, shiftData.end_time);
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        } else if (profile) {
+          const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+          
+          const { error: restoreError } = await supabase
+            .from("profiles")
+            .update({
+              [ptoColumn]: (currentBalance || 0) + hoursUsed,
+            })
+            .eq("id", ptoData.officerId);
+
+          if (restoreError) {
+            console.error('Error restoring PTO balance:', restoreError);
+          }
         }
       }
-
-      // Restore PTO balance before deleting
-      await restorePTOBalance(ptoData.officerId, ptoData.ptoType, hoursToRestore);
 
       // Delete the PTO exception
       const { error: deleteError } = await supabase
@@ -265,8 +297,18 @@ export const useWeeklyScheduleMutations = (
         .eq("id", ptoData.id);
 
       if (deleteError) {
+        console.error('Error deleting PTO exception:', deleteError);
         throw deleteError;
       }
+
+      // Also delete any associated working time exception
+      await supabase
+        .from("schedule_exceptions")
+        .delete()
+        .eq("officer_id", ptoData.officerId)
+        .eq("date", ptoData.date)
+        .eq("shift_type_id", ptoData.shiftTypeId)
+        .eq("is_off", false);
 
       console.log('✅ PTO successfully removed');
       return { success: true };
@@ -275,12 +317,13 @@ export const useWeeklyScheduleMutations = (
       toast.success("PTO removed and balance restored");
       queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('❌ Mutation error:', error);
       toast.error(error.message || "Failed to remove PTO");
     },
   });
 
+  // Return all mutations in the correct order
   return {
     updatePositionMutation,
     removeOfficerMutation,

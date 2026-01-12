@@ -71,37 +71,44 @@ export const AssignmentEditDialogMobile: React.FC<AssignmentEditDialogMobileProp
     }
   };
 
-  const handleSave = () => {
-    if (!editingAssignment || !editingAssignment.officer?.shiftInfo) {
-      console.error('No assignment data available');
-      return;
-    }
+const handleSave = () => {
+  if (!editingAssignment) {
+    console.error('No assignment data available');
+    return;
+  }
 
-    // Determine the final position name
-    const finalPosition = position === "other-custom" && customPosition.trim() 
-      ? customPosition.trim() 
-      : position;
+  // Determine the final position name
+  const finalPosition = position === "other-custom" && customPosition.trim() 
+    ? customPosition.trim() 
+    : position;
 
-    if (!finalPosition) {
-      console.error('Position is required');
-      toast.error("Position is required");
-      return;
-    }
+  if (!finalPosition) {
+    console.error('Position is required');
+    toast.error("Position is required");
+    return;
+  }
 
-    const assignmentData = {
-      scheduleId: editingAssignment.officer.shiftInfo.scheduleId,
-      type: editingAssignment.officer.shiftInfo.scheduleType as "recurring" | "exception",
-      positionName: finalPosition,
-      unitNumber: unitNumber.trim() || undefined,
-      notes: notes.trim() || undefined,
-      date: editingAssignment.dateStr,
-      officerId: editingAssignment.officerId || editingAssignment.officer.officerId,
-      shiftTypeId: editingAssignment.shiftTypeId
-    };
+  // Check if this is a new assignment
+  const isNewAssignment = !editingAssignment.officer?.shiftInfo?.scheduleId ||
+                         editingAssignment.officer?.shiftInfo?.scheduleId === 'new' ||
+                         editingAssignment.officer?.shiftInfo?.scheduleType === 'new';
 
-    console.log('💾 Saving assignment data:', assignmentData);
-    onSave(assignmentData);
+  const assignmentData = {
+    scheduleId: isNewAssignment ? 'new' : editingAssignment.officer?.shiftInfo?.scheduleId,
+    type: isNewAssignment ? 'new' : (editingAssignment.officer?.shiftInfo?.scheduleType as "recurring" | "exception"),
+    positionName: finalPosition,
+    unitNumber: unitNumber.trim() || undefined,
+    notes: notes.trim() || undefined,
+    date: editingAssignment.dateStr,
+    officerId: editingAssignment.officerId || editingAssignment.officer?.officerId,
+    shiftTypeId: editingAssignment.shiftTypeId,
+    // Add flag for new assignments
+    isNewAssignment: isNewAssignment
   };
+
+  console.log('💾 Saving assignment data (new?', isNewAssignment, '):', assignmentData);
+  onSave(assignmentData);
+};
 
   if (!editingAssignment) return null;
 

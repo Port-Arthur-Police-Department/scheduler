@@ -405,57 +405,63 @@ const handleEditPTO = (ptoRecord: any) => {
     setAddOfficerDialogOpen(true);
   };
 
- // In DailyScheduleView.tsx - update the handleExportShiftToPDF function:
+// In DailyScheduleView.tsx, update the handleExportShiftToPDF function:
 const handleExportShiftToPDF = async (shiftData: any) => {
   try {
-    console.log("🔄 Starting PDF export...", { 
-      shiftData: shiftData?.shift?.name,
-      selectedDate,
-      layoutSettings: websiteSettings?.pdf_layout_settings 
-    });
-
     if (!shiftData) {
-      console.error("❌ No shift data provided for PDF export");
       toast.error("No schedule data available for PDF export");
-      return;
-    }
-
-    if (!shiftData.shift) {
-      console.error("❌ Invalid shift data structure:", shiftData);
-      toast.error("Invalid schedule data format");
       return;
     }
 
     toast.info("Generating PDF...");
     
-    // Get layout settings from website settings
-    const layoutSettings = websiteSettings?.pdf_layout_settings;
+    // Get layout settings from website settings with fallback
+    let layoutSettings = websiteSettings?.pdf_layout_settings;
     
-    console.log("📄 PDF Export Settings:", {
-      shiftName: shiftData.shift.name,
-      date: selectedDate,
-      hasLayoutSettings: !!layoutSettings,
-      layoutSettings: layoutSettings
-    });
+    // If layoutSettings is undefined or malformed, use defaults
+    if (!layoutSettings || typeof layoutSettings !== 'object') {
+      console.warn("⚠️ No valid layout settings found, using defaults");
+      layoutSettings = DEFAULT_LAYOUT_SETTINGS;
+    } else {
+      // Ensure all required properties exist
+      layoutSettings = {
+        ...DEFAULT_LAYOUT_SETTINGS,
+        ...layoutSettings,
+        fontSizes: {
+          ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+          ...(layoutSettings.fontSizes || {})
+        },
+        sections: {
+          ...DEFAULT_LAYOUT_SETTINGS.sections,
+          ...(layoutSettings.sections || {})
+        },
+        tableSettings: {
+          ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+          ...(layoutSettings.tableSettings || {})
+        },
+        colorSettings: {
+          ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
+          ...(layoutSettings.colorSettings || {})
+        }
+      };
+    }
 
     const result = await exportToPDF({
       selectedDate: selectedDate,
       shiftName: shiftData.shift.name,
       shiftData: shiftData,
-      layoutSettings: layoutSettings // Pass layout settings
+      layoutSettings: layoutSettings
     });
-
-    console.log("✅ PDF Export Result:", result);
 
     if (result.success) {
       toast.success("PDF exported successfully");
     } else {
-      console.error("❌ PDF Export failed:", result.error);
-      toast.error(`Failed to export PDF: ${result.error?.message || 'Unknown error'}`);
+      console.error("PDF export failed:", result.error);
+      toast.error("Failed to export PDF");
     }
   } catch (error) {
-    console.error("❌ PDF Export error:", error);
-    toast.error(`Error generating PDF: ${error.message || 'Unknown error'}`);
+    console.error("PDF Export error:", error);
+    toast.error(`Error generating PDF: ${error.message}`);
   }
 };
 

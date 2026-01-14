@@ -20,7 +20,7 @@ import { SettingsInstructions } from "./settings/SettingsInstructions";
 // ADD THESE IMPORTS:
 import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
-import { DEFAULT_LAYOUT_SETTINGS } from "@/hooks/useWebsiteSettings"; // Import the default settings
+import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 
 // Constants
 export const DEFAULT_COLORS = {

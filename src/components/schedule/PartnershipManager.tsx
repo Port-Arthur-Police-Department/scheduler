@@ -26,23 +26,6 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   const [open, setOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
 
-  // Check if current officer is PPO
-  const isCurrentOfficerPPO = isPPO({
-    id: officer.officerId,
-    full_name: officer.name,
-    rank: officer.rank
-  });
-
-  // If officer is not PPO, don't show partnership option
-  if (!isCurrentOfficerPPO) {
-    console.log("Officer is not PPO, hiding partnership option:", {
-      name: officer.name,
-      rank: officer.rank,
-      isPPO: isCurrentOfficerPPO
-    });
-    return null;
-  }
-
   const { data: availablePartners, isLoading } = useQuery({
     queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
     queryFn: async () => {
@@ -108,7 +91,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
           index === self.findIndex(p => p?.id === profile.id)
         )
         .filter(profile => profile.id !== officer.officerId) // Double-check exclusion
-        // ONLY SHOW PPO OFFICERS
+        // ONLY SHOW PPO OFFICERS IN THE DROPDOWN
         .filter(profile => {
           const officerForCheck = {
             id: profile.id,
@@ -171,20 +154,20 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Partnership with PPO</DialogTitle>
+            <DialogTitle>Create Partnership</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             <Select value={selectedPartner} onValueChange={setSelectedPartner}>
               <SelectTrigger>
-                <SelectValue placeholder="Select PPO partner officer" />
+                <SelectValue placeholder="Select Probationary (PPO) partner" />
               </SelectTrigger>
               <SelectContent>
                 {isLoading ? (
-                  <div className="p-2 text-sm text-muted-foreground">Loading PPO officers...</div>
+                  <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
                 ) : availablePartners?.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground">
-                    No available PPO officers on this shift
+                    No available Probationary (PPO) officers on this shift
                   </div>
                 ) : (
                   availablePartners?.map((partner) => (
@@ -220,21 +203,26 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Manage PPO Partnership</DialogTitle>
+          <DialogTitle>Manage Partnership</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
           <div className="p-3 border rounded-lg bg-blue-50">
-            <p className="font-medium">Current PPO Partner:</p>
+            <p className="font-medium">Current Partner:</p>
             <p>{officer.partnerData.partnerName} ({officer.partnerData.partnerBadge})</p>
             <p className="text-sm text-muted-foreground">{officer.partnerData.partnerRank}</p>
+            {officer.partnerData.partnerIsPPO && (
+              <Badge variant="outline" className="mt-1 bg-yellow-100 text-yellow-800 border-yellow-300">
+                Probationary (PPO)
+              </Badge>
+            )}
           </div>
           <Button 
             variant="destructive" 
             onClick={handleRemovePartnership}
             className="w-full"
           >
-            Remove PPO Partnership
+            Remove Partnership
           </Button>
         </div>
       </DialogContent>

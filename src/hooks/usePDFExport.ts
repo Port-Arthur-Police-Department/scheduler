@@ -1,4 +1,4 @@
-
+import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 
 // hooks/usePDFExport.ts
 import { useCallback } from "react";
@@ -58,53 +58,6 @@ interface ExportOptions {
   shiftData: any;
   layoutSettings?: LayoutSettings;
 }
-
-// Default layout settings - UPDATED with separate header colors
-const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
-  fontSizes: {
-    header: 10,
-    sectionTitle: 9,
-    tableHeader: 7,
-    tableContent: 7,
-    footer: 7
-  },
-  sections: {
-    showSupervisors: true,
-    showOfficers: true,
-    showSpecialAssignments: true,
-    showPTO: true,
-    showStaffingSummary: true
-  },
-  tableSettings: {
-    rowHeight: 8,
-    cellPadding: 3,
-    showRowStriping: true,
-    compactMode: false
-  },
-  colorSettings: {
-    // Header Colors - Each section has different background
-    supervisorHeaderBgColor: "41,128,185", // Blue for supervisors
-    officerHeaderBgColor: "52,152,219", // Lighter blue for officers
-    specialHeaderBgColor: "155,89,182", // Purple for special assignments
-    ptoHeaderBgColor: "243,156,18", // Orange for PTO
-    headerTextColor: "255,255,255", // White text for all headers
-    
-    // Table Content Colors
-    officerTextColor: "44,62,80", // Dark gray for officer names
-    supervisorTextColor: "44,62,80", // Dark gray for supervisor names
-    specialAssignmentTextColor: "102,51,153", // Purple for special assignments
-    ptoTextColor: "139,0,0", // Red for PTO
-    
-    // Row Colors
-    evenRowColor: "255,255,255",
-    oddRowColor: "248,249,250",
-    
-    // Accent Colors (top header only)
-    primaryColor: "41,128,185", // Shift and Date title only
-    secondaryColor: "52,152,219",
-    accentColor: "155,89,182"
-  }
-};
 
 // Modern color scheme (kept for backward compatibility)
 const COLORS = {

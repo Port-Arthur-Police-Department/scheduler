@@ -405,31 +405,59 @@ const handleEditPTO = (ptoRecord: any) => {
     setAddOfficerDialogOpen(true);
   };
 
-  const handleExportShiftToPDF = async (shiftData: any) => {
-    try {
-      if (!shiftData) {
-        toast.error("No schedule data available for PDF export");
-        return;
-      }
+ // In DailyScheduleView.tsx - update the handleExportShiftToPDF function:
+const handleExportShiftToPDF = async (shiftData: any) => {
+  try {
+    console.log("🔄 Starting PDF export...", { 
+      shiftData: shiftData?.shift?.name,
+      selectedDate,
+      layoutSettings: websiteSettings?.pdf_layout_settings 
+    });
 
-      toast.info("Generating PDF...");
-      
-      const result = await exportToPDF({
-        selectedDate: selectedDate,
-        shiftName: shiftData.shift.name,
-        shiftData: shiftData,
-        layoutSettings: savedLayoutSettings 
-      });
-
-      if (result.success) {
-        toast.success("PDF exported successfully");
-      } else {
-        toast.error("Failed to export PDF");
-      }
-    } catch (error) {
-      toast.error("Error generating PDF");
+    if (!shiftData) {
+      console.error("❌ No shift data provided for PDF export");
+      toast.error("No schedule data available for PDF export");
+      return;
     }
-  };
+
+    if (!shiftData.shift) {
+      console.error("❌ Invalid shift data structure:", shiftData);
+      toast.error("Invalid schedule data format");
+      return;
+    }
+
+    toast.info("Generating PDF...");
+    
+    // Get layout settings from website settings
+    const layoutSettings = websiteSettings?.pdf_layout_settings;
+    
+    console.log("📄 PDF Export Settings:", {
+      shiftName: shiftData.shift.name,
+      date: selectedDate,
+      hasLayoutSettings: !!layoutSettings,
+      layoutSettings: layoutSettings
+    });
+
+    const result = await exportToPDF({
+      selectedDate: selectedDate,
+      shiftName: shiftData.shift.name,
+      shiftData: shiftData,
+      layoutSettings: layoutSettings // Pass layout settings
+    });
+
+    console.log("✅ PDF Export Result:", result);
+
+    if (result.success) {
+      toast.success("PDF exported successfully");
+    } else {
+      console.error("❌ PDF Export failed:", result.error);
+      toast.error(`Failed to export PDF: ${result.error?.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error("❌ PDF Export error:", error);
+    toast.error(`Error generating PDF: ${error.message || 'Unknown error'}`);
+  }
+};
 
   if (isLoading) {
     return (

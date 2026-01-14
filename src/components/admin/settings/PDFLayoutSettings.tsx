@@ -117,15 +117,15 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
     }));
   };
 
-  const handleColorChange = (color: keyof LayoutSettings['colorSettings'], value: string) => {
-    setLayoutSettings(prev => ({
-      ...prev,
-      colorSettings: {
-        ...prev.colorSettings,
-        [color]: value
-      }
-    }));
-  };
+const handleColorChange = (key: string, value: string) => {
+  setLayoutSettings(prev => ({
+    ...prev,
+    colorSettings: {
+      ...prev.colorSettings,
+      [key]: value
+    }
+  }));
+};
 
   const handleReset = () => {
     setLayoutSettings(DEFAULT_LAYOUT_SETTINGS);

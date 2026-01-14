@@ -1,9 +1,7 @@
-import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-
-// hooks/usePDFExport.ts
 import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
+import { DEFAULT_LAYOUT_SETTINGS, LayoutSettings } from "@/constants/pdfLayoutSettings";
 
 // Layout Settings Interface
 interface LayoutSettings {
@@ -782,7 +780,5 @@ export const usePDFExport = () => {
     }
   }, []);
 
-  return { exportToPDF, DEFAULT_LAYOUT_SETTINGS };
+  return { exportToPDF };
 };
-
-export { DEFAULT_LAYOUT_SETTINGS };

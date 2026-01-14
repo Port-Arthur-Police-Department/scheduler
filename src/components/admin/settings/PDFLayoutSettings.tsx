@@ -303,30 +303,54 @@ const handleColorChange = (key: string, value: string) => {
             </div>
           </TabsContent>
 
+// In your PDFLayoutSettings.tsx, update the colors tab:
 <TabsContent value="colors" className="space-y-4">
   <div className="grid grid-cols-2 gap-4">
-    {/* Header Colors */}
+    {/* Section Header Background Colors */}
     <div className="space-y-2">
-      <Label>Header Background</Label>
+      <Label>Supervisor Header Background</Label>
       <ColorPicker
-        value={layoutSettings.colorSettings.headerBgColor}
-        onChange={(value) => handleColorChange('headerBgColor', value)}
+        value={layoutSettings.colorSettings.supervisorHeaderBgColor}
+        onChange={(value) => handleColorChange('supervisorHeaderBgColor', value)}
       />
     </div>
     <div className="space-y-2">
-      <Label>Header Text</Label>
+      <Label>Officer Header Background</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.officerHeaderBgColor}
+        onChange={(value) => handleColorChange('officerHeaderBgColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Special Assignment Header Background</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.specialHeaderBgColor}
+        onChange={(value) => handleColorChange('specialHeaderBgColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>PTO Header Background</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.ptoHeaderBgColor}
+        onChange={(value) => handleColorChange('ptoHeaderBgColor', value)}
+      />
+    </div>
+    
+    {/* Header Text Color */}
+    <div className="space-y-2">
+      <Label>Header Text Color (All Sections)</Label>
       <ColorPicker
         value={layoutSettings.colorSettings.headerTextColor}
         onChange={(value) => handleColorChange('headerTextColor', value)}
       />
     </div>
     
-    {/* Section Titles */}
+    {/* Primary Color (Top Header Only) */}
     <div className="space-y-2">
-      <Label>Section Titles (SUPERVISORS/OFFICERS)</Label>
+      <Label>Primary Color (Shift/Date Title Only)</Label>
       <ColorPicker
-        value={layoutSettings.colorSettings.sectionTitleColor}
-        onChange={(value) => handleColorChange('sectionTitleColor', value)}
+        value={layoutSettings.colorSettings.primaryColor}
+        onChange={(value) => handleColorChange('primaryColor', value)}
       />
     </div>
     
@@ -373,22 +397,6 @@ const handleColorChange = (key: string, value: string) => {
       <ColorPicker
         value={layoutSettings.colorSettings.oddRowColor}
         onChange={(value) => handleColorChange('oddRowColor', value)}
-      />
-    </div>
-    
-    {/* Accent Colors */}
-    <div className="space-y-2">
-      <Label>Primary Color (Headers/Accents)</Label>
-      <ColorPicker
-        value={layoutSettings.colorSettings.primaryColor}
-        onChange={(value) => handleColorChange('primaryColor', value)}
-      />
-    </div>
-    <div className="space-y-2">
-      <Label>Accent Color</Label>
-      <ColorPicker
-        value={layoutSettings.colorSettings.accentColor}
-        onChange={(value) => handleColorChange('accentColor', value)}
       />
     </div>
   </div>

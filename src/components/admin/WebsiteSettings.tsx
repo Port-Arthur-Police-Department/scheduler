@@ -17,6 +17,10 @@ import { PasswordResetManager } from "./PasswordResetManager";
 import { AuditLogViewer } from "./settings/AuditLogViewer";
 import { ManualAlertSender } from "./settings/ManualAlertSender";
 import { SettingsInstructions } from "./settings/SettingsInstructions";
+// ADD THESE IMPORTS:
+import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
+import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
+import { DEFAULT_LAYOUT_SETTINGS } from "@/hooks/useWebsiteSettings"; // Import the default settings
 
 // Constants
 export const DEFAULT_COLORS = {
@@ -106,6 +110,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
+  // ADD THESE STATES FOR PDF LAYOUT:
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -128,7 +135,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             .insert({
               ...DEFAULT_NOTIFICATION_SETTINGS,
               color_settings: DEFAULT_COLORS,
-              pto_type_visibility: DEFAULT_PTO_VISIBILITY
+              pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS // ADD THIS
             })
             .select()
             .single();
@@ -146,6 +154,33 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       // Merge with defaults to ensure all properties exist
       data.color_settings = { ...DEFAULT_COLORS, ...(data.color_settings || {}) };
       data.pto_type_visibility = { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) };
+      
+      // Ensure pdf_layout_settings exists and has all defaults
+      if (!data.pdf_layout_settings) {
+        data.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
+      } else {
+        // Deep merge with defaults
+        data.pdf_layout_settings = {
+          ...DEFAULT_LAYOUT_SETTINGS,
+          ...data.pdf_layout_settings,
+          fontSizes: {
+            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+            ...(data.pdf_layout_settings.fontSizes || {})
+          },
+          sections: {
+            ...DEFAULT_LAYOUT_SETTINGS.sections,
+            ...(data.pdf_layout_settings.sections || {})
+          },
+          tableSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+            ...(data.pdf_layout_settings.tableSettings || {})
+          },
+          colorSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
+            ...(data.pdf_layout_settings.colorSettings || {})
+          }
+        };
+      }
       
       for (const key in DEFAULT_NOTIFICATION_SETTINGS) {
         if (data[key] === undefined) {
@@ -205,6 +240,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       [key]: value,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
+      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -216,6 +252,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       id: settings?.id,
       pto_type_visibility: newPtoVisibility,
       color_settings: colorSettings,
+      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -244,7 +281,94 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       id: settings?.id,
       color_settings: newColors,
       pto_type_visibility: ptoVisibility,
+      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
+  };
+
+  // ADD THIS: Handler for PDF layout settings
+  const handleLayoutSettingsSave = (layoutSettings: any) => {
+    console.log('Saving PDF layout settings:', layoutSettings);
+    
+    updateSettingsMutation.mutate({
+      id: settings?.id,
+      pdf_layout_settings: layoutSettings,
+      color_settings: colorSettings,
+      pto_type_visibility: ptoVisibility,
+    });
+  };
+
+  // ADD THIS: Function to generate preview data
+  const generatePreviewData = () => {
+    // Create mock data for preview
+    const mockData = {
+      shift: {
+        name: "DAY SHIFT",
+        start_time: "07:00",
+        end_time: "15:00"
+      },
+      supervisors: [
+        { 
+          name: "SGT. JANE DOE", 
+          badge: "1234", 
+          position: "District 1 Supervisor", 
+          unitNumber: "Unit 1",
+          rank: "Sergeant",
+          hasPTO: false
+        },
+        { 
+          name: "LT. JOHN SMITH", 
+          badge: "5678", 
+          position: "District 2 Supervisor", 
+          unitNumber: "Unit 2",
+          rank: "Lieutenant",
+          hasPTO: false
+        }
+      ],
+      officers: [
+        { 
+          name: "OFFICER ALEX JONES", 
+          badge: "9012", 
+          position: "District 1", 
+          unitNumber: "101",
+          hasPTO: false,
+          isPPO: false
+        },
+        { 
+          name: "OFFICER SAM WILSON", 
+          badge: "3456", 
+          position: "District 2", 
+          unitNumber: "102",
+          hasPTO: false,
+          isPPO: false
+        }
+      ],
+      specialAssignmentOfficers: [
+        { 
+          name: "OFFICER TOM HARRIS", 
+          badge: "7890", 
+          position: "Traffic Enforcement", 
+          unitNumber: "T-1",
+          hasPTO: false
+        }
+      ],
+      ptoRecords: [
+        { 
+          name: "OFFICER MIKE BROWN", 
+          badge: "1111", 
+          ptoType: "VACATION", 
+          startTime: "07:00", 
+          endTime: "15:00",
+          isFullShift: true
+        }
+      ],
+      currentSupervisors: 2,
+      minSupervisors: 2,
+      currentOfficers: 2,
+      minOfficers: 8
+    };
+
+    setPreviewData(mockData);
+    setPdfPreviewOpen(true);
   };
 
   const resetToDefaults = () => {
@@ -254,6 +378,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       id: settings?.id,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+      pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS, // ADD THIS
       ...DEFAULT_NOTIFICATION_SETTINGS,
     });
   };
@@ -271,6 +396,14 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
   return (
     <div className="space-y-6">
+      {/* Add PDF Layout Settings at the top for easy access */}
+      <PDFLayoutSettings 
+        settings={settings}
+        onSave={handleLayoutSettingsSave}
+        onPreview={generatePreviewData}
+        isPending={updateSettingsMutation.isPending}
+      />
+
       <NotificationSettings 
         settings={settings}
         handleToggle={handleToggle}
@@ -313,6 +446,15 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       {(isAdmin || isSupervisor) && <ManualAlertSender />}
 
       <SettingsInstructions />
+
+      {/* PDF Preview Dialog */}
+      <PDFPreviewDialog
+        open={pdfPreviewOpen}
+        onOpenChange={setPdfPreviewOpen}
+        previewData={previewData}
+        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+        selectedDate={new Date()}
+      />
     </div>
   );
 };

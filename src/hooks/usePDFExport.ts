@@ -127,17 +127,23 @@ const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['co
   return color;
 };
 
-// Helper to extract just the number from positions like "District 1", "Beat 2", etc.
+// Helper to extract just the number from positions like "District 1", "Beat 2", "District 1/2"
 const extractBeatNumber = (position: string | undefined): string => {
   if (!position) return "";
   
-  // Try to extract number from common position formats
-  const match = position.match(/\d+/);
-  if (match) {
-    return match[0];
+  // Remove common prefixes and trim whitespace
+  const cleanedPosition = position
+    .replace(/^District\s*/i, '')  // Remove "District" at the start
+    .replace(/^Beat\s*/i, '')      // Remove "Beat" at the start
+    .replace(/^Unit\s*/i, '')      // Remove "Unit" at the start
+    .trim();
+  
+  // If after removing prefixes we have something, return it
+  if (cleanedPosition) {
+    return cleanedPosition;
   }
   
-  // If no number found, return the original position
+  // If nothing left after removing prefixes, return original
   return position;
 };
 

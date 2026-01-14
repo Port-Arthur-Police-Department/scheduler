@@ -303,7 +303,6 @@ const handleColorChange = (key: string, value: string) => {
             </div>
           </TabsContent>
 
-// In your PDFLayoutSettings.tsx, update the colors tab:
 <TabsContent value="colors" className="space-y-4">
   <div className="grid grid-cols-2 gap-4">
     {/* Section Header Background Colors */}

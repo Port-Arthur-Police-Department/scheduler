@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { Eye, RotateCcw } from "lucide-react";
+import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 
 interface LayoutSettings {
   fontSizes: {
@@ -42,53 +43,6 @@ interface LayoutSettings {
     oddRowColor: string;
   };
 }
-
-// In PDFLayoutSettings.tsx, make sure the colorSettings in DEFAULT_LAYOUT_SETTINGS matches:
-const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
-  fontSizes: {
-    header: 10,
-    sectionTitle: 9,
-    tableHeader: 7,
-    tableContent: 7,
-    footer: 7
-  },
-  sections: {
-    showSupervisors: true,
-    showOfficers: true,
-    showSpecialAssignments: true,
-    showPTO: true,
-    showStaffingSummary: true
-  },
-  tableSettings: {
-    rowHeight: 8,
-    cellPadding: 3,
-    showRowStriping: true,
-    compactMode: false
-  },
-  colorSettings: {
-    // Header Colors - Each section has different background
-    supervisorHeaderBgColor: "#2980b9",
-    officerHeaderBgColor: "#3498db",
-    specialHeaderBgColor: "#9b59b6",
-    ptoHeaderBgColor: "#f39c12",
-    headerTextColor: "#ffffff",
-    
-    // Table Content Colors
-    officerTextColor: "#2c3e50",
-    supervisorTextColor: "#2c3e50",
-    specialAssignmentTextColor: "#663399",
-    ptoTextColor: "#8b0000",
-    
-    // Row Colors
-    evenRowColor: "#ffffff",
-    oddRowColor: "#f8f9fa",
-    
-    // Accent Colors (top header only)
-    primaryColor: "#2980b9",
-    secondaryColor: "#3498db",
-    accentColor: "#9b59b6"
-  }
-};
 
 interface PDFLayoutSettingsProps {
   settings: any;

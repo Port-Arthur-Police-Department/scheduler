@@ -303,52 +303,97 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
             </div>
           </TabsContent>
 
-          <TabsContent value="colors" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Header Background</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.headerBgColor}
-                  onChange={(value) => handleColorChange('headerBgColor', value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Header Text</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.headerTextColor}
-                  onChange={(value) => handleColorChange('headerTextColor', value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Even Rows</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.evenRowColor}
-                  onChange={(value) => handleColorChange('evenRowColor', value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Odd Rows</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.oddRowColor}
-                  onChange={(value) => handleColorChange('oddRowColor', value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Primary Color</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.primaryColor}
-                  onChange={(value) => handleColorChange('primaryColor', value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Accent Color</Label>
-                <ColorPicker
-                  value={layoutSettings.colorSettings.accentColor}
-                  onChange={(value) => handleColorChange('accentColor', value)}
-                />
-              </div>
-            </div>
-          </TabsContent>
+          // In your PDFLayoutSettings.tsx, update the colors tab to include the new color options:
+<TabsContent value="colors" className="space-y-4">
+  <div className="grid grid-cols-2 gap-4">
+    {/* Header Colors */}
+    <div className="space-y-2">
+      <Label>Header Background</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.headerBgColor}
+        onChange={(value) => handleColorChange('headerBgColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Header Text</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.headerTextColor}
+        onChange={(value) => handleColorChange('headerTextColor', value)}
+      />
+    </div>
+    
+    {/* Section Titles */}
+    <div className="space-y-2">
+      <Label>Section Titles (SUPERVISORS/OFFICERS)</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.sectionTitleColor}
+        onChange={(value) => handleColorChange('sectionTitleColor', value)}
+      />
+    </div>
+    
+    {/* Officer Text Colors */}
+    <div className="space-y-2">
+      <Label>Officer Names Text</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.officerTextColor}
+        onChange={(value) => handleColorChange('officerTextColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Supervisor Names Text</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.supervisorTextColor}
+        onChange={(value) => handleColorChange('supervisorTextColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Special Assignment Text</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.specialAssignmentTextColor}
+        onChange={(value) => handleColorChange('specialAssignmentTextColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>PTO Text</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.ptoTextColor}
+        onChange={(value) => handleColorChange('ptoTextColor', value)}
+      />
+    </div>
+    
+    {/* Row Colors */}
+    <div className="space-y-2">
+      <Label>Even Rows</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.evenRowColor}
+        onChange={(value) => handleColorChange('evenRowColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Odd Rows</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.oddRowColor}
+        onChange={(value) => handleColorChange('oddRowColor', value)}
+      />
+    </div>
+    
+    {/* Accent Colors */}
+    <div className="space-y-2">
+      <Label>Primary Color (Headers/Accents)</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.primaryColor}
+        onChange={(value) => handleColorChange('primaryColor', value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label>Accent Color</Label>
+      <ColorPicker
+        value={layoutSettings.colorSettings.accentColor}
+        onChange={(value) => handleColorChange('accentColor', value)}
+      />
+    </div>
+  </div>
+</TabsContent>
         </Tabs>
 
         <Separator className="my-6" />

@@ -10,7 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { Eye, RotateCcw } from "lucide-react";
-import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { DEFAULT_LAYOUT_SETTINGS, LayoutSettings } from "@/constants/pdfLayoutSettings";
 
 interface LayoutSettings {
   fontSizes: {

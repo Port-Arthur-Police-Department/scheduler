@@ -519,6 +519,8 @@ const drawCompactTable = (
   return y + 8;
 };
 
+export { DEFAULT_LAYOUT_SETTINGS };
+
 export const usePDFExport = () => {
   const exportToPDF = useCallback(async ({ 
     selectedDate, 
@@ -829,3 +831,5 @@ export const usePDFExport = () => {
 
   return { exportToPDF, DEFAULT_LAYOUT_SETTINGS };
 };
+
+export { DEFAULT_LAYOUT_SETTINGS };

@@ -25,12 +25,12 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     compactMode: false
   },
   colorSettings: {
-    // Header Colors
-    headerBgColor: "41,128,185",
+    // Header Colors - Each section has different background
+    supervisorHeaderBgColor: "41,128,185",
+    officerHeaderBgColor: "52,152,219",
+    specialHeaderBgColor: "155,89,182",
+    ptoHeaderBgColor: "243,156,18",
     headerTextColor: "255,255,255",
-    
-    // Section Title Colors
-    sectionTitleColor: "41,128,185",
     
     // Table Content Colors
     officerTextColor: "44,62,80",
@@ -42,7 +42,7 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     evenRowColor: "255,255,255",
     oddRowColor: "248,249,250",
     
-    // Accent Colors
+    // Accent Colors (top header only)
     primaryColor: "41,128,185",
     secondaryColor: "52,152,219",
     accentColor: "155,89,182"

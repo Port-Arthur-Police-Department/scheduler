@@ -1,3 +1,5 @@
+
+
 // hooks/usePDFExport.ts
 import { useCallback } from "react";
 import jsPDF from "jspdf";
@@ -26,12 +28,12 @@ interface LayoutSettings {
     compactMode: boolean;
   };
   colorSettings: {
-    // Header Colors
-    headerBgColor: string;
-    headerTextColor: string;
-    
-    // Section Title Colors (SUPERVISORS, OFFICERS text)
-    sectionTitleColor: string;
+    // Header Colors - Each section has its own header background
+    supervisorHeaderBgColor: string;
+    officerHeaderBgColor: string;
+    specialHeaderBgColor: string;
+    ptoHeaderBgColor: string;
+    headerTextColor: string; // White text for all headers
     
     // Table Content Colors
     officerTextColor: string;
@@ -43,8 +45,8 @@ interface LayoutSettings {
     evenRowColor: string;
     oddRowColor: string;
     
-    // Accent Colors (for borders, etc)
-    primaryColor: string;
+    // Accent Colors (for top header and other accents)
+    primaryColor: string; // Shift and Date title only
     secondaryColor: string;
     accentColor: string;
   };
@@ -57,7 +59,7 @@ interface ExportOptions {
   layoutSettings?: LayoutSettings;
 }
 
-// Default layout settings - UPDATED with more specific colors
+// Default layout settings - UPDATED with separate header colors
 const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
   fontSizes: {
     header: 10,
@@ -80,12 +82,12 @@ const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
     compactMode: false
   },
   colorSettings: {
-    // Header Colors
-    headerBgColor: "41,128,185", // Blue background for table headers
-    headerTextColor: "255,255,255", // White text for table headers
-    
-    // Section Title Colors
-    sectionTitleColor: "41,128,185", // Blue for "SUPERVISORS", "OFFICERS" titles
+    // Header Colors - Each section has different background
+    supervisorHeaderBgColor: "41,128,185", // Blue for supervisors
+    officerHeaderBgColor: "52,152,219", // Lighter blue for officers
+    specialHeaderBgColor: "155,89,182", // Purple for special assignments
+    ptoHeaderBgColor: "243,156,18", // Orange for PTO
+    headerTextColor: "255,255,255", // White text for all headers
     
     // Table Content Colors
     officerTextColor: "44,62,80", // Dark gray for officer names
@@ -97,8 +99,8 @@ const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
     evenRowColor: "255,255,255",
     oddRowColor: "248,249,250",
     
-    // Accent Colors
-    primaryColor: "41,128,185",
+    // Accent Colors (top header only)
+    primaryColor: "41,128,185", // Shift and Date title only
     secondaryColor: "52,152,219",
     accentColor: "155,89,182"
   }
@@ -118,28 +120,74 @@ const COLORS = {
   border: [222, 226, 230]
 };
 
-// Helper function to convert hex/rgb string to array
-const parseColor = (colorString: string): number[] => {
-  if (colorString.includes(',')) {
-    // RGB string like "41,128,185"
-    return colorString.split(',').map(num => parseInt(num.trim(), 10));
-  } else if (colorString.startsWith('#')) {
-    // Hex color like "#2980b9"
-    const hex = colorString.replace('#', '');
-    if (hex.length === 3) {
-      const r = parseInt(hex[0] + hex[0], 16);
-      const g = parseInt(hex[1] + hex[1], 16);
-      const b = parseInt(hex[2] + hex[2], 16);
-      return [r, g, b];
-    } else if (hex.length === 6) {
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return [r, g, b];
+// Helper function to convert hex/rgb string to array - FIXED with better error handling
+const parseColor = (colorString: string | undefined): number[] => {
+  // If colorString is undefined or null, return default color
+  if (!colorString) {
+    console.warn('parseColor: colorString is undefined or null, using default');
+    return COLORS.dark;
+  }
+  
+  // Check if it's an RGB string
+  if (typeof colorString === 'string' && colorString.includes(',')) {
+    try {
+      const parts = colorString.split(',').map(num => parseInt(num.trim(), 10));
+      // Validate all parts are numbers
+      if (parts.length === 3 && parts.every(num => !isNaN(num))) {
+        return parts;
+      }
+    } catch (error) {
+      console.warn('parseColor: Failed to parse RGB string:', colorString, error);
     }
   }
+  
+  // Check if it's a hex color
+  if (typeof colorString === 'string' && colorString.startsWith('#')) {
+    try {
+      const hex = colorString.replace('#', '');
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        return [r, g, b];
+      } else if (hex.length === 6) {
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        return [r, g, b];
+      }
+    } catch (error) {
+      console.warn('parseColor: Failed to parse hex color:', colorString, error);
+    }
+  }
+  
   // Default to dark gray if invalid
+  console.warn('parseColor: Invalid color format, using default:', colorString);
   return COLORS.dark;
+};
+
+// Safe color settings getter with defaults
+const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['colorSettings']): string => {
+  const color = settings.colorSettings[key];
+  if (!color) {
+    console.warn(`Missing color setting for ${key}, using default`);
+    return DEFAULT_LAYOUT_SETTINGS.colorSettings[key] || "44,62,80";
+  }
+  return color;
+};
+
+// Helper to extract just the number from positions like "District 1", "Beat 2", etc.
+const extractBeatNumber = (position: string | undefined): string => {
+  if (!position) return "";
+  
+  // Try to extract number from common position formats
+  const match = position.match(/\d+/);
+  if (match) {
+    return match[0];
+  }
+  
+  // If no number found, return the original position
+  return position;
 };
 
 // Your actual base64 logo - paste your complete string here
@@ -156,7 +204,9 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
   
   if (!logoBase64 || logoBase64 === "placeholder") {
     const logoSize = 20;
-    pdf.setFillColor(COLORS.primary[0], COLORS.primary[1], COLORS.primary[2]);
+    const primaryColorStr = getColorSetting(DEFAULT_LAYOUT_SETTINGS, 'primaryColor');
+    const primaryColor = parseColor(primaryColorStr);
+    pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     pdf.rect(x, y, logoSize, logoSize, 'F');
     pdf.setFontSize(6);
     pdf.setTextColor(255, 255, 255);
@@ -173,7 +223,9 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
   } catch (error) {
     console.error('Error drawing logo:', error);
     const logoSize = 20;
-    pdf.setFillColor(COLORS.primary[0], COLORS.primary[1], COLORS.primary[2]);
+    const primaryColorStr = getColorSetting(DEFAULT_LAYOUT_SETTINGS, 'primaryColor');
+    const primaryColor = parseColor(primaryColorStr);
+    pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     pdf.rect(x, y, logoSize, logoSize, 'F');
     pdf.setFontSize(6);
     pdf.setTextColor(255, 255, 255);
@@ -235,7 +287,7 @@ const formatPartnershipDetails = (person: any) => {
   return partnershipInfo;
 };
 
-// UPDATED: Table drawing function with better color separation
+// UPDATED: Table drawing function with separate header colors and simplified beat column
 const drawCompactTable = (
   pdf: jsPDF, 
   headers: string[], 
@@ -256,8 +308,8 @@ const drawCompactTable = (
       "PTO OFFICERS": 0.35,
       "OFFICERS": 0.35,
       "SUPERVISORS": 0.35,
-      "BEAT": 0.10,
-      "ASSIGNMENT": 0.20,
+      "BEAT": 0.08, // Slightly narrower for just numbers
+      "ASSIGNMENT": 0.22, // Slightly wider to compensate
       "BADGE #": 0.10,
       "UNIT": 0.10,
       "NOTES": 0.35,
@@ -282,23 +334,42 @@ const drawCompactTable = (
   }
 
   let y = startY;
-  const rowHeight = layoutSettings.tableSettings.rowHeight;
-  const cellPadding = layoutSettings.tableSettings.cellPadding;
+  const rowHeight = layoutSettings.tableSettings.rowHeight || DEFAULT_LAYOUT_SETTINGS.tableSettings.rowHeight;
+  const cellPadding = layoutSettings.tableSettings.cellPadding || DEFAULT_LAYOUT_SETTINGS.tableSettings.cellPadding;
 
   // Draw headers - center all headers
   let x = margins.left;
   headers.forEach((header, index) => {
-    // Use header background color from layout settings
-    const headerBg = parseColor(layoutSettings.colorSettings.headerBgColor);
+    // Get appropriate header background color based on section type
+    let headerBgColorKey: keyof LayoutSettings['colorSettings'];
+    switch(sectionType) {
+      case 'supervisors':
+        headerBgColorKey = 'supervisorHeaderBgColor';
+        break;
+      case 'special':
+        headerBgColorKey = 'specialHeaderBgColor';
+        break;
+      case 'pto':
+        headerBgColorKey = 'ptoHeaderBgColor';
+        break;
+      case 'officers':
+      default:
+        headerBgColorKey = 'officerHeaderBgColor';
+        break;
+    }
+    
+    const headerBgColor = getColorSetting(layoutSettings, headerBgColorKey);
+    const headerBg = parseColor(headerBgColor);
     pdf.setFillColor(headerBg[0], headerBg[1], headerBg[2]);
     pdf.rect(x, y, colWidths[index], rowHeight, 'F');
     
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(layoutSettings.fontSizes.tableHeader);
+    pdf.setFontSize(layoutSettings.fontSizes.tableHeader || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableHeader);
     
     // Use header text color from layout settings
-    const headerTextColor = parseColor(layoutSettings.colorSettings.headerTextColor);
-    pdf.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+    const headerTextColor = getColorSetting(layoutSettings, 'headerTextColor');
+    const headerTextColorParsed = parseColor(headerTextColor);
+    pdf.setTextColor(headerTextColorParsed[0], headerTextColorParsed[1], headerTextColorParsed[2]);
     
     const textWidth = pdf.getTextWidth(header);
     const textX = x + (colWidths[index] - textWidth) / 2;
@@ -311,7 +382,7 @@ const drawCompactTable = (
 
   // Draw data rows
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(layoutSettings.fontSizes.tableContent);
+  pdf.setFontSize(layoutSettings.fontSizes.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent);
   
   data.forEach((row, rowIndex) => {
     x = margins.left;
@@ -319,15 +390,18 @@ const drawCompactTable = (
     // Apply row striping if enabled
     if (layoutSettings.tableSettings.showRowStriping) {
       if (rowIndex % 2 === 0) {
-        const evenRowColor = parseColor(layoutSettings.colorSettings.evenRowColor);
-        pdf.setFillColor(evenRowColor[0], evenRowColor[1], evenRowColor[2]);
+        const evenRowColor = getColorSetting(layoutSettings, 'evenRowColor');
+        const evenRowColorParsed = parseColor(evenRowColor);
+        pdf.setFillColor(evenRowColorParsed[0], evenRowColorParsed[1], evenRowColorParsed[2]);
       } else {
-        const oddRowColor = parseColor(layoutSettings.colorSettings.oddRowColor);
-        pdf.setFillColor(oddRowColor[0], oddRowColor[1], oddRowColor[2]);
+        const oddRowColor = getColorSetting(layoutSettings, 'oddRowColor');
+        const oddRowColorParsed = parseColor(oddRowColor);
+        pdf.setFillColor(oddRowColorParsed[0], oddRowColorParsed[1], oddRowColorParsed[2]);
       }
     } else {
-      const evenRowColor = parseColor(layoutSettings.colorSettings.evenRowColor);
-      pdf.setFillColor(evenRowColor[0], evenRowColor[1], evenRowColor[2]);
+      const evenRowColor = getColorSetting(layoutSettings, 'evenRowColor');
+      const evenRowColorParsed = parseColor(evenRowColor);
+      pdf.setFillColor(evenRowColorParsed[0], evenRowColorParsed[1], evenRowColorParsed[2]);
     }
     
     pdf.rect(x, y, tableWidth, rowHeight, 'F');
@@ -339,27 +413,36 @@ const drawCompactTable = (
       pdf.rect(x, y, colWidths[cellIndex], rowHeight, 'S');
       
       // Set text color based on section type
-      let textColor;
+      let colorKey: keyof LayoutSettings['colorSettings'];
       switch(sectionType) {
         case 'supervisors':
-          textColor = parseColor(layoutSettings.colorSettings.supervisorTextColor);
+          colorKey = 'supervisorTextColor';
           break;
         case 'special':
-          textColor = parseColor(layoutSettings.colorSettings.specialAssignmentTextColor);
+          colorKey = 'specialAssignmentTextColor';
           break;
         case 'pto':
-          textColor = parseColor(layoutSettings.colorSettings.ptoTextColor);
+          colorKey = 'ptoTextColor';
           break;
         case 'officers':
         default:
-          textColor = parseColor(layoutSettings.colorSettings.officerTextColor);
+          colorKey = 'officerTextColor';
           break;
       }
       
+      const textColorStr = getColorSetting(layoutSettings, colorKey);
+      const textColor = parseColor(textColorStr);
+      
       pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
       
-      const cellText = cell?.toString() || "";
+      let cellText = cell?.toString() || "";
       const maxTextWidth = colWidths[cellIndex] - (cellPadding * 2);
+      
+      // For BEAT column, extract just the number
+      const currentHeader = headers[cellIndex].toUpperCase();
+      if (currentHeader === "BEAT") {
+        cellText = extractBeatNumber(cellText);
+      }
       
       let displayText = cellText;
       if (pdf.getTextWidth(cellText) > maxTextWidth) {
@@ -371,7 +454,6 @@ const drawCompactTable = (
       }
       
       // Center specific columns: BADGE #, BEAT, UNIT, TYPE
-      const currentHeader = headers[cellIndex].toUpperCase();
       const centerColumns = ["BADGE #", "BEAT", "UNIT", "TYPE"];
       
       if (centerColumns.includes(currentHeader)) {
@@ -395,14 +477,34 @@ const drawCompactTable = (
       
       x = margins.left;
       headers.forEach((header, index) => {
-        const headerBg = parseColor(layoutSettings.colorSettings.headerBgColor);
+        // Get appropriate header background color based on section type
+        let headerBgColorKey: keyof LayoutSettings['colorSettings'];
+        switch(sectionType) {
+          case 'supervisors':
+            headerBgColorKey = 'supervisorHeaderBgColor';
+            break;
+          case 'special':
+            headerBgColorKey = 'specialHeaderBgColor';
+            break;
+          case 'pto':
+            headerBgColorKey = 'ptoHeaderBgColor';
+            break;
+          case 'officers':
+          default:
+            headerBgColorKey = 'officerHeaderBgColor';
+            break;
+        }
+        
+        const headerBgColor = getColorSetting(layoutSettings, headerBgColorKey);
+        const headerBg = parseColor(headerBgColor);
         pdf.setFillColor(headerBg[0], headerBg[1], headerBg[2]);
         pdf.rect(x, y, colWidths[index], rowHeight, 'F');
         
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(layoutSettings.fontSizes.tableHeader);
-        const headerTextColor = parseColor(layoutSettings.colorSettings.headerTextColor);
-        pdf.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+        pdf.setFontSize(layoutSettings.fontSizes.tableHeader || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableHeader);
+        const headerTextColor = getColorSetting(layoutSettings, 'headerTextColor');
+        const headerTextColorParsed = parseColor(headerTextColor);
+        pdf.setTextColor(headerTextColorParsed[0], headerTextColorParsed[1], headerTextColorParsed[2]);
         
         const textWidth = pdf.getTextWidth(header);
         const textX = x + (colWidths[index] - textWidth) / 2;
@@ -425,11 +527,42 @@ export const usePDFExport = () => {
     layoutSettings = DEFAULT_LAYOUT_SETTINGS 
   }: ExportOptions) => {
     try {
-      console.log("PDF Export - Received data:", { selectedDate, shiftName, shiftData, layoutSettings });
+      console.log("PDF Export - Starting export with:", { 
+        selectedDate, 
+        shiftName, 
+        hasShiftData: !!shiftData,
+        hasLayoutSettings: !!layoutSettings,
+        layoutSettings: layoutSettings 
+      });
 
+      // Validate inputs
       if (!shiftData || !selectedDate) {
         throw new Error("No shift data or date provided for PDF export");
       }
+
+      // Ensure layoutSettings has all required properties
+      const safeLayoutSettings = {
+        ...DEFAULT_LAYOUT_SETTINGS,
+        ...layoutSettings,
+        fontSizes: {
+          ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+          ...(layoutSettings?.fontSizes || {})
+        },
+        sections: {
+          ...DEFAULT_LAYOUT_SETTINGS.sections,
+          ...(layoutSettings?.sections || {})
+        },
+        tableSettings: {
+          ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+          ...(layoutSettings?.tableSettings || {})
+        },
+        colorSettings: {
+          ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
+          ...(layoutSettings?.colorSettings || {})
+        }
+      };
+
+      console.log("Using layout settings:", safeLayoutSettings);
 
       const pdf = new jsPDF("p", "mm", "letter");
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -438,33 +571,28 @@ export const usePDFExport = () => {
       // Draw logo
       drawActualLogo(pdf, 15, 15);
 
-      // Shift info on the left, same line as logo
-      pdf.setFontSize(layoutSettings.fontSizes.header);
+      // Shift info on the left, same line as logo - USING PRIMARY COLOR ONLY HERE
+      pdf.setFontSize(safeLayoutSettings.fontSizes.header);
       pdf.setFont("helvetica", "bold");
-      const primaryColor = parseColor(layoutSettings.colorSettings.primaryColor);
+      const primaryColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');
+      const primaryColor = parseColor(primaryColorStr);
       pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       
       const shiftInfo = `${shiftName.toUpperCase()} • ${shiftData.shift?.start_time || "N/A"}-${shiftData.shift?.end_time || "N/A"}`;
       pdf.text(shiftInfo, 45, 28);
 
-      // Date with a few spaces after shiftInfo
+      // Date with a few spaces after shiftInfo - ALSO USING PRIMARY COLOR
       const dateText = format(selectedDate, "EEE, MMM d, yyyy");
       const shiftInfoWidth = pdf.getTextWidth(shiftInfo);
       const dateX = 45 + shiftInfoWidth + 15; // 15mm space after shiftInfo
       pdf.text(dateText, dateX, 28);
 
-      // Start content lower to maintain spacing
+      // Start content lower to maintain spacing - NO SECTION TITLES
       yPosition = 40;
 
       // Supervisors section - Only show if enabled in layout settings
-      if (layoutSettings.sections.showSupervisors && shiftData.supervisors && shiftData.supervisors.length > 0) {
-        // Add section title
-        pdf.setFontSize(layoutSettings.fontSizes.sectionTitle);
-        pdf.setFont("helvetica", "bold");
-        const sectionTitleColor = parseColor(layoutSettings.colorSettings.sectionTitleColor);
-        pdf.setTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2]);
-        pdf.text("SUPERVISORS", 15, yPosition);
-        yPosition += 6;
+      if (safeLayoutSettings.sections.showSupervisors && shiftData.supervisors && shiftData.supervisors.length > 0) {
+        // NO SECTION TITLE - Just start with table
         
         const supervisorsData: any[] = [];
 
@@ -487,7 +615,7 @@ export const usePDFExport = () => {
           
           supervisorsData.push([
             displayName,
-            supervisor?.position || "",
+            extractBeatNumber(supervisor?.position || ""), // Extract just beat number
             supervisor?.badge || "",
             supervisor?.unitNumber ? `Unit ${supervisor.unitNumber}` : "",
             notes
@@ -503,22 +631,16 @@ export const usePDFExport = () => {
             supervisorsData, 
             yPosition, 
             { left: 15, right: 15 }, 
-            'supervisors', // Pass section type
-            layoutSettings
+            'supervisors',
+            safeLayoutSettings
           );
           yPosition += 4;
         }
       }
 
       // SECTION 1: REGULAR OFFICERS TABLE - Only show if enabled
-      if (layoutSettings.sections.showOfficers && shiftData.officers && shiftData.officers.length > 0) {
-        // Add section title
-        pdf.setFontSize(layoutSettings.fontSizes.sectionTitle);
-        pdf.setFont("helvetica", "bold");
-        const sectionTitleColor = parseColor(layoutSettings.colorSettings.sectionTitleColor);
-        pdf.setTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2]);
-        pdf.text("OFFICERS", 15, yPosition);
-        yPosition += 6;
+      if (safeLayoutSettings.sections.showOfficers && shiftData.officers && shiftData.officers.length > 0) {
+        // NO SECTION TITLE - Just start with table
         
         const regularOfficersData: any[] = [];
         
@@ -541,7 +663,7 @@ export const usePDFExport = () => {
           
           regularOfficersData.push([
             displayName,
-            officer?.position || "",
+            extractBeatNumber(officer?.position || ""), // Extract just beat number
             officer?.badge || "",
             officer?.unitNumber || "",
             notes
@@ -557,21 +679,15 @@ export const usePDFExport = () => {
             regularOfficersData, 
             yPosition, 
             { left: 15, right: 15 }, 
-            'officers', // Pass section type
-            layoutSettings
+            'officers',
+            safeLayoutSettings
           );
         }
       }
 
       // SECTION 2: SPECIAL ASSIGNMENT OFFICERS TABLE - Only show if enabled
-      if (layoutSettings.sections.showSpecialAssignments && shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0) {
-        // Add section title
-        pdf.setFontSize(layoutSettings.fontSizes.sectionTitle);
-        pdf.setFont("helvetica", "bold");
-        const sectionTitleColor = parseColor(layoutSettings.colorSettings.sectionTitleColor);
-        pdf.setTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2]);
-        pdf.text("SPECIAL ASSIGNMENTS", 15, yPosition);
-        yPosition += 6;
+      if (safeLayoutSettings.sections.showSpecialAssignments && shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0) {
+        // NO SECTION TITLE - Just start with table
         
         const specialAssignmentData: any[] = [];
         
@@ -610,21 +726,15 @@ export const usePDFExport = () => {
             specialAssignmentData, 
             yPosition, 
             { left: 15, right: 15 }, 
-            'special', // Pass section type
-            layoutSettings
+            'special',
+            safeLayoutSettings
           );
         }
       }
 
       // SECTION 3: PTO/OFF DUTY TABLE - Only show if enabled
-      if (layoutSettings.sections.showPTO && shiftData.ptoRecords && shiftData.ptoRecords.length > 0) {
-        // Add section title
-        pdf.setFontSize(layoutSettings.fontSizes.sectionTitle);
-        pdf.setFont("helvetica", "bold");
-        const sectionTitleColor = parseColor(layoutSettings.colorSettings.sectionTitleColor);
-        pdf.setTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2]);
-        pdf.text("TIME OFF", 15, yPosition);
-        yPosition += 6;
+      if (safeLayoutSettings.sections.showPTO && shiftData.ptoRecords && shiftData.ptoRecords.length > 0) {
+        // NO SECTION TITLE - Just start with table
         
         const ptoData: any[] = [];
         
@@ -647,13 +757,13 @@ export const usePDFExport = () => {
           ptoData, 
           yPosition, 
           { left: 15, right: 15 }, 
-          'pto', // Pass section type
-          layoutSettings
+          'pto',
+          safeLayoutSettings
         );
       }
 
       // Compact staffing summary at bottom - Only show if enabled
-      if (layoutSettings.sections.showStaffingSummary) {
+      if (safeLayoutSettings.sections.showStaffingSummary) {
         yPosition += 5;
         
         // Recalculate counts after filtering out full-day PTO officers
@@ -680,9 +790,10 @@ export const usePDFExport = () => {
         const currentOfficers = filteredOfficers.length;
         const minOfficers = shiftData.minOfficers || 0;
         
-        pdf.setFontSize(layoutSettings.fontSizes.footer);
+        pdf.setFontSize(safeLayoutSettings.fontSizes.footer);
         pdf.setFont("helvetica", "bold");
-        const darkColor = parseColor(layoutSettings.colorSettings.primaryColor);
+        const darkColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');
+        const darkColor = parseColor(darkColorStr);
         pdf.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
         
         const staffingText = `STAFFING: Supervisors ${currentSupervisors}/${minSupervisors} • Officers ${currentOfficers}/${minOfficers}`;
@@ -700,7 +811,18 @@ export const usePDFExport = () => {
 
       return { success: true };
     } catch (error) {
-      console.error("PDF export error:", error);
+      console.error("PDF export error details:", {
+        error,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        selectedDate,
+        shiftName,
+        shiftData: shiftData ? {
+          shift: shiftData.shift,
+          supervisorsCount: shiftData.supervisors?.length,
+          officersCount: shiftData.officers?.length
+        } : 'No shift data'
+      });
       return { success: false, error };
     }
   }, []);

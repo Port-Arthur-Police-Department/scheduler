@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-// ADD THIS: Default layout settings constant
+// In useWebsiteSettings.ts, update the DEFAULT_LAYOUT_SETTINGS:
 export const DEFAULT_LAYOUT_SETTINGS = {
   fontSizes: {
     header: 10,
@@ -25,13 +25,27 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     compactMode: false
   },
   colorSettings: {
-    primaryColor: "41,128,185",
-    secondaryColor: "52,152,219",
-    accentColor: "155,89,182",
+    // Header Colors
     headerBgColor: "41,128,185",
     headerTextColor: "255,255,255",
+    
+    // Section Title Colors
+    sectionTitleColor: "41,128,185",
+    
+    // Table Content Colors
+    officerTextColor: "44,62,80",
+    supervisorTextColor: "44,62,80",
+    specialAssignmentTextColor: "102,51,153",
+    ptoTextColor: "139,0,0",
+    
+    // Row Colors
     evenRowColor: "255,255,255",
-    oddRowColor: "248,249,250"
+    oddRowColor: "248,249,250",
+    
+    // Accent Colors
+    primaryColor: "41,128,185",
+    secondaryColor: "52,152,219",
+    accentColor: "155,89,182"
   }
 };
 

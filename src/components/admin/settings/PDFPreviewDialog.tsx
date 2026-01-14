@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { usePDFExport } from "@/hooks/usePDFExport";
-import { DEFAULT_LAYOUT_SETTINGS } from "@/hooks/useWebsiteSettings";
+import { usePDFExport, DEFAULT_LAYOUT_SETTINGS } from "@/hooks/usePDFExport";
 
 interface PDFPreviewDialogProps {
   open: boolean;

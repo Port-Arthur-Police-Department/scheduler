@@ -22,7 +22,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
-import { usePDFExport, DEFAULT_LAYOUT_SETTINGS } from "@/hooks/usePDFExport";
+import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 
 
 interface DailyScheduleViewProps {

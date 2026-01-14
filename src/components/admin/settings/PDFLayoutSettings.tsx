@@ -43,6 +43,7 @@ interface LayoutSettings {
   };
 }
 
+// In PDFLayoutSettings.tsx, make sure the colorSettings in DEFAULT_LAYOUT_SETTINGS matches:
 const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
   fontSizes: {
     header: 10,
@@ -65,13 +66,27 @@ const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
     compactMode: false
   },
   colorSettings: {
+    // Header Colors - Each section has different background
+    supervisorHeaderBgColor: "#2980b9",
+    officerHeaderBgColor: "#3498db",
+    specialHeaderBgColor: "#9b59b6",
+    ptoHeaderBgColor: "#f39c12",
+    headerTextColor: "#ffffff",
+    
+    // Table Content Colors
+    officerTextColor: "#2c3e50",
+    supervisorTextColor: "#2c3e50",
+    specialAssignmentTextColor: "#663399",
+    ptoTextColor: "#8b0000",
+    
+    // Row Colors
+    evenRowColor: "#ffffff",
+    oddRowColor: "#f8f9fa",
+    
+    // Accent Colors (top header only)
     primaryColor: "#2980b9",
     secondaryColor: "#3498db",
-    accentColor: "#9b59b6",
-    headerBgColor: "#2980b9",
-    headerTextColor: "#ffffff",
-    evenRowColor: "#ffffff",
-    oddRowColor: "#f8f9fa"
+    accentColor: "#9b59b6"
   }
 };
 

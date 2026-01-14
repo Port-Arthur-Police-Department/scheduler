@@ -237,7 +237,8 @@ export const DailyScheduleViewMobile = ({
       const result = await exportToPDF({
         selectedDate: selectedDate,
         shiftName: shiftData.shift.name,
-        shiftData: shiftData
+        shiftData: shiftData,
+        layoutSettings: savedLayoutSettings 
       });
 
       if (result.success) {

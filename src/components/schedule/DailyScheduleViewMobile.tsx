@@ -35,6 +35,7 @@ import { getScheduleData } from "./DailyScheduleView";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
+import { usePDFExport, DEFAULT_LAYOUT_SETTINGS } from "@/hooks/usePDFExport";
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {

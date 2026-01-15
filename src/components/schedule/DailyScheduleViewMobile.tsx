@@ -5,19 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Clock, Users, MapPin, FileText, Edit, Trash2, UserPlus, Download, MoreVertical, AlertTriangle as AlertTriangleIcon } from "lucide-react"; // ADD AlertTriangleIcon
-import { format } from "date-fns";
+import { Calendar, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Clock, Users, MapPin, FileText, Edit, Trash2, UserPlus, Download, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { format, isToday, isTomorrow, isYesterday, addDays, subDays } from "date-fns";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
+  DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import {
   Select,
@@ -36,7 +34,10 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; // ADD THIS IMPORT
+
+// Add Popover and Calendar imports
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {
@@ -45,6 +46,7 @@ interface DailyScheduleViewMobileProps {
   isAdminOrSupervisor?: boolean;
   userRole?: 'officer' | 'supervisor' | 'admin';
   userCurrentShift?: string; // NEW: Add this prop
+  onDateChange?: (date: Date) => void; // NEW: Add callback for date changes
 }
 
 export const DailyScheduleViewMobile = ({ 
@@ -52,7 +54,8 @@ export const DailyScheduleViewMobile = ({
   filterShiftId = "all", 
   isAdminOrSupervisor = false,
   userRole = 'officer',
-  userCurrentShift = "all" // NEW: Default parameter
+  userCurrentShift = "all",
+  onDateChange // NEW: Receive date change callback
 }: DailyScheduleViewMobileProps) => {
   const [expandedShifts, setExpandedShifts] = useState<Set<string>>(new Set());
   const [expandedOfficers, setExpandedOfficers] = useState<Set<string>>(new Set());
@@ -60,26 +63,26 @@ export const DailyScheduleViewMobile = ({
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<any>(null);
-  const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift); // Initialize with userCurrentShift
+  const [selectedShiftId, setSelectedShiftId] = useState<string>(userCurrentShift);
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
   const [addOfficerDialogOpen, setAddOfficerDialogOpen] = useState(false);
   const [selectedShiftForAdd, setSelectedShiftForAdd] = useState<any>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false); // NEW: Calendar state
+  
+  // NEW: Local date state for mobile navigation
+  const [localSelectedDate, setLocalSelectedDate] = useState<Date>(selectedDate);
+  
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
-  const dateStr = format(selectedDate, "yyyy-MM-dd");
-  const [emergencyReassignment, setEmergencyReassignment] = useState<{ // ADD THIS STATE
-    ppoOfficer: any;
-    shift: any;
-  } | null>(null);
-
-  // Add useEffect to update selectedShiftId when userCurrentShift changes
+  const dateStr = format(localSelectedDate, "yyyy-MM-dd");
+  
+  // Sync local date with prop when prop changes
   useEffect(() => {
-    if (userCurrentShift && userCurrentShift !== selectedShiftId) {
-      console.log("🔄 Mobile: Updating selected shift from prop:", userCurrentShift);
-      setSelectedShiftId(userCurrentShift);
+    if (selectedDate && selectedDate.getTime() !== localSelectedDate.getTime()) {
+      setLocalSelectedDate(selectedDate);
     }
-  }, [userCurrentShift]);
+  }, [selectedDate]);
 
   // Fetch all available shifts first
   const { data: allShifts, isLoading: shiftsLoading } = useQuery({
@@ -92,10 +95,8 @@ export const DailyScheduleViewMobile = ({
       
       if (error) throw error;
       
-      // Set default selected shift to userCurrentShift if provided, otherwise first shift
       if (data && data.length > 0) {
         if (userCurrentShift && userCurrentShift !== "all") {
-          // Check if userCurrentShift exists in available shifts
           const userShiftExists = data.some(shift => shift.id === userCurrentShift);
           if (userShiftExists) {
             console.log("🎯 Mobile: Setting user's assigned shift:", userCurrentShift);
@@ -117,12 +118,61 @@ export const DailyScheduleViewMobile = ({
     queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
     queryFn: () => {
       if (!selectedShiftId) return Promise.resolve([]);
-      return getScheduleData(selectedDate, selectedShiftId);
+      return getScheduleData(localSelectedDate, selectedShiftId);
     },
-    enabled: !!selectedShiftId, // Only fetch when a shift is selected
+    enabled: !!selectedShiftId,
   });
 
   const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
+
+  // NEW: Date navigation functions
+  const goToPreviousDay = () => {
+    const newDate = subDays(localSelectedDate, 1);
+    setLocalSelectedDate(newDate);
+    if (onDateChange) {
+      onDateChange(newDate);
+    }
+  };
+
+  const goToNextDay = () => {
+    const newDate = addDays(localSelectedDate, 1);
+    setLocalSelectedDate(newDate);
+    if (onDateChange) {
+      onDateChange(newDate);
+    }
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    setLocalSelectedDate(today);
+    if (onDateChange) {
+      onDateChange(today);
+    }
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setLocalSelectedDate(date);
+      setCalendarOpen(false);
+      if (onDateChange) {
+        onDateChange(date);
+      }
+    }
+  };
+
+  // NEW: Format date for display with relative day names
+  const formatDateDisplay = (date: Date) => {
+    if (isToday(date)) {
+      return `Today, ${format(date, "MMM d")}`;
+    }
+    if (isTomorrow(date)) {
+      return `Tomorrow, ${format(date, "MMM d")}`;
+    }
+    if (isYesterday(date)) {
+      return `Yesterday, ${format(date, "MMM d")}`;
+    }
+    return format(date, "EEE, MMM d");
+  };
 
   // Toggle shift expansion
   const toggleShift = (shiftId: string) => {
@@ -150,8 +200,8 @@ export const DailyScheduleViewMobile = ({
   // Handle shift selection change
   const handleShiftChange = (shiftId: string) => {
     setSelectedShiftId(shiftId);
-    setExpandedShifts(new Set()); // Reset expanded shifts
-    setExpandedOfficers(new Set()); // Reset expanded officers
+    setExpandedShifts(new Set());
+    setExpandedOfficers(new Set());
   };
 
   // Handle officer action
@@ -170,16 +220,10 @@ export const DailyScheduleViewMobile = ({
         if (confirm(`Remove ${officer.name} from this shift?`)) {
           removeOfficerMutation.mutate(officer, {
             onSuccess: () => {
-              refetchSchedule(); // Refresh the schedule after removal
+              refetchSchedule();
             }
           });
         }
-        break;
-      case 'emergency-partner': // ADD THIS CASE
-        setEmergencyReassignment({
-          ppoOfficer: officer,
-          shift: officer.shift
-        });
         break;
     }
   };
@@ -201,7 +245,7 @@ export const DailyScheduleViewMobile = ({
         notes: selectedOfficer.notes
       }, {
         onSuccess: () => {
-          refetchSchedule(); // Refresh the schedule after edit
+          refetchSchedule();
           setEditSheetOpen(false);
         }
       });
@@ -218,7 +262,7 @@ export const DailyScheduleViewMobile = ({
         notes: selectedOfficer.notes
       }, {
         onSuccess: () => {
-          refetchSchedule(); // Refresh the schedule after edit
+          refetchSchedule();
           setEditSheetOpen(false);
         }
       });
@@ -235,7 +279,7 @@ export const DailyScheduleViewMobile = ({
         notes: value
       }, {
         onSuccess: () => {
-          refetchSchedule(); // Refresh the schedule after edit
+          refetchSchedule();
           setEditSheetOpen(false);
         }
       });
@@ -247,10 +291,10 @@ export const DailyScheduleViewMobile = ({
     try {
       toast.info("Generating PDF...");
       const result = await exportToPDF({
-        selectedDate: selectedDate,
+        selectedDate: localSelectedDate,
         shiftName: shiftData.shift.name,
         shiftData: shiftData,
-        layoutSettings: DEFAULT_LAYOUT_SETTINGS 
+        layoutSettings: DEFAULT_LAYOUT_SETTINGS
       });
 
       if (result.success) {
@@ -288,12 +332,78 @@ export const DailyScheduleViewMobile = ({
 
   return (
     <div className="pb-20">
+      {/* NEW: Date Navigation Header */}
+      <div className="sticky top-0 z-10 bg-background border-b">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goToPreviousDay}
+              className="h-8 w-8"
+              title="Previous day"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="gap-2 font-medium"
+                >
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="min-w-[140px] text-center">
+                    {formatDateDisplay(localSelectedDate)}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <CalendarComponent
+                  mode="single"
+                  selected={localSelectedDate}
+                  onSelect={handleDateSelect}
+                  initialFocus
+                  className="rounded-md border"
+                />
+                <div className="p-3 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={goToToday}
+                    disabled={isToday(localSelectedDate)}
+                  >
+                    Go to Today
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goToNextDay}
+              className="h-8 w-8"
+              title="Next day"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">
+              {format(localSelectedDate, "EEEE, MMMM d, yyyy")}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <Card className="mx-4 mt-4">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
             <Calendar className="h-5 w-5 inline mr-2" />
-            Schedule for {format(selectedDate, "MMM d, yyyy")}
-            {/* Add indicator for assigned shift */}
+            Schedule for {format(localSelectedDate, "MMM d, yyyy")}
             {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
               <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
                 Your Shift
@@ -496,17 +606,6 @@ export const DailyScheduleViewMobile = ({
           officer={selectedOfficer}
           shift={selectedShift}
           date={dateStr}
-        />
-      )}
-
-      {/* Emergency Partner Reassignment Dialog - ADD THIS */}
-      {emergencyReassignment && (
-        <EmergencyPartnerReassignment
-          ppoOfficer={emergencyReassignment.ppoOfficer}
-          date={dateStr}
-          shift={emergencyReassignment.shift}
-          open={!!emergencyReassignment}
-          onOpenChange={(open) => !open && setEmergencyReassignment(null)}
         />
       )}
 

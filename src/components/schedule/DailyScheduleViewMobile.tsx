@@ -68,6 +68,10 @@ export const DailyScheduleViewMobile = ({
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
   const dateStr = format(selectedDate, "yyyy-MM-dd");
+  const [emergencyReassignment, setEmergencyReassignment] = useState<{
+  ppoOfficer: any;
+  shift: any;
+} | null>(null);
 
   // Add useEffect to update selectedShiftId when userCurrentShift changes
   useEffect(() => {

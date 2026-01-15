@@ -67,7 +67,7 @@ export const PTOAssignmentDialog = ({
   officer,
   shift,
   date,
-  ptoBalancesEnabled = true,
+  ptoBalancesEnabled = false, // Default to false (indefinite PTO)
   onSuccess
 }: PTOAssignmentDialogProps) => {
   const queryClient = useQueryClient();
@@ -314,8 +314,12 @@ export const PTOAssignmentDialog = ({
     }
   };
 
+  // UPDATED: Only restore credit if PTO balances are enabled
   const restorePTOCredit = async (existingPTO: any) => {
-    if (!ptoBalancesEnabled) return;
+    if (!ptoBalancesEnabled) {
+      console.log("PTO balances disabled, skipping balance restoration");
+      return;
+    }
 
     const ptoType = existingPTO.ptoType;
     const startTime = existingPTO.startTime;
@@ -359,7 +363,7 @@ export const PTOAssignmentDialog = ({
         await suspendPartnershipForPTO(officer.officerId, partnerInfo.id);
       }
 
-      // 2. If editing existing PTO, first restore the previous PTO balance
+      // 2. If editing existing PTO, first restore the previous PTO balance (if balances enabled)
       if (officer.existingPTO && ptoBalancesEnabled) {
         await restorePTOCredit(officer.existingPTO);
         
@@ -482,7 +486,8 @@ export const PTOAssignmentDialog = ({
         isFullShift,
         shiftName: shift.name,
         hadPartnership: officerHasPartnership,
-        partnerName: partnerInfo?.full_name
+        partnerName: partnerInfo?.full_name,
+        balancesEnabled: ptoBalancesEnabled
       };
     },
     onSuccess: (ptoData) => {
@@ -490,6 +495,10 @@ export const PTOAssignmentDialog = ({
       
       if (ptoData.hadPartnership) {
         successMessage += `. Partnership with ${ptoData.partnerName} has been suspended.`;
+      }
+      
+      if (!ptoData.balancesEnabled) {
+        successMessage += " (Unlimited PTO - no balance deducted)";
       }
       
       toast.success(successMessage);
@@ -502,7 +511,8 @@ export const PTOAssignmentDialog = ({
         ptoData.hoursUsed,
         userEmail,
         `${officer?.existingPTO ? 'Updated' : 'Assigned'} ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours)` +
-        (ptoData.hadPartnership ? ` - Partnership with ${ptoData.partnerName} suspended` : '')
+        (ptoData.hadPartnership ? ` - Partnership with ${ptoData.partnerName} suspended` : '') +
+        (!ptoData.balancesEnabled ? ' - Unlimited PTO mode' : '')
       );
 
       // Call the onSuccess callback if provided
@@ -523,7 +533,10 @@ export const PTOAssignmentDialog = ({
     mutationFn: async () => {
       if (!officer?.existingPTO) return;
 
-      await restorePTOCredit(officer.existingPTO);
+      // UPDATED: Only restore credit if PTO balances are enabled
+      if (ptoBalancesEnabled) {
+        await restorePTOCredit(officer.existingPTO);
+      }
 
       // Delete the PTO exception
       const { error: deleteError } = await supabase
@@ -608,14 +621,21 @@ export const PTOAssignmentDialog = ({
         date,
         hoursUsed: calculateHours(officer.existingPTO.startTime, officer.existingPTO.endTime),
         restoredPartnership: !!suspendedPartnership,
-        partnerName: suspendedPartnership?.partner_profile?.full_name
+        partnerName: suspendedPartnership?.partner_profile?.full_name,
+        balancesEnabled: ptoBalancesEnabled
       };
     },
     onSuccess: (ptoData) => {
-      let successMessage = "PTO removed and balance restored";
+      let successMessage = "PTO removed successfully";
       
       if (ptoData.restoredPartnership) {
         successMessage += `. Partnership with ${ptoData.partnerName} has been restored.`;
+      }
+      
+      if (ptoData.balancesEnabled) {
+        successMessage += ` ${ptoData.hoursUsed} hours restored to balance.`;
+      } else {
+        successMessage += " (Unlimited PTO mode - no balance affected)";
       }
       
       toast.success(successMessage);
@@ -626,7 +646,8 @@ export const PTOAssignmentDialog = ({
         ptoData.ptoType,
         ptoData.date,
         userEmail,
-        `Removed ${ptoData.ptoType} PTO from ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours restored)` +
+        `Removed ${ptoData.ptoType} PTO from ${ptoData.officerName} on ${ptoData.date}` +
+        (ptoData.balancesEnabled ? ` (${ptoData.hoursUsed} hours restored)` : '') +
         (ptoData.restoredPartnership ? ` - Partnership with ${ptoData.partnerName} restored` : '')
       );
 
@@ -650,12 +671,18 @@ export const PTOAssignmentDialog = ({
         <DialogHeader>
           <DialogTitle>
             {officer.existingPTO ? "Edit PTO" : "Assign PTO"}
+            {!ptoBalancesEnabled && (
+              <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200">
+                Unlimited PTO
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
             {officer.existingPTO 
               ? `Edit PTO for ${officer.name} on ${shift.name}`
               : `Assign PTO for ${officer.name} on ${shift.name}`
             }
+            {!ptoBalancesEnabled && " - Unlimited PTO mode"}
           </DialogDescription>
         </DialogHeader>
 
@@ -688,6 +715,21 @@ export const PTOAssignmentDialog = ({
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Unlimited PTO Notice */}
+          {!ptoBalancesEnabled && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center gap-2">
+                <span className="text-green-600 font-medium">Unlimited PTO Mode</span>
+                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                  No Balance Tracking
+                </Badge>
+              </div>
+              <p className="text-sm text-green-700 mt-1">
+                PTO balances are disabled. Hours will not be deducted from or restored to officer balances.
+              </p>
             </div>
           )}
 
@@ -747,10 +789,12 @@ export const PTOAssignmentDialog = ({
 
           {ptoType && (
             <div className="text-sm text-muted-foreground">
-              Hours to {officer.existingPTO ? 'update' : 'deduct'}: {calculateHours(
+              Hours: {calculateHours(
                 isFullShift ? shift.start_time : startTime,
                 isFullShift ? shift.end_time : endTime
               ).toFixed(2)}
+              {ptoBalancesEnabled && ` (will be deducted from balance)`}
+              {!ptoBalancesEnabled && ` (no balance deduction)`}
             </div>
           )}
         </div>

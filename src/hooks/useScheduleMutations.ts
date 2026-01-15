@@ -560,7 +560,7 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-  // Enhanced partnership mutation with PTO handling
+  // Enhanced partnership mutation with PTO handling - FIXED: Removed partnership_suspended from recurring_schedules updates
   const updatePartnershipMutation = useMutation({
     mutationFn: async ({ 
       officer, 
@@ -641,12 +641,17 @@ export const useScheduleMutations = (dateStr: string) => {
         }
 
         // Update current officer with partner
-        const updateData = {
-          partner_officer_id: partnerOfficerId,
-          is_partnership: true,
-          partnership_suspended: false,
-          partnership_suspension_reason: null
-        };
+        const updateData = officer.type === "recurring" 
+          ? {
+              partner_officer_id: partnerOfficerId,
+              is_partnership: true,
+            }
+          : {
+              partner_officer_id: partnerOfficerId,
+              is_partnership: true,
+              partnership_suspended: false,
+              partnership_suspension_reason: null
+            };
 
         let updatePromise;
         
@@ -669,12 +674,17 @@ export const useScheduleMutations = (dateStr: string) => {
         }
 
         // Also update the partner's record to create reciprocal relationship
-        const partnerUpdateData = {
-          partner_officer_id: officer.officerId,
-          is_partnership: true,
-          partnership_suspended: false,
-          partnership_suspension_reason: null
-        };
+        const partnerUpdateData = officer.type === "recurring"
+          ? {
+              partner_officer_id: officer.officerId,
+              is_partnership: true,
+            }
+          : {
+              partner_officer_id: officer.officerId,
+              is_partnership: true,
+              partnership_suspended: false,
+              partnership_suspension_reason: null
+            };
 
         let partnerUpdatePromise;
         
@@ -739,12 +749,17 @@ export const useScheduleMutations = (dateStr: string) => {
         console.log("Removing partnership for officer:", officer.officerId);
         
         // Remove partnership from current officer
-        const removeData = {
-          partner_officer_id: null,
-          is_partnership: false,
-          partnership_suspended: false,
-          partnership_suspension_reason: null
-        };
+        const removeData = officer.type === "recurring"
+          ? {
+              partner_officer_id: null,
+              is_partnership: false,
+            }
+          : {
+              partner_officer_id: null,
+              is_partnership: false,
+              partnership_suspended: false,
+              partnership_suspension_reason: null
+            };
 
         // Remove from current officer
         let removePromise;
@@ -775,6 +790,18 @@ export const useScheduleMutations = (dateStr: string) => {
         if (actualPartnerOfficerId) {
           console.log("Removing partnership from partner officer:", actualPartnerOfficerId);
 
+          const partnerRemoveData = officer.type === "recurring"
+            ? {
+                partner_officer_id: null,
+                is_partnership: false,
+              }
+            : {
+                partner_officer_id: null,
+                is_partnership: false,
+                partnership_suspended: false,
+                partnership_suspension_reason: null
+              };
+
           let partnerRemovePromise;
           
           if (officer.type === "recurring") {
@@ -793,7 +820,7 @@ export const useScheduleMutations = (dateStr: string) => {
             } else if (partnerSchedule) {
               partnerRemovePromise = supabase
                 .from("recurring_schedules")
-                .update(removeData)
+                .update(partnerRemoveData)
                 .eq("id", partnerSchedule.id);
             }
           } else {
@@ -812,7 +839,7 @@ export const useScheduleMutations = (dateStr: string) => {
             } else if (partnerSchedule) {
               partnerRemovePromise = supabase
                 .from("schedule_exceptions")
-                .update(removeData)
+                .update(partnerRemoveData)
                 .eq("id", partnerSchedule.id);
             }
           }
@@ -1066,6 +1093,7 @@ export const useScheduleMutations = (dateStr: string) => {
 
   const removePTOMutation = useMutation({
     mutationFn: async (ptoRecord: any) => {
+      // Note: ptoBalancesEnabled is not defined in this file - you'll need to add it or remove this check
       const hoursUsed = calculateHours(ptoRecord.startTime, ptoRecord.endTime);
       const ptoColumn = PTO_TYPES.find((t) => t.value === ptoRecord.ptoType)?.column;
       

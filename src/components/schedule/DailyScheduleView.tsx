@@ -1422,114 +1422,114 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
 
     const allOfficers = Array.from(allOfficersMap.values());
 
-    // Process partnerships
-    const processedOfficers = [];
-    const processedOfficerIds = new Set();
-    const partnershipMap = new Map();
+// Process partnerships
+const processedOfficers = [];
+const processedOfficerIds = new Set();
+const partnershipMap = new Map();
 
-    for (const officer of allOfficers) {
-      if (officer.isPartnership && officer.partnerOfficerId) {
-        const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
-        if (partnerOfficer && partnerOfficer.isPartnership && partnerOfficer.partnerOfficerId === officer.officerId) {
-          partnershipMap.set(officer.officerId, officer.partnerOfficerId);
-          partnershipMap.set(officer.partnerOfficerId, officer.officerId);
-        } else {
-          officer.isPartnership = false;
-          officer.partnerOfficerId = null;
-        }
-      }
+for (const officer of allOfficers) {
+  if (officer.isPartnership && officer.partnerOfficerId) {
+    const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
+    if (partnerOfficer && partnerOfficer.isPartnership && partnerOfficer.partnerOfficerId === officer.officerId) {
+      partnershipMap.set(officer.officerId, officer.partnerOfficerId);
+      partnershipMap.set(officer.partnerOfficerId, officer.officerId);
+    } else {
+      officer.isPartnership = false;
+      officer.partnerOfficerId = null;
     }
+  }
+}
 
-    for (const officer of allOfficers) {
-      if (processedOfficerIds.has(officer.officerId)) {
+for (const officer of allOfficers) {
+  if (processedOfficerIds.has(officer.officerId)) {
+    continue;
+  }
+
+  const partnerOfficerId = partnershipMap.get(officer.officerId);
+  
+  if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
+    const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
+    
+    if (partnerOfficer) {
+      // CHECK: Is either officer on PTO?
+      const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
+      const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
+      
+      // If either is on PTO, don't combine them - show them separately
+      if (officerOnPTO || partnerOnPTO) {
+        console.log(`⚠️ Partnership suspended - ${officerOnPTO ? officer.name : partnerOfficer.name} is on PTO`);
+        
+        // Add each officer separately with suspended partnership flag
+        processedOfficers.push({
+          ...officer,
+          isPartnership: true,
+          partnerOfficerId: partnerOfficer.officerId,
+          partnershipSuspended: true,
+          partnershipSuspensionReason: officerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
+        });
+        
+        processedOfficers.push({
+          ...partnerOfficer,
+          isPartnership: true,
+          partnerOfficerId: officer.officerId,
+          partnershipSuspended: true,
+          partnershipSuspensionReason: partnerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
+        });
+        
+        processedOfficerIds.add(officer.officerId);
+        processedOfficerIds.add(partnerOfficer.officerId);
         continue;
       }
-
-      const partnerOfficerId = partnershipMap.get(officer.officerId);
       
-      if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
-        const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
-        
-        if (partnerOfficer) {
-          // CHECK: Is either officer on PTO?
-          const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
-          const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
-          
-          // If either is on PTO, suspend the partnership
-          if (officerOnPTO || partnerOnPTO) {
-            console.log(`⚠️ Partnership suspended - ${officerOnPTO ? officer.name : partnerOfficer.name} is on PTO`);
-            
-            // Add each officer separately with partnership suspended flag
-            processedOfficers.push({
-              ...officer,
-              isPartnership: true,
-              partnerOfficerId: partnerOfficer.officerId,
-              partnershipSuspended: true,
-              partnershipSuspensionReason: officerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
-            });
-            
-            processedOfficers.push({
-              ...partnerOfficer,
-              isPartnership: true,
-              partnerOfficerId: officer.officerId,
-              partnershipSuspended: true,
-              partnershipSuspensionReason: partnerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
-            });
-            
-            processedOfficerIds.add(officer.officerId);
-            processedOfficerIds.add(partnerOfficer.officerId);
-            continue;
-          }
-          
-          // Normal partnership processing (existing code)
-          let primaryOfficer = officer;
-          let secondaryOfficer = partnerOfficer;
-          
-          if (officer.isPPO && !partnerOfficer.isPPO) {
-            primaryOfficer = partnerOfficer;
-            secondaryOfficer = officer;
-          } else if (officer.isPPO === partnerOfficer.isPPO) {
-            primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
-            secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
-          }
-
-          const combinedOfficer = {
-            ...primaryOfficer,
-            isCombinedPartnership: true,
-            partnerData: {
-              partnerOfficerId: secondaryOfficer.officerId,
-              partnerName: secondaryOfficer.name,
-              partnerBadge: secondaryOfficer.badge,
-              partnerRank: secondaryOfficer.rank,
-              partnerIsPPO: secondaryOfficer.isPPO,
-              partnerPosition: secondaryOfficer.position,
-              partnerUnitNumber: secondaryOfficer.unitNumber,
-              partnerScheduleId: secondaryOfficer.scheduleId,
-              partnerType: secondaryOfficer.type
-            },
-            partnerOfficerId: secondaryOfficer.officerId,
-            originalPartnerOfficerId: secondaryOfficer.officerId,
-            position: primaryOfficer.position || secondaryOfficer.position,
-            unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
-            notes: primaryOfficer.notes || secondaryOfficer.notes ? 
-              `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
-              : null,
-            isPartnership: true,
-            partnershipSuspended: false
-          };
-
-          processedOfficers.push(combinedOfficer);
-          processedOfficerIds.add(primaryOfficer.officerId);
-          processedOfficerIds.add(secondaryOfficer.officerId);
-        } else {
-          processedOfficers.push(officer);
-          processedOfficerIds.add(officer.officerId);
-        }
-      } else {
-        processedOfficers.push(officer);
-        processedOfficerIds.add(officer.officerId);
+      // Normal partnership processing (existing code)
+      let primaryOfficer = officer;
+      let secondaryOfficer = partnerOfficer;
+      
+      if (officer.isPPO && !partnerOfficer.isPPO) {
+        primaryOfficer = partnerOfficer;
+        secondaryOfficer = officer;
+      } else if (officer.isPPO === partnerOfficer.isPPO) {
+        primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
+        secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
       }
+
+      const combinedOfficer = {
+        ...primaryOfficer,
+        isCombinedPartnership: true,
+        partnerData: {
+          partnerOfficerId: secondaryOfficer.officerId,
+          partnerName: secondaryOfficer.name,
+          partnerBadge: secondaryOfficer.badge,
+          partnerRank: secondaryOfficer.rank,
+          partnerIsPPO: secondaryOfficer.isPPO,
+          partnerPosition: secondaryOfficer.position,
+          partnerUnitNumber: secondaryOfficer.unitNumber,
+          partnerScheduleId: secondaryOfficer.scheduleId,
+          partnerType: secondaryOfficer.type
+        },
+        partnerOfficerId: secondaryOfficer.officerId,
+        originalPartnerOfficerId: secondaryOfficer.officerId,
+        position: primaryOfficer.position || secondaryOfficer.position,
+        unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
+        notes: primaryOfficer.notes || secondaryOfficer.notes ? 
+          `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
+          : null,
+        isPartnership: true,
+        partnershipSuspended: false
+      };
+
+      processedOfficers.push(combinedOfficer);
+      processedOfficerIds.add(primaryOfficer.officerId);
+      processedOfficerIds.add(secondaryOfficer.officerId);
+    } else {
+      processedOfficers.push(officer);
+      processedOfficerIds.add(officer.officerId);
     }
+  } else {
+    processedOfficers.push(officer);
+    processedOfficerIds.add(officer.officerId);
+  }
+}
 
     // Function to check if officer is a supervisor by rank
     const isSupervisorByRank = (rank: string | undefined | null) => {

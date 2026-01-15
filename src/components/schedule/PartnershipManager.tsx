@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Users, AlertTriangle } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
@@ -64,6 +65,7 @@ const isPPO = (officer: any): boolean => {
 export const PartnershipManager = ({ officer, onPartnershipChange }: PartnershipManagerProps) => {
   const [open, setOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
+  const [emergencyMode, setEmergencyMode] = useState(false); // NEW: Track if we're in emergency mode
 
   // FIX: Check if officer is on PTO or has suspended partnership
   if (officer.hasPTO && officer.ptoData?.isFullShift) {
@@ -71,10 +73,97 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     return null;
   }
 
-  // FIX: Check partnership status
+  // Check partnership status
   const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended;
   const hasSuspendedPartnership = officer.isPartnership && officer.partnershipSuspended;
+  const isOfficerPPO = isPPO(officer);
 
+  // NEW: For emergency partner query (regular officers, not PPOs)
+  const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyError } = useQuery({
+    queryKey: ["emergency-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
+    queryFn: async () => {
+      const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
+      
+      console.log("🚨 EMERGENCY PARTNER QUERY for PPO:", officer.name, {
+        officerId: officer.officerId,
+        isPPO: isOfficerPPO,
+        hasSuspendedPartnership,
+        shift: officer.shift.name,
+        date: dateToUse
+      });
+
+      // Get all officers working this shift today
+      const { data: workingOfficers, error } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          id,
+          officer_id,
+          is_partnership,
+          partnership_suspended,
+          is_off,
+          notes,
+          profiles:officer_id (
+            id,
+            full_name,
+            badge_number,
+            rank
+          )
+        `)
+        .eq("date", dateToUse)
+        .eq("shift_type_id", officer.shift.id)
+        .neq("officer_id", officer.officerId); // Exclude current officer
+
+      if (error) {
+        console.error("Error finding working officers for emergency assignment:", error);
+        throw error;
+      }
+
+      // Filter for available emergency partners (REGULAR officers, not PPOs)
+      const emergencyPartners = (workingOfficers || []).filter(record => {
+        const officer = record.profiles;
+        
+        // Skip if officer is on PTO
+        if (record.is_off) return false;
+        
+        // Skip if officer is a PPO (PPOs can't partner with each other in emergencies)
+        const isPartnerPPO = isPPO(officer.rank);
+        if (isPartnerPPO) {
+          console.log(`❌ Skipping PPO for emergency assignment: ${officer.full_name}`);
+          return false;
+        }
+        
+        // Skip if already in an active partnership (unless suspended)
+        if (record.is_partnership && !record.partnership_suspended) {
+          console.log(`❌ Skipping - in active partnership: ${officer.full_name}`);
+          return false;
+        }
+        
+        // Officer is available for emergency assignment
+        console.log(`✅ Available for emergency assignment: ${officer.full_name}`);
+        return true;
+      });
+
+      console.log("🚨 Emergency partners found:", emergencyPartners.map(p => ({
+        name: p.profiles.full_name,
+        rank: p.profiles.rank,
+        hasPartnership: p.is_partnership,
+        partnershipSuspended: p.partnership_suspended
+      })));
+
+      return emergencyPartners.map(p => ({
+        id: p.officer_id,
+        name: p.profiles.full_name,
+        badge: p.profiles.badge_number,
+        rank: p.profiles.rank,
+        scheduleId: p.id,
+        hasSuspendedPartnership: p.partnership_suspended,
+        notes: p.notes
+      }));
+    },
+    enabled: open && emergencyMode && isOfficerPPO && hasSuspendedPartnership,
+  });
+
+  // Existing query for regular PPO partners (for "Add Partner")
   const { data: availablePartners, isLoading, error } = useQuery({
     queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
     queryFn: async () => {
@@ -391,27 +480,47 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
 
       return availablePPOs;
     },
-    enabled: open && !hasActivePartnership, // Only fetch if officer doesn't have an active partnership
+    enabled: open && !emergencyMode && !hasActivePartnership, // Updated condition
   });
 
   const handleCreatePartnership = async () => {
     if (!selectedPartner) return;
     
-    const partner = availablePartners?.find(p => p.id === selectedPartner);
-    console.log("🤝 Creating partnership:", {
-      officer: officer.name,
-      officerRank: officer.rank,
-      officerId: officer.officerId,
-      partner: partner?.full_name,
-      partnerRank: partner?.rank,
-      partnerId: selectedPartner,
-      shift: officer.shift.name,
-      date: officer.date || format(new Date(), "yyyy-MM-dd")
-    });
+    if (emergencyMode) {
+      // Handle emergency partnership
+      const partner = emergencyPartners?.find(p => p.id === selectedPartner);
+      console.log("🚨 Creating EMERGENCY partnership:", {
+        ppo: officer.name,
+        ppoRank: officer.rank,
+        partner: partner?.name,
+        partnerRank: partner?.rank,
+        partnerId: selectedPartner,
+        shift: officer.shift.name,
+        date: officer.date || format(new Date(), "yyyy-MM-dd")
+      });
 
-    onPartnershipChange(officer, selectedPartner);
-    setOpen(false);
-    setSelectedPartner("");
+      // Call emergency partnership handler
+      onPartnershipChange(officer, selectedPartner);
+      setOpen(false);
+      setSelectedPartner("");
+      setEmergencyMode(false);
+    } else {
+      // Handle regular partnership
+      const partner = availablePartners?.find(p => p.id === selectedPartner);
+      console.log("🤝 Creating regular partnership:", {
+        officer: officer.name,
+        officerRank: officer.rank,
+        partner: partner?.full_name,
+        partnerRank: partner?.rank,
+        partnerId: selectedPartner,
+        shift: officer.shift.name,
+        date: officer.date || format(new Date(), "yyyy-MM-dd")
+      });
+
+      onPartnershipChange(officer, selectedPartner);
+      setOpen(false);
+      setSelectedPartner("");
+    }
   };
   
   const handleRemovePartnership = async () => {
@@ -464,20 +573,128 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     );
   }
 
-  // FIX: For suspended partnerships, show different UI
+  // FIX: For suspended partnerships, show emergency partner option for PPOs
   if (hasSuspendedPartnership) {
-    return (
-      <div className="text-sm text-amber-600">
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          Partnership Suspended
-        </Badge>
-        <p className="text-xs mt-1">{officer.partnershipSuspensionReason || 'Partner unavailable'}</p>
-      </div>
-    );
+    if (isOfficerPPO) {
+      return (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
+              onClick={() => {
+                setEmergencyMode(true);
+                setOpen(true);
+              }}
+            >
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Emergency Partner
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                Emergency Partner Assignment
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                <p className="font-medium text-amber-800">PPO Officer:</p>
+                <p className="font-semibold">{officer.name}</p>
+                <p className="text-sm text-amber-700">
+                  Partnership suspended: {officer.partnershipSuspensionReason || 'Partner on PTO'}
+                </p>
+                {officer.partnerData?.partnerName && (
+                  <p className="text-sm text-amber-700 mt-1">
+                    Original partner: {officer.partnerData.partnerName}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="emergency-partner">Select Emergency Partner</Label>
+                <Select value={selectedPartner} onValueChange={setSelectedPartner}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select available officer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {emergencyLoading ? (
+                      <div className="p-2 text-sm text-muted-foreground">Loading available officers...</div>
+                    ) : emergencyError ? (
+                      <div className="p-2 text-sm text-red-600">
+                        Error loading officers: {emergencyError.message}
+                      </div>
+                    ) : !emergencyPartners || emergencyPartners.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground space-y-1">
+                        <p>No available officers found for emergency assignment.</p>
+                        <p className="text-xs">All regular officers are either:</p>
+                        <ul className="text-xs list-disc pl-4 mt-1">
+                          <li>Already partnered</li>
+                          <li>On PTO</li>
+                          <li>Assigned to special duty</li>
+                        </ul>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-xs text-muted-foreground p-2 border-b">
+                          Select a regular officer (non-PPO) for temporary assignment
+                        </div>
+                        {emergencyPartners.map((partner) => (
+                          <SelectItem key={partner.id} value={partner.id}>
+                            <div className="flex flex-col py-1">
+                              <span className="font-medium">{partner.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {partner.badge && `Badge: ${partner.badge}`}
+                                {partner.rank && ` • ${partner.rank}`}
+                                {partner.hasSuspendedPartnership && (
+                                  <span className="text-amber-600"> • Partnership suspended</span>
+                                )}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+                
+                {emergencyPartners && emergencyPartners.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    This is a temporary assignment for today only. The original partnership will resume when the partner returns.
+                  </p>
+                )}
+              </div>
+              
+              <Button 
+                onClick={handleCreatePartnership}
+                disabled={!selectedPartner || emergencyLoading}
+                className="w-full bg-amber-600 hover:bg-amber-700"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Assign Emergency Partner
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    } else {
+      // Non-PPO with suspended partnership - just show status
+      return (
+        <div className="text-sm text-amber-600">
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Partnership Suspended
+          </Badge>
+          <p className="text-xs mt-1">{officer.partnershipSuspensionReason || 'Partner unavailable'}</p>
+        </div>
+      );
+    }
   }
 
-  // Regular UI for officers without partnerships
+  // Regular UI for officers without partnerships - "Add Partner" for regular PPO partnerships
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>

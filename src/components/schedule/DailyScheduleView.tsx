@@ -23,7 +23,8 @@ import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; // ADD THIS IMPORT
+import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
+import { PartnershipManager } from "./PartnershipManager";
 
 interface DailyScheduleViewProps {
   selectedDate: Date;

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Users, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { parseISO } from "date-fns";
 
 interface EmergencyPartnerReassignmentProps {
   ppoOfficer: any;
@@ -26,15 +27,38 @@ export const EmergencyPartnerReassignment = ({
 }: EmergencyPartnerReassignmentProps) => {
   const [selectedPartner, setSelectedPartner] = useState("");
   const queryClient = useQueryClient();
+  
+  // Helper function to determine if officer is a PPO
+  const isPPO = (officer: any): boolean => {
+    if (!officer || !officer.rank) return false;
+    const rank = officer.rank.toLowerCase().trim();
+    return (
+      rank === 'probationary' ||
+      rank.includes('probationary') ||
+      rank.includes('ppo') ||
+      rank.includes('probation') ||
+      rank === 'ppo' ||
+      rank.includes('probationary officer') ||
+      rank.includes('probationary peace officer')
+    );
+  };
 
   // Query for available partners (regular officers not in partnerships and not on PTO)
   const { data: availablePartners, isLoading } = useQuery({
     queryKey: ["emergency-partners", ppoOfficer.officerId, date, shift.id],
     queryFn: async () => {
-      console.log("🔍 Finding available partners for emergency reassignment...");
+      console.log("🔍 Finding available partners for emergency reassignment...", {
+        date,
+        shiftId: shift.id,
+        shiftName: shift.name,
+        ppoOfficer: ppoOfficer.name
+      });
       
-      // Get all officers working this shift today
-      const { data: workingOfficers, error } = await supabase
+      const dayOfWeek = parseISO(date).getDay();
+      const currentDate = parseISO(date);
+
+      // Step 1: Get schedule exceptions for this date and shift
+      const { data: exceptions, error: exceptionsError } = await supabase
         .from("schedule_exceptions")
         .select(`
           id,
@@ -42,6 +66,7 @@ export const EmergencyPartnerReassignment = ({
           is_partnership,
           partnership_suspended,
           is_off,
+          notes,
           profiles:officer_id (
             id,
             full_name,
@@ -53,52 +78,160 @@ export const EmergencyPartnerReassignment = ({
         .eq("shift_type_id", shift.id)
         .neq("officer_id", ppoOfficer.officerId); // Exclude the PPO
 
-      if (error) {
-        console.error("Error finding working officers:", error);
-        throw error;
+      if (exceptionsError) {
+        console.error("Error finding schedule exceptions:", exceptionsError);
+        throw exceptionsError;
       }
 
-      // Filter for available partners
-     // In EmergencyPartnerReassignment.tsx, update the query filter:
-const availablePartners = (workingOfficers || []).filter(record => {
-  const officer = record.profiles;
-  
-  // Skip if officer is on PTO
-  if (record.is_off) return false;
-  
-  // Skip if officer is a PPO (PPOs can't partner with each other)
-  const isPPO = officer.rank?.toLowerCase().includes('probationary');
-  if (isPPO) return false;
-  
-  // Skip if already in an active partnership (unless suspended due to partner's PTO)
-  if (record.is_partnership && !record.partnership_suspended) {
-    return false;
-  }
-  
-  // Check if officer has the PPO emergency availability marker
-  const hasPPOAvailabilityMarker = record.notes?.includes('[PPO_AVAILABLE_FOR_EMERGENCY]');
-  if (hasPPOAvailabilityMarker) {
-    console.log(`✅ Officer ${officer.full_name} marked as available for PPO emergency assignment`);
-  }
-  
-  return true;
-});
+      // Step 2: Get recurring schedules for this day of week and shift
+      const { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          id,
+          officer_id,
+          is_partnership,
+          partnership_suspended,
+          day_of_week,
+          start_date,
+          end_date,
+          notes,
+          profiles:profiles!recurring_schedules_officer_id_fkey (
+            id,
+            full_name,
+            badge_number,
+            rank
+          )
+        `)
+        .eq("shift_type_id", shift.id)
+        .eq("day_of_week", dayOfWeek);
 
-      console.log("Available partners found:", availablePartners.map(p => ({
-        name: p.profiles.full_name,
-        rank: p.profiles.rank,
-        hasPartnership: p.is_partnership,
-        partnershipSuspended: p.partnership_suspended
+      if (recurringError) {
+        console.error("Error finding recurring schedules:", recurringError);
+        throw recurringError;
+      }
+
+      console.log("📊 Raw data:", {
+        exceptionsCount: exceptions?.length || 0,
+        recurringCount: recurringSchedules?.length || 0
+      });
+
+      // Process all officers working today
+      const allOfficers = new Map();
+
+      // Process exceptions first (they override recurring schedules)
+      if (exceptions) {
+        for (const exception of exceptions) {
+          if (!exception.profiles) continue;
+          
+          // Skip officers who are off duty (PTO)
+          if (exception.is_off) {
+            console.log(`⏸️ Skipping officer on PTO via exception: ${exception.profiles.full_name}`);
+            continue;
+          }
+          
+          allOfficers.set(exception.officer_id, {
+            id: exception.officer_id,
+            name: exception.profiles.full_name,
+            badge: exception.profiles.badge_number,
+            rank: exception.profiles.rank,
+            isPartnership: exception.is_partnership,
+            partnershipSuspended: exception.partnership_suspended,
+            source: 'exception',
+            scheduleId: exception.id,
+            notes: exception.notes
+          });
+        }
+      }
+
+      // Process recurring schedules
+      if (recurringSchedules) {
+        for (const recurring of recurringSchedules) {
+          if (!recurring.profiles) continue;
+          
+          // Skip if already processed via exception
+          if (allOfficers.has(recurring.officer_id)) {
+            console.log(`⏸️ Skipping - has exception override: ${recurring.profiles.full_name}`);
+            continue;
+          }
+          
+          // Validate date range
+          const startDate = parseISO(recurring.start_date);
+          const endDate = recurring.end_date ? parseISO(recurring.end_date) : null;
+          
+          if (currentDate < startDate) {
+            console.log(`⏸️ Skipping - date before start: ${recurring.profiles.full_name}`);
+            continue;
+          }
+          
+          if (endDate && currentDate > endDate) {
+            console.log(`⏸️ Skipping - date after end: ${recurring.profiles.full_name}`);
+            continue;
+          }
+          
+          // Skip if officer is marked as off in recurring (shouldn't happen but just in case)
+          if (recurring.is_off) {
+            console.log(`⏸️ Skipping officer marked as off in recurring: ${recurring.profiles.full_name}`);
+            continue;
+          }
+          
+          allOfficers.set(recurring.officer_id, {
+            id: recurring.officer_id,
+            name: recurring.profiles.full_name,
+            badge: recurring.profiles.badge_number,
+            rank: recurring.profiles.rank,
+            isPartnership: recurring.is_partnership,
+            partnershipSuspended: recurring.partnership_suspended,
+            source: 'recurring',
+            scheduleId: recurring.id,
+            notes: recurring.notes
+          });
+        }
+      }
+
+      console.log("👮 Total officers found (before filtering):", Array.from(allOfficers.values()).map(o => ({
+        name: o.name,
+        rank: o.rank,
+        source: o.source,
+        hasPartnership: o.isPartnership,
+        partnershipSuspended: o.partnershipSuspended
       })));
 
-      return availablePartners.map(p => ({
-        id: p.officer_id,
-        name: p.profiles.full_name,
-        badge: p.profiles.badge_number,
-        rank: p.profiles.rank,
-        scheduleId: p.id,
-        hasSuspendedPartnership: p.partnership_suspended
-      }));
+      // Filter for available partners
+      const availablePartners = Array.from(allOfficers.values()).filter(officer => {
+        // Skip if officer is a PPO (PPOs can't partner with each other in emergencies)
+        if (isPPO(officer)) {
+          console.log(`❌ Skipping PPO for emergency assignment: ${officer.name} (Rank: ${officer.rank})`);
+          return false;
+        }
+        
+        // Skip if already in an active partnership (unless suspended)
+        if (officer.isPartnership && !officer.partnershipSuspended) {
+          console.log(`❌ Skipping - in active partnership: ${officer.name}`);
+          return false;
+        }
+        
+        // Officer is available for emergency assignment
+        console.log(`✅ Available for emergency assignment: ${officer.name} (${officer.rank}) - Source: ${officer.source}`);
+        return true;
+      });
+
+      console.log("🚨 Emergency partners found:", availablePartners.map(p => ({
+        name: p.name,
+        rank: p.rank,
+        source: p.source,
+        hasSuspendedPartnership: p.partnershipSuspended
+      })));
+
+      // Sort alphabetically by last name
+      return availablePartners.sort((a, b) => {
+        const getLastName = (fullName: string) => {
+          const parts = fullName.trim().split(' ');
+          return parts[parts.length - 1] || '';
+        };
+        const lastNameA = getLastName(a.name).toLowerCase();
+        const lastNameB = getLastName(b.name).toLowerCase();
+        return lastNameA.localeCompare(lastNameB);
+      });
     },
     enabled: open
   });
@@ -111,45 +244,58 @@ const availablePartners = (workingOfficers || []).filter(record => {
 
       console.log("🚨 Creating emergency partnership:", {
         ppo: ppoOfficer.name,
+        ppoId: ppoOfficer.officerId,
         partner: partner.name,
+        partnerId: partnerId,
         date,
-        shift: shift.name
+        shift: shift.name,
+        shiftId: shift.id
       });
 
-      // Create new partnership exception
-      const { error } = await supabase
+      // Create new partnership exception for the PPO
+      const { error: ppoError } = await supabase
         .from("schedule_exceptions")
-        .insert([
-          {
-            officer_id: ppoOfficer.officerId,
-            partner_officer_id: partnerId,
-            date: date,
-            shift_type_id: shift.id,
-            is_partnership: true,
-            partnership_suspended: false,
-            schedule_type: "emergency_partnership",
-            position_name: "Riding Partner (PPO)",
-            notes: `Emergency assignment - original partner unavailable`,
-            is_off: false
-          },
-          {
-            officer_id: partnerId,
-            partner_officer_id: ppoOfficer.officerId,
-            date: date,
-            shift_type_id: shift.id,
-            is_partnership: true,
-            partnership_suspended: false,
-            schedule_type: "emergency_partnership",
-            position_name: "Emergency Riding Partner",
-            notes: `Emergency assignment with PPO ${ppoOfficer.name}`,
-            is_off: false
-          }
-        ]);
+        .insert({
+          officer_id: ppoOfficer.officerId,
+          partner_officer_id: partnerId,
+          date: date,
+          shift_type_id: shift.id,
+          is_partnership: true,
+          partnership_suspended: false,
+          schedule_type: "emergency_partnership",
+          position_name: "Riding Partner (PPO)",
+          notes: `Emergency assignment with ${partner.name} - original partner unavailable`,
+          is_off: false
+        });
 
-      if (error) throw error;
+      if (ppoError) {
+        console.error("Error creating PPO exception:", ppoError);
+        throw ppoError;
+      }
+
+      // Create new partnership exception for the partner
+      const { error: partnerError } = await supabase
+        .from("schedule_exceptions")
+        .insert({
+          officer_id: partnerId,
+          partner_officer_id: ppoOfficer.officerId,
+          date: date,
+          shift_type_id: shift.id,
+          is_partnership: true,
+          partnership_suspended: false,
+          schedule_type: "emergency_partnership",
+          position_name: "Emergency Riding Partner",
+          notes: `Emergency assignment with PPO ${ppoOfficer.name}`,
+          is_off: false
+        });
+
+      if (partnerError) {
+        console.error("Error creating partner exception:", partnerError);
+        throw partnerError;
+      }
 
       // Log the emergency assignment
-      await supabase
+      const { error: logError } = await supabase
         .from("partnership_exceptions")
         .insert({
           officer_id: ppoOfficer.officerId,
@@ -161,13 +307,20 @@ const availablePartners = (workingOfficers || []).filter(record => {
           created_at: new Date().toISOString()
         });
 
+      if (logError) {
+        console.error("Error logging partnership exception:", logError);
+        // Don't throw here - the partnership was created successfully
+      }
+
       return { partnerName: partner.name };
     },
     onSuccess: (data) => {
       toast.success(`Emergency partnership created with ${data.partnerName}`);
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["emergency-partners"] });
       onOpenChange(false);
+      setSelectedPartner("");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create emergency partnership");
@@ -202,6 +355,11 @@ const availablePartners = (workingOfficers || []).filter(record => {
             </div>
             <p className="text-sm text-amber-700 mt-1">Shift: {shift.name}</p>
             <p className="text-sm text-amber-700">Date: {date}</p>
+            {ppoOfficer.partnerData?.partnerName && (
+              <p className="text-sm text-amber-700 mt-1">
+                Original partner: {ppoOfficer.partnerData.partnerName} (unavailable)
+              </p>
+            )}
           </div>
           
           {/* Partner Selection */}
@@ -215,28 +373,30 @@ const availablePartners = (workingOfficers || []).filter(record => {
                   <div className="p-2 text-sm text-muted-foreground">Loading available officers...</div>
                 ) : availablePartners?.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground space-y-1">
-                    <p>No available officers found.</p>
+                    <p>No available officers found for emergency assignment.</p>
                     <p className="text-xs">All regular officers are either:</p>
                     <ul className="text-xs list-disc pl-4 mt-1">
-                      <li>Already partnered</li>
-                      <li>On PTO</li>
-                      <li>Assigned to special duty</li>
+                      <li>Already in active partnerships</li>
+                      <li>On PTO/off duty</li>
+                      <li>PPOs (cannot partner with PPOs in emergencies)</li>
+                      <li>Not scheduled for this shift today</li>
                     </ul>
                   </div>
                 ) : (
                   availablePartners?.map((partner) => (
                     <SelectItem key={partner.id} value={partner.id}>
                       <div className="flex flex-col py-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between">
                           <span className="font-medium">{partner.name}</span>
-                          {partner.hasSuspendedPartnership && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                              Available (Partner on PTO)
-                            </Badge>
-                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {partner.source === 'exception' ? 'Exception' : 'Recurring'}
+                          </Badge>
                         </div>
                         <span className="text-xs text-muted-foreground">
                           Badge: {partner.badge} • {partner.rank}
+                          {partner.partnershipSuspended && (
+                            <span className="text-amber-600"> • Available (Partner on PTO)</span>
+                          )}
                         </span>
                       </div>
                     </SelectItem>
@@ -275,6 +435,7 @@ const availablePartners = (workingOfficers || []).filter(record => {
               <li>This is a one-time assignment for today only</li>
               <li>The original partnership will resume tomorrow</li>
               <li>Both officers will be marked as partnered for today's shift</li>
+              <li>Only regular officers (non-PPOs) are available for emergency assignments</li>
             </ul>
           </div>
         </div>

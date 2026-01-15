@@ -519,16 +519,17 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
                     Select a Probationary officer to partner with
                   </div>
                   {availablePartners.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id}>
-                      <div className="flex flex-col py-1">
-                        <span className="font-medium">{partner.full_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {partner.badge_number && `Badge: ${partner.badge_number}`}
-                          {partner.rank && ` • ${partner.rank}`}
-                          {partner.source && ` • ${partner.source}`}
-                        </span>
-                      </SelectItem>
-                  ))}
+  <SelectItem key={partner.id} value={partner.id}>
+    <div className="flex flex-col py-1">
+      <span className="font-medium">{partner.full_name}</span>
+      <span className="text-xs text-muted-foreground">
+        {partner.badge_number && `Badge: ${partner.badge_number}`}
+        {partner.rank && ` • ${partner.rank}`}
+        {partner.source && ` • ${partner.source}`}
+      </span>
+    </div>
+  </SelectItem>
+))}
                 </>
               )}
             </SelectContent>
@@ -555,7 +556,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
       </DialogContent>
     </Dialog>
   );
-}
+};
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

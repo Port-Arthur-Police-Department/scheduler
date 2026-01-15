@@ -59,23 +59,30 @@ export const EmergencyPartnerReassignment = ({
       }
 
       // Filter for available partners
-      const availablePartners = (workingOfficers || []).filter(record => {
-        const officer = record.profiles;
-        
-        // Skip if officer is on PTO
-        if (record.is_off) return false;
-        
-        // Skip if officer is a PPO (PPOs can't partner with each other)
-        const isPPO = officer.rank?.toLowerCase().includes('probationary');
-        if (isPPO) return false;
-        
-        // Skip if already in an active partnership (unless suspended due to partner's PTO)
-        if (record.is_partnership && !record.partnership_suspended) {
-          return false;
-        }
-        
-        return true;
-      });
+     // In EmergencyPartnerReassignment.tsx, update the query filter:
+const availablePartners = (workingOfficers || []).filter(record => {
+  const officer = record.profiles;
+  
+  // Skip if officer is on PTO
+  if (record.is_off) return false;
+  
+  // Skip if officer is a PPO (PPOs can't partner with each other)
+  const isPPO = officer.rank?.toLowerCase().includes('probationary');
+  if (isPPO) return false;
+  
+  // Skip if already in an active partnership (unless suspended due to partner's PTO)
+  if (record.is_partnership && !record.partnership_suspended) {
+    return false;
+  }
+  
+  // Check if officer has the PPO emergency availability marker
+  const hasPPOAvailabilityMarker = record.notes?.includes('[PPO_AVAILABLE_FOR_EMERGENCY]');
+  if (hasPPOAvailabilityMarker) {
+    console.log(`✅ Officer ${officer.full_name} marked as available for PPO emergency assignment`);
+  }
+  
+  return true;
+});
 
       console.log("Available partners found:", availablePartners.map(p => ({
         name: p.profiles.full_name,

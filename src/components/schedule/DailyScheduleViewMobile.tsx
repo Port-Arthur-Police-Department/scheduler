@@ -115,7 +115,7 @@ const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule
   queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
   queryFn: () => {
     if (!selectedShiftId) return Promise.resolve([]);
-    return getScheduleData(selectedDate, selectedShiftId); // LOCAL selectedDate
+    return getScheduleData(selectedDate, selectedShiftId); 
   },
   enabled: !!selectedShiftId,
 });
@@ -272,7 +272,7 @@ const handleExportShiftToPDF = async (shiftData: any) => {
   try {
     toast.info("Generating PDF...");
     const result = await exportToPDF({
-      selectedDate: selectedDate, // LOCAL selectedDate
+      selectedDate: selectedDate, 
       shiftName: shiftData.shift.name,
       shiftData: shiftData,
       layoutSettings: DEFAULT_LAYOUT_SETTINGS
@@ -335,14 +335,14 @@ const handleExportShiftToPDF = async (shiftData: any) => {
                 >
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="min-w-[140px] text-center">
-                    {formatDateDisplay(selectedDate)} {/* LOCAL selectedDate */}
+                    {formatDateDisplay(selectedDate)} 
                   </span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="center">
                 <CalendarComponent
                   mode="single"
-                  selected={selectedDate} {/* LOCAL selectedDate */}
+                  selected={selectedDate} 
                   onSelect={handleDateSelect}
                   initialFocus
                   className="rounded-md border"
@@ -353,7 +353,7 @@ const handleExportShiftToPDF = async (shiftData: any) => {
                     variant="outline"
                     className="w-full"
                     onClick={goToToday}
-                    disabled={isToday(selectedDate)} {/* LOCAL selectedDate */}
+                    disabled={isToday(selectedDate)} 
                   >
                     Go to Today
                   </Button>
@@ -374,7 +374,7 @@ const handleExportShiftToPDF = async (shiftData: any) => {
           
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {format(selectedDate, "EEEE, MMMM d, yyyy")} {/* LOCAL selectedDate */}
+              {format(selectedDate, "EEEE, MMMM d, yyyy")} 
             </p>
           </div>
         </div>
@@ -384,7 +384,7 @@ const handleExportShiftToPDF = async (shiftData: any) => {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
             <Calendar className="h-5 w-5 inline mr-2" />
-            Schedule for {format(selectedDate, "MMM d, yyyy")} {/* LOCAL selectedDate */}
+            Schedule for {format(selectedDate, "MMM d, yyyy")} 
             {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
               <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
                 Your Shift

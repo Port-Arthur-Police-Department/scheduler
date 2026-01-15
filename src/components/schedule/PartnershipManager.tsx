@@ -298,12 +298,12 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
             return false;
           }
 
-              // NEW: Check if partnership is suspended (partner on PTO)
-    const hasSuspendedPartnership = officer.partnership_suspended === true;
-    if (hasSuspendedPartnership) {
-      console.log(`⚠️ Partnership suspended, available for reassignment: ${officer.full_name}`);
-      return true; // This PPO is available for reassignment!
-    }
+          // NEW: Check if partnership is suspended (partner on PTO)
+          const hasSuspendedPartnership = officer.partnership_suspended === true;
+          if (hasSuspendedPartnership) {
+            console.log(`⚠️ Partnership suspended, available for reassignment: ${officer.full_name}`);
+            return true; // This PPO is available for reassignment!
+          }
           
           console.log(`✅ Available PPO: ${officer.full_name} (Rank: ${officer.rank})`);
           return true;
@@ -414,7 +414,16 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     setOpen(false);
   };
 
-  if (!officer.isPartnership) {
+  // FIX: Check if officer is on PTO before rendering partnership manager
+  if (officer.hasPTO && officer.ptoData?.isFullShift) {
+    console.log("📋 Officer is on full day PTO, hiding partnership manager:", officer.name);
+    return null;
+  }
+
+  // FIX: Check if partnership exists and partnerData is available
+  const hasValidPartnership = officer.isPartnership && officer.partnerData && officer.partnerData.partnerName;
+
+  if (!hasValidPartnership) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
@@ -511,9 +520,9 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         <div className="space-y-4">
           <div className="p-3 border rounded-lg bg-blue-50">
             <p className="font-medium">Current Partner:</p>
-            <p>{officer.partnerData.partnerName} ({officer.partnerData.partnerBadge})</p>
-            <p className="text-sm text-muted-foreground">{officer.partnerData.partnerRank}</p>
-            {officer.partnerData.partnerRank?.toLowerCase().includes('probationary') && (
+            <p>{officer.partnerData?.partnerName || 'Unknown Partner'} ({officer.partnerData?.partnerBadge || 'N/A'})</p>
+            <p className="text-sm text-muted-foreground">{officer.partnerData?.partnerRank || 'Unknown Rank'}</p>
+            {officer.partnerData?.partnerRank?.toLowerCase().includes('probationary') && (
               <Badge variant="outline" className="mt-1 bg-yellow-100 text-yellow-800 border-yellow-300">
                 Probationary Officer
               </Badge>

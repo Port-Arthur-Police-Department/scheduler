@@ -26,14 +26,16 @@ const isPPO = (officer: any): boolean => {
   if (!officer || !officer.rank) return false;
   
   const rank = officer.rank.toLowerCase();
+  const isProbationary = rank === 'probationary' || rank.includes('probationary') || rank.includes('ppo');
+  
   console.log("🔍 Checking if PPO:", {
     name: officer.full_name || officer.name,
     rank: officer.rank,
     lowercase: rank,
-    isPPO: rank === 'probationary' || rank.includes('ppo')
+    isPPO: isProbationary
   });
   
-  return rank === 'probationary' || rank.includes('ppo');
+  return isProbationary;
 };
 
 export const PartnershipManager = ({ officer, onPartnershipChange }: PartnershipManagerProps) => {
@@ -136,35 +138,36 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
       })));
 
       // STEP 2: Filter for PPO officers who are available
-      const availablePPOs = uniqueWorkingToday
-        .filter(officer => {
-          // Exclude current officer
-          if (officer.id === officer.officerId) {
-            console.log(`❌ Excluding current officer: ${officer.full_name}`);
-            return false;
-          }
-          
-          // Check if PPO (exact match for "Probationary")
-          const isPPOOfficer = isPPO(officer);
-          if (!isPPOOfficer) {
-            console.log(`❌ Not a PPO: ${officer.full_name} (Rank: ${officer.rank})`);
-            return false;
-          }
-          
-          // Check if already in a partnership
-          if (officer.isPartnership === true) {
-            console.log(`❌ Already in partnership: ${officer.full_name}`);
-            return false;
-          }
-          
-          console.log(`✅ Available PPO: ${officer.full_name} (Rank: ${officer.rank})`);
-          return true;
-        })
-        .sort((a, b) => {
-          const lastNameA = getLastName(a.full_name).toLowerCase();
-          const lastNameB = getLastName(b.full_name).toLowerCase();
-          return lastNameA.localeCompare(lastNameB);
-        });
+ const availablePPOs = uniqueWorkingToday
+  .filter(officer => {
+    // Exclude current officer
+    if (officer.id === officer.officerId) {
+      console.log(`❌ Excluding current officer: ${officer.full_name}`);
+      return false;
+    }
+    
+    // Check if PPO
+    const isPPOOfficer = isPPO(officer);
+    if (!isPPOOfficer) {
+      console.log(`❌ Not a PPO: ${officer.full_name} (Rank: ${officer.rank})`);
+      return false;
+    }
+    
+    // Check if already in a partnership by checking both fields
+    const hasPartner = officer.isPartnership === true || officer.partnerOfficerId;
+    if (hasPartner) {
+      console.log(`❌ Already has partner: ${officer.full_name} (isPartnership: ${officer.isPartnership}, partnerId: ${officer.partnerOfficerId})`);
+      return false;
+    }
+    
+    console.log(`✅ Available PPO: ${officer.full_name} (Rank: ${officer.rank})`);
+    return true;
+  })
+  .sort((a, b) => {
+    const lastNameA = getLastName(a.full_name).toLowerCase();
+    const lastNameB = getLastName(b.full_name).toLowerCase();
+    return lastNameA.localeCompare(lastNameB);
+  });
 
       console.log("=== FINAL RESULTS ===");
       console.log("✅ Available PPO partners:", availablePPOs.map(p => ({

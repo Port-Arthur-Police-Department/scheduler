@@ -49,13 +49,12 @@ interface DailyScheduleViewMobileProps {
   onDateChange?: (date: Date) => void; // NEW: Add callback for date changes
 }
 
-export const DailyScheduleViewMobile = ({ 
-  selectedDate, 
+export const DailyScheduleViewMobile = ({  
   filterShiftId = "all", 
   isAdminOrSupervisor = false,
   userRole = 'officer',
-  userCurrentShift = "all",
-  onDateChange // NEW: Receive date change callback
+  userCurrentShift = "all"
+  
 }: DailyScheduleViewMobileProps) => {
   const [expandedShifts, setExpandedShifts] = useState<Set<string>>(new Set());
   const [expandedOfficers, setExpandedOfficers] = useState<Set<string>>(new Set());
@@ -77,13 +76,6 @@ export const DailyScheduleViewMobile = ({
   
   const dateStr = format(localSelectedDate, "yyyy-MM-dd");
   
-  // Sync local date with prop when prop changes
-  useEffect(() => {
-    if (selectedDate && selectedDate.getTime() !== localSelectedDate.getTime()) {
-      setLocalSelectedDate(selectedDate);
-    }
-  }, [selectedDate]);
-
   // Fetch all available shifts first
   const { data: allShifts, isLoading: shiftsLoading } = useQuery({
     queryKey: ["shift-types-mobile"],
@@ -126,39 +118,25 @@ export const DailyScheduleViewMobile = ({
   const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
 
   // NEW: Date navigation functions
-  const goToPreviousDay = () => {
-    const newDate = subDays(localSelectedDate, 1);
-    setLocalSelectedDate(newDate);
-    if (onDateChange) {
-      onDateChange(newDate);
-    }
+const goToPreviousDay = () => {
+    setSelectedDate(prev => subDays(prev, 1));
   };
 
   const goToNextDay = () => {
-    const newDate = addDays(localSelectedDate, 1);
-    setLocalSelectedDate(newDate);
-    if (onDateChange) {
-      onDateChange(newDate);
-    }
+    setSelectedDate(prev => addDays(prev, 1));
   };
 
   const goToToday = () => {
-    const today = new Date();
-    setLocalSelectedDate(today);
-    if (onDateChange) {
-      onDateChange(today);
-    }
+    setSelectedDate(new Date());
   };
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
-      setLocalSelectedDate(date);
+      setSelectedDate(date);
       setCalendarOpen(false);
-      if (onDateChange) {
-        onDateChange(date);
-      }
     }
   };
+
 
   // NEW: Format date for display with relative day names
   const formatDateDisplay = (date: Date) => {

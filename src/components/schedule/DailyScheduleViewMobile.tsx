@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Clock, Users, MapPin, FileText, Edit, Trash2, UserPlus, Download, MoreVertical } from "lucide-react";
+import { Calendar, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Clock, Users, MapPin, FileText, Edit, Trash2, UserPlus, Download, MoreVertical, AlertTriangle as AlertTriangleIcon } from "lucide-react"; // ADD AlertTriangleIcon
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,7 +36,7 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
+import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; // ADD THIS IMPORT
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {
@@ -68,10 +68,10 @@ export const DailyScheduleViewMobile = ({
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
   const dateStr = format(selectedDate, "yyyy-MM-dd");
-  const [emergencyReassignment, setEmergencyReassignment] = useState<{
-  ppoOfficer: any;
-  shift: any;
-} | null>(null);
+  const [emergencyReassignment, setEmergencyReassignment] = useState<{ // ADD THIS STATE
+    ppoOfficer: any;
+    shift: any;
+  } | null>(null);
 
   // Add useEffect to update selectedShiftId when userCurrentShift changes
   useEffect(() => {
@@ -175,6 +175,12 @@ export const DailyScheduleViewMobile = ({
           });
         }
         break;
+      case 'emergency-partner': // ADD THIS CASE
+        setEmergencyReassignment({
+          ppoOfficer: officer,
+          shift: officer.shift
+        });
+        break;
     }
   };
 
@@ -244,7 +250,7 @@ export const DailyScheduleViewMobile = ({
         selectedDate: selectedDate,
         shiftName: shiftData.shift.name,
         shiftData: shiftData,
-        layoutSettings: savedLayoutSettings 
+        layoutSettings: DEFAULT_LAYOUT_SETTINGS 
       });
 
       if (result.success) {
@@ -280,58 +286,58 @@ export const DailyScheduleViewMobile = ({
     );
   }
 
-return (
-  <div className="pb-20">
-    <Card className="mx-4 mt-4">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">
-          <Calendar className="h-5 w-5 inline mr-2" />
-          Schedule for {format(selectedDate, "MMM d, yyyy")}
-          {/* Add indicator for assigned shift */}
-          {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
-            <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
-              Your Shift
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Shift Selector */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Select value={selectedShiftId} onValueChange={handleShiftChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a shift">
-                  {allShifts?.find(s => s.id === selectedShiftId)?.name || "Select a shift"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Shifts</SelectItem>
-                {allShifts?.map((shift) => (
-                  <SelectItem key={shift.id} value={shift.id}>
-                    {shift.name} ({shift.start_time} - {shift.end_time})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {selectedShiftId && allShifts?.find(s => s.id === selectedShiftId) ? (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {allShifts.find(s => s.id === selectedShiftId)?.start_time} - {allShifts.find(s => s.id === selectedShiftId)?.end_time}
-              </p>
-              {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
-                <Badge variant="secondary" className="text-xs">
-                  Your Assigned Shift
-                </Badge>
-              )}
+  return (
+    <div className="pb-20">
+      <Card className="mx-4 mt-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">
+            <Calendar className="h-5 w-5 inline mr-2" />
+            Schedule for {format(selectedDate, "MMM d, yyyy")}
+            {/* Add indicator for assigned shift */}
+            {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
+              <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
+                Your Shift
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Shift Selector */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Select value={selectedShiftId} onValueChange={handleShiftChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a shift">
+                    {allShifts?.find(s => s.id === selectedShiftId)?.name || "Select a shift"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Shifts</SelectItem>
+                  {allShifts?.map((shift) => (
+                    <SelectItem key={shift.id} value={shift.id}>
+                      {shift.name} ({shift.start_time} - {shift.end_time})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : selectedShiftId === "all" ? (
-            <p className="text-sm text-muted-foreground mt-2 text-center">
-              Viewing all shifts
-            </p>
-          ) : null}
-        </div>
+            {selectedShiftId && allShifts?.find(s => s.id === selectedShiftId) ? (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {allShifts.find(s => s.id === selectedShiftId)?.start_time} - {allShifts.find(s => s.id === selectedShiftId)?.end_time}
+                </p>
+                {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
+                  <Badge variant="secondary" className="text-xs">
+                    Your Assigned Shift
+                  </Badge>
+                )}
+              </div>
+            ) : selectedShiftId === "all" ? (
+              <p className="text-sm text-muted-foreground mt-2 text-center">
+                Viewing all shifts
+              </p>
+            ) : null}
+          </div>
 
           {/* Loading state for schedule */}
           {scheduleLoading ? (
@@ -493,6 +499,17 @@ return (
         />
       )}
 
+      {/* Emergency Partner Reassignment Dialog - ADD THIS */}
+      {emergencyReassignment && (
+        <EmergencyPartnerReassignment
+          ppoOfficer={emergencyReassignment.ppoOfficer}
+          date={dateStr}
+          shift={emergencyReassignment.shift}
+          open={!!emergencyReassignment}
+          onOpenChange={(open) => !open && setEmergencyReassignment(null)}
+        />
+      )}
+
       {/* Edit Officer Sheet */}
       <EditOfficerSheet
         open={editSheetOpen}
@@ -519,7 +536,7 @@ return (
   );
 };
 
-// Mobile Officer Section Component - UPDATED with background colors and partial shift display
+// Mobile Officer Section Component - UPDATED with emergency partner option
 interface OfficerSectionMobileProps {
   title: string;
   officers: any[];
@@ -530,7 +547,7 @@ interface OfficerSectionMobileProps {
   sectionType?: "regular" | "supervisor" | "special" | "pto";
 }
 
-  // Define background colors based on section type
+// Define background colors based on section type
 const OfficerSectionMobile = ({
   title,
   officers,
@@ -544,45 +561,45 @@ const OfficerSectionMobile = ({
   const { data: websiteSettings } = useWebsiteSettings();
   
   // Define background colors based on section type
-const getSectionStyle = () => {
-  // Get colors from settings or use defaults
-  const colors = websiteSettings?.color_settings || {};
-  
-  switch (sectionType) {
-    case "special":
-      return {
-        headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-        headerBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-        cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
-        cardBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
-        textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
-      };
-    case "supervisor":
-      return {
-        headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-        headerBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-        cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
-        cardBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
-        textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
-      };
-    case "pto":
-      return {
-        headerBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
-        headerBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
-        cardBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]/50`,
-        cardBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
-        textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
-      };
-    default: // regular (officers)
-      return {
-        headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-        headerBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-        cardBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]/50`,
-        cardBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
-        textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
-      };
-  }
-};
+  const getSectionStyle = () => {
+    // Get colors from settings or use defaults
+    const colors = websiteSettings?.color_settings || {};
+    
+    switch (sectionType) {
+      case "special":
+        return {
+          headerBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+          headerBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+          cardBg: `bg-[rgb(${colors.schedule_special_bg || '243,229,245'})]/50`,
+          cardBorder: `border-[rgb(${colors.schedule_special_bg || '243,229,245'})]`,
+          textColor: `text-[rgb(${colors.schedule_special_text || '102,51,153'})]`
+        };
+      case "supervisor":
+        return {
+          headerBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+          headerBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+          cardBg: `bg-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]/50`,
+          cardBorder: `border-[rgb(${colors.schedule_supervisor_bg || '240,248,255'})]`,
+          textColor: `text-[rgb(${colors.schedule_supervisor_text || '25,25,112'})]`
+        };
+      case "pto":
+        return {
+          headerBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+          headerBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+          cardBg: `bg-[rgb(${colors.schedule_pto_bg || '230,255,242'})]/50`,
+          cardBorder: `border-[rgb(${colors.schedule_pto_bg || '230,255,242'})]`,
+          textColor: `text-[rgb(${colors.schedule_pto_text || '0,100,0'})]`
+        };
+      default: // regular (officers)
+        return {
+          headerBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+          headerBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+          cardBg: `bg-[rgb(${colors.schedule_officer_bg || '248,249,250'})]/50`,
+          cardBorder: `border-[rgb(${colors.schedule_officer_bg || '248,249,250'})]`,
+          textColor: `text-[rgb(${colors.schedule_officer_text || '33,37,41'})]`
+        };
+    }
+  };
 
   const sectionStyle = getSectionStyle();
 
@@ -627,7 +644,15 @@ const getSectionStyle = () => {
                       PPO
                     </Badge>
                   )}
-                  {officer.isPartnership && (
+                  {officer.partnershipSuspended && officer.isPartnership && ( // ADD THIS
+                    <Badge 
+                      variant="outline" 
+                      className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
+                    >
+                      <AlertTriangleIcon className="h-3 w-3 mr-1" />
+                    </Badge>
+                  )}
+                  {officer.isPartnership && !officer.partnershipSuspended && (
                     <Badge 
                       variant="outline" 
                       className="bg-blue-100 text-blue-800 border-blue-800/50 text-xs"
@@ -710,6 +735,19 @@ const getSectionStyle = () => {
                   </div>
                 )}
 
+                {/* Partnership Suspended Notice */}
+                {officer.partnershipSuspended && officer.isPartnership && ( // ADD THIS
+                  <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
+                    <AlertTriangleIcon className="h-4 w-4 text-amber-600" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">Partnership Suspended</p>
+                      <p className="text-sm text-amber-700">
+                        {officer.partnershipSuspensionReason || 'Partner unavailable'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Notes */}
                 {officer.notes && (
                   <div className="flex items-start gap-2 p-2 bg-muted rounded">
@@ -719,7 +757,7 @@ const getSectionStyle = () => {
                 )}
 
                 {/* Partnership Info */}
-                {officer.isPartnership && officer.partnerData && (
+                {officer.isPartnership && officer.partnerData && !officer.partnershipSuspended && (
                   <div className="flex items-center gap-2 p-2 bg-blue-50 rounded border border-blue-200">
                     <Users className="h-4 w-4 text-blue-600" />
                     <div>
@@ -751,6 +789,16 @@ const getSectionStyle = () => {
                           <Clock className="h-4 w-4 mr-2" />
                           Assign PTO
                         </DropdownMenuItem>
+                        {/* ADD EMERGENCY PARTNER OPTION */}
+                        {officer.isPPO && officer.partnershipSuspended && (
+                          <DropdownMenuItem 
+                            onClick={() => onOfficerAction(officer, 'emergency-partner')}
+                            className="text-amber-600"
+                          >
+                            <AlertTriangleIcon className="h-4 w-4 mr-2" />
+                            Emergency Partner
+                          </DropdownMenuItem>
+                        )}
                         {officer.type === "exception" && (
                           <DropdownMenuItem 
                             onClick={() => onOfficerAction(officer, 'remove')}
@@ -1215,91 +1263,91 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
             )}
           </div>
 
-{/* Shift Hours Selection */}
-<div className="space-y-2">
-  <Label>Shift Hours</Label>
-  <div className="space-y-3">
-    {/* Full Shift Option */}
-    <div className="flex items-center space-x-2">
-      <Checkbox
-        id="fullShift"
-        checked={!isPartialShift}
-        onCheckedChange={(checked) => {
-          if (checked) {
-            setIsPartialShift(false);
-          }
-        }}
-      />
-      <Label htmlFor="fullShift" className="cursor-pointer">
-        Full Shift {formatShiftDisplay(shift.start_time, shift.end_time)}
-      </Label>
-    </div>
-    
-    {/* Partial Shift Option */}
-    <div className="flex items-center space-x-2">
-      <Checkbox
-        id="partialShift"
-        checked={isPartialShift}
-        onCheckedChange={(checked) => {
-          setIsPartialShift(checked === true);
-        }}
-      />
-      <Label htmlFor="partialShift" className="cursor-pointer">
-        Partial/Custom Hours
-      </Label>
-    </div>
-    
-    {/* Warning for midnight-crossing shifts */}
-    {isPartialShift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
-      <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 ml-6">
-        ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
-        Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
-      </div>
-    )}
-    
-    {isPartialShift && (
-      <div className="grid grid-cols-2 gap-4 ml-6">
-        <div className="space-y-2">
-          <Label>Start Time</Label>
-          <Select value={customStartTime} onValueChange={setCustomStartTime}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-[200px]">
-              {timeOptions.map((time) => (
-                <SelectItem key={time} value={time}>
-                  {time}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>End Time</Label>
-          <Select value={customEndTime} onValueChange={setCustomEndTime}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-[200px]">
-              {timeOptions.map((time) => (
-                <SelectItem key={time} value={time}>
-                  {time}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    )}
-    
-    {/* Display calculated hours */}
-    {isPartialShift && customStartTime && customEndTime && (
-      <div className="text-sm text-muted-foreground ml-6">
-        Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
-      </div>
-    )}
-  </div>
-</div>
+          {/* Shift Hours Selection */}
+          <div className="space-y-2">
+            <Label>Shift Hours</Label>
+            <div className="space-y-3">
+              {/* Full Shift Option */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="fullShift"
+                  checked={!isPartialShift}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setIsPartialShift(false);
+                    }
+                  }}
+                />
+                <Label htmlFor="fullShift" className="cursor-pointer">
+                  Full Shift {formatShiftDisplay(shift.start_time, shift.end_time)}
+                </Label>
+              </div>
+              
+              {/* Partial Shift Option */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="partialShift"
+                  checked={isPartialShift}
+                  onCheckedChange={(checked) => {
+                    setIsPartialShift(checked === true);
+                  }}
+                />
+                <Label htmlFor="partialShift" className="cursor-pointer">
+                  Partial/Custom Hours
+                </Label>
+              </div>
+              
+              {/* Warning for midnight-crossing shifts */}
+              {isPartialShift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
+                <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 ml-6">
+                  ⚠️ This shift crosses midnight. For partial shifts, ensure your end time is correct.
+                  Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
+                </div>
+              )}
+              
+              {isPartialShift && (
+                <div className="grid grid-cols-2 gap-4 ml-6">
+                  <div className="space-y-2">
+                    <Label>Start Time</Label>
+                    <Select value={customStartTime} onValueChange={setCustomStartTime}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[200px]">
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>End Time</Label>
+                    <Select value={customEndTime} onValueChange={setCustomEndTime}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[200px]">
+                        {timeOptions.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+              
+              {/* Display calculated hours */}
+              {isPartialShift && customStartTime && customEndTime && (
+                <div className="text-sm text-muted-foreground ml-6">
+                  Shift Duration: {calculateHours(customStartTime, customEndTime).toFixed(1)} hours
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Unit Number */}
           <div className="space-y-2">

@@ -555,7 +555,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
       </DialogContent>
     </Dialog>
   );
-};
+}
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

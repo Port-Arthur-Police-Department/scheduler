@@ -21,6 +21,21 @@ const getLastName = (fullName: string) => {
   return parts[parts.length - 1] || '';
 };
 
+// Improved PPO check function
+const isPPO = (officer: any): boolean => {
+  if (!officer || !officer.rank) return false;
+  
+  const rank = officer.rank.toLowerCase();
+  console.log("🔍 Checking if PPO:", {
+    name: officer.full_name || officer.name,
+    rank: officer.rank,
+    lowercase: rank,
+    isPPO: rank === 'probationary' || rank.includes('ppo')
+  });
+  
+  return rank === 'probationary' || rank.includes('ppo');
+};
+
 export const PartnershipManager = ({ officer, onPartnershipChange }: PartnershipManagerProps) => {
   const [open, setOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
@@ -40,35 +55,8 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         date: dateToUse
       });
 
-      // METHOD 1: Get ALL profiles and filter manually
-      console.log("📥 Method 1: Getting all officer profiles...");
-      const { data: allProfiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, full_name, badge_number, rank")
-        .order("full_name");
-
-      if (profilesError) {
-        console.error("Error fetching profiles:", profilesError);
-        throw profilesError;
-      }
-
-      console.log("📋 All profiles in system:", allProfiles?.length);
-      
-      // Find PPO profiles
-      const ppoProfiles = allProfiles?.filter(profile => {
-        const rank = profile.rank?.toLowerCase() || '';
-        const isPPO = rank.includes('probationary') || rank.includes('ppo');
-        return isPPO;
-      }) || [];
-
-      console.log("🎯 PPO profiles found:", ppoProfiles.map(p => ({
-        id: p.id,
-        name: p.full_name,
-        rank: p.rank
-      })));
-
-      // METHOD 2: Check who's working today on this shift
-      console.log("📥 Method 2: Checking who's scheduled for today...");
+      // STEP 1: Get all officers working on this shift today
+      console.log("📥 Step 1: Getting officers working today...");
       
       // Get exceptions for today
       const { data: todayExceptions, error: todayError } = await supabase
@@ -139,7 +127,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         o && o.id && index === self.findIndex(p => p?.id === o.id)
       );
 
-      console.log("👮 Officers working today on this shift:", uniqueWorkingToday.map(o => ({
+      console.log("👮 All officers working today on this shift:", uniqueWorkingToday.map(o => ({
         id: o.id,
         name: o.full_name,
         rank: o.rank,
@@ -147,27 +135,30 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         partnerId: o.partnerOfficerId
       })));
 
-      // Find PPO officers who are working today AND not already partnered
-      const availablePPOs = ppoProfiles
-        .filter(ppoProfile => {
-          // Check if this PPO is working today
-          const isWorkingToday = uniqueWorkingToday.some(o => o.id === ppoProfile.id);
-          
-          // Check if already in partnership
-          const workingOfficer = uniqueWorkingToday.find(o => o.id === ppoProfile.id);
-          const isAlreadyPartnered = workingOfficer?.isPartnership === true;
-          
+      // STEP 2: Filter for PPO officers who are available
+      const availablePPOs = uniqueWorkingToday
+        .filter(officer => {
           // Exclude current officer
-          const isCurrentOfficer = ppoProfile.id === officer.officerId;
+          if (officer.id === officer.officerId) {
+            console.log(`❌ Excluding current officer: ${officer.full_name}`);
+            return false;
+          }
           
-          console.log(`🔍 PPO Check for ${ppoProfile.full_name}:`, {
-            isWorkingToday,
-            isAlreadyPartnered,
-            isCurrentOfficer,
-            passes: isWorkingToday && !isAlreadyPartnered && !isCurrentOfficer
-          });
+          // Check if PPO (exact match for "Probationary")
+          const isPPOOfficer = isPPO(officer);
+          if (!isPPOOfficer) {
+            console.log(`❌ Not a PPO: ${officer.full_name} (Rank: ${officer.rank})`);
+            return false;
+          }
           
-          return isWorkingToday && !isAlreadyPartnered && !isCurrentOfficer;
+          // Check if already in a partnership
+          if (officer.isPartnership === true) {
+            console.log(`❌ Already in partnership: ${officer.full_name}`);
+            return false;
+          }
+          
+          console.log(`✅ Available PPO: ${officer.full_name} (Rank: ${officer.rank})`);
+          return true;
         })
         .sort((a, b) => {
           const lastNameA = getLastName(a.full_name).toLowerCase();
@@ -179,8 +170,16 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
       console.log("✅ Available PPO partners:", availablePPOs.map(p => ({
         id: p.id,
         name: p.full_name,
-        rank: p.rank
+        rank: p.rank,
+        isPartnership: p.isPartnership
       })));
+
+      if (availablePPOs.length === 0) {
+        console.log("⚠️ No PPO partners found. Checking data...");
+        console.log("- Total officers working today:", uniqueWorkingToday.length);
+        console.log("- PPO officers found:", uniqueWorkingToday.filter(o => isPPO(o)).map(o => o.full_name));
+        console.log("- Officers already partnered:", uniqueWorkingToday.filter(o => o.isPartnership).map(o => o.full_name));
+      }
 
       return availablePPOs;
     },
@@ -193,7 +192,9 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     const partner = availablePartners?.find(p => p.id === selectedPartner);
     console.log("🤝 Creating partnership:", {
       officer: officer.name,
-      partner: partner?.full_name
+      officerRank: officer.rank,
+      partner: partner?.full_name,
+      partnerRank: partner?.rank
     });
 
     onPartnershipChange(officer, selectedPartner);
@@ -224,26 +225,26 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
           <div className="space-y-4">
             <Select value={selectedPartner} onValueChange={setSelectedPartner}>
               <SelectTrigger>
-                <SelectValue placeholder="Select Probationary (PPO) partner" />
+                <SelectValue placeholder="Select Probationary partner" />
               </SelectTrigger>
               <SelectContent>
                 {isLoading ? (
                   <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
                 ) : error ? (
                   <div className="p-2 text-sm text-red-600">
-                    Error: {error.message}
+                    Error loading officers
                   </div>
                 ) : !availablePartners || availablePartners.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground space-y-2">
-                    <div>No available Probationary (PPO) officers</div>
+                    <div>No available Probationary officers on this shift</div>
                     <div className="text-xs text-amber-600">
-                      Check console for debugging information
+                      Check browser console (F12) for details
                     </div>
                   </div>
                 ) : (
                   <>
                     <div className="text-xs text-muted-foreground p-2 border-b">
-                      Available PPO Officers
+                      Select a Probationary officer to partner with
                     </div>
                     {availablePartners.map((partner) => (
                       <SelectItem key={partner.id} value={partner.id}>
@@ -262,11 +263,11 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
             </Select>
             
             <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
-              <div className="font-medium mb-1">Note:</div>
+              <div className="font-medium mb-1">Requirements:</div>
               <ul className="list-disc pl-4 space-y-1">
-                <li>Only shows Probationary (PPO) officers</li>
-                <li>Officers already in partnerships are excluded</li>
-                <li>Open browser console (F12) for detailed logs</li>
+                <li>Officer must be marked as "Probationary"</li>
+                <li>Officer must be scheduled for this shift</li>
+                <li>Officer must not already be in a partnership</li>
               </ul>
             </div>
             
@@ -275,7 +276,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
               disabled={!selectedPartner || isLoading}
               className="w-full"
             >
-              Create Partnership with PPO
+              Create Partnership
             </Button>
           </div>
         </DialogContent>
@@ -301,10 +302,9 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
             <p className="font-medium">Current Partner:</p>
             <p>{officer.partnerData.partnerName} ({officer.partnerData.partnerBadge})</p>
             <p className="text-sm text-muted-foreground">{officer.partnerData.partnerRank}</p>
-            {(officer.partnerData.partnerRank?.toLowerCase().includes('probationary') || 
-              officer.partnerData.partnerRank?.toLowerCase().includes('ppo')) && (
+            {officer.partnerData.partnerRank?.toLowerCase() === 'probationary' && (
               <Badge variant="outline" className="mt-1 bg-yellow-100 text-yellow-800 border-yellow-300">
-                Probationary (PPO)
+                Probationary Officer
               </Badge>
             )}
           </div>

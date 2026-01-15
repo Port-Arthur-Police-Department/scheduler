@@ -560,22 +560,25 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-  // Enhanced partnership mutation with PTO handling - FIXED: Create partnerships in schedule_exceptions only
+  // Enhanced partnership mutation with PTO handling - FIXED: Create partnerships in schedule_exceptions with position preservation
   const updatePartnershipMutation = useMutation({
     mutationFn: async ({ 
       officer, 
       partnerOfficerId, 
-      action 
+      action,
+      position // Add position parameter
     }: { 
       officer: any; 
       partnerOfficerId?: string; 
-      action: 'create' | 'remove' | 'emergency' 
+      action: 'create' | 'remove' | 'emergency';
+      position?: string; // Optional position parameter
     }) => {
       console.log("🔄 Partnership mutation:", { 
         officerName: officer.name, 
         officerId: officer.officerId,
         partnerOfficerId, 
-        action 
+        action,
+        position 
       });
 
       if (action === 'create' && partnerOfficerId) {
@@ -616,10 +619,10 @@ export const useScheduleMutations = (dateStr: string) => {
         }
 
         // Check if either officer already has a partnership for this date/shift
-        const [{ data: existingOfficerPartnership }, { data: existingPartnerPartnership }] = await Promise.all([
+        const [{ data: existingOfficerSchedule }, { data: existingPartnerSchedule }] = await Promise.all([
           supabase
             .from("schedule_exceptions")
-            .select("id, is_partnership, position_name")
+            .select("id, is_partnership, position_name, unit_number, notes")
             .eq("officer_id", officer.officerId)
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
@@ -627,7 +630,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .single(),
           supabase
             .from("schedule_exceptions")
-            .select("id, is_partnership, position_name")
+            .select("id, is_partnership, position_name, unit_number, notes")
             .eq("officer_id", partnerOfficerId)
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
@@ -636,12 +639,12 @@ export const useScheduleMutations = (dateStr: string) => {
         ]);
 
         // Check if officer already has a partnership
-        if (existingOfficerPartnership?.is_partnership) {
+        if (existingOfficerSchedule?.is_partnership) {
           throw new Error(`${officer.name} is already in a partnership for this shift`);
         }
 
         // Check if partner already has a partnership
-        if (existingPartnerPartnership?.is_partnership) {
+        if (existingPartnerSchedule?.is_partnership) {
           throw new Error("Partner officer is already in a partnership for this shift");
         }
 
@@ -659,11 +662,21 @@ export const useScheduleMutations = (dateStr: string) => {
             .single()
         ]);
 
+        // Determine positions
+        // Use provided position, existing position, or default based on rank
+        const officerPosition = position || 
+                               existingOfficerSchedule?.position_name || 
+                               (isPPO(officerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+        
+        // For partner, use their existing position or default based on rank
+        const partnerPosition = existingPartnerSchedule?.position_name || 
+                                (isPPO(partnerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+
         // Create or update schedule exceptions for both officers
         const updates = [];
 
         // For officer
-        if (existingOfficerPartnership) {
+        if (existingOfficerSchedule) {
           // Update existing exception to be a partnership
           updates.push(
             supabase
@@ -671,12 +684,11 @@ export const useScheduleMutations = (dateStr: string) => {
               .update({
                 is_partnership: true,
                 partner_officer_id: partnerOfficerId,
-                position_name: isPPO(officerProfile?.rank) 
-                  ? "Riding Partner (PPO)" 
-                  : "Riding Partner",
+                position_name: officerPosition,
                 schedule_type: "manual_partnership"
+                // Keep existing unit_number and notes
               })
-              .eq("id", existingOfficerPartnership.id)
+              .eq("id", existingOfficerSchedule.id)
           );
         } else {
           // Create new exception for officer
@@ -690,9 +702,9 @@ export const useScheduleMutations = (dateStr: string) => {
                 is_off: false,
                 is_partnership: true,
                 partner_officer_id: partnerOfficerId,
-                position_name: isPPO(officerProfile?.rank) 
-                  ? "Riding Partner (PPO)" 
-                  : "Riding Partner",
+                position_name: officerPosition,
+                unit_number: officer.unitNumber || null,
+                notes: officer.notes || null,
                 schedule_type: "manual_partnership",
                 custom_start_time: null,
                 custom_end_time: null
@@ -701,7 +713,7 @@ export const useScheduleMutations = (dateStr: string) => {
         }
 
         // For partner
-        if (existingPartnerPartnership) {
+        if (existingPartnerSchedule) {
           // Update existing exception to be a partnership
           updates.push(
             supabase
@@ -709,12 +721,11 @@ export const useScheduleMutations = (dateStr: string) => {
               .update({
                 is_partnership: true,
                 partner_officer_id: officer.officerId,
-                position_name: isPPO(partnerProfile?.rank) 
-                  ? "Riding Partner (PPO)" 
-                  : "Riding Partner",
+                position_name: partnerPosition,
                 schedule_type: "manual_partnership"
+                // Keep existing unit_number and notes
               })
-              .eq("id", existingPartnerPartnership.id)
+              .eq("id", existingPartnerSchedule.id)
           );
         } else {
           // Create new exception for partner
@@ -728,9 +739,9 @@ export const useScheduleMutations = (dateStr: string) => {
                 is_off: false,
                 is_partnership: true,
                 partner_officer_id: officer.officerId,
-                position_name: isPPO(partnerProfile?.rank) 
-                  ? "Riding Partner (PPO)" 
-                  : "Riding Partner",
+                position_name: partnerPosition,
+                unit_number: officer.partnerUnitNumber || null, // You might want to add this to the parameters
+                notes: officer.partnerNotes || null, // You might want to add this to the parameters
                 schedule_type: "manual_partnership",
                 custom_start_time: null,
                 custom_end_time: null
@@ -769,6 +780,16 @@ export const useScheduleMutations = (dateStr: string) => {
         const shiftId = officer.shift.id;
         const actualPartnerOfficerId = officer.partnerOfficerId || officer.partnerData?.partnerOfficerId;
 
+        // Get officer's current schedule to preserve unit_number and notes
+        const { data: officerSchedule } = await supabase
+          .from("schedule_exceptions")
+          .select("position_name, unit_number, notes, schedule_type")
+          .eq("officer_id", officer.officerId)
+          .eq("date", targetDate)
+          .eq("shift_type_id", shiftId)
+          .eq("is_off", false)
+          .single();
+
         // Remove partnership from officer's schedule exception
         const { error: officerError } = await supabase
           .from("schedule_exceptions")
@@ -777,7 +798,10 @@ export const useScheduleMutations = (dateStr: string) => {
             partner_officer_id: null,
             partnership_suspended: false,
             partnership_suspension_reason: null,
-            position_name: officer.position || null
+            // If it was a manual partnership, keep the position, otherwise reset to null
+            position_name: officerSchedule?.schedule_type === "manual_partnership" 
+              ? null 
+              : officerSchedule?.position_name
           })
           .eq("officer_id", officer.officerId)
           .eq("date", targetDate)
@@ -795,10 +819,10 @@ export const useScheduleMutations = (dateStr: string) => {
         if (actualPartnerOfficerId) {
           console.log("Removing partnership from partner officer:", actualPartnerOfficerId);
 
-          // Get partner's current position to restore it
+          // Get partner's current schedule
           const { data: partnerSchedule } = await supabase
             .from("schedule_exceptions")
-            .select("position_name")
+            .select("position_name, unit_number, notes, schedule_type")
             .eq("officer_id", actualPartnerOfficerId)
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
@@ -812,7 +836,10 @@ export const useScheduleMutations = (dateStr: string) => {
               partner_officer_id: null,
               partnership_suspended: false,
               partnership_suspension_reason: null,
-              position_name: partnerSchedule?.position_name || null
+              // If it was a manual partnership, keep the position, otherwise reset to null
+              position_name: partnerSchedule?.schedule_type === "manual_partnership" 
+                ? null 
+                : partnerSchedule?.position_name
             })
             .eq("officer_id", actualPartnerOfficerId)
             .eq("date", targetDate)

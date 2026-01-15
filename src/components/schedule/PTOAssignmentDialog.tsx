@@ -15,8 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { auditLogger } from "@/lib/auditLogger"; // ADD THIS IMPORT
-import { useUser } from "@/contexts/UserContext"; // ADD THIS IMPORT
+import { auditLogger } from "@/lib/auditLogger";
+import { useUser } from "@/contexts/UserContext";
+import { AlertTriangle, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface PTOAssignmentDialogProps {
   open: boolean;
@@ -42,7 +44,7 @@ interface PTOAssignmentDialogProps {
   } | null;
   date: string;
   ptoBalancesEnabled?: boolean;
-  onSuccess?: (ptoData: any) => void; // ADD THIS PROP
+  onSuccess?: (ptoData: any) => void;
 }
 
 const PTO_TYPES = [
@@ -52,6 +54,13 @@ const PTO_TYPES = [
   { value: "holiday", label: "Holiday", column: "holiday_hours" },
 ];
 
+// Helper function to check if officer is PPO
+const isPPO = (rank: string | undefined | null): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  return rankLower.includes('probationary') || rankLower.includes('ppo');
+};
+
 export const PTOAssignmentDialog = ({
   open,
   onOpenChange,
@@ -59,14 +68,88 @@ export const PTOAssignmentDialog = ({
   shift,
   date,
   ptoBalancesEnabled = true,
-  onSuccess // ADD THIS PROP
+  onSuccess
 }: PTOAssignmentDialogProps) => {
   const queryClient = useQueryClient();
-  const { userEmail } = useUser(); // ADD THIS HOOK
+  const { userEmail } = useUser();
   const [ptoType, setPtoType] = useState("");
   const [isFullShift, setIsFullShift] = useState(true);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [officerHasPartnership, setOfficerHasPartnership] = useState(false);
+  const [partnerInfo, setPartnerInfo] = useState<any>(null);
+
+  // Check for partnerships when dialog opens
+  useEffect(() => {
+    const checkPartnership = async () => {
+      if (open && officer && shift) {
+        console.log("🔍 Checking for partnerships for officer:", officer.officerId);
+        
+        // Check for existing partnership on this date/shift
+        const { data: partnership } = await supabase
+          .from("schedule_exceptions")
+          .select(`
+            id,
+            partner_officer_id,
+            is_partnership,
+            partner_profile:profiles!schedule_exceptions_partner_officer_id_fkey (
+              id,
+              full_name,
+              badge_number,
+              rank
+            )
+          `)
+          .eq("officer_id", officer.officerId)
+          .eq("date", date)
+          .eq("shift_type_id", shift.id)
+          .eq("is_partnership", true)
+          .single();
+
+        if (partnership?.is_partnership && partnership.partner_officer_id) {
+          console.log("✅ Officer has a partnership:", partnership);
+          setOfficerHasPartnership(true);
+          setPartnerInfo(partnership.partner_profile);
+        } else {
+          // Check recurring partnerships
+          const dayOfWeek = new Date(date).getDay();
+          const { data: recurringPartnership } = await supabase
+            .from("recurring_schedules")
+            .select(`
+              id,
+              partner_officer_id,
+              is_partnership,
+              partner_profile:profiles!recurring_schedules_partner_officer_id_fkey (
+                id,
+                full_name,
+                badge_number,
+                rank
+              )
+            `)
+            .eq("officer_id", officer.officerId)
+            .eq("shift_type_id", shift.id)
+            .eq("day_of_week", dayOfWeek)
+            .eq("is_partnership", true)
+            .single();
+
+          if (recurringPartnership?.is_partnership && recurringPartnership.partner_officer_id) {
+            console.log("✅ Officer has a recurring partnership:", recurringPartnership);
+            setOfficerHasPartnership(true);
+            setPartnerInfo(recurringPartnership.partner_profile);
+          } else {
+            setOfficerHasPartnership(false);
+            setPartnerInfo(null);
+          }
+        }
+      } else {
+        setOfficerHasPartnership(false);
+        setPartnerInfo(null);
+      }
+    };
+
+    if (open && officer && shift) {
+      checkPartnership();
+    }
+  }, [open, officer, shift, date]);
 
   // Reset form when dialog opens/closes or officer changes
   useEffect(() => {
@@ -90,6 +173,145 @@ export const PTOAssignmentDialog = ({
     const startMinutes = startHour * 60 + startMin;
     const endMinutes = endHour * 60 + endMin;
     return (endMinutes - startMinutes) / 60;
+  };
+
+  // Function to handle partnership suspension when officer goes on PTO
+  const suspendPartnershipForPTO = async (officerId: string, partnerId: string | null) => {
+    if (!partnerId) {
+      console.log("No partner to suspend");
+      return;
+    }
+
+    console.log(`🔄 Suspending partnership: ${officerId} with ${partnerId} for PTO`);
+
+    try {
+      // Get officer's name for logging
+      const { data: officerData } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", officerId)
+        .single();
+
+      // Get partner's name for logging
+      const { data: partnerData } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", partnerId)
+        .single();
+
+      // 1. Check for existing schedule exceptions for both officers
+      const { data: officerException } = await supabase
+        .from("schedule_exceptions")
+        .select("id, is_partnership")
+        .eq("officer_id", officerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift!.id)
+        .single();
+
+      const { data: partnerException } = await supabase
+        .from("schedule_exceptions")
+        .select("id, is_partnership")
+        .eq("officer_id", partnerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift!.id)
+        .single();
+
+      // 2. Update or create schedule exceptions with suspended partnership
+      const updates = [];
+
+      // Officer's record
+      if (officerException) {
+        updates.push(
+          supabase
+            .from("schedule_exceptions")
+            .update({
+              is_partnership: false,
+              partnership_suspended: true,
+              partnership_suspension_reason: ptoType,
+              partner_officer_id: partnerId // Keep for tracking
+            })
+            .eq("id", officerException.id)
+        );
+      } else {
+        // Create a new exception for the officer (on PTO)
+        updates.push(
+          supabase
+            .from("schedule_exceptions")
+            .insert({
+              officer_id: officerId,
+              date: date,
+              shift_type_id: shift!.id,
+              is_off: true,
+              reason: ptoType,
+              is_partnership: false,
+              partnership_suspended: true,
+              partnership_suspension_reason: ptoType,
+              partner_officer_id: partnerId,
+              schedule_type: "pto_partnership_suspension"
+            })
+        );
+      }
+
+      // Partner's record - they should still be working
+      if (partnerException) {
+        updates.push(
+          supabase
+            .from("schedule_exceptions")
+            .update({
+              is_partnership: false,
+              partnership_suspended: true,
+              partnership_suspension_reason: ptoType,
+              partner_officer_id: officerId // Keep for tracking
+            })
+            .eq("id", partnerException.id)
+        );
+      } else {
+        // Create a new exception for the partner (still working)
+        updates.push(
+          supabase
+            .from("schedule_exceptions")
+            .insert({
+              officer_id: partnerId,
+              date: date,
+              shift_type_id: shift!.id,
+              is_off: false,
+              is_partnership: false,
+              partnership_suspended: true,
+              partnership_suspension_reason: ptoType,
+              partner_officer_id: officerId,
+              schedule_type: "pto_partner_available"
+            })
+        );
+      }
+
+      // 3. Execute all updates
+      const results = await Promise.all(updates);
+      results.forEach((result, index) => {
+        if (result.error) {
+          console.error(`Error updating record ${index}:`, result.error);
+        }
+      });
+
+      // 4. Log the partnership suspension
+      await supabase
+        .from("partnership_exceptions")
+        .insert({
+          officer_id: officerId,
+          partner_officer_id: partnerId,
+          date: date,
+          shift_type_id: shift!.id,
+          reason: `Officer on ${ptoType} leave`,
+          exception_type: 'pto_suspension',
+          created_at: new Date().toISOString()
+        });
+
+      console.log(`✅ Partnership suspended: ${officerData?.full_name} ↔ ${partnerData?.full_name}`);
+      toast.info(`Partnership suspended. ${partnerData?.full_name} is now available for reassignment.`);
+
+    } catch (error) {
+      console.error("Error suspending partnership:", error);
+      toast.error("Failed to suspend partnership, but PTO was assigned.");
+    }
   };
 
   const restorePTOCredit = async (existingPTO: any) => {
@@ -131,7 +353,13 @@ export const PTOAssignmentDialog = ({
       const ptoEndTime = isFullShift ? shift.end_time : endTime;
       const hoursUsed = calculateHours(ptoStartTime, ptoEndTime);
 
-      // If editing existing PTO, first restore the previous PTO balance
+      // 1. Handle partnership suspension BEFORE PTO assignment
+      if (officerHasPartnership && partnerInfo) {
+        console.log(`⚠️ Officer is in a partnership. Suspending partnership for PTO...`);
+        await suspendPartnershipForPTO(officer.officerId, partnerInfo.id);
+      }
+
+      // 2. If editing existing PTO, first restore the previous PTO balance
       if (officer.existingPTO && ptoBalancesEnabled) {
         await restorePTOCredit(officer.existingPTO);
         
@@ -153,7 +381,7 @@ export const PTOAssignmentDialog = ({
           .eq("is_off", false);
       }
 
-      // ONLY CHECK BALANCES IF PTO BALANCES ARE ENABLED
+      // 3. ONLY CHECK BALANCES IF PTO BALANCES ARE ENABLED
       if (ptoBalancesEnabled) {
         // Get current PTO balance for the new PTO type
         const { data: profile, error: profileError } = await supabase
@@ -183,7 +411,7 @@ export const PTOAssignmentDialog = ({
         if (updateError) throw updateError;
       }
 
-      // Create PTO exception (this should always happen regardless of balance settings)
+      // 4. Create PTO exception (this should always happen regardless of balance settings)
       const { error: ptoError } = await supabase.from("schedule_exceptions").insert({
         officer_id: officer.officerId,
         date: date,
@@ -192,11 +420,14 @@ export const PTOAssignmentDialog = ({
         reason: ptoType,
         custom_start_time: isFullShift ? null : ptoStartTime,
         custom_end_time: isFullShift ? null : ptoEndTime,
+        partnership_suspended: officerHasPartnership,
+        partnership_suspension_reason: officerHasPartnership ? ptoType : null,
+        partner_officer_id: officerHasPartnership ? partnerInfo?.id : null
       });
 
       if (ptoError) throw ptoError;
 
-      // If partial shift, create working time exception for the remaining time
+      // 5. If partial shift, create working time exception for the remaining time
       if (!isFullShift) {
         // Calculate the working portion (the part that's NOT PTO)
         const workStartTime = ptoEndTime;
@@ -230,13 +461,16 @@ export const PTOAssignmentDialog = ({
             position_name: positionName,
             custom_start_time: workStartTime,
             custom_end_time: workEndTime,
+            partnership_suspended: officerHasPartnership,
+            partnership_suspension_reason: officerHasPartnership ? ptoType : null,
+            partner_officer_id: officerHasPartnership ? partnerInfo?.id : null
           });
 
           if (workError) throw workError;
         }
       }
 
-      // Return data for audit logging
+      // 6. Return data for audit logging
       return {
         officerId: officer.officerId,
         officerName: officer.name,
@@ -246,11 +480,19 @@ export const PTOAssignmentDialog = ({
         endTime: ptoEndTime,
         hoursUsed,
         isFullShift,
-        shiftName: shift.name
+        shiftName: shift.name,
+        hadPartnership: officerHasPartnership,
+        partnerName: partnerInfo?.full_name
       };
     },
     onSuccess: (ptoData) => {
-      toast.success(officer?.existingPTO ? "PTO updated successfully" : "PTO assigned successfully");
+      let successMessage = officer?.existingPTO ? "PTO updated successfully" : "PTO assigned successfully";
+      
+      if (ptoData.hadPartnership) {
+        successMessage += `. Partnership with ${ptoData.partnerName} has been suspended.`;
+      }
+      
+      toast.success(successMessage);
       
       // Log the PTO assignment
       auditLogger.logPTOAssignment(
@@ -259,7 +501,8 @@ export const PTOAssignmentDialog = ({
         ptoData.date,
         ptoData.hoursUsed,
         userEmail,
-        `${officer?.existingPTO ? 'Updated' : 'Assigned'} ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours)`
+        `${officer?.existingPTO ? 'Updated' : 'Assigned'} ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours)` +
+        (ptoData.hadPartnership ? ` - Partnership with ${ptoData.partnerName} suspended` : '')
       );
 
       // Call the onSuccess callback if provided
@@ -299,17 +542,83 @@ export const PTOAssignmentDialog = ({
         .eq("shift_type_id", shift!.id)
         .eq("is_off", false);
 
+      // Check if we should restore the partnership
+      const { data: suspendedPartnership } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          id,
+          partner_officer_id,
+          partnership_suspended,
+          partner_profile:profiles!schedule_exceptions_partner_officer_id_fkey (
+            id,
+            full_name
+          )
+        `)
+        .eq("officer_id", officer.officerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift!.id)
+        .eq("partnership_suspended", true)
+        .single();
+
+      if (suspendedPartnership?.partnership_suspended && suspendedPartnership.partner_officer_id) {
+        console.log("🔄 Restoring suspended partnership...");
+        
+        // Restore the partnership
+        await supabase
+          .from("schedule_exceptions")
+          .update({
+            is_partnership: true,
+            partnership_suspended: false,
+            partnership_suspension_reason: null
+          })
+          .eq("officer_id", officer.officerId)
+          .eq("date", date)
+          .eq("shift_type_id", shift!.id);
+
+        // Also restore partner's record
+        await supabase
+          .from("schedule_exceptions")
+          .update({
+            is_partnership: true,
+            partnership_suspended: false,
+            partnership_suspension_reason: null
+          })
+          .eq("officer_id", suspendedPartnership.partner_officer_id)
+          .eq("date", date)
+          .eq("shift_type_id", shift!.id);
+
+        // Log partnership restoration
+        await supabase
+          .from("partnership_exceptions")
+          .update({
+            resolved_at: new Date().toISOString(),
+            resolved_by: officer.officerId
+          })
+          .eq("officer_id", officer.officerId)
+          .eq("partner_officer_id", suspendedPartnership.partner_officer_id)
+          .eq("date", date)
+          .eq("exception_type", 'pto_suspension');
+      }
+
       // Return data for audit logging
       return {
         officerId: officer.officerId,
         officerName: officer.name,
         ptoType: officer.existingPTO.ptoType,
         date,
-        hoursUsed: calculateHours(officer.existingPTO.startTime, officer.existingPTO.endTime)
+        hoursUsed: calculateHours(officer.existingPTO.startTime, officer.existingPTO.endTime),
+        restoredPartnership: !!suspendedPartnership,
+        partnerName: suspendedPartnership?.partner_profile?.full_name
       };
     },
     onSuccess: (ptoData) => {
-      toast.success("PTO removed and balance restored");
+      let successMessage = "PTO removed and balance restored";
+      
+      if (ptoData.restoredPartnership) {
+        successMessage += `. Partnership with ${ptoData.partnerName} has been restored.`;
+      }
+      
+      toast.success(successMessage);
       
       // Log the PTO removal
       auditLogger.logPTORemoval(
@@ -317,7 +626,8 @@ export const PTOAssignmentDialog = ({
         ptoData.ptoType,
         ptoData.date,
         userEmail,
-        `Removed ${ptoData.ptoType} PTO from ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours restored)`
+        `Removed ${ptoData.ptoType} PTO from ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours restored)` +
+        (ptoData.restoredPartnership ? ` - Partnership with ${ptoData.partnerName} restored` : '')
       );
 
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
@@ -328,9 +638,6 @@ export const PTOAssignmentDialog = ({
       toast.error(error.message || "Failed to remove PTO");
     },
   });
-
-  // Remove the duplicate audit logging line that was outside the mutation
-  // (The one that said: "After successful PTO assignment")
 
   // Don't render the dialog content if officer or shift is null
   if (!officer || !shift) {
@@ -353,6 +660,37 @@ export const PTOAssignmentDialog = ({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Partnership Warning */}
+          {officerHasPartnership && partnerInfo && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h4 className="font-medium text-amber-800 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Partnership Alert
+                  </h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    This officer is partnered with <span className="font-semibold">{partnerInfo.full_name}</span>.
+                  </p>
+                  <p className="text-sm text-amber-700">
+                    Assigning PTO will suspend the partnership and make {partnerInfo.full_name} available for emergency reassignment.
+                  </p>
+                  <div className="mt-2">
+                    <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
+                      Partner: {partnerInfo.full_name} ({partnerInfo.badge_number})
+                    </Badge>
+                    {isPPO(partnerInfo.rank) && (
+                      <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800 border-yellow-300">
+                        PPO
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>PTO Type</Label>
             <Select value={ptoType} onValueChange={setPtoType}>
@@ -436,11 +774,13 @@ export const PTOAssignmentDialog = ({
             <Button
               onClick={() => assignPTOMutation.mutate()}
               disabled={!ptoType || assignPTOMutation.isPending}
+              className={officerHasPartnership ? "bg-amber-600 hover:bg-amber-700" : ""}
             >
               {assignPTOMutation.isPending 
                 ? (officer.existingPTO ? "Updating..." : "Assigning...")
                 : (officer.existingPTO ? "Update PTO" : "Assign PTO")
               }
+              {officerHasPartnership && !assignPTOMutation.isPending && " & Suspend Partnership"}
             </Button>
           </div>
         </DialogFooter>

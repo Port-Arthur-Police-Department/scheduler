@@ -41,21 +41,21 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {
-  selectedDate: Date;
   filterShiftId?: string;
   isAdminOrSupervisor?: boolean;
   userRole?: 'officer' | 'supervisor' | 'admin';
-  userCurrentShift?: string; // NEW: Add this prop
-  onDateChange?: (date: Date) => void; // NEW: Add callback for date changes
+  userCurrentShift?: string;
+  // REMOVED: selectedDate and onDateChange
 }
 
-export const DailyScheduleViewMobile = ({  
+export const DailyScheduleViewMobile = ({ 
   filterShiftId = "all", 
   isAdminOrSupervisor = false,
   userRole = 'officer',
   userCurrentShift = "all"
-  
 }: DailyScheduleViewMobileProps) => {
+  // Initialize with current date - LOCAL STATE
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [expandedShifts, setExpandedShifts] = useState<Set<string>>(new Set());
   const [expandedOfficers, setExpandedOfficers] = useState<Set<string>>(new Set());
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
@@ -66,16 +66,21 @@ export const DailyScheduleViewMobile = ({
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
   const [addOfficerDialogOpen, setAddOfficerDialogOpen] = useState(false);
   const [selectedShiftForAdd, setSelectedShiftForAdd] = useState<any>(null);
-  const [calendarOpen, setCalendarOpen] = useState(false); // NEW: Calendar state
-  
-  // NEW: Local date state for mobile navigation
-  const [localSelectedDate, setLocalSelectedDate] = useState<Date>(selectedDate);
-  
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
   
-  const dateStr = format(localSelectedDate, "yyyy-MM-dd");
+  // This should now use the LOCAL selectedDate state
+  const dateStr = format(selectedDate, "yyyy-MM-dd");
   
+  // Add useEffect to update selectedShiftId when userCurrentShift changes
+  useEffect(() => {
+    if (userCurrentShift && userCurrentShift !== selectedShiftId) {
+      console.log("🔄 Mobile: Updating selected shift from prop:", userCurrentShift);
+      setSelectedShiftId(userCurrentShift);
+    }
+  }, [userCurrentShift]);
+
   // Fetch all available shifts first
   const { data: allShifts, isLoading: shiftsLoading } = useQuery({
     queryKey: ["shift-types-mobile"],
@@ -106,19 +111,19 @@ export const DailyScheduleViewMobile = ({
   });
 
   // Fetch schedule data only for the selected shift
-  const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
-    queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
-    queryFn: () => {
-      if (!selectedShiftId) return Promise.resolve([]);
-      return getScheduleData(localSelectedDate, selectedShiftId);
-    },
-    enabled: !!selectedShiftId,
-  });
+const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
+  queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
+  queryFn: () => {
+    if (!selectedShiftId) return Promise.resolve([]);
+    return getScheduleData(selectedDate, selectedShiftId); // LOCAL selectedDate
+  },
+  enabled: !!selectedShiftId,
+});
 
   const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
 
   // NEW: Date navigation functions
-const goToPreviousDay = () => {
+  const goToPreviousDay = () => {
     setSelectedDate(prev => subDays(prev, 1));
   };
 
@@ -137,7 +142,6 @@ const goToPreviousDay = () => {
     }
   };
 
-
   // NEW: Format date for display with relative day names
   const formatDateDisplay = (date: Date) => {
     if (isToday(date)) {
@@ -151,7 +155,6 @@ const goToPreviousDay = () => {
     }
     return format(date, "EEE, MMM d");
   };
-
   // Toggle shift expansion
   const toggleShift = (shiftId: string) => {
     const newExpanded = new Set(expandedShifts);
@@ -265,15 +268,15 @@ const goToPreviousDay = () => {
   };
 
   // Export shift to PDF
-  const handleExportShiftToPDF = async (shiftData: any) => {
-    try {
-      toast.info("Generating PDF...");
-      const result = await exportToPDF({
-        selectedDate: localSelectedDate,
-        shiftName: shiftData.shift.name,
-        shiftData: shiftData,
-        layoutSettings: DEFAULT_LAYOUT_SETTINGS
-      });
+const handleExportShiftToPDF = async (shiftData: any) => {
+  try {
+    toast.info("Generating PDF...");
+    const result = await exportToPDF({
+      selectedDate: selectedDate, // LOCAL selectedDate
+      shiftName: shiftData.shift.name,
+      shiftData: shiftData,
+      layoutSettings: DEFAULT_LAYOUT_SETTINGS
+    });
 
       if (result.success) {
         toast.success("PDF exported successfully");
@@ -310,7 +313,7 @@ const goToPreviousDay = () => {
 
   return (
     <div className="pb-20">
-      {/* NEW: Date Navigation Header */}
+      {/* Date Navigation Header */}
       <div className="sticky top-0 z-10 bg-background border-b">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between mb-2">
@@ -332,14 +335,14 @@ const goToPreviousDay = () => {
                 >
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="min-w-[140px] text-center">
-                    {formatDateDisplay(localSelectedDate)}
+                    {formatDateDisplay(selectedDate)} {/* LOCAL selectedDate */}
                   </span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="center">
                 <CalendarComponent
                   mode="single"
-                  selected={localSelectedDate}
+                  selected={selectedDate} {/* LOCAL selectedDate */}
                   onSelect={handleDateSelect}
                   initialFocus
                   className="rounded-md border"
@@ -350,7 +353,7 @@ const goToPreviousDay = () => {
                     variant="outline"
                     className="w-full"
                     onClick={goToToday}
-                    disabled={isToday(localSelectedDate)}
+                    disabled={isToday(selectedDate)} {/* LOCAL selectedDate */}
                   >
                     Go to Today
                   </Button>
@@ -371,7 +374,7 @@ const goToPreviousDay = () => {
           
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {format(localSelectedDate, "EEEE, MMMM d, yyyy")}
+              {format(selectedDate, "EEEE, MMMM d, yyyy")} {/* LOCAL selectedDate */}
             </p>
           </div>
         </div>
@@ -381,7 +384,7 @@ const goToPreviousDay = () => {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
             <Calendar className="h-5 w-5 inline mr-2" />
-            Schedule for {format(localSelectedDate, "MMM d, yyyy")}
+            Schedule for {format(selectedDate, "MMM d, yyyy")} {/* LOCAL selectedDate */}
             {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
               <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
                 Your Shift

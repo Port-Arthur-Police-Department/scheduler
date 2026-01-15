@@ -240,8 +240,7 @@ export const PTOAssignmentDialog = ({
             partner_officer_id: officerId,
             schedule_type: "working_partner_suspended",
             // Store PPO info in notes for emergency assignment lookup
-            notes: (partnerException.notes || '') + 
-                   (isPartnerPPO ? ' [PPO_AVAILABLE_FOR_EMERGENCY]' : '')
+            notes: partnerException.notes || null,
           })
           .eq("id", partnerException.id);
         
@@ -271,8 +270,7 @@ export const PTOAssignmentDialog = ({
             partner_officer_id: officerId,
             position_name: partnerRecurring?.position_name || "",
             unit_number: partnerRecurring?.unit_number || "",
-            notes: (partnerRecurring?.notes || "Partnership suspended - partner on PTO") + 
-                   (isPartnerPPO ? ' [PPO_AVAILABLE_FOR_EMERGENCY]' : ''),
+            notes: partnerRecurring?.notes || "Partnership suspended - partner on PTO",
             schedule_type: "working_partner_suspended"
           });
         

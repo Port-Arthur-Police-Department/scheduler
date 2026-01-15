@@ -297,6 +297,13 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
             console.log(`❌ Already in partnership: ${officer.full_name}`);
             return false;
           }
+
+              // NEW: Check if partnership is suspended (partner on PTO)
+    const hasSuspendedPartnership = officer.partnership_suspended === true;
+    if (hasSuspendedPartnership) {
+      console.log(`⚠️ Partnership suspended, available for reassignment: ${officer.full_name}`);
+      return true; // This PPO is available for reassignment!
+    }
           
           console.log(`✅ Available PPO: ${officer.full_name} (Rank: ${officer.rank})`);
           return true;

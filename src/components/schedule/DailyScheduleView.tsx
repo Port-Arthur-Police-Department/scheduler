@@ -75,6 +75,10 @@ export const DailyScheduleView = ({
   } | null>(null);
   const [addOfficerDialogOpen, setAddOfficerDialogOpen] = useState(false);
   const [selectedShiftForAdd, setSelectedShiftForAdd] = useState<any>(null);
+  const [emergencyReassignment, setEmergencyReassignment] = useState<{
+  ppoOfficer: any;
+  shift: any;
+} | null>(null);
   const { exportToPDF } = usePDFExport();
 
   // Determine if user can edit based on role

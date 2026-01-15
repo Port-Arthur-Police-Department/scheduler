@@ -623,42 +623,42 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     }
     
     switch (activeTab) {
-      case "daily":
-        return isAdminOrSupervisor ? (
-          // For admin/supervisor on mobile, show mobile management
-          isMobile ? (
-            <DailyScheduleViewMobile
-              selectedDate={new Date()}
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={isAdminOrSupervisor}
-              userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
-              userCurrentShift={userCurrentShift}
-            />
-          ) : (
-            <DailyScheduleManagement 
-              isAdminOrSupervisor={isAdminOrSupervisor}
-              userCurrentShift={userCurrentShift}
-            />
-          )
-        ) : (
-          // For regular officers
-          isMobile ? (
-            <DailyScheduleViewMobile
-              selectedDate={new Date()}
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={false}
-              userRole="officer"
-              userCurrentShift={userCurrentShift}
-            />
-          ) : (
-            <DailyScheduleView 
-              selectedDate={new Date()} 
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={false} 
-              userRole="officer" 
-            />
-          )
-        );
+case "daily":
+  return isAdminOrSupervisor ? (
+    // For admin/supervisor on mobile, show mobile management
+    isMobile ? (
+      <DailyScheduleViewMobile
+        // REMOVE this line: selectedDate={new Date()}
+        filterShiftId={userCurrentShift}
+        isAdminOrSupervisor={isAdminOrSupervisor}
+        userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+        userCurrentShift={userCurrentShift}
+      />
+    ) : (
+      <DailyScheduleManagement 
+        isAdminOrSupervisor={isAdminOrSupervisor}
+        userCurrentShift={userCurrentShift}
+      />
+    )
+  ) : (
+    // For regular officers
+    isMobile ? (
+      <DailyScheduleViewMobile
+        // REMOVE this line: selectedDate={new Date()}
+        filterShiftId={userCurrentShift}
+        isAdminOrSupervisor={false}
+        userRole="officer"
+        userCurrentShift={userCurrentShift}
+      />
+    ) : (
+      <DailyScheduleView 
+        selectedDate={new Date()} 
+        filterShiftId={userCurrentShift}
+        isAdminOrSupervisor={false} 
+        userRole="officer" 
+      />
+    )
+  );
       case "schedule":
         return (
           <div className="space-y-4">

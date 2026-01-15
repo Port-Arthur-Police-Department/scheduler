@@ -10,7 +10,7 @@ import { Users, Clock, Edit2, Calendar, Award, Plus, Search, CalendarIcon, Trend
 import { OfficerProfileDialog } from "./OfficerProfileDialog";
 import { OfficerScheduleManager } from "./OfficerScheduleManager";
 import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
-import { PartnershipManagement } from "./staff/PartnershipManagement"; // NEW: Import partnership management
+import { PartnershipManagement } from "./PartnershipManagement";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { auditLogger } from "@/lib/auditLogger";

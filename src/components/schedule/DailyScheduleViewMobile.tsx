@@ -36,6 +36,7 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {

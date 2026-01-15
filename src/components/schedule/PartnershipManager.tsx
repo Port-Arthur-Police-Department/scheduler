@@ -120,7 +120,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         throw exceptionsError;
       }
 
-      // Get all recurring schedules for this shift and day of week - FIXED: Remove partnership_suspended
+      // Get all recurring schedules for this shift and day of week
       const { data: recurringData, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
@@ -660,7 +660,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
                               <span className="text-xs text-muted-foreground">
                                 {partner.badge && `Badge: ${partner.badge}`}
                                 {partner.rank && ` • ${partner.rank}`}
-                                {partner.partnershipSuspended && (
+                                {partner.source === 'exception' && partner.partnershipSuspended && (
                                   <span className="text-amber-600"> • Partnership suspended</span>
                                 )}
                               </span>

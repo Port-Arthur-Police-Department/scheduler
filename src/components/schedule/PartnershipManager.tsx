@@ -497,42 +497,42 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
               <SelectValue placeholder="Select Probationary partner" />
             </SelectTrigger>
             <SelectContent>
-              {isLoading ? (
-                <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
-              ) : error ? (
-                <div className="p-2 text-sm text-red-600">
-                  Error loading officers: {error.message}
-                </div>
-              ) : !availablePartners || availablePartners.length === 0 ? (
-                <div className="p-2 text-sm text-muted-foreground space-y-2">
-                  <div>No available Probationary officers on this shift</div>
-                  <div className="text-xs text-amber-600">
-                    Check browser console (F12) for debugging details
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Shift: {officer.shift.name} ({officer.shift.start_time} - {officer.shift.end_time})
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="text-xs text-muted-foreground p-2 border-b">
-                    Select a Probationary officer to partner with
-                  </div>
-                  {availablePartners.map((partner) => (
-  <SelectItem key={partner.id} value={partner.id}>
-    <div className="flex flex-col py-1">
-      <span className="font-medium">{partner.full_name}</span>
-      <span className="text-xs text-muted-foreground">
-        {partner.badge_number && `Badge: ${partner.badge_number}`}
-        {partner.rank && ` • ${partner.rank}`}
-        {partner.source && ` • ${partner.source}`}
-      </span>
+  {isLoading ? (
+    <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
+  ) : error ? (
+    <div className="p-2 text-sm text-red-600">
+      Error loading officers: {error.message}
     </div>
-  </SelectItem>
-))}
-                </>
-              )}
-            </SelectContent>
+  ) : !availablePartners || availablePartners.length === 0 ? (
+    <div className="p-2 text-sm text-muted-foreground space-y-2">
+      <div>No available Probationary officers on this shift</div>
+      <div className="text-xs text-amber-600">
+        Check browser console (F12) for debugging details
+      </div>
+      <div className="text-xs text-muted-foreground mt-2">
+        Shift: {officer.shift.name} ({officer.shift.start_time} - {officer.shift.end_time})
+      </div>
+    </div>
+  ) : (
+    <>
+      <div className="text-xs text-muted-foreground p-2 border-b">
+        Select a Probationary officer to partner with
+      </div>
+      {availablePartners.map((partner) => (
+        <SelectItem key={partner.id} value={partner.id}>
+          <div className="flex flex-col py-1">
+            <span className="font-medium">{partner.full_name}</span>
+            <span className="text-xs text-muted-foreground">
+              {partner.badge_number && `Badge: ${partner.badge_number}`}
+              {partner.rank && ` • ${partner.rank}`}
+              {partner.source && ` • ${partner.source}`}
+            </span>
+          </div>
+        </SelectItem>
+      ))}
+    </>
+  )}
+</SelectContent>
           </Select>
           
           <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">

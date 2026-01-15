@@ -65,6 +65,16 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   const [open, setOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
 
+  // FIX: Check if officer is on PTO or has suspended partnership
+  if (officer.hasPTO && officer.ptoData?.isFullShift) {
+    console.log("📋 Officer is on full day PTO, hiding partnership manager:", officer.name);
+    return null;
+  }
+
+  // FIX: Check partnership status
+  const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended;
+  const hasSuspendedPartnership = officer.isPartnership && officer.partnershipSuspended;
+
   const { data: availablePartners, isLoading, error } = useQuery({
     queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
     queryFn: async () => {
@@ -77,11 +87,12 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         name: officer.name,
         rank: officer.rank,
         isPPO: isPPO(officer),
+        hasActivePartnership,
+        hasSuspendedPartnership,
         shift: officer.shift.name,
         shiftId: officer.shift.id,
         date: dateToUse,
         dayOfWeek: dayOfWeek,
-        officerData: officer // Include full officer data for debugging
       });
 
       // STEP 1: Get all officers working on this shift today
@@ -380,7 +391,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
 
       return availablePPOs;
     },
-    enabled: open,
+    enabled: open && !hasActivePartnership, // Only fetch if officer doesn't have an active partnership
   });
 
   const handleCreatePartnership = async () => {
@@ -414,95 +425,137 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     setOpen(false);
   };
 
-  // FIX: Check if officer is on PTO before rendering partnership manager
-  if (officer.hasPTO && officer.ptoData?.isFullShift) {
-    console.log("📋 Officer is on full day PTO, hiding partnership manager:", officer.name);
-    return null;
-  }
-
-  // FIX: Check if partnership exists and partnerData is available
-  const hasValidPartnership = officer.isPartnership && officer.partnerData && officer.partnerData.partnerName;
-
-  if (!hasValidPartnership) {
+  // FIX: Render different UI based on partnership status
+  if (hasActivePartnership) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" className="h-7">
+          <Button variant="outline" size="sm" className="h-7 bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
             <Users className="h-3 w-3 mr-1" />
-            Add Partner
+            Manage Partner
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Partnership</DialogTitle>
+            <DialogTitle>Manage Partnership</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
-            <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select Probationary partner" />
-              </SelectTrigger>
-              <SelectContent>
-                {isLoading ? (
-                  <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
-                ) : error ? (
-                  <div className="p-2 text-sm text-red-600">
-                    Error loading officers: {error.message}
-                  </div>
-                ) : !availablePartners || availablePartners.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground space-y-2">
-                    <div>No available Probationary officers on this shift</div>
-                    <div className="text-xs text-amber-600">
-                      Check browser console (F12) for debugging details
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-2">
-                      Shift: {officer.shift.name} ({officer.shift.start_time} - {officer.shift.end_time})
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-xs text-muted-foreground p-2 border-b">
-                      Select a Probationary officer to partner with
-                    </div>
-                    {availablePartners.map((partner) => (
-                      <SelectItem key={partner.id} value={partner.id}>
-                        <div className="flex flex-col py-1">
-                          <span className="font-medium">{partner.full_name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {partner.badge_number && `Badge: ${partner.badge_number}`}
-                            {partner.rank && ` • ${partner.rank}`}
-                            {partner.source && ` • ${partner.source}`}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-            
-            <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
-              <div className="font-medium mb-1">Requirements:</div>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>Officer must be marked as "Probationary"</li>
-                <li>Officer must be scheduled for this shift</li>
-                <li>Officer must not already be in a partnership</li>
-                <li>Officer must not be on PTO/off duty</li>
-              </ul>
+            <div className="p-3 border rounded-lg bg-blue-50">
+              <p className="font-medium">Current Partner:</p>
+              <p>{officer.partnerData?.partnerName || 'Unknown Partner'} ({officer.partnerData?.partnerBadge || 'N/A'})</p>
+              <p className="text-sm text-muted-foreground">{officer.partnerData?.partnerRank || 'Unknown Rank'}</p>
+              {officer.partnerData?.partnerRank?.toLowerCase().includes('probationary') && (
+                <Badge variant="outline" className="mt-1 bg-yellow-100 text-yellow-800 border-yellow-300">
+                  Probationary Officer
+                </Badge>
+              )}
             </div>
-            
             <Button 
-              onClick={handleCreatePartnership}
-              disabled={!selectedPartner || isLoading}
+              variant="destructive" 
+              onClick={handleRemovePartnership}
               className="w-full"
             >
-              Create Partnership
+              Remove Partnership
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     );
   }
+
+  // FIX: For suspended partnerships, show different UI
+  if (hasSuspendedPartnership) {
+    return (
+      <div className="text-sm text-amber-600">
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+          <AlertTriangle className="h-3 w-3 mr-1" />
+          Partnership Suspended
+        </Badge>
+        <p className="text-xs mt-1">{officer.partnershipSuspensionReason || 'Partner unavailable'}</p>
+      </div>
+    );
+  }
+
+  // Regular UI for officers without partnerships
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7">
+          <Users className="h-3 w-3 mr-1" />
+          Add Partner
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Partnership</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <Select value={selectedPartner} onValueChange={setSelectedPartner}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Probationary partner" />
+            </SelectTrigger>
+            <SelectContent>
+              {isLoading ? (
+                <div className="p-2 text-sm text-muted-foreground">Loading Probationary officers...</div>
+              ) : error ? (
+                <div className="p-2 text-sm text-red-600">
+                  Error loading officers: {error.message}
+                </div>
+              ) : !availablePartners || availablePartners.length === 0 ? (
+                <div className="p-2 text-sm text-muted-foreground space-y-2">
+                  <div>No available Probationary officers on this shift</div>
+                  <div className="text-xs text-amber-600">
+                    Check browser console (F12) for debugging details
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Shift: {officer.shift.name} ({officer.shift.start_time} - {officer.shift.end_time})
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-xs text-muted-foreground p-2 border-b">
+                    Select a Probationary officer to partner with
+                  </div>
+                  {availablePartners.map((partner) => (
+                    <SelectItem key={partner.id} value={partner.id}>
+                      <div className="flex flex-col py-1">
+                        <span className="font-medium">{partner.full_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {partner.badge_number && `Badge: ${partner.badge_number}`}
+                          {partner.rank && ` • ${partner.rank}`}
+                          {partner.source && ` • ${partner.source}`}
+                        </span>
+                      </SelectItem>
+                  ))}
+                </>
+              )}
+            </SelectContent>
+          </Select>
+          
+          <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
+            <div className="font-medium mb-1">Requirements:</div>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Officer must be marked as "Probationary"</li>
+              <li>Officer must be scheduled for this shift</li>
+              <li>Officer must not already be in a partnership</li>
+              <li>Officer must not be on PTO/off duty</li>
+            </ul>
+          </div>
+          
+          <Button 
+            onClick={handleCreatePartnership}
+            disabled={!selectedPartner || isLoading}
+            className="w-full"
+          >
+            Create Partnership
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

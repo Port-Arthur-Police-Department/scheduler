@@ -239,163 +239,147 @@ const { data: availablePartners, isLoading, error } = useQuery({
     const dayOfWeek = parseISO(dateToUse).getDay();
     const currentDate = parseISO(dateToUse);
 
-    console.log("🤝 === ENHANCED PPO AVAILABILITY QUERY ===");
+    console.log("🤝 === DATE-SPECIFIC PPO AVAILABILITY QUERY ===");
     console.log("Date:", dateToUse, "Day of week:", dayOfWeek, "Shift ID:", officer.shift.id);
 
-    // STEP 1: Get PPO officers from recurring schedules for this day/shift
-    const { data: recurringPPOs, error: recurringError } = await supabase
-      .from("recurring_schedules")
-      .select(`
-        id,
-        officer_id,
-        is_partnership,
-        partner_officer_id,
-        day_of_week,
-        start_date,
-        end_date,
-        profiles!recurring_schedules_officer_id_fkey (
-          id,
-          full_name,
-          badge_number,
-          rank
-        )
-      `)
-      .eq("shift_type_id", officer.shift.id)
-      .eq("day_of_week", dayOfWeek)
-      .neq("officer_id", officer.officerId)
-      .lte("start_date", dateToUse)
-      .or(`end_date.is.null,end_date.gte.${dateToUse}`);
+    // First, get all PPO profiles
+    const { data: allPPOs, error: pposError } = await supabase
+      .from("profiles")
+      .select("id, full_name, badge_number, rank")
+      .eq("rank", "Probationary")
+      .eq("active", true);
 
-    if (recurringError) {
-      console.error("❌ Error fetching recurring PPOs:", recurringError);
-      throw recurringError;
+    if (pposError) {
+      console.error("❌ Error fetching PPO profiles:", pposError);
+      throw pposError;
     }
 
-    console.log("📅 Recurring PPOs found:", recurringPPOs?.map(p => ({
-      name: p.profiles?.full_name,
-      rank: p.profiles?.rank,
-      startDate: p.start_date,
-      endDate: p.end_date,
-      isPartnership: p.is_partnership
-    })));
+    console.log("👮 All active PPOs in system:", allPPOs);
 
-    // STEP 2: Get PPO officers from schedule exceptions for this date/shift
-    const { data: exceptionPPOs, error: exceptionError } = await supabase
-      .from("schedule_exceptions")
-      .select(`
-        id,
-        officer_id,
-        is_partnership,
-        partner_officer_id,
-        is_off,
-        date,
-        profiles!schedule_exceptions_officer_id_fkey (
-          id,
-          full_name,
-          badge_number,
-          rank
-        )
-      `)
-      .eq("date", dateToUse)
-      .eq("shift_type_id", officer.shift.id)
-      .eq("is_off", false)  // Not on PTO
-      .neq("officer_id", officer.officerId);
-
-    if (exceptionError) {
-      console.error("❌ Error fetching exception PPOs:", exceptionError);
-      throw exceptionError;
-    }
-
-    console.log("📅 Exception PPOs found:", exceptionPPOs?.map(p => ({
-      name: p.profiles?.full_name,
-      rank: p.profiles?.rank,
-      isPartnership: p.is_partnership,
-      isOff: p.is_off
-    })));
-
-    // Combine and filter PPOs
     const availablePPOs = [];
 
-    // Process recurring PPOs (only if not overridden by exception)
-    if (recurringPPOs) {
-      for (const recurring of recurringPPOs) {
-        if (!recurring.profiles) continue;
-        
-        // Check if this officer is a PPO
-        const isPPO = recurring.profiles.rank === 'Probationary';
-        if (!isPPO) continue;
-        
-        // Check if officer has an exception that overrides their recurring schedule
-        const hasException = exceptionPPOs?.find(e => 
-          e.officer_id === recurring.officer_id && e.date === dateToUse
-        );
-        
-        // Skip if they have an exception (it will be processed separately)
-        if (hasException) {
-          console.log(`⏸️ Skipping recurring - has exception: ${recurring.profiles.full_name}`);
-          continue;
-        }
-        
-        // Check if they're already partnered
-        const alreadyPartnered = recurring.is_partnership || recurring.partner_officer_id;
-        if (alreadyPartnered) {
-          console.log(`❌ Skipping recurring - already partnered: ${recurring.profiles.full_name}`);
-          continue;
-        }
-        
-        // Valid available PPO from recurring schedule
-        availablePPOs.push({
-          id: recurring.officer_id,
-          full_name: recurring.profiles.full_name,
-          badge_number: recurring.profiles.badge_number,
-          rank: recurring.profiles.rank,
-          scheduleId: recurring.id,
-          source: 'recurring',
-          type: 'recurring'
-        });
+    // Check each PPO individually
+    for (const ppo of allPPOs || []) {
+      if (ppo.id === officer.officerId) {
+        console.log(`⏸️ Skipping self: ${ppo.full_name}`);
+        continue;
       }
-    }
 
-    // Process exception PPOs
-    if (exceptionPPOs) {
-      for (const exception of exceptionPPOs) {
-        if (!exception.profiles) continue;
-        
-        // Check if this officer is a PPO
-        const isPPO = exception.profiles.rank === 'Probationary';
-        if (!isPPO) continue;
-        
+      console.log(`\n--- Checking ${ppo.full_name} for availability ---`);
+
+      // 1. Check if PPO has a schedule exception for this date/shift
+      const { data: exception, error: exceptionError } = await supabase
+        .from("schedule_exceptions")
+        .select("id, is_partnership, partner_officer_id, is_off")
+        .eq("officer_id", ppo.id)
+        .eq("date", dateToUse)
+        .eq("shift_type_id", officer.shift.id)
+        .maybeSingle();
+
+      if (exceptionError) {
+        console.error(`Error checking exceptions for ${ppo.full_name}:`, exceptionError);
+        continue;
+      }
+
+      if (exception) {
+        console.log(`   Found schedule exception:`, {
+          isPartnership: exception.is_partnership,
+          partnerOfficerId: exception.partner_officer_id,
+          isOff: exception.is_off
+        });
+
         // Skip if on PTO
         if (exception.is_off) {
-          console.log(`⏸️ Skipping exception - on PTO: ${exception.profiles.full_name}`);
+          console.log(`   ❌ Skipping - on PTO`);
           continue;
         }
-        
-        // Check if they're already partnered
-        const alreadyPartnered = exception.is_partnership || exception.partner_officer_id;
-        if (alreadyPartnered) {
-          console.log(`❌ Skipping exception - already partnered: ${exception.profiles.full_name}`);
+
+        // Skip if already partnered in exception
+        if (exception.is_partnership || exception.partner_officer_id) {
+          console.log(`   ❌ Skipping - already partnered via exception`);
           continue;
         }
-        
-        // Valid available PPO from exception
+
+        // PPO is available via exception (not partnered, not on PTO)
         availablePPOs.push({
-          id: exception.officer_id,
-          full_name: exception.profiles.full_name,
-          badge_number: exception.profiles.badge_number,
-          rank: exception.profiles.rank,
+          id: ppo.id,
+          full_name: ppo.full_name,
+          badge_number: ppo.badge_number,
+          rank: ppo.rank,
           scheduleId: exception.id,
           source: 'exception',
           type: 'exception'
         });
+        console.log(`   ✅ Available via exception`);
+        continue;
       }
+
+      // 2. Check if PPO has a recurring schedule for this day/shift
+      const { data: recurring, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select("id, is_partnership, partner_officer_id, start_date, end_date")
+        .eq("officer_id", ppo.id)
+        .eq("shift_type_id", officer.shift.id)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle();
+
+      if (recurringError) {
+        console.error(`Error checking recurring for ${ppo.full_name}:`, recurringError);
+        continue;
+      }
+
+      if (recurring) {
+        console.log(`   Found recurring schedule:`, {
+          isPartnership: recurring.is_partnership,
+          partnerOfficerId: recurring.partner_officer_id,
+          startDate: recurring.start_date,
+          endDate: recurring.end_date
+        });
+
+        // Check date range
+        const startDate = parseISO(recurring.start_date);
+        const endDate = recurring.end_date ? parseISO(recurring.end_date) : null;
+        
+        if (currentDate < startDate) {
+          console.log(`   ❌ Skipping - date ${dateToUse} is before schedule start ${recurring.start_date}`);
+          continue;
+        }
+        
+        if (endDate && currentDate > endDate) {
+          console.log(`   ❌ Skipping - date ${dateToUse} is after schedule end ${recurring.end_date}`);
+          continue;
+        }
+
+        // Skip if already partnered in recurring
+        if (recurring.is_partnership || recurring.partner_officer_id) {
+          console.log(`   ❌ Skipping - already partnered in recurring schedule`);
+          continue;
+        }
+
+        // PPO is available via recurring schedule
+        availablePPOs.push({
+          id: ppo.id,
+          full_name: ppo.full_name,
+          badge_number: ppo.badge_number,
+          rank: ppo.rank,
+          scheduleId: recurring.id,
+          source: 'recurring',
+          type: 'recurring',
+          start_date: recurring.start_date,
+          end_date: recurring.end_date
+        });
+        console.log(`   ✅ Available via recurring schedule`);
+        continue;
+      }
+
+      // 3. PPO is not scheduled at all for this shift
+      console.log(`   ⚠️ Not scheduled for this shift/day`);
     }
 
-    console.log("✅ FINAL available PPO partners:", availablePPOs.map(p => ({
+    console.log("\n✅ FINAL available PPO partners:", availablePPOs.map(p => ({
       name: p.full_name,
-      rank: p.rank,
-      source: p.source,
-      type: p.type
+      badge: p.badge_number,
+      source: p.source
     })));
 
     // Sort by last name
@@ -409,7 +393,6 @@ const { data: availablePartners, isLoading, error } = useQuery({
   },
   enabled: open && !emergencyMode && !hasActivePartnership,
 });
-
   
   const handleCreatePartnership = async () => {
     if (!selectedPartner) return;

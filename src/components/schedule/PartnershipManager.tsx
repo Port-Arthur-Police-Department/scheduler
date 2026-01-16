@@ -66,13 +66,14 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
  const isOfficerPPO = isPPOByRank(officer.officer_rank);
 
 // In the emergency partners query:
+// In the emergency partners query:
 const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyError } = useQuery({
   queryKey: ["emergency-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
   queryFn: async () => {
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
     
-    // Get exceptions data - USE 'rank' NOT 'officer_rank'
+    // Get exceptions data
     const { data: exceptionsData, error: exceptionsError } = await supabase
       .from("schedule_exceptions")
       .select(`
@@ -85,7 +86,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
           id,
           full_name,
           badge_number,
-          rank 
+          rank  // <-- CHANGED FROM officer_rank TO rank
         )
       `)
       .eq("date", dateToUse)
@@ -111,7 +112,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
           id: record.officer_id,
           name: record.profiles.full_name,
           badge: record.profiles.badge_number,
-          rank: record.profiles.officer_rank, // <-- CHANGE HERE
+          rank: record.profiles.rank, // <-- CHANGED FROM officer_rank TO rank
           isOff: record.is_off,
           isPartnership: record.is_partnership,
           partnershipSuspended: record.partnership_suspended,
@@ -128,11 +129,11 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
         id,
         officer_id,
         is_partnership,
-        profiles:profiles!recurring_schedules_officer_id_fkey (
+        profiles!recurring_schedules_officer_id_fkey (
           id,
           full_name,
           badge_number,
-          officer_rank  // <-- CHANGE HERE
+          rank  // <-- CHANGED FROM officer_rank TO rank
         )
       `)
       .eq("shift_type_id", officer.shift.id)
@@ -159,7 +160,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
           id: record.officer_id,
           name: record.profiles.full_name,
           badge: record.profiles.badge_number,
-          rank: record.profiles.officer_rank, // <-- CHANGE HERE
+          rank: record.profiles.rank, 
           isOff: false,
           isPartnership: record.is_partnership,
           partnershipSuspended: false,
@@ -172,7 +173,9 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     // Filter for available emergency partners
     const emergencyPartners = allOfficers.filter(officerRecord => {
       // Skip if officer is a PPO
-      const isPartnerPPO = isPPOByRank(officerRecord.rank);
+      // Convert rank to string if it's an enum
+      const rankValue = officerRecord.rank?.toString() || '';
+      const isPartnerPPO = isPPOByRank(rankValue);
       if (isPartnerPPO) return false;
       
       // Skip if already in an active partnership

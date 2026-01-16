@@ -25,7 +25,7 @@ import { useEffect } from "react";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
 import { PartnershipManager } from "./PartnershipManager";
-import { isPPOByRank } from "@/utils/sortingUtils";
+import { isPPOByRank } from "@/utils/ppoUtils";
 
 interface DailyScheduleViewProps {
   selectedDate: Date;

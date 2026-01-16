@@ -1,17 +1,15 @@
 // In src/utils/ppoUtils.ts
-export const isPPOByRank = (rank: string | undefined | null): boolean => {
+export const isPPOByRank = (rank: any): boolean => {
   if (!rank) return false;
   
-  const rankLower = rank.toLowerCase().trim();
+  // Convert to string if it's an enum/object
+  const rankString = typeof rank === 'string' ? rank : rank?.toString?.() || '';
+  const rankLower = rankString.toLowerCase().trim();
   
   return (
     rankLower === 'probationary' ||
     rankLower.includes('probationary') ||
     rankLower.includes('ppo') ||
-    rankLower.includes('probation') ||
-    rankLower === 'ppo' ||
-    rankLower.includes('probationary officer') ||
-    rankLower.includes('probationary peace officer') ||
-    rankLower.includes('probationary police officer')
+    rankLower === 'ppo'
   );
 };

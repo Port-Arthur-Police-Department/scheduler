@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Users, AlertTriangle } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
-import { isPPOByRank } from "@/utils/sortingUtils";
+import { isPPOByRank } from "@/utils/ppoUtils";
 
 interface PartnershipManagerProps {
   officer: any;
@@ -63,7 +63,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   // Check partnership status
   const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended;
   const hasSuspendedPartnership = officer.isPartnership && officer.partnershipSuspended;
-  const isOfficerPPO = isPPOByRank(officer.rank);
+ const isOfficerPPO = isPPOByRank(officer.officer_rank);
 
   // Emergency partner query (regular officers, not PPOs)
   const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyError } = useQuery({

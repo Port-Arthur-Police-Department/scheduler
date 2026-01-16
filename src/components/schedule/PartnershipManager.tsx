@@ -191,14 +191,14 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
 
 // For the regular query:
 const { data: availablePartners, isLoading, error } = useQuery({
-  queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
+  queryKey: ["available-ppo-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
   queryFn: async () => {
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
 
-    console.log("🤝 === ENUM RANK PPO QUERY ===");
+    console.log("🤝 === PPO-SPECIFIC PARTNERSHIP QUERY ===");
     
-    // Get all scheduled officers for this shift/day
+    // SPECIFICALLY look for Probationary officers scheduled today
     const { data: scheduledOfficers, error } = await supabase
       .from("recurring_schedules")
       .select(`
@@ -224,43 +224,57 @@ const { data: availablePartners, isLoading, error } = useQuery({
       throw error;
     }
 
-    console.log("📅 All scheduled officers:", scheduledOfficers?.map(s => ({
+    console.log("📅 ALL scheduled officers (including PPOs):", scheduledOfficers?.map(s => ({
       name: s.profiles?.full_name,
       rank: s.profiles?.rank,
-      rankType: typeof s.profiles?.rank,
-      isPartnership: s.is_partnership
+      isPartnership: s.is_partnership,
+      partnerOfficerId: s.partner_officer_id
     })));
 
-    // Filter for available PPOs
+    // Filter ONLY for Probationary officers who are available
     const availablePPOs = (scheduledOfficers || [])
       .filter(schedule => {
         if (!schedule.profiles) return false;
         
-        // Check if officer is a PPO - rank is an enum, convert to string
+        // CRITICAL: Only include Probationary officers
         const rankValue = schedule.profiles.rank?.toString() || '';
-        const isPPO = isPPOByRank(rankValue);
+        const isProbationary = rankValue === 'Probationary';
+        
+        // They must NOT already be in a partnership
         const alreadyPartnered = schedule.is_partnership || schedule.partner_officer_id;
         
-        console.log(`Checking ${schedule.profiles.full_name}:`, {
-          rankRaw: schedule.profiles.rank,
-          rankString: rankValue,
-          isPPO,
+        console.log(`Checking ${schedule.profiles.full_name} for partnership:`, {
+          rank: rankValue,
+          isProbationary,
           alreadyPartnered
         });
         
-        return isPPO && !alreadyPartnered;
+        // Return true ONLY if Probationary AND not partnered
+        return isProbationary && !alreadyPartnered;
       })
       .map(schedule => ({
         id: schedule.officer_id,
         full_name: schedule.profiles?.full_name,
         badge_number: schedule.profiles?.badge_number,
-        rank: schedule.profiles?.rank?.toString() || '', // Convert enum to string
+        rank: schedule.profiles?.rank?.toString() || '',
         scheduleId: schedule.id,
         source: 'recurring'
       }))
       .sort((a, b) => getLastName(a.full_name).localeCompare(getLastName(b.full_name)));
 
-    console.log("✅ Available PPO partners:", availablePPOs);
+    console.log("✅ Available PPO partners for pairing:", availablePPOs);
+    
+    // If no PPOs found, check if there are any PPOs in the system at all
+    if (availablePPOs.length === 0) {
+      console.log("⚠️ No available PPOs found. Checking if any PPOs exist in system...");
+      
+      const { data: allPPOsInSystem } = await supabase
+        .from("profiles")
+        .select("id, full_name, rank")
+        .eq("rank", "Probationary");
+      
+      console.log("👮 All Probationary officers in system:", allPPOsInSystem);
+    }
     
     return availablePPOs;
   },

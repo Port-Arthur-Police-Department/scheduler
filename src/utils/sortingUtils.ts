@@ -167,12 +167,11 @@ export const isPPO = (officer: OfficerForSorting): boolean => {
  * Comprehensive PPO detection function
  * Use this consistently across the entire application
  */
-export const isPPOByRank = (rank: string | undefined | null): boolean => {
+const isPPOByRank = (rank: string | undefined | null): boolean => {
   if (!rank) return false;
   
   const rankLower = rank.toLowerCase().trim();
   
-  // Comprehensive PPO matching patterns
   return (
     rankLower === 'probationary' ||
     rankLower.includes('probationary') ||
@@ -180,10 +179,15 @@ export const isPPOByRank = (rank: string | undefined | null): boolean => {
     rankLower.includes('probation') ||
     rankLower === 'ppo' ||
     rankLower.includes('probationary officer') ||
-    rankLower.includes('probationary peace officer') ||
-    rankLower.includes('probationary police officer') ||
-    rankLower.includes('probationary patrol officer')
+    rankLower.includes('probationary peace officer')
   );
+};
+
+// Also update your isPPO function in useScheduleMutations.ts:
+const isPPO = (rank: string | undefined | null): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  return rankLower.includes('probationary') || rankLower.includes('ppo');
 };
 
 /**

@@ -74,3 +74,146 @@ Please help me modify the mobile version to match the desktop functionality.
 * I need help with making these changes, can you make the changes in full code blocks and give me the code to copy and paste in my project with the start and end code line so I know what code to replace with  the new code?
 
 ## I'll update both the desktop and mobile versions to sort officers by service credit (descending) and then by badge number (ascending, lower number = higher seniority) when service credit is equal.
+
+## I have a Supabase database for a police department schedule management system with the following structure:
+
+1. Table: profiles
+Purpose: Stores officer information
+
+Key Columns:
+
+id (uuid, primary key)
+
+full_name (text, NOT NULL)
+
+badge_number (text)
+
+rank (USER-DEFINED enum, values: 'Officer', 'Probationary', 'Sergeant', 'Lieutenant', 'Deputy Chief', 'Chief')
+
+role (text, default: 'officer')
+
+active (boolean, default: true)
+
+hire_date (date)
+
+service_credit_override (numeric)
+
+Various PTO hour columns (pto_hours_balance, sick_hours, comp_hours, vacation_hours, holiday_hours)
+
+2. Table: recurring_schedules
+Purpose: Stores recurring weekly schedules for officers
+
+Key Columns:
+
+id (uuid, primary key)
+
+officer_id (uuid, foreign key to profiles.id)
+
+shift_type_id (uuid, foreign key to shift_types.id)
+
+day_of_week (integer, NOT NULL)
+
+start_date (date, NOT NULL)
+
+end_date (date)
+
+is_partnership (boolean, default: false)
+
+partner_officer_id (uuid, foreign key to profiles.id)
+
+position_name (text)
+
+unit_number (text)
+
+3. Table: schedule_exceptions
+Purpose: Stores one-off schedule changes, PTO, and overrides
+
+Key Columns:
+
+id (uuid, primary key)
+
+officer_id (uuid, foreign key to profiles.id)
+
+date (date)
+
+shift_type_id (uuid, foreign key to shift_types.id)
+
+is_off (boolean)
+
+is_partnership (boolean)
+
+partnership_suspended (boolean)
+
+partner_officer_id (uuid, foreign key to profiles.id)
+
+position_name (text)
+
+reason (text, for PTO types)
+
+custom_start_time (text)
+
+custom_end_time (text)
+
+4. Table: shift_types
+Purpose: Defines different shifts (e.g., Day Shift, Evening Shift)
+
+Key Columns:
+
+id (uuid, primary key)
+
+name (text)
+
+start_time (text)
+
+end_time (text)
+
+5. Table: partnership_exceptions
+Purpose: Logs partnership changes and suspensions
+
+Key Columns:
+
+officer_id (uuid, foreign key to profiles.id)
+
+partner_officer_id (uuid, foreign key to profiles.id)
+
+date (date)
+
+shift_type_id (uuid, foreign key to shift_types.id)
+
+exception_type (text)
+
+reason (text)
+
+resolved_at (timestamp)
+
+Key Relationships:
+recurring_schedules.officer_id → profiles.id
+
+recurring_schedules.partner_officer_id → profiles.id
+
+schedule_exceptions.officer_id → profiles.id
+
+schedule_exceptions.partner_officer_id → profiles.id
+
+Important Notes:
+Rank System: The rank column in profiles is an ENUM type with specific values. Probationary officers (PPOs) have rank = 'Probationary'.
+
+Partnerships: Officers can be partnered via is_partnership flag in both recurring_schedules and schedule_exceptions.
+
+PPO Rules: Probationary officers must always be partnered and cannot work alone.
+
+Schedule Priority: schedule_exceptions override recurring_schedules for specific dates.
+
+PTO Handling: When an officer takes PTO, their partnership is suspended and logged in partnership_exceptions.
+
+Queries to Check:
+sql
+-- Check profile structure
+SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'profiles';
+
+-- Check foreign keys
+SELECT tc.table_name, kcu.column_name, ccu.table_name AS foreign_table_name
+FROM information_schema.table_constraints AS tc 
+JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY';

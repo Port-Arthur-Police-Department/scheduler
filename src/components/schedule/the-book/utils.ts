@@ -6,7 +6,8 @@ import {
   sortOfficersConsistently, 
   getServiceCreditForSorting,
   type OfficerForSorting,
-  isSupervisor as isSupervisorFromSortingUtils
+  isSupervisor as isSupervisorFromSortingUtils,
+  isPPO as isPPOFromSortingUtils 
 } from "@/utils/sortingUtils";
 
 // Re-export from scheduleUtils

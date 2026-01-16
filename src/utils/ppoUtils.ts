@@ -1,15 +1,9 @@
-// In src/utils/ppoUtils.ts
 export const isPPOByRank = (rank: any): boolean => {
   if (!rank) return false;
   
-  // Convert to string if it's an enum/object
-  const rankString = typeof rank === 'string' ? rank : rank?.toString?.() || '';
-  const rankLower = rankString.toLowerCase().trim();
+  // Convert to string if it's an enum
+  const rankString = typeof rank === 'string' ? rank : rank?.toString() || '';
   
-  return (
-    rankLower === 'probationary' ||
-    rankLower.includes('probationary') ||
-    rankLower.includes('ppo') ||
-    rankLower === 'ppo'
-  );
+  // Since it's an enum, we can do exact comparison
+  return rankString === 'Probationary';
 };

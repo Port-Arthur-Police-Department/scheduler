@@ -19,7 +19,7 @@ interface UpdateScheduleParams {
   isPartnership?: boolean;
 }
 
-const isOfficerPPO = isPPOByRank(rank);
+const isPPO = isPPOByRank;
 
 // Helper function to calculate hours
 const calculateHours = (start: string, end: string) => {

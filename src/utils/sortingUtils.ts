@@ -1,4 +1,5 @@
 // src/utils/sortingUtils.ts
+import { isPPOByRank } from "@/utils/ppoUtils";
 
 // Helper function to extract last name
 const getLastName = (fullName: string = ""): string => {
@@ -153,42 +154,7 @@ export const isSupervisor = (officer: OfficerForSorting): boolean => {
          rank.includes('sgt');
 };
 
-/**
- * Check if officer is a PPO
- */
-export const isPPO = (officer: OfficerForSorting): boolean => {
-  const rank = officer.rank?.toLowerCase() || '';
-  return rank === 'probationary' || rank.includes('ppo');
-};
 
-// Add to src/utils/sortingUtils.ts
-
-/**
- * Comprehensive PPO detection function
- * Use this consistently across the entire application
- */
-const isPPOByRank = (rank: string | undefined | null): boolean => {
-  if (!rank) return false;
-  
-  const rankLower = rank.toLowerCase().trim();
-  
-  return (
-    rankLower === 'probationary' ||
-    rankLower.includes('probationary') ||
-    rankLower.includes('ppo') ||
-    rankLower.includes('probation') ||
-    rankLower === 'ppo' ||
-    rankLower.includes('probationary officer') ||
-    rankLower.includes('probationary peace officer')
-  );
-};
-
-// Also update your isPPO function in useScheduleMutations.ts:
-const isPPO = (rank: string | undefined | null): boolean => {
-  if (!rank) return false;
-  const rankLower = rank.toLowerCase();
-  return rankLower.includes('probationary') || rankLower.includes('ppo');
-};
 
 /**
  * Get officer type with consistent logic

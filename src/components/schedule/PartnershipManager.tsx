@@ -72,7 +72,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
     
-    // Get exceptions data
+    // Get exceptions data - USE 'rank' NOT 'officer_rank'
     const { data: exceptionsData, error: exceptionsError } = await supabase
       .from("schedule_exceptions")
       .select(`
@@ -81,11 +81,11 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
         is_off,
         is_partnership,
         partnership_suspended,
-        profiles:officer_id (
+        profiles!schedule_exceptions_officer_id_fkey (
           id,
           full_name,
           badge_number,
-          officer_rank  // <-- CHANGE HERE
+          rank  // <-- USE 'rank'
         )
       `)
       .eq("date", dateToUse)
@@ -193,23 +193,21 @@ const { data: availablePartners, isLoading, error } = useQuery({
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
 
-    console.log("🤝 === UPDATED PPO PARTNERSHIP QUERY ===");
+    console.log("🤝 === CORRECTED PPO QUERY ===");
     
-    // Query scheduled officers with officer_rank
-    const { data: scheduledOfficers, error: scheduledError } = await supabase
+    // Get all scheduled officers for this shift/day
+    const { data: scheduledOfficers, error } = await supabase
       .from("recurring_schedules")
       .select(`
         id,
         officer_id,
         is_partnership,
         partner_officer_id,
-        start_date,
-        end_date,
-        profiles:profiles!recurring_schedules_officer_id_fkey (
+        profiles!recurring_schedules_officer_id_fkey (
           id,
           full_name,
           badge_number,
-          officer_rank
+          rank  // <-- USE 'rank' NOT 'officer_rank'
         )
       `)
       .eq("shift_type_id", officer.shift.id)
@@ -218,14 +216,14 @@ const { data: availablePartners, isLoading, error } = useQuery({
       .or(`end_date.is.null,end_date.gte.${dateToUse}`)
       .neq("officer_id", officer.officerId);
 
-    if (scheduledError) {
-      console.error("❌ Error fetching scheduled officers:", scheduledError);
-      throw scheduledError;
+    if (error) {
+      console.error("❌ Error fetching scheduled officers:", error);
+      throw error;
     }
 
-    console.log("📅 All officers scheduled for this shift/day:", scheduledOfficers?.map(s => ({
+    console.log("📅 All scheduled officers:", scheduledOfficers?.map(s => ({
       name: s.profiles?.full_name,
-      rank: s.profiles?.officer_rank, // <-- CHANGE HERE
+      rank: s.profiles?.rank,  // <-- USE 'rank'
       isPartnership: s.is_partnership,
       partnerOfficerId: s.partner_officer_id
     })));
@@ -235,13 +233,14 @@ const { data: availablePartners, isLoading, error } = useQuery({
       .filter(schedule => {
         if (!schedule.profiles) return false;
         
-        const isPPO = isPPOByRank(schedule.profiles.officer_rank); // <-- USE officer_rank
+        // Check if officer is a PPO - use the rank column
+        const isPPO = isPPOByRank(schedule.profiles.rank);  // <-- USE 'rank'
         const alreadyPartnered = schedule.is_partnership || schedule.partner_officer_id;
         
         console.log(`Checking ${schedule.profiles.full_name}:`, {
           isPPO,
           alreadyPartnered,
-          rank: schedule.profiles.officer_rank // <-- CHANGE HERE
+          rank: schedule.profiles.rank  // <-- USE 'rank'
         });
         
         return isPPO && !alreadyPartnered;
@@ -250,7 +249,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
         id: schedule.officer_id,
         full_name: schedule.profiles?.full_name,
         badge_number: schedule.profiles?.badge_number,
-        rank: schedule.profiles?.officer_rank, // <-- CHANGE HERE
+        rank: schedule.profiles?.rank,  // <-- USE 'rank'
         scheduleId: schedule.id,
         source: 'recurring'
       }))

@@ -19,13 +19,6 @@ interface UpdateScheduleParams {
   isPartnership?: boolean;
 }
 
-// Helper function to check if officer is PPO
-const isPPO = (rank: string | undefined | null): boolean => {
-  if (!rank) return false;
-  const rankLower = rank.toLowerCase();
-  return rankLower.includes('probationary') || rankLower.includes('ppo');
-};
-
 const isOfficerPPO = isPPOByRank(rank);
 
 // Helper function to calculate hours

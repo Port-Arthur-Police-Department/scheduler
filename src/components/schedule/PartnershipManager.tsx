@@ -209,7 +209,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
           id,
           full_name,
           badge_number,
-          officer_rank  // <-- CHANGE FROM rank TO officer_rank
+          officer_rank
         )
       `)
       .eq("shift_type_id", officer.shift.id)

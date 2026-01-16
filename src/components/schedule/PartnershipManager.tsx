@@ -193,7 +193,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
 
-    console.log("🤝 === CORRECTED PPO QUERY ===");
+    console.log("🤝 === ENUM RANK PPO QUERY ===");
     
     // Get all scheduled officers for this shift/day
     const { data: scheduledOfficers, error } = await supabase
@@ -207,7 +207,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
           id,
           full_name,
           badge_number,
-          rank 
+          rank
         )
       `)
       .eq("shift_type_id", officer.shift.id)
@@ -223,9 +223,9 @@ const { data: availablePartners, isLoading, error } = useQuery({
 
     console.log("📅 All scheduled officers:", scheduledOfficers?.map(s => ({
       name: s.profiles?.full_name,
-      rank: s.profiles?.rank,  
-      isPartnership: s.is_partnership,
-      partnerOfficerId: s.partner_officer_id
+      rank: s.profiles?.rank,
+      rankType: typeof s.profiles?.rank,
+      isPartnership: s.is_partnership
     })));
 
     // Filter for available PPOs
@@ -233,14 +233,16 @@ const { data: availablePartners, isLoading, error } = useQuery({
       .filter(schedule => {
         if (!schedule.profiles) return false;
         
-        // Check if officer is a PPO - use the rank column
-        const isPPO = isPPOByRank(schedule.profiles.rank);  
+        // Check if officer is a PPO - rank is an enum, convert to string
+        const rankValue = schedule.profiles.rank?.toString() || '';
+        const isPPO = isPPOByRank(rankValue);
         const alreadyPartnered = schedule.is_partnership || schedule.partner_officer_id;
         
         console.log(`Checking ${schedule.profiles.full_name}:`, {
+          rankRaw: schedule.profiles.rank,
+          rankString: rankValue,
           isPPO,
-          alreadyPartnered,
-          rank: schedule.profiles.rank  
+          alreadyPartnered
         });
         
         return isPPO && !alreadyPartnered;
@@ -249,7 +251,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
         id: schedule.officer_id,
         full_name: schedule.profiles?.full_name,
         badge_number: schedule.profiles?.badge_number,
-        rank: schedule.profiles?.rank, 
+        rank: schedule.profiles?.rank?.toString() || '', // Convert enum to string
         scheduleId: schedule.id,
         source: 'recurring'
       }))

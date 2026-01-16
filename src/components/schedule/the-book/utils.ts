@@ -1,13 +1,12 @@
 // src/components/schedule/the-book/utils.ts
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
 import { getLastName as getLastNameFromUtils } from "@/utils/scheduleUtils";
-// Import sorting utilities
+import { isPPOByRank } from "@/utils/ppoUtils";
 import { 
   sortOfficersConsistently, 
   getServiceCreditForSorting,
   type OfficerForSorting,
-  isSupervisor as isSupervisorFromSortingUtils,
-  isPPO as isPPOFromSortingUtils
+  isSupervisor as isSupervisorFromSortingUtils
 } from "@/utils/sortingUtils";
 
 // Re-export from scheduleUtils
@@ -47,7 +46,8 @@ export const isSupervisor = (officer: any): boolean => {
 
 // Alias to use the sorting utils version
 export const isPPO = (officer: any): boolean => {
-  return isPPOFromSortingUtils(officer);
+  const rank = officer.rank || officer.officer_rank || '';
+  return isPPOByRank(rank);
 };
 
 export const isSpecialAssignment = (position: string | undefined): boolean => {

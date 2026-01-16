@@ -19,8 +19,6 @@ interface UpdateScheduleParams {
   isPartnership?: boolean;
 }
 
-const isPPO = isPPOByRank;
-
 // Helper function to calculate hours
 const calculateHours = (start: string, end: string) => {
   const [startHour, startMin] = start.split(":").map(Number);
@@ -382,7 +380,7 @@ export const useScheduleMutations = (dateStr: string) => {
               is_partnership: true,
               is_off: false,
               schedule_type: "partnership_from_recurring",
-              position_name: isPPO(recurring.officer_profile?.rank) 
+              position_name: isPPOByRank(recurring.officer_profile?.rank) 
                 ? "Riding Partner (PPO)" 
                 : "Riding Partner"
             },
@@ -394,7 +392,7 @@ export const useScheduleMutations = (dateStr: string) => {
               is_partnership: true,
               is_off: false,
               schedule_type: "partnership_from_recurring",
-              position_name: isPPO(recurring.partner_profile?.rank) 
+              position_name: isPPOByRank(recurring.partner_profile?.rank) 
                 ? "Riding Partner (PPO)" 
                 : "Riding Partner"
             }
@@ -662,11 +660,11 @@ export const useScheduleMutations = (dateStr: string) => {
         // Use provided position, existing position, or default based on rank
         const officerPosition = position || 
                                existingOfficerSchedule?.position_name || 
-                               (isPPO(officerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+                               (isPPOByRank(officerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
         
         // For partner, use their existing position or default based on rank
         const partnerPosition = existingPartnerSchedule?.position_name || 
-                                (isPPO(partnerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+                                (isPPOByRank(partnerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
 
         // Create or update schedule exceptions for both officers
         const updates = [];

@@ -74,14 +74,14 @@ export const useScheduleMutations = (dateStr: string) => {
           .eq("officer_id", officerId)
           .eq("date", dateStr)
           .eq("shift_type_id", shiftId)
-          .single(),
+          .maybeSingle(),
         supabase
           .from("schedule_exceptions")
           .select("id, is_partnership, is_off")
           .eq("officer_id", partnerId)
           .eq("date", dateStr)
           .eq("shift_type_id", shiftId)
-          .single()
+          .maybeSingle()
       ]);
 
       const updates = [];
@@ -141,7 +141,7 @@ export const useScheduleMutations = (dateStr: string) => {
           .eq("officer_id", partnerId)
           .eq("shift_type_id", shiftId)
           .eq("day_of_week", dayOfWeek)
-          .single();
+          .maybeSingle();
 
         updates.push(
           supabase
@@ -218,7 +218,7 @@ export const useScheduleMutations = (dateStr: string) => {
         .eq("date", dateStr)
         .eq("shift_type_id", shiftId)
         .eq("partnership_suspended", true)
-        .single();
+        .maybeSingle();
 
       if (!suspendedPartnership?.partnership_suspended || !suspendedPartnership.partner_officer_id) {
         console.log("No suspended partnership found");
@@ -341,7 +341,7 @@ export const useScheduleMutations = (dateStr: string) => {
           .eq("date", dateStr)
           .eq("shift_type_id", recurring.shift_type_id)
           .eq("is_partnership", true)
-          .single();
+          .maybeSingle();
 
         if (existingPartnership) {
           console.log(`Skipping - partnership already exists for ${recurring.officer_profile?.full_name}`);
@@ -357,7 +357,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("date", dateStr)
             .eq("shift_type_id", recurring.shift_type_id)
             .eq("is_off", true)
-            .single(),
+            .maybeSingle(),
           supabase
             .from("schedule_exceptions")
             .select("id")
@@ -365,7 +365,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("date", dateStr)
             .eq("shift_type_id", recurring.shift_type_id)
             .eq("is_off", true)
-            .single()
+            .maybeSingle()
         ]);
 
         // If either officer is on PTO, don't create partnership
@@ -466,7 +466,7 @@ export const useScheduleMutations = (dateStr: string) => {
               .eq("date", params.date)
               .eq("shift_type_id", params.shiftTypeId)
               .eq("is_off", false)
-              .single();
+              .maybeSingle();
 
             if (partnerException) {
               await supabase
@@ -536,7 +536,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("officer_id", params.partnerOfficerId)
             .eq("date", params.date)
             .eq("shift_type_id", params.shiftTypeId)
-            .single();
+            .maybeSingle();
 
           if (partnerException) {
             await supabase
@@ -560,18 +560,18 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-  // Enhanced partnership mutation with PTO handling - FIXED: Create partnerships in schedule_exceptions with position preservation
+  // Enhanced partnership mutation with PTO handling, verification, and better error handling
   const updatePartnershipMutation = useMutation({
     mutationFn: async ({ 
       officer, 
       partnerOfficerId, 
       action,
-      position // Add position parameter
+      position
     }: { 
       officer: any; 
       partnerOfficerId?: string; 
       action: 'create' | 'remove' | 'emergency';
-      position?: string; // Optional position parameter
+      position?: string;
     }) => {
       console.log("🔄 Partnership mutation:", { 
         officerName: officer.name, 
@@ -599,7 +599,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
             .eq("is_off", true)
-            .single(),
+            .maybeSingle(),
           supabase
             .from("schedule_exceptions")
             .select("id")
@@ -607,7 +607,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
             .eq("is_off", true)
-            .single()
+            .maybeSingle()
         ]);
 
         if (officerPTO) {
@@ -622,20 +622,20 @@ export const useScheduleMutations = (dateStr: string) => {
         const [{ data: existingOfficerSchedule }, { data: existingPartnerSchedule }] = await Promise.all([
           supabase
             .from("schedule_exceptions")
-            .select("id, is_partnership, position_name, unit_number, notes")
+            .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
             .eq("officer_id", officer.officerId)
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
             .eq("is_off", false)
-            .single(),
+            .maybeSingle(),
           supabase
             .from("schedule_exceptions")
-            .select("id, is_partnership, position_name, unit_number, notes")
+            .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
             .eq("officer_id", partnerOfficerId)
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
             .eq("is_off", false)
-            .single()
+            .maybeSingle()
         ]);
 
         // Check if officer already has a partnership
@@ -685,7 +685,7 @@ export const useScheduleMutations = (dateStr: string) => {
                 is_partnership: true,
                 partner_officer_id: partnerOfficerId,
                 position_name: officerPosition,
-                schedule_type: "manual_partnership"
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership'
                 // Keep existing unit_number and notes
               })
               .eq("id", existingOfficerSchedule.id)
@@ -705,7 +705,7 @@ export const useScheduleMutations = (dateStr: string) => {
                 position_name: officerPosition,
                 unit_number: officer.unitNumber || null,
                 notes: officer.notes || null,
-                schedule_type: "manual_partnership",
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership',
                 custom_start_time: null,
                 custom_end_time: null
               })
@@ -722,7 +722,7 @@ export const useScheduleMutations = (dateStr: string) => {
                 is_partnership: true,
                 partner_officer_id: officer.officerId,
                 position_name: partnerPosition,
-                schedule_type: "manual_partnership"
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership'
                 // Keep existing unit_number and notes
               })
               .eq("id", existingPartnerSchedule.id)
@@ -740,9 +740,9 @@ export const useScheduleMutations = (dateStr: string) => {
                 is_partnership: true,
                 partner_officer_id: officer.officerId,
                 position_name: partnerPosition,
-                unit_number: officer.partnerUnitNumber || null, // You might want to add this to the parameters
-                notes: officer.partnerNotes || null, // You might want to add this to the parameters
-                schedule_type: "manual_partnership",
+                unit_number: officer.partnerUnitNumber || null,
+                notes: officer.partnerNotes || null,
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership',
                 custom_start_time: null,
                 custom_end_time: null
               })
@@ -757,6 +757,42 @@ export const useScheduleMutations = (dateStr: string) => {
           console.error("Errors creating partnership:", errors);
           throw new Error(`Failed to create partnership: ${errors[0]?.message}`);
         }
+
+        // VERIFY partnership was created correctly
+        const verificationPromises = [
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, partner_officer_id, position_name")
+            .eq("officer_id", officer.officerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .single(),
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, partner_officer_id, position_name")
+            .eq("officer_id", partnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .single()
+        ];
+
+        const verificationResults = await Promise.all(verificationPromises);
+        
+        const [officerVerification, partnerVerification] = verificationResults;
+        
+        if (officerVerification.error || !officerVerification.data?.is_partnership) {
+          console.error("❌ Officer partnership verification failed:", officerVerification.error);
+          throw new Error("Failed to verify officer partnership creation");
+        }
+        
+        if (partnerVerification.error || !partnerVerification.data?.is_partnership) {
+          console.error("❌ Partner partnership verification failed:", partnerVerification.error);
+          throw new Error("Failed to verify partner partnership creation");
+        }
+
+        console.log("✅ Partnership verified for both officers");
 
         // Log partnership creation
         await supabase
@@ -773,6 +809,14 @@ export const useScheduleMutations = (dateStr: string) => {
 
         console.log(`✅ Partnership created: ${officerProfile?.full_name} ↔ ${partnerProfile?.full_name}`);
 
+        return {
+          success: true,
+          officerName: officerProfile?.full_name,
+          partnerName: partnerProfile?.full_name,
+          officerPosition: officerPosition,
+          partnerPosition: partnerPosition
+        };
+
       } else if (action === 'remove') {
         console.log("Removing partnership for officer:", officer.officerId);
         
@@ -788,7 +832,7 @@ export const useScheduleMutations = (dateStr: string) => {
           .eq("date", targetDate)
           .eq("shift_type_id", shiftId)
           .eq("is_off", false)
-          .single();
+          .maybeSingle();
 
         // Remove partnership from officer's schedule exception
         const { error: officerError } = await supabase
@@ -799,9 +843,10 @@ export const useScheduleMutations = (dateStr: string) => {
             partnership_suspended: false,
             partnership_suspension_reason: null,
             // If it was a manual partnership, keep the position, otherwise reset to null
-            position_name: officerSchedule?.schedule_type === "manual_partnership" 
-              ? null 
-              : officerSchedule?.position_name
+            position_name: officerSchedule?.schedule_type === "manual_partnership" || 
+                          officerSchedule?.schedule_type === "emergency_partnership" 
+                          ? null 
+                          : officerSchedule?.position_name
           })
           .eq("officer_id", officer.officerId)
           .eq("date", targetDate)
@@ -827,7 +872,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
             .eq("is_off", false)
-            .single();
+            .maybeSingle();
 
           const { error: partnerError } = await supabase
             .from("schedule_exceptions")
@@ -837,9 +882,10 @@ export const useScheduleMutations = (dateStr: string) => {
               partnership_suspended: false,
               partnership_suspension_reason: null,
               // If it was a manual partnership, keep the position, otherwise reset to null
-              position_name: partnerSchedule?.schedule_type === "manual_partnership" 
-                ? null 
-                : partnerSchedule?.position_name
+              position_name: partnerSchedule?.schedule_type === "manual_partnership" || 
+                            partnerSchedule?.schedule_type === "emergency_partnership" 
+                            ? null 
+                            : partnerSchedule?.position_name
             })
             .eq("officer_id", actualPartnerOfficerId)
             .eq("date", targetDate)
@@ -868,7 +914,15 @@ export const useScheduleMutations = (dateStr: string) => {
             exception_type: 'removed',
             created_at: new Date().toISOString()
           });
+
+        return {
+          success: true,
+          officerName: officer.name,
+          partnerName: officer.partnerData?.partnerName
+        };
       }
+
+      throw new Error(`Unknown action: ${action}`);
     },
     onSuccess: (data, variables) => {
       const action = variables.action;
@@ -884,6 +938,7 @@ export const useScheduleMutations = (dateStr: string) => {
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["available-partners"] });
       
       // Add a small delay to ensure the backend has processed the changes
       setTimeout(() => {
@@ -1057,7 +1112,7 @@ export const useScheduleMutations = (dateStr: string) => {
             .eq("officer_id", officer.partnerOfficerId)
             .eq("date", dateStr)
             .eq("shift_type_id", officer.shift.id)
-            .single();
+            .maybeSingle();
 
           if (partnerSchedule) {
             await supabase
@@ -1093,6 +1148,7 @@ export const useScheduleMutations = (dateStr: string) => {
   const removePTOMutation = useMutation({
     mutationFn: async (ptoRecord: any) => {
       // Note: ptoBalancesEnabled is not defined in this file - you'll need to add it or remove this check
+      const ptoBalancesEnabled = false; // Add this line or get from your config
       const hoursUsed = calculateHours(ptoRecord.startTime, ptoRecord.endTime);
       const ptoColumn = PTO_TYPES.find((t) => t.value === ptoRecord.ptoType)?.column;
       

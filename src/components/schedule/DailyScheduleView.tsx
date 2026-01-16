@@ -1424,13 +1424,6 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
 
     const allOfficers = Array.from(allOfficersMap.values());
 
-// In getScheduleData function, replace the partnership processing section:
-
-// Import the centralized utility
-import { isPPOByRank } from "@/utils/sortingUtils";
-
-// ... in getScheduleData function:
-
 // Process partnerships with improved logic
 const processedOfficers = [];
 const processedOfficerIds = new Set();

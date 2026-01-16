@@ -161,6 +161,46 @@ export const isPPO = (officer: OfficerForSorting): boolean => {
   return rank === 'probationary' || rank.includes('ppo');
 };
 
+// Add to src/utils/sortingUtils.ts
+
+/**
+ * Comprehensive PPO detection function
+ * Use this consistently across the entire application
+ */
+export const isPPOByRank = (rank: string | undefined | null): boolean => {
+  if (!rank) return false;
+  
+  const rankLower = rank.toLowerCase().trim();
+  
+  // Comprehensive PPO matching patterns
+  return (
+    rankLower === 'probationary' ||
+    rankLower.includes('probationary') ||
+    rankLower.includes('ppo') ||
+    rankLower.includes('probation') ||
+    rankLower === 'ppo' ||
+    rankLower.includes('probationary officer') ||
+    rankLower.includes('probationary peace officer') ||
+    rankLower.includes('probationary police officer') ||
+    rankLower.includes('probationary patrol officer')
+  );
+};
+
+/**
+ * Get officer type with consistent logic
+ */
+export const getOfficerType = (officer: any): 'ppo' | 'regular' | 'supervisor' => {
+  const rank = officer?.rank || '';
+  const position = officer?.position?.toLowerCase() || '';
+  
+  if (isPPOByRank(rank)) return 'ppo';
+  
+  // Use existing isSupervisor function
+  if (isSupervisor(officer)) return 'supervisor';
+  
+  return 'regular';
+};
+
 /**
  * Sort officers with consistent logic:
  * 1. Supervisors first (Lieutenants/Chiefs → Sergeants)

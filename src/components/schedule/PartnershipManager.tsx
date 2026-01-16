@@ -85,7 +85,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
           id,
           full_name,
           badge_number,
-          rank  // <-- USE 'rank'
+          rank 
         )
       `)
       .eq("date", dateToUse)
@@ -207,7 +207,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
           id,
           full_name,
           badge_number,
-          rank  // <-- USE 'rank' NOT 'officer_rank'
+          rank 
         )
       `)
       .eq("shift_type_id", officer.shift.id)
@@ -223,7 +223,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
 
     console.log("📅 All scheduled officers:", scheduledOfficers?.map(s => ({
       name: s.profiles?.full_name,
-      rank: s.profiles?.rank,  // <-- USE 'rank'
+      rank: s.profiles?.rank,  
       isPartnership: s.is_partnership,
       partnerOfficerId: s.partner_officer_id
     })));
@@ -234,13 +234,13 @@ const { data: availablePartners, isLoading, error } = useQuery({
         if (!schedule.profiles) return false;
         
         // Check if officer is a PPO - use the rank column
-        const isPPO = isPPOByRank(schedule.profiles.rank);  // <-- USE 'rank'
+        const isPPO = isPPOByRank(schedule.profiles.rank);  
         const alreadyPartnered = schedule.is_partnership || schedule.partner_officer_id;
         
         console.log(`Checking ${schedule.profiles.full_name}:`, {
           isPPO,
           alreadyPartnered,
-          rank: schedule.profiles.rank  // <-- USE 'rank'
+          rank: schedule.profiles.rank  
         });
         
         return isPPO && !alreadyPartnered;
@@ -249,7 +249,7 @@ const { data: availablePartners, isLoading, error } = useQuery({
         id: schedule.officer_id,
         full_name: schedule.profiles?.full_name,
         badge_number: schedule.profiles?.badge_number,
-        rank: schedule.profiles?.rank,  // <-- USE 'rank'
+        rank: schedule.profiles?.rank, 
         scheduleId: schedule.id,
         source: 'recurring'
       }))

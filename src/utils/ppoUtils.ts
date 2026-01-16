@@ -1,4 +1,4 @@
-// src/utils/ppoUtils.ts
+// In src/utils/ppoUtils.ts
 export const isPPOByRank = (rank: string | undefined | null): boolean => {
   if (!rank) return false;
   
@@ -14,9 +14,4 @@ export const isPPOByRank = (rank: string | undefined | null): boolean => {
     rankLower.includes('probationary peace officer') ||
     rankLower.includes('probationary police officer')
   );
-};
-
-export const isPPOFromOfficer = (officer: any): boolean => {
-  const rank = officer?.rank || officer?.officer_rank || '';
-  return isPPOByRank(rank);
 };

@@ -65,13 +65,15 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   const hasSuspendedPartnership = officer.isPartnership && officer.partnershipSuspended;
   const isOfficerPPO = isPPOByRank(officer.rank?.toString() || '');
 
-// In the emergency partners query:
-// In the emergency partners query:
+// Emergency partners query - finds regular officers (non-PPOs) for emergency pairing
 const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyError } = useQuery({
   queryKey: ["emergency-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
   queryFn: async () => {
     const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
     const dayOfWeek = parseISO(dateToUse).getDay();
+    
+    console.log("🚨 === EMERGENCY PARTNERS QUERY ===");
+    console.log("Looking for regular officers (non-PPOs) for emergency pairing");
     
     // Get exceptions data
     const { data: exceptionsData, error: exceptionsError } = await supabase
@@ -86,7 +88,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
           id,
           full_name,
           badge_number,
-          rank  // <-- CHANGED FROM officer_rank TO rank
+          rank
         )
       `)
       .eq("date", dateToUse)
@@ -98,30 +100,6 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
       throw exceptionsError;
     }
 
-    // Process exceptions
-    const allOfficers = [];
-    
-    if (exceptionsData) {
-      for (const record of exceptionsData) {
-        if (!record.profiles) continue;
-        
-        // Skip if officer is on PTO
-        if (record.is_off) continue;
-        
-        allOfficers.push({
-          id: record.officer_id,
-          name: record.profiles.full_name,
-          badge: record.profiles.badge_number,
-          rank: record.profiles.rank, // <-- CHANGED FROM officer_rank TO rank
-          isOff: record.is_off,
-          isPartnership: record.is_partnership,
-          partnershipSuspended: record.partnership_suspended,
-          scheduleId: record.id,
-          source: 'exception'
-        });
-      }
-    }
-
     // Get recurring schedules
     const { data: recurringData, error: recurringError } = await supabase
       .from("recurring_schedules")
@@ -129,11 +107,12 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
         id,
         officer_id,
         is_partnership,
+        partner_officer_id,
         profiles!recurring_schedules_officer_id_fkey (
           id,
           full_name,
           badge_number,
-          rank  // <-- CHANGED FROM officer_rank TO rank
+          rank
         )
       `)
       .eq("shift_type_id", officer.shift.id)
@@ -147,42 +126,105 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
       throw recurringError;
     }
 
-    // Process recurring schedules
+    // Combine all officers
+    const allOfficers = [];
+    const processedOfficerIds = new Set();
+    
+    // Process exceptions first
+    if (exceptionsData) {
+      for (const record of exceptionsData) {
+        if (!record.profiles) continue;
+        
+        // Skip if officer is on PTO
+        if (record.is_off) {
+          console.log(`   ⏸️ Skipping - on PTO: ${record.profiles.full_name}`);
+          continue;
+        }
+        
+        const officerData = {
+          id: record.officer_id,
+          name: record.profiles.full_name,
+          badge: record.profiles.badge_number,
+          rank: record.profiles.rank?.toString() || '', // Convert enum to string
+          isOff: record.is_off,
+          isPartnership: record.is_partnership,
+          partnershipSuspended: record.partnership_suspended,
+          scheduleId: record.id,
+          source: 'exception'
+        };
+        
+        allOfficers.push(officerData);
+        processedOfficerIds.add(record.officer_id);
+        
+        console.log(`   📋 Added from exception: ${record.profiles.full_name} (${officerData.rank})`);
+      }
+    }
+
+    // Process recurring schedules (exceptions override recurring)
     if (recurringData) {
       for (const record of recurringData) {
         if (!record.profiles) continue;
         
-        // Check if officer already has an exception
-        const existingException = allOfficers.find(o => o.id === record.officer_id);
-        if (existingException) continue;
+        // Skip if already processed from exceptions
+        if (processedOfficerIds.has(record.officer_id)) {
+          console.log(`   ⏸️ Skipping - has exception: ${record.profiles.full_name}`);
+          continue;
+        }
         
-        allOfficers.push({
+        const officerData = {
           id: record.officer_id,
           name: record.profiles.full_name,
           badge: record.profiles.badge_number,
-          rank: record.profiles.rank, 
+          rank: record.profiles.rank?.toString() || '', // Convert enum to string
           isOff: false,
           isPartnership: record.is_partnership,
           partnershipSuspended: false,
           scheduleId: record.id,
           source: 'recurring'
-        });
+        };
+        
+        allOfficers.push(officerData);
+        processedOfficerIds.add(record.officer_id);
+        
+        console.log(`   📋 Added from recurring: ${record.profiles.full_name} (${officerData.rank})`);
       }
     }
 
-    // Filter for available emergency partners
+    console.log("👥 All officers found:", allOfficers.map(o => ({
+      name: o.name,
+      rank: o.rank,
+      source: o.source,
+      isPartnership: o.isPartnership
+    })));
+
+    // Filter for available emergency partners (REGULAR officers only, no PPOs)
     const emergencyPartners = allOfficers.filter(officerRecord => {
-      // Skip if officer is a PPO
-      // Convert rank to string if it's an enum
-      const rankValue = officerRecord.rank?.toString() || '';
-      const isPartnerPPO = isPPOByRank(rankValue);
-      if (isPartnerPPO) return false;
+      console.log(`\n--- Checking ${officerRecord.name} for emergency assignment ---`);
       
       // Skip if already in an active partnership
-      if (officerRecord.isPartnership) return false;
+      if (officerRecord.isPartnership) {
+        console.log(`❌ Skipping - already in partnership: ${officerRecord.name}`);
+        return false;
+      }
       
+      // CRITICAL: Skip if officer is a PPO
+      // Since rank is an enum converted to string, check exact value
+      const isPPO = officerRecord.rank === 'Probationary';
+      if (isPPO) {
+        console.log(`❌ Skipping PPO for emergency assignment: ${officerRecord.name}`);
+        return false;
+      }
+      
+      // Officer is available for emergency assignment
+      console.log(`✅ Available for emergency assignment: ${officerRecord.name} (${officerRecord.rank})`);
       return true;
     });
+
+    console.log("🚨 Emergency partners found:", emergencyPartners.map(p => ({
+      name: p.name,
+      rank: p.rank,
+      source: p.source
+    })));
 
     return emergencyPartners.sort((a, b) => a.name.localeCompare(b.name));
   },

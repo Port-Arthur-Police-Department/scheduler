@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PTO_TYPES } from "@/constants/positions";
 import { format, parseISO } from "date-fns";
+import { isPPOByRank } from "@/utils/ppoUtils";
 
 interface UpdateScheduleParams {
   scheduleId: string;
@@ -24,6 +25,8 @@ const isPPO = (rank: string | undefined | null): boolean => {
   const rankLower = rank.toLowerCase();
   return rankLower.includes('probationary') || rankLower.includes('ppo');
 };
+
+const isOfficerPPO = isPPOByRank(rank);
 
 // Helper function to calculate hours
 const calculateHours = (start: string, end: string) => {

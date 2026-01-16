@@ -1429,20 +1429,24 @@ const processedOfficers = [];
 const processedOfficerIds = new Set();
 const partnershipMap = new Map();
 
-// First pass: Build partnership map and validate mutual partnerships
+// First pass: Build partnership map - ACCEPT ONE-SIDED PARTNERSHIPS FOR DISPLAY
 for (const officer of allOfficers) {
   if (officer.isPartnership && officer.partnerOfficerId) {
     const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
     
-    // Validate the partnership is mutual
-    if (partnerOfficer && 
-        partnerOfficer.isPartnership && 
-        partnerOfficer.partnerOfficerId === officer.officerId) {
+    // FIX: Accept one-sided partnerships for display
+    if (partnerOfficer) {
       partnershipMap.set(officer.officerId, officer.partnerOfficerId);
       partnershipMap.set(officer.partnerOfficerId, officer.officerId);
+      
+      // Ensure partner also has partnership flag for display
+      if (!partnerOfficer.isPartnership) {
+        partnerOfficer.isPartnership = true;
+        partnerOfficer.partnerOfficerId = officer.officerId;
+      }
     } else {
-      // Invalidate one-sided partnership
-      console.log(`⚠️ Invalid one-sided partnership for ${officer.name}`);
+      // Partner not found in officers list
+      console.log(`⚠️ Partner not scheduled today for ${officer.name}`);
       officer.isPartnership = false;
       officer.partnerOfficerId = null;
     }

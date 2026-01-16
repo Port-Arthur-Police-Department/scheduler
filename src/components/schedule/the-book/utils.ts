@@ -6,8 +6,8 @@ import {
   sortOfficersConsistently, 
   getServiceCreditForSorting,
   type OfficerForSorting,
-  isSupervisor as isSupervisorFromSortingUtils,
-  isPPO as isPPOFromSortingUtils 
+  isSupervisor as isSupervisorFromSortingUtils
+  // REMOVE THIS: isPPO as isPPOFromSortingUtils 
 } from "@/utils/sortingUtils";
 
 // Re-export from scheduleUtils
@@ -45,9 +45,15 @@ export const isSupervisor = (officer: any): boolean => {
   return isSupervisorFromSortingUtils(officer);
 };
 
-// Alias to use the sorting utils version
+// Use the centralized isPPOByRank from ppoUtils
 export const isPPO = (officer: any): boolean => {
   const rank = officer.rank || officer.officer_rank || '';
+  return isPPOByRank(rank);
+};
+
+// Add this helper function for OfficerForSorting objects
+export const isOfficerForSortingPPO = (officer: OfficerForSorting): boolean => {
+  const rank = officer.rank || '';
   return isPPOByRank(rank);
 };
 
@@ -109,7 +115,7 @@ export const categorizeAndSortOfficers = (officers: any[]) => {
   
   const sortedOfficers = sortOfficersConsistently(officersForSorting);
   
-  // Map back and categorize
+  // Map back and categorize - USE THE NEW HELPER FUNCTION
   const supervisors = sortedOfficers
     .filter(officer => isSupervisorFromSortingUtils(officer))
     .map(officer => {
@@ -121,7 +127,7 @@ export const categorizeAndSortOfficers = (officers: any[]) => {
     .filter(Boolean);
   
   const ppos = sortedOfficers
-    .filter(officer => isPPOFromSortingUtils(officer))
+    .filter(officer => isOfficerForSortingPPO(officer)) // USE THE NEW HELPER
     .map(officer => {
       const originalOfficer = officers.find(o => 
         o.id === officer.id || o.officerId === officer.id
@@ -133,7 +139,7 @@ export const categorizeAndSortOfficers = (officers: any[]) => {
   const regularOfficers = sortedOfficers
     .filter(officer => 
       !isSupervisorFromSortingUtils(officer) && 
-      !isPPOFromSortingUtils(officer)
+      !isOfficerForSortingPPO(officer) // USE THE NEW HELPER
     )
     .map(officer => {
       const originalOfficer = officers.find(o => 
@@ -165,9 +171,9 @@ export const toOfficerForSorting = (officer: any): OfficerForSorting => ({
 // New function: categorize sorted officers (use after sortOfficersConsistently)
 export const categorizeSortedOfficers = (sortedOfficers: OfficerForSorting[]) => {
   const supervisors = sortedOfficers.filter(officer => isSupervisorFromSortingUtils(officer));
-  const ppos = sortedOfficers.filter(officer => isPPOFromSortingUtils(officer));
+  const ppos = sortedOfficers.filter(officer => isOfficerForSortingPPO(officer)); // USE THE NEW HELPER
   const regularOfficers = sortedOfficers.filter(officer => 
-    !isSupervisorFromSortingUtils(officer) && !isPPOFromSortingUtils(officer)
+    !isSupervisorFromSortingUtils(officer) && !isOfficerForSortingPPO(officer) // USE THE NEW HELPER
   );
   
   return { supervisors, regularOfficers, ppos };

@@ -63,7 +63,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   // Check partnership status
   const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended;
   const hasSuspendedPartnership = officer.isPartnership && officer.partnershipSuspended;
- const isOfficerPPO = isPPOByRank(officer.officer_rank);
+  const isOfficerPPO = isPPOByRank(officer.rank?.toString() || '');
 
 // In the emergency partners query:
 // In the emergency partners query:

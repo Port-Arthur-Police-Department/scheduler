@@ -232,170 +232,226 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
   });
 
   // Regular query for PPO partners (for "Add Partner" button)
-  const { data: availablePartners, isLoading, error } = useQuery({
-    queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
-    queryFn: async () => {
-      const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
-      const dayOfWeek = parseISO(dateToUse).getDay();
+// In PartnershipManager.tsx, update the regular query to include more debugging:
 
-      console.log("🤝 === START REGULAR PARTNERSHIP QUERY ===");
-      console.log("📋 Officer requesting partner:", {
-        id: officer.officerId,
-        name: officer.name,
-        rank: officer.rank,
-        isPPO: isPPO(officer),
-        hasActivePartnership,
-        hasSuspendedPartnership,
-        shift: officer.shift.name,
-        shiftId: officer.shift.id,
-        date: dateToUse,
-        dayOfWeek: dayOfWeek,
-      });
+const { data: availablePartners, isLoading, error } = useQuery({
+  queryKey: ["available-partners", officer.shift.id, officer.date || format(new Date(), "yyyy-MM-dd")],
+  queryFn: async () => {
+    const dateToUse = officer.date || format(new Date(), "yyyy-MM-dd");
+    const dayOfWeek = parseISO(dateToUse).getDay();
 
-      // Get exceptions for today
-      const { data: todayExceptions, error: todayError } = await supabase
-        .from("schedule_exceptions")
-        .select(`
+    console.log("🤝 === ENHANCED PARTNERSHIP QUERY ===");
+    console.log("📋 Officer requesting partner:", {
+      id: officer.officerId,
+      name: officer.name,
+      rank: officer.rank,
+      isPPO: isPPOByRank(officer.rank),
+      shift: officer.shift.name,
+      shiftId: officer.shift.id,
+      date: dateToUse,
+      dayOfWeek: dayOfWeek,
+    });
+
+    // Get exceptions for today
+    const { data: todayExceptions, error: todayError } = await supabase
+      .from("schedule_exceptions")
+      .select(`
+        id,
+        officer_id,
+        partner_officer_id,
+        is_partnership,
+        date,
+        shift_type_id,
+        is_off,
+        profiles:officer_id (
           id,
-          officer_id,
-          partner_officer_id,
-          is_partnership,
-          date,
-          shift_type_id,
-          is_off,
-          profiles:officer_id (
-            id,
-            full_name,
-            badge_number,
-            rank
-          )
-        `)
-        .eq("date", dateToUse)
-        .eq("shift_type_id", officer.shift.id);
+          full_name,
+          badge_number,
+          rank
+        )
+      `)
+      .eq("date", dateToUse)
+      .eq("shift_type_id", officer.shift.id);
 
-      if (todayError) {
-        console.error("❌ Error fetching today exceptions:", todayError);
-      }
+    if (todayError) {
+      console.error("❌ Error fetching today exceptions:", todayError);
+    }
 
-      // Get recurring for today's day of week
-      const { data: todayRecurring, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
+    console.log("📊 Today's exceptions:", todayExceptions?.map(e => ({
+      name: e.profiles?.full_name,
+      officerId: e.officer_id,
+      isOff: e.is_off,
+      isPartnership: e.is_partnership,
+      partnerOfficerId: e.partner_officer_id
+    })));
+
+    // Get recurring for today's day of week
+    const { data: todayRecurring, error: recurringError } = await supabase
+      .from("recurring_schedules")
+      .select(`
+        id,
+        officer_id,
+        partner_officer_id,
+        is_partnership,
+        day_of_week,
+        start_date,
+        end_date,
+        shift_type_id,
+        profiles:profiles!recurring_schedules_officer_id_fkey (
           id,
-          officer_id,
-          partner_officer_id,
-          is_partnership,
-          day_of_week,
-          start_date,
-          end_date,
-          shift_type_id,
-          profiles:profiles!recurring_schedules_officer_id_fkey (
-            id,
-            full_name,
-            badge_number,
-            rank
-          )
-        `)
-        .eq("shift_type_id", officer.shift.id)
-        .eq("day_of_week", dayOfWeek)
-        .lte("start_date", dateToUse)
-        .or(`end_date.is.null,end_date.gte.${dateToUse}`);
+          full_name,
+          badge_number,
+          rank
+        )
+      `)
+      .eq("shift_type_id", officer.shift.id)
+      .eq("day_of_week", dayOfWeek)
+      .lte("start_date", dateToUse)
+      .or(`end_date.is.null,end_date.gte.${dateToUse}`);
 
-      if (recurringError) {
-        console.error("❌ Error fetching recurring schedules:", recurringError);
-      }
+    if (recurringError) {
+      console.error("❌ Error fetching recurring schedules:", recurringError);
+    }
 
-      // Combine all officers working today
-      const workingToday = [];
-      const currentDate = parseISO(dateToUse);
-      
-      // Process exceptions - only add if NOT off
-      if (todayExceptions) {
-        for (const exception of todayExceptions) {
-          if (!exception.profiles) continue;
-          
-          if (exception.is_off === true) {
-            console.log(`   ⏸️ Skipping officer on PTO: ${exception.profiles.full_name}`);
-            continue;
-          }
-          
-          workingToday.push({
-            ...exception.profiles,
-            scheduleId: exception.id,
-            isPartnership: exception.is_partnership,
-            partnerOfficerId: exception.partner_officer_id,
-            source: 'exception'
-          });
+    console.log("📊 Today's recurring schedules:", todayRecurring?.map(r => ({
+      name: r.profiles?.full_name,
+      officerId: r.officer_id,
+      isPartnership: r.is_partnership,
+      partnerOfficerId: r.partner_officer_id,
+      startDate: r.start_date,
+      endDate: r.end_date
+    })));
+
+    // Look specifically for Jaray Lewis
+    const jarayLewisRecurring = todayRecurring?.find(r => 
+      r.profiles?.full_name?.toLowerCase().includes('jaray') || 
+      r.profiles?.full_name?.toLowerCase().includes('lewis')
+    );
+    
+    const jarayLewisException = todayExceptions?.find(e => 
+      e.profiles?.full_name?.toLowerCase().includes('jaray') || 
+      e.profiles?.full_name?.toLowerCase().includes('lewis')
+    );
+
+    console.log("🔍 JARAY LEWIS SPECIFIC CHECK:", {
+      inRecurring: !!jarayLewisRecurring,
+      recurringData: jarayLewisRecurring,
+      inException: !!jarayLewisException,
+      exceptionData: jarayLewisException,
+      isPPO: isPPOByRank(jarayLewisRecurring?.profiles?.rank || jarayLewisException?.profiles?.rank)
+    });
+
+    // Combine all officers working today
+    const workingToday = [];
+    const currentDate = parseISO(dateToUse);
+    
+    // Process exceptions - only add if NOT off
+    if (todayExceptions) {
+      for (const exception of todayExceptions) {
+        if (!exception.profiles) continue;
+        
+        if (exception.is_off === true) {
+          console.log(`   ⏸️ Skipping officer on PTO: ${exception.profiles.full_name}`);
+          continue;
         }
+        
+        workingToday.push({
+          ...exception.profiles,
+          scheduleId: exception.id,
+          isPartnership: exception.is_partnership,
+          partnerOfficerId: exception.partner_officer_id,
+          source: 'exception',
+          hasException: true
+        });
       }
+    }
 
-      // Process recurring schedules
-      if (todayRecurring) {
-        for (const recurring of todayRecurring) {
-          if (!recurring.profiles) continue;
-          
-          // Validate date range
-          const startDate = parseISO(recurring.start_date);
-          const endDate = recurring.end_date ? parseISO(recurring.end_date) : null;
-          
-          if (currentDate < startDate) {
-            console.log(`   ⏸️ Skipping - date before start: ${recurring.profiles.full_name}`);
-            continue;
-          }
-          
-          if (endDate && currentDate > endDate) {
-            console.log(`   ⏸️ Skipping - date after end: ${recurring.profiles.full_name}`);
-            continue;
-          }
-          
-          // Check if officer has an exception (exception overrides recurring)
-          const hasException = todayExceptions?.find(e => 
-            e.officer_id === recurring.officer_id
-          );
-          
-          if (hasException) {
-            console.log(`   ⏸️ Skipping - has exception: ${recurring.profiles.full_name}`);
-            continue;
-          }
-          
-          workingToday.push({
-            ...recurring.profiles,
-            scheduleId: recurring.id,
-            isPartnership: recurring.is_partnership,
-            partnerOfficerId: recurring.partner_officer_id,
-            source: 'recurring'
-          });
+    // Process recurring schedules
+    if (todayRecurring) {
+      for (const recurring of todayRecurring) {
+        if (!recurring.profiles) continue;
+        
+        // Validate date range
+        const startDate = parseISO(recurring.start_date);
+        const endDate = recurring.end_date ? parseISO(recurring.end_date) : null;
+        
+        if (currentDate < startDate) {
+          console.log(`   ⏸️ Skipping - date before start: ${recurring.profiles.full_name}`);
+          continue;
         }
+        
+        if (endDate && currentDate > endDate) {
+          console.log(`   ⏸️ Skipping - date after end: ${recurring.profiles.full_name}`);
+          continue;
+        }
+        
+        // Check if officer has an exception (exception overrides recurring)
+        const hasException = todayExceptions?.find(e => 
+          e.officer_id === recurring.officer_id
+        );
+        
+        if (hasException) {
+          console.log(`   ⏸️ Skipping - has exception: ${recurring.profiles.full_name}`);
+          continue;
+        }
+        
+        workingToday.push({
+          ...recurring.profiles,
+          scheduleId: recurring.id,
+          isPartnership: recurring.is_partnership,
+          partnerOfficerId: recurring.partner_officer_id,
+          source: 'recurring',
+          hasException: false
+        });
       }
+    }
 
-      // Filter for available PPOs
-      const availablePPOs = workingToday
-        .filter(officerRecord => {
-          // Exclude current officer
-          if (officerRecord.id === officer.officerId) {
-            return false;
-          }
-          
-          // Check if PPO
-          if (!isPPO(officerRecord)) {
-            return false;
-          }
-          
-          // Check if already in a partnership
-          if (officerRecord.isPartnership === true || officerRecord.partnerOfficerId) {
-            return false;
-          }
-          
-          return true;
-        })
-        .sort((a, b) => getLastName(a.full_name).localeCompare(getLastName(b.full_name)));
+    console.log("👥 All working officers today:", workingToday.map(o => ({
+      name: o.full_name,
+      rank: o.rank,
+      source: o.source,
+      hasException: o.hasException,
+      isPartnership: o.isPartnership,
+      partnerOfficerId: o.partnerOfficerId
+    })));
 
-      console.log("✅ Available PPO partners:", availablePPOs.map(p => p.full_name));
+    // Filter for available PPOs
+    const availablePPOs = workingToday
+      .filter(officerRecord => {
+        // Exclude current officer
+        if (officerRecord.id === officer.officerId) {
+          console.log(`   ❌ Excluding current officer: ${officerRecord.full_name}`);
+          return false;
+        }
+        
+        // Check if PPO
+        const isOfficerPPO = isPPOByRank(officerRecord.rank);
+        if (!isOfficerPPO) {
+          console.log(`   ❌ Not a PPO: ${officerRecord.full_name} (${officerRecord.rank})`);
+          return false;
+        }
+        
+        // Check if already in a partnership
+        if (officerRecord.isPartnership === true || officerRecord.partnerOfficerId) {
+          console.log(`   ❌ Already in partnership: ${officerRecord.full_name}`);
+          return false;
+        }
+        
+        console.log(`   ✅ Available PPO: ${officerRecord.full_name}`);
+        return true;
+      })
+      .sort((a, b) => getLastName(a.full_name).localeCompare(getLastName(b.full_name)));
 
-      return availablePPOs;
-    },
-    enabled: open && !emergencyMode && !hasActivePartnership,
-  });
+    console.log("✅ Final available PPO partners:", availablePPOs.map(p => ({
+      name: p.full_name,
+      rank: p.rank,
+      source: p.source
+    })));
+
+    return availablePPOs;
+  },
+  enabled: open && !emergencyMode && !hasActivePartnership,
+});
 
   const handleCreatePartnership = async () => {
     if (!selectedPartner) return;

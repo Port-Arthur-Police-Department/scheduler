@@ -1,3 +1,5 @@
+[file name]: useScheduleMutations.ts
+[file content begin]
 // src/hooks/useScheduleMutations.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +28,152 @@ const calculateHours = (start: string, end: string) => {
   const startMinutes = startHour * 60 + startMin;
   const endMinutes = endHour * 60 + endMin;
   return (endMinutes - startMinutes) / 60;
+};
+
+// Function to update recurring schedule partnerships
+const updateRecurringPartnership = async (
+  officerId: string,
+  partnerOfficerId: string,
+  shiftId: string,
+  dayOfWeek: number,
+  officerPosition: string,
+  partnerPosition: string
+) => {
+  try {
+    console.log("🔄 Updating recurring partnership in database");
+    
+    // Find both officers' recurring schedules
+    const [{ data: officerRecurring }, { data: partnerRecurring }] = await Promise.all([
+      supabase
+        .from("recurring_schedules")
+        .select("id")
+        .eq("officer_id", officerId)
+        .eq("shift_type_id", shiftId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle(),
+      supabase
+        .from("recurring_schedules")
+        .select("id")
+        .eq("officer_id", partnerOfficerId)
+        .eq("shift_type_id", shiftId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle()
+    ]);
+
+    if (!officerRecurring || !partnerRecurring) {
+      console.log("⚠️ One or both officers don't have recurring schedules for this day");
+      return { success: false, error: "Missing recurring schedules" };
+    }
+
+    // Update both records
+    const [officerResult, partnerResult] = await Promise.all([
+      supabase
+        .from("recurring_schedules")
+        .update({
+          is_partnership: true,
+          partner_officer_id: partnerOfficerId,
+          position_name: officerPosition
+        })
+        .eq("id", officerRecurring.id),
+      supabase
+        .from("recurring_schedules")
+        .update({
+          is_partnership: true,
+          partner_officer_id: officerId,
+          position_name: partnerPosition
+        })
+        .eq("id", partnerRecurring.id)
+    ]);
+
+    if (officerResult.error || partnerResult.error) {
+      console.error("Error updating recurring schedules:", officerResult.error || partnerResult.error);
+      return { success: false, error: officerResult.error || partnerResult.error };
+    }
+
+    console.log("✅ Recurring partnership updated in database");
+    return { success: true };
+  } catch (error) {
+    console.error("Error in updateRecurringPartnership:", error);
+    return { success: false, error };
+  }
+};
+
+// Function to remove recurring partnership
+const removeRecurringPartnership = async (
+  officerId: string,
+  partnerOfficerId: string,
+  shiftId: string,
+  dayOfWeek: number
+) => {
+  try {
+    console.log("🔄 Removing recurring partnership from database");
+    
+    // Find both officers' recurring schedules
+    const [{ data: officerRecurring }, { data: partnerRecurring }] = await Promise.all([
+      supabase
+        .from("recurring_schedules")
+        .select("id, position_name")
+        .eq("officer_id", officerId)
+        .eq("shift_type_id", shiftId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle(),
+      supabase
+        .from("recurring_schedules")
+        .select("id, position_name")
+        .eq("officer_id", partnerOfficerId)
+        .eq("shift_type_id", shiftId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle()
+    ]);
+
+    const updates = [];
+
+    // Remove partnership from officer's recurring schedule
+    if (officerRecurring) {
+      updates.push(
+        supabase
+          .from("recurring_schedules")
+          .update({
+            is_partnership: false,
+            partner_officer_id: null,
+            // Reset position to default if it was a partnership-specific position
+            position_name: officerRecurring.position_name?.includes("Riding Partner") ? null : officerRecurring.position_name
+          })
+          .eq("id", officerRecurring.id)
+      );
+    }
+
+    // Remove partnership from partner's recurring schedule
+    if (partnerRecurring) {
+      updates.push(
+        supabase
+          .from("recurring_schedules")
+          .update({
+            is_partnership: false,
+            partner_officer_id: null,
+            // Reset position to default if it was a partnership-specific position
+            position_name: partnerRecurring.position_name?.includes("Riding Partner") ? null : partnerRecurring.position_name
+          })
+          .eq("id", partnerRecurring.id)
+      );
+    }
+
+    if (updates.length > 0) {
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error).map(r => r.error);
+      
+      if (errors.length > 0) {
+        console.error("Error removing recurring partnerships:", errors);
+        return { success: false, errors };
+      }
+    }
+
+    console.log("✅ Recurring partnership removed from database");
+    return { success: true };
+  } catch (error) {
+    console.error("Error in removeRecurringPartnership:", error);
+    return { success: false, error };
+  }
 };
 
 export const useScheduleMutations = (dateStr: string) => {
@@ -583,6 +731,7 @@ export const useScheduleMutations = (dateStr: string) => {
 
         const targetDate = officer.date || dateStr;
         const shiftId = officer.shift.id;
+        const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
 
         // Check if either officer is on PTO
         const [{ data: officerPTO }, { data: partnerPTO }] = await Promise.all([
@@ -665,6 +814,10 @@ export const useScheduleMutations = (dateStr: string) => {
         // For partner, use their existing position or default based on rank
         const partnerPosition = existingPartnerSchedule?.position_name || 
                                 (isPPOByRank(partnerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+
+        // Check if this is a recurring day (not a one-time exception)
+        const isRecurringDay = officer.type === 'recurring' || 
+                               (officer.dayOfWeek !== undefined && officer.dayOfWeek !== null);
 
         // Create or update schedule exceptions for both officers
         const updates = [];
@@ -752,6 +905,23 @@ export const useScheduleMutations = (dateStr: string) => {
           throw new Error(`Failed to create partnership: ${errors[0]?.message}`);
         }
 
+        // NEW: Also update recurring_schedules if this is a recurring partnership
+        if (isRecurringDay) {
+          console.log("🔄 Updating recurring_schedules for partnership");
+          const recurringResult = await updateRecurringPartnership(
+            officer.officerId,
+            partnerOfficerId,
+            shiftId,
+            dayOfWeek,
+            officerPosition,
+            partnerPosition
+          );
+          
+          if (!recurringResult.success) {
+            console.warn("⚠️ Could not update recurring schedules, but exception was created:", recurringResult.error);
+          }
+        }
+
         // VERIFY partnership was created correctly
         const verificationPromises = [
           supabase
@@ -816,6 +986,7 @@ export const useScheduleMutations = (dateStr: string) => {
         
         const targetDate = officer.date || dateStr;
         const shiftId = officer.shift.id;
+        const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
         const actualPartnerOfficerId = officer.partnerOfficerId || officer.partnerData?.partnerOfficerId;
 
         // Get officer's current schedule to preserve unit_number and notes
@@ -894,6 +1065,24 @@ export const useScheduleMutations = (dateStr: string) => {
           }
         } else {
           console.warn("No partnerOfficerId found for removal");
+        }
+
+        // NEW: Also remove from recurring_schedules if this is a recurring partnership
+        if (officer.type === 'recurring' || officer.originalScheduleId) {
+          console.log("🔄 Also removing from recurring_schedules");
+          
+          if (actualPartnerOfficerId) {
+            const recurringResult = await removeRecurringPartnership(
+              officer.officerId,
+              actualPartnerOfficerId,
+              shiftId,
+              dayOfWeek
+            );
+            
+            if (!recurringResult.success) {
+              console.warn("⚠️ Could not remove from recurring schedules:", recurringResult.error);
+            }
+          }
         }
 
         // Log partnership removal
@@ -1218,6 +1407,10 @@ export const useScheduleMutations = (dateStr: string) => {
     // Export helper functions
     suspendPartnershipForPTO,
     restorePartnershipAfterPTO,
-    autoCreatePartnershipsFromRecurring
+    autoCreatePartnershipsFromRecurring,
+    // NEW: Export recurring partnership functions
+    updateRecurringPartnership,
+    removeRecurringPartnership
   };
 };
+[file content end]

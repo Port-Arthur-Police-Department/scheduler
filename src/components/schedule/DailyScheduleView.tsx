@@ -602,7 +602,38 @@ export const DailyScheduleView = ({
   colorSettings={websiteSettings?.color_settings}
 />
 
-{/* ADD THIS SECTION: Suspended Partnerships */}
+{/* Active Partnerships Section */}
+{shiftData.partneredOfficers && shiftData.partneredOfficers.length > 0 && (
+  <OfficerSection
+    title="Partnerships"
+    officers={shiftData.partneredOfficers}
+    minCount={0}
+    currentCount={shiftData.partneredOfficers.length}
+    isUnderstaffed={false}
+    canEdit={canEdit}
+    onSavePosition={handleSavePosition}
+    onSaveUnitNumber={handleSaveUnitNumber}
+    onSaveNotes={handleSaveNotes}
+    onAssignPTO={(officer) => {
+      setSelectedOfficer({
+        officerId: officer.officerId,
+        name: officer.name,
+        scheduleId: officer.scheduleId,
+        type: officer.type,
+      });
+      setSelectedShift(officer.shift);
+      setPtoDialogOpen(true);
+    }}
+    onRemoveOfficer={removeOfficerMutation.mutate}
+    onPartnershipChange={handlePartnershipChange}
+    onEmergencyPartner={handleEmergencyPartner}
+    isUpdating={updateScheduleMutation.isPending}
+    sectionType="partnership"
+    colorSettings={websiteSettings?.color_settings}
+  />
+)}
+
+{/* Suspended Partnerships Section */}
 {shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
   <OfficerSection
     title="Partnerships (Suspended)"

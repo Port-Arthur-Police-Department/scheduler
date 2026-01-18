@@ -433,30 +433,18 @@ export const PartnershipManagement = () => {
         }
 
         // Create recurring schedules for each day
-        const recurringPromises = daysOfWeek.map(day =>
-          supabase
-            .from("recurring_schedules")
-            .insert([
-              {
-                officer_id: regularOfficerId,
-                partner_officer_id: ppoOfficerId,
-                shift_type_id: shiftId,
-                day_of_week: day,
-                start_date: startDate,
-                end_date: endDate || null,
-                is_partnership: true
-              },
-              {
-                officer_id: ppoOfficerId,
-                partner_officer_id: regularOfficerId,
-                shift_type_id: shiftId,
-                day_of_week: day,
-                start_date: startDate,
-                end_date: endDate || null,
-                is_partnership: true
-              }
-            ])
-        );
+        const recurringPromises = daysOfWeek.map(day => {
+  // First, check if the officer already has a recurring schedule for this day
+  return supabase.rpc('create_or_update_partnership', {
+    p_regular_officer_id: regularOfficerId,
+    p_ppo_officer_id: ppoOfficerId,
+    p_shift_type_id: shiftId,
+    p_day_of_week: day,
+    p_start_date: startDate,
+    p_end_date: endDate || null,
+    p_is_partnership: true
+  });
+});
 
         const recurringResults = await Promise.all(recurringPromises);
         const errors = recurringResults.filter(r => r.error).map(r => r.error);

@@ -1017,8 +1017,7 @@ export const PartnershipManagement = () => {
                     <>
                       <div>
                         <Label>Days of Week</Label>
-                        <div className="flex flex-wrap gap-2
-                                                <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-2">
                           {daysOfWeek.map((day) => (
                             <div key={day.id} className="flex items-center space-x-1">
                               <Checkbox

@@ -1478,7 +1478,7 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
 
     const allOfficers = Array.from(allOfficersMap.values());
 
-// Process partnerships with original logic
+// Process partnerships with proper handling
 const processedOfficers = [];
 const processedOfficerIds = new Set();
 const partnershipMap = new Map();
@@ -1488,71 +1488,71 @@ for (const officer of allOfficers) {
   if (officer.isPartnership && officer.partnerOfficerId) {
     const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
     
-    // FIX: Accept one-sided partnerships for display
     if (partnerOfficer) {
       partnershipMap.set(officer.officerId, officer.partnerOfficerId);
       partnershipMap.set(officer.partnerOfficerId, officer.officerId);
-      
-      // Ensure partner also has partnership flag for display
-      if (!partnerOfficer.isPartnership) {
-        partnerOfficer.isPartnership = true;
-        partnerOfficer.partnerOfficerId = officer.officerId;
-      }
-    } else {
-      // Partner not found in officers list
-      console.log(`⚠️ Partner not scheduled today for ${officer.name}`);
-      officer.isPartnership = false;
-      officer.partnerOfficerId = null;
     }
   }
 }
 
-// Second pass: Process officers with valid partnerships
+// Second pass: Process ALL officers
 for (const officer of allOfficers) {
+  // Skip if already processed
   if (processedOfficerIds.has(officer.officerId)) {
     continue;
   }
 
   const partnerOfficerId = partnershipMap.get(officer.officerId);
   
+  // Check if this is a valid reciprocal partnership
   if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
     const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
     
     if (partnerOfficer) {
-      // Check if either officer has full-day PTO
+      // Mark BOTH officers as processed immediately
+      processedOfficerIds.add(officer.officerId);
+      processedOfficerIds.add(partnerOfficer.officerId);
+      
+      // Check PTO status
       const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
       const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
       
-      if (officerOnPTO || partnerOnPTO) {
-        // Keep partnership but mark as suspended
-        processedOfficers.push({
-          ...officer,
-          isPartnership: true,
-          partnerOfficerId: partnerOfficer.officerId,
-          partnershipSuspended: true,
-          partnershipSuspensionReason: officerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
-        });
+      if (officerOnPTO && partnerOnPTO) {
+        // Both on PTO - don't add to processedOfficers (they'll be in PTO section)
+        continue;
+      } else if (officerOnPTO || partnerOnPTO) {
+        // One on PTO, one working
+        const workingOfficer = officerOnPTO ? partnerOfficer : officer;
+        const ptoOfficer = officerOnPTO ? officer : partnerOfficer;
         
-        processedOfficers.push({
-          ...partnerOfficer,
+        // Add ONLY the working officer to processedOfficers
+        // This ensures they only appear in suspended partnerships section
+        const suspendedOfficer = {
+          ...workingOfficer,
           isPartnership: true,
-          partnerOfficerId: officer.officerId,
+          partnerOfficerId: ptoOfficer.officerId,
           partnershipSuspended: true,
-          partnershipSuspensionReason: partnerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
-        });
+          partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
+          // CRITICAL: Clear PTO flags
+          hasPTO: false,
+          ptoData: undefined,
+          // Ensure they're marked as processed
+          _processed: true
+        };
+        
+        processedOfficers.push(suspendedOfficer);
+        // Officer on PTO will appear in PTO section only
       } else {
-        // Normal partnership - combine them
+        // Normal active partnership - combine them
         let primaryOfficer = officer;
         let secondaryOfficer = partnerOfficer;
         
-        // PPO should always be secondary (use centralized detection)
         if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
           primaryOfficer = partnerOfficer;
           secondaryOfficer = officer;
         } else if (isPPOByRank(partnerOfficer.rank) && !isPPOByRank(officer.rank)) {
           // Already correct
         } else {
-          // Both same type, sort by name
           primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
           secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
         }
@@ -1579,27 +1579,40 @@ for (const officer of allOfficers) {
             `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
             : null,
           isPartnership: true,
-          partnershipSuspended: false
+          partnershipSuspended: false,
+          // Ensure they're marked as processed
+          _processed: true
         };
 
         processedOfficers.push(combinedOfficer);
-        processedOfficerIds.add(primaryOfficer.officerId);
-        processedOfficerIds.add(secondaryOfficer.officerId);
       }
     } else {
-      // Partner not found in officers list
+      // Partner not found - treat as regular officer
       processedOfficers.push({
         ...officer,
-        isPartnership: false, // Invalidate since partner doesn't exist
+        isPartnership: false,
         partnerOfficerId: null,
         partnershipSuspended: false
       });
       processedOfficerIds.add(officer.officerId);
     }
   } else {
-    // No partnership or invalid partnership
-    processedOfficers.push(officer);
-    processedOfficerIds.add(officer.officerId);
+    // No valid partnership - process as individual officer
+    // Check if officer is on full-day PTO
+    if (officer.hasPTO && officer.ptoData?.isFullShift) {
+      // Don't add to processedOfficers - they'll appear in PTO section
+      processedOfficerIds.add(officer.officerId);
+    } else {
+      // Regular officer (no partnership or invalid partnership)
+      const finalOfficer = { ...officer };
+      // Clear any orphaned partnership flags
+      if (finalOfficer.isPartnership && !finalOfficer.partnerOfficerId) {
+        finalOfficer.isPartnership = false;
+        finalOfficer.partnershipSuspended = false;
+      }
+      processedOfficers.push(finalOfficer);
+      processedOfficerIds.add(officer.officerId);
+    }
   }
 }
 
@@ -1679,6 +1692,9 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
   
+  // CRITICAL: Skip officers in suspended partnerships
+  if (o.isPartnership && o.partnershipSuspended) return false;
+  
   return true;
 }).sort((a, b) => {
   const aMatch = a.position?.match(/district\s*(\d+)/i);
@@ -1691,26 +1707,20 @@ const regularOfficers = processedOfficers.filter(o => {
   return (a.position || '').localeCompare(b.position || '');
 });
 
-// FIFTH: Active partnerships
-//const partneredOfficers = processedOfficers.filter(o => 
-//  isActivePartnership(o)
-// );
-
-// SIXTH: Suspended partnerships
+// FIFTH: Suspended partnerships ONLY
 const suspendedPartnershipOfficers = processedOfficers.filter(o => 
   o.isPartnership && o.partnershipSuspended
 );
-// Debug logging - FIXED VERSION
-console.log("🔍 DEBUG - Officer categorization results:", {
-  shiftName: shift.name,
-  totalAllOfficers: allOfficers.length,
-  totalProcessedOfficers: processedOfficers.length,
-  specialAssignmentCount: specialAssignmentOfficers.length,
-  supervisorCount: supervisors.length,
-  regularOfficerCount: regularOfficers.length,
-  // partneredOfficersCount: 0, // You can hardcode 0 if you want
-  suspendedPartnershipCount: suspendedPartnershipOfficers.length,
-  ptoRecordCount: shiftPTORecords.length
+
+// Debug to verify
+console.log("🔍 Verification:", {
+  totalProcessed: processedOfficers.length,
+  regularOfficers: regularOfficers.length,
+  suspendedPartnerships: suspendedPartnershipOfficers.length,
+  // Check for duplication
+  officersInBoth: regularOfficers.filter(ro => 
+    suspendedPartnershipOfficers.some(so => so.officerId === ro.officerId)
+  ).map(o => o.name)
 });
 
 // Calculate staffing counts (exclude PPOs from officer count)

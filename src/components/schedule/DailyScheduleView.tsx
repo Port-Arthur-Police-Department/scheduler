@@ -602,37 +602,6 @@ export const DailyScheduleView = ({
   colorSettings={websiteSettings?.color_settings}
 />
 
-{/* Active Partnerships Section */}
-{shiftData.partneredOfficers && shiftData.partneredOfficers.length > 0 && (
-  <OfficerSection
-    title="Partnerships"
-    officers={shiftData.partneredOfficers}
-    minCount={0}
-    currentCount={shiftData.partneredOfficers.length}
-    isUnderstaffed={false}
-    canEdit={canEdit}
-    onSavePosition={handleSavePosition}
-    onSaveUnitNumber={handleSaveUnitNumber}
-    onSaveNotes={handleSaveNotes}
-    onAssignPTO={(officer) => {
-      setSelectedOfficer({
-        officerId: officer.officerId,
-        name: officer.name,
-        scheduleId: officer.scheduleId,
-        type: officer.type,
-      });
-      setSelectedShift(officer.shift);
-      setPtoDialogOpen(true);
-    }}
-    onRemoveOfficer={removeOfficerMutation.mutate}
-    onPartnershipChange={handlePartnershipChange}
-    onEmergencyPartner={handleEmergencyPartner}
-    isUpdating={updateScheduleMutation.isPending}
-    sectionType="partnership"
-    colorSettings={websiteSettings?.color_settings}
-  />
-)}
-
 {/* Suspended Partnerships Section */}
 {shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
   <OfficerSection
@@ -1696,6 +1665,9 @@ const supervisors = sortSupervisorsByRank(
 
 // FOURTH: Regular officers (everyone else who's not in the above categories)
 const regularOfficers = processedOfficers.filter(o => {
+  // Skip officers with full day PTO
+  if (o.hasPTO && o.ptoData?.isFullShift) return false;
+  
   // Skip special assignment officers
   const position = o.position?.toLowerCase() || '';
   const isSpecialAssignment = position.includes('other') || 
@@ -1706,9 +1678,6 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorPosition = position.includes('supervisor');
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
-  
-  // Skip officers in ANY partnership
-  if (isInPartnership(o)) return false;
   
   return true;
 }).sort((a, b) => {
@@ -1723,9 +1692,9 @@ const regularOfficers = processedOfficers.filter(o => {
 });
 
 // FIFTH: Active partnerships
-const partneredOfficers = processedOfficers.filter(o => 
-  isActivePartnership(o)
-);
+//const partneredOfficers = processedOfficers.filter(o => 
+//  isActivePartnership(o)
+// );
 
 // SIXTH: Suspended partnerships
 const suspendedPartnershipOfficers = processedOfficers.filter(o => 
@@ -1776,7 +1745,7 @@ const suspendedPartnershipOfficers = processedOfficers.filter(o =>
       currentOfficers: countedOfficers.length,
       supervisors,
       officers: regularOfficers,
-      partneredOfficers,
+      // partneredOfficers,
       suspendedPartnershipOfficers, // NEW
       specialAssignmentOfficers,
       ptoRecords: shiftPTORecords,

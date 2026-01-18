@@ -1478,7 +1478,7 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
 
     const allOfficers = Array.from(allOfficersMap.values());
 
-// Process partnerships with improved logic
+// Process partnerships with original logic
 const processedOfficers = [];
 const processedOfficerIds = new Set();
 const partnershipMap = new Map();
@@ -1488,65 +1488,64 @@ for (const officer of allOfficers) {
   if (officer.isPartnership && officer.partnerOfficerId) {
     const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
     
+    // FIX: Accept one-sided partnerships for display
     if (partnerOfficer) {
       partnershipMap.set(officer.officerId, officer.partnerOfficerId);
       partnershipMap.set(officer.partnerOfficerId, officer.officerId);
+      
+      // Ensure partner also has partnership flag for display
+      if (!partnerOfficer.isPartnership) {
+        partnerOfficer.isPartnership = true;
+        partnerOfficer.partnerOfficerId = officer.officerId;
+      }
+    } else {
+      // Partner not found in officers list
+      console.log(`⚠️ Partner not scheduled today for ${officer.name}`);
+      officer.isPartnership = false;
+      officer.partnerOfficerId = null;
     }
   }
 }
 
-// Second pass: Process ALL officers
+// Second pass: Process officers with valid partnerships
 for (const officer of allOfficers) {
-  // Skip if already processed
   if (processedOfficerIds.has(officer.officerId)) {
     continue;
   }
 
   const partnerOfficerId = partnershipMap.get(officer.officerId);
   
-  // Check if this officer has a valid reciprocal partnership
   if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
     const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
     
     if (partnerOfficer) {
-      // Check PTO status
+      // Check if either officer has full-day PTO
       const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
       const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
       
-      // Mark both officers as processed
-      processedOfficerIds.add(officer.officerId);
-      processedOfficerIds.add(partnerOfficer.officerId);
-      
-      if (officerOnPTO && partnerOnPTO) {
-        // Both on PTO - don't add to processedOfficers
-        continue;
-      } else if (officerOnPTO || partnerOnPTO) {
-        // One on PTO, one working
-        const workingOfficer = officerOnPTO ? partnerOfficer : officer;
-        const ptoOfficer = officerOnPTO ? officer : partnerOfficer;
-        
-        // Add working officer with suspended partnership
+      if (officerOnPTO || partnerOnPTO) {
+        // Keep partnership but mark as suspended
         processedOfficers.push({
-          ...workingOfficer,
+          ...officer,
           isPartnership: true,
-          partnerOfficerId: ptoOfficer.officerId,
+          partnerOfficerId: partnerOfficer.officerId,
           partnershipSuspended: true,
-          partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
-          hasPTO: false, // Ensure they don't appear as PTO
-          ptoData: undefined,
-          scheduleId: workingOfficer.scheduleId,
-          type: workingOfficer.type,
-          shift: workingOfficer.shift,
-          date: workingOfficer.date,
-          dayOfWeek: workingOfficer.dayOfWeek
+          partnershipSuspensionReason: officerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
         });
-        // Officer on PTO will appear in PTO section
+        
+        processedOfficers.push({
+          ...partnerOfficer,
+          isPartnership: true,
+          partnerOfficerId: officer.officerId,
+          partnershipSuspended: true,
+          partnershipSuspensionReason: partnerOnPTO ? 'Officer on PTO' : 'Partner on PTO'
+        });
       } else {
-        // Normal active partnership - combine them
+        // Normal partnership - combine them
         let primaryOfficer = officer;
         let secondaryOfficer = partnerOfficer;
         
-        // PPO should be secondary
+        // PPO should always be secondary (use centralized detection)
         if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
           primaryOfficer = partnerOfficer;
           secondaryOfficer = officer;
@@ -1584,27 +1583,22 @@ for (const officer of allOfficers) {
         };
 
         processedOfficers.push(combinedOfficer);
+        processedOfficerIds.add(primaryOfficer.officerId);
+        processedOfficerIds.add(secondaryOfficer.officerId);
       }
-      continue; // Move to next officer since we handled this partnership
+    } else {
+      // Partner not found in officers list
+      processedOfficers.push({
+        ...officer,
+        isPartnership: false, // Invalidate since partner doesn't exist
+        partnerOfficerId: null,
+        partnershipSuspended: false
+      });
+      processedOfficerIds.add(officer.officerId);
     }
-  }
-  
-  // If we get here, officer has no valid partnership
-  // Check if officer is on full-day PTO
-  if (officer.hasPTO && officer.ptoData?.isFullShift) {
-    // Don't add to processedOfficers - they'll appear in PTO section
-    processedOfficerIds.add(officer.officerId);
   } else {
-    // Regular officer (no partnership or invalid partnership)
-    // Reset partnership flags if partner doesn't exist
-    const finalOfficer = { ...officer };
-    if (officer.isPartnership && officer.partnerOfficerId) {
-      // Orphaned partnership - clear it
-      finalOfficer.isPartnership = false;
-      finalOfficer.partnerOfficerId = null;
-      finalOfficer.partnershipSuspended = false;
-    }
-    processedOfficers.push(finalOfficer);
+    // No partnership or invalid partnership
+    processedOfficers.push(officer);
     processedOfficerIds.add(officer.officerId);
   }
 }

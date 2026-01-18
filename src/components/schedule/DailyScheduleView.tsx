@@ -1745,7 +1745,6 @@ const suspendedPartnershipOfficers = processedOfficers.filter(o =>
       currentOfficers: countedOfficers.length,
       supervisors,
       officers: regularOfficers,
-      // partneredOfficers,
       suspendedPartnershipOfficers, // NEW
       specialAssignmentOfficers,
       ptoRecords: shiftPTORecords,

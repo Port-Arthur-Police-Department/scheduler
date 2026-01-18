@@ -1,5 +1,3 @@
-[file name]: useScheduleMutations.ts
-[file content begin]
 // src/hooks/useScheduleMutations.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1413,4 +1411,3 @@ export const useScheduleMutations = (dateStr: string) => {
     removeRecurringPartnership
   };
 };
-[file content end]

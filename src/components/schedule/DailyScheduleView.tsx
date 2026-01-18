@@ -1700,55 +1700,55 @@ const regularOfficers = processedOfficers.filter(o => {
 const suspendedPartnershipOfficers = processedOfficers.filter(o => 
   o.isPartnership && o.partnershipSuspended
 );
-    // Debug logging
-    console.log("🔍 DEBUG - Officer categorization results:", {
-      shiftName: shift.name,
-      totalAllOfficers: allOfficers.length,
-      totalProcessedOfficers: processedOfficers.length,
-      specialAssignmentCount: specialAssignmentOfficers.length,
-      supervisorCount: supervisors.length,
-      regularOfficerCount: regularOfficers.length,
-      partneredOfficersCount: partneredOfficers.length,
-      suspendedPartnershipCount: suspendedPartnershipOfficers.length,
-      ptoRecordCount: shiftPTORecords.length
-    });
+// Debug logging - FIXED VERSION
+console.log("🔍 DEBUG - Officer categorization results:", {
+  shiftName: shift.name,
+  totalAllOfficers: allOfficers.length,
+  totalProcessedOfficers: processedOfficers.length,
+  specialAssignmentCount: specialAssignmentOfficers.length,
+  supervisorCount: supervisors.length,
+  regularOfficerCount: regularOfficers.length,
+  // partneredOfficersCount: 0, // You can hardcode 0 if you want
+  suspendedPartnershipCount: suspendedPartnershipOfficers.length,
+  ptoRecordCount: shiftPTORecords.length
+});
 
-    // Calculate staffing counts (exclude PPOs from officer count)
-    const countedSupervisors = supervisors.filter(supervisor => {
-      const hasFullDayPTO = supervisor.hasPTO && supervisor.ptoData?.isFullShift;
-      return !hasFullDayPTO;
-    });
+// Calculate staffing counts (exclude PPOs from officer count)
+const countedSupervisors = supervisors.filter(supervisor => {
+  const hasFullDayPTO = supervisor.hasPTO && supervisor.ptoData?.isFullShift;
+  return !hasFullDayPTO;
+});
 
-    const countedOfficers = regularOfficers.filter(officer => {
-      const isPPO = officer.isPPO;
-      const hasFullDayPTO = officer.hasPTO && officer.ptoData?.isFullShift;
-      return !isPPO && !hasFullDayPTO;
-    });
+const countedOfficers = regularOfficers.filter(officer => {
+  const isPPO = officer.isPPO;
+  const hasFullDayPTO = officer.hasPTO && officer.ptoData?.isFullShift;
+  return !isPPO && !hasFullDayPTO;
+});
 
-    console.log(`📊 Staffing counts for ${shift.name}:`, {
-      totalSupervisors: supervisors.length,
-      countedSupervisors: countedSupervisors.length,
-      totalOfficers: regularOfficers.length,
-      countedOfficers: countedOfficers.length,
-      ppos: regularOfficers.filter(o => o.isPPO).length,
-      fullDayPTOs: shiftPTORecords.filter(p => p.isFullShift).length,
-      activePartnerships: partneredOfficers.length,
-      suspendedPartnerships: suspendedPartnershipOfficers.length,
-      specialAssignments: specialAssignmentOfficers.length
-    });
+console.log(`📊 Staffing counts for ${shift.name}:`, {
+  totalSupervisors: supervisors.length,
+  countedSupervisors: countedSupervisors.length,
+  totalOfficers: regularOfficers.length,
+  countedOfficers: countedOfficers.length,
+  ppos: regularOfficers.filter(o => o.isPPO).length,
+  fullDayPTOs: shiftPTORecords.filter(p => p.isFullShift).length,
+  // activePartnerships: 0, // Hardcode 0 since we're not tracking this
+  suspendedPartnerships: suspendedPartnershipOfficers.length,
+  specialAssignments: specialAssignmentOfficers.length
+});
 
-    return {
-      shift,
-      minSupervisors: minStaff?.minimum_supervisors || 1,
-      minOfficers: minStaff?.minimum_officers || 0,
-      currentSupervisors: countedSupervisors.length,
-      currentOfficers: countedOfficers.length,
-      supervisors,
-      officers: regularOfficers,
-      suspendedPartnershipOfficers, // NEW
-      specialAssignmentOfficers,
-      ptoRecords: shiftPTORecords,
-    };
+return {
+  shift,
+  minSupervisors: minStaff?.minimum_supervisors || 1,
+  minOfficers: minStaff?.minimum_officers || 0,
+  currentSupervisors: countedSupervisors.length,
+  currentOfficers: countedOfficers.length,
+  supervisors,
+  officers: regularOfficers,
+  suspendedPartnershipOfficers,
+  specialAssignmentOfficers,
+  ptoRecords: shiftPTORecords,
+};
   });
 
   // Filter by shift if needed

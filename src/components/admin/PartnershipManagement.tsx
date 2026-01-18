@@ -72,7 +72,7 @@ export const PartnershipManagement = () => {
         mode: viewMode
       });
 
-      // Get recurring partnerships
+           // Get recurring partnerships - FIXED: Exclude null partner_officer_id
       const { data: recurringData, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
@@ -104,7 +104,7 @@ export const PartnershipManagement = () => {
           )
         `)
         .eq("is_partnership", true)
-        .neq("partner_officer_id", null);
+        .not("partner_officer_id", "is", null); // THIS IS THE FIX - exclude null values
 
       if (recurringError) {
         console.error("Error fetching recurring partnerships:", recurringError);
@@ -114,7 +114,7 @@ export const PartnershipManagement = () => {
       // Get exception partnerships for each day in range
       const exceptionPromises = datesInRange.map(date => 
         supabase
-          .from("schedule_exceptions")
+                    .from("schedule_exceptions")
           .select(`
             id,
             officer_id,
@@ -144,7 +144,7 @@ export const PartnershipManagement = () => {
             )
           `)
           .eq("is_partnership", true)
-          .neq("partner_officer_id", null)
+          .not("partner_officer_id", "is", null) 
           .eq("date", date)
       );
 

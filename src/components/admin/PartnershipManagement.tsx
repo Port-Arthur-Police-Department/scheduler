@@ -389,8 +389,7 @@ export const PartnershipManagement = () => {
               shift_type_id: shiftId,
               is_partnership: true,
               is_off: false,
-              schedule_type: "manual_partnership",
-              position_name: "Riding Partner"
+              schedule_type: "manual_partnership"
             },
             {
               officer_id: ppoOfficerId,
@@ -399,8 +398,7 @@ export const PartnershipManagement = () => {
               shift_type_id: shiftId,
               is_partnership: true,
               is_off: false,
-              schedule_type: "manual_partnership",
-              position_name: "Riding Partner (PPO)"
+              schedule_type: "manual_partnership"
             }
           ]);
 
@@ -446,8 +444,7 @@ export const PartnershipManagement = () => {
                 day_of_week: day,
                 start_date: startDate,
                 end_date: endDate || null,
-                is_partnership: true,
-                position_name: "Riding Partner"
+                is_partnership: true
               },
               {
                 officer_id: ppoOfficerId,
@@ -456,8 +453,7 @@ export const PartnershipManagement = () => {
                 day_of_week: day,
                 start_date: startDate,
                 end_date: endDate || null,
-                is_partnership: true,
-                position_name: "Riding Partner (PPO)"
+                is_partnership: true
               }
             ])
         );

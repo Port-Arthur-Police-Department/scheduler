@@ -261,7 +261,7 @@ export const PartnershipManagement = () => {
             p.type === "recurring" &&
             p.officer1.id === partnership.officer2.id &&
             p.officer2.id === partnership.officer1.id &&
-            p.shift_type_id === partnership.shift_type_id &&
+            p.shift?.id === partnership.shift?.id &&
             p.dayOfWeek === partnership.dayOfWeek
           );
           
@@ -275,7 +275,8 @@ export const PartnershipManagement = () => {
             p.type === "exception" &&
             p.officer1.id === partnership.officer2.id &&
             p.officer2.id === partnership.officer1.id &&
-            p.date === partnership.date
+            p.date === partnership.date &&
+            p.shift?.id === partnership.shift?.id
           );
           
           return {
@@ -576,7 +577,6 @@ export const PartnershipManagement = () => {
           .select("id")
           .eq("officer_id", partnership.officer2.id)
           .eq("partner_officer_id", partnership.officer1.id)
-          .eq("shift_type_id", partnership.shift_type_id)
           .eq("day_of_week", partnership.dayOfWeek);
 
         if (partnerRecords && partnerRecords.length > 0) {
@@ -590,22 +590,31 @@ export const PartnershipManagement = () => {
         }
       } else {
         // Remove from exceptions for all dates
+        const shiftTypeId = partnership.shift?.id;
+        
+        if (!shiftTypeId) {
+          console.error("No shift type ID found for partnership:", partnership);
+          throw new Error("Cannot remove partnership: missing shift information");
+        }
+        
         for (const date of partnership.dates) {
+          // Delete officer1's partnership
           await supabase
             .from("schedule_exceptions")
             .delete()
             .eq("officer_id", partnership.officer1.id)
             .eq("partner_officer_id", partnership.officer2.id)
             .eq("date", date)
-            .eq("shift_type_id", partnership.shift_type_id);
+            .eq("shift_type_id", shiftTypeId);
           
+          // Delete officer2's partnership
           await supabase
             .from("schedule_exceptions")
             .delete()
             .eq("officer_id", partnership.officer2.id)
             .eq("partner_officer_id", partnership.officer1.id)
             .eq("date", date)
-            .eq("shift_type_id", partnership.shift_type_id);
+            .eq("shift_type_id", shiftTypeId);
         }
       }
     },
@@ -634,7 +643,11 @@ export const PartnershipManagement = () => {
 
     // Fix each orphaned partnership
     for (const partnership of orphanedPartnerships) {
-      await removePartnershipMutation.mutateAsync(partnership);
+      try {
+        await removePartnershipMutation.mutateAsync(partnership);
+      } catch (error) {
+        console.error(`Failed to fix orphaned partnership ${partnership.id}:`, error);
+      }
     }
     
     toast.success(`Fixed ${orphanedPartnerships.length} orphaned partnership(s)`);

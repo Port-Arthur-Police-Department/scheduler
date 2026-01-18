@@ -573,64 +573,96 @@ export const DailyScheduleView = ({
                 colorSettings={websiteSettings?.color_settings}
               />
 
-              <OfficerSection
-                title="Officers"
-                officers={shiftData.officers}
-                minCount={shiftData.minOfficers}
-                currentCount={shiftData.currentOfficers}
-                isUnderstaffed={officersUnderstaffed}
-                canEdit={canEdit}
-                onSavePosition={handleSavePosition}
-                onSaveUnitNumber={handleSaveUnitNumber}
-                onSaveNotes={handleSaveNotes}
-                onAssignPTO={(officer) => {
-                  setSelectedOfficer({
-                    officerId: officer.officerId,
-                    name: officer.name,
-                    scheduleId: officer.scheduleId,
-                    type: officer.type,
-                  });
-                  setSelectedShift(officer.shift);
-                  setPtoDialogOpen(true);
-                }}
-                onRemoveOfficer={removeOfficerMutation.mutate}
-                onPartnershipChange={handlePartnershipChange}
-                onEmergencyPartner={handleEmergencyPartner} // ADD THIS
-                isUpdating={updateScheduleMutation.isPending}
-                sectionType="regular"
-                colorSettings={websiteSettings?.color_settings}
-              />
+             {/* Officer Section */}
+<OfficerSection
+  title="Officers"
+  officers={shiftData.officers}
+  minCount={shiftData.minOfficers}
+  currentCount={shiftData.currentOfficers}
+  isUnderstaffed={officersUnderstaffed}
+  canEdit={canEdit}
+  onSavePosition={handleSavePosition}
+  onSaveUnitNumber={handleSaveUnitNumber}
+  onSaveNotes={handleSaveNotes}
+  onAssignPTO={(officer) => {
+    setSelectedOfficer({
+      officerId: officer.officerId,
+      name: officer.name,
+      scheduleId: officer.scheduleId,
+      type: officer.type,
+    });
+    setSelectedShift(officer.shift);
+    setPtoDialogOpen(true);
+  }}
+  onRemoveOfficer={removeOfficerMutation.mutate}
+  onPartnershipChange={handlePartnershipChange}
+  onEmergencyPartner={handleEmergencyPartner}
+  isUpdating={updateScheduleMutation.isPending}
+  sectionType="regular"
+  colorSettings={websiteSettings?.color_settings}
+/>
 
-              {/* Special Assignment Section */}
-              {shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
-                <OfficerSection
-                  title="Special Assignments"
-                  officers={shiftData.specialAssignmentOfficers}
-                  minCount={0}
-                  currentCount={shiftData.specialAssignmentOfficers.length}
-                  isUnderstaffed={false}
-                  canEdit={canEdit}
-                  onSavePosition={handleSavePosition}
-                  onSaveUnitNumber={handleSaveUnitNumber}
-                  onSaveNotes={handleSaveNotes}
-                  onAssignPTO={(officer) => {
-                    setSelectedOfficer({
-                      officerId: officer.officerId,
-                      name: officer.name,
-                      scheduleId: officer.scheduleId,
-                      type: officer.type,
-                    });
-                    setSelectedShift(officer.shift);
-                    setPtoDialogOpen(true);
-                  }}
-                  onRemoveOfficer={removeOfficerMutation.mutate}
-                  onPartnershipChange={handlePartnershipChange}
-                  onEmergencyPartner={handleEmergencyPartner} // ADD THIS
-                  isUpdating={updateScheduleMutation.isPending}
-                  sectionType="special"
-                  colorSettings={websiteSettings?.color_settings}
-                />
-              )}
+{/* ADD THIS SECTION: Suspended Partnerships */}
+{shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
+  <OfficerSection
+    title="Partnerships (Suspended)"
+    officers={shiftData.suspendedPartnershipOfficers}
+    minCount={0}
+    currentCount={shiftData.suspendedPartnershipOfficers.length}
+    isUnderstaffed={false}
+    canEdit={canEdit}
+    onSavePosition={handleSavePosition}
+    onSaveUnitNumber={handleSaveUnitNumber}
+    onSaveNotes={handleSaveNotes}
+    onAssignPTO={(officer) => {
+      setSelectedOfficer({
+        officerId: officer.officerId,
+        name: officer.name,
+        scheduleId: officer.scheduleId,
+        type: officer.type,
+      });
+      setSelectedShift(officer.shift);
+      setPtoDialogOpen(true);
+    }}
+    onRemoveOfficer={removeOfficerMutation.mutate}
+    onPartnershipChange={handlePartnershipChange}
+    onEmergencyPartner={handleEmergencyPartner}
+    isUpdating={updateScheduleMutation.isPending}
+    sectionType="suspendedPartnership"
+    colorSettings={websiteSettings?.color_settings}
+  />
+)}
+
+{/* Special Assignment Section */}
+{shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
+  <OfficerSection
+    title="Special Assignments"
+    officers={shiftData.specialAssignmentOfficers}
+    minCount={0}
+    currentCount={shiftData.specialAssignmentOfficers.length}
+    isUnderstaffed={false}
+    canEdit={canEdit}
+    onSavePosition={handleSavePosition}
+    onSaveUnitNumber={handleSaveUnitNumber}
+    onSaveNotes={handleSaveNotes}
+    onAssignPTO={(officer) => {
+      setSelectedOfficer({
+        officerId: officer.officerId,
+        name: officer.name,
+        scheduleId: officer.scheduleId,
+        type: officer.type,
+      });
+      setSelectedShift(officer.shift);
+      setPtoDialogOpen(true);
+    }}
+    onRemoveOfficer={removeOfficerMutation.mutate}
+    onPartnershipChange={handlePartnershipChange}
+    onEmergencyPartner={handleEmergencyPartner}
+    isUpdating={updateScheduleMutation.isPending}
+    sectionType="special"
+    colorSettings={websiteSettings?.color_settings}
+  />
+)}
 
               {/* PTO Section */}
               {shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (

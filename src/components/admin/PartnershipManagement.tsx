@@ -13,11 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Edit, X } from "lucide-react";
 import { toast } from "sonner";
-import { Users, AlertTriangle, CheckCircle, Trash2, Search, CalendarDays, Filter, RefreshCw, UserCheck, UserX, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, AlertTriangle, CheckCircle, Trash2, Search, CalendarDays, Filter, RefreshCw, UserCheck, UserX, ChevronLeft, ChevronRight, Clock, CalendarRange } from "lucide-react";
 import { format, parseISO, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isWithinInterval } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const PartnershipManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,11 +32,30 @@ export const PartnershipManagement = () => {
   const [filterShift, setFilterShift] = useState<string>("all");
   const [selectedPartnership, setSelectedPartnership] = useState<any>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedRegularOfficer, setSelectedRegularOfficer] = useState<string>("");
   const [selectedPPO, setSelectedPPO] = useState<string>("");
   const [viewMode, setViewMode] = useState<"all" | "active" | "orphaned">("all");
+  const [partnershipType, setPartnershipType] = useState<"one-time" | "recurring">("one-time");
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [recurringStartDate, setRecurringStartDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [recurringEndDate, setRecurringEndDate] = useState<string>("");
+  const [editRecurringStartDate, setEditRecurringStartDate] = useState<string>("");
+  const [editRecurringEndDate, setEditRecurringEndDate] = useState<string>("");
+  const [editSelectedDays, setEditSelectedDays] = useState<number[]>([]);
   
   const queryClient = useQueryClient();
+
+  // Days of week options
+  const daysOfWeek = [
+    { id: 0, label: "Sunday", short: "Sun" },
+    { id: 1, label: "Monday", short: "Mon" },
+    { id: 2, label: "Tuesday", short: "Tue" },
+    { id: 3, label: "Wednesday", short: "Wed" },
+    { id: 4, label: "Thursday", short: "Thu" },
+    { id: 5, label: "Friday", short: "Fri" },
+    { id: 6, label: "Saturday", short: "Sat" }
+  ];
 
   // Helper function to check if officer is PPO
   const isPPO = (officer: any): boolean => {
@@ -72,7 +92,7 @@ export const PartnershipManagement = () => {
         mode: viewMode
       });
 
-           // Get recurring partnerships - FIXED: Exclude null partner_officer_id
+      // Get recurring partnerships
       const { data: recurringData, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
@@ -104,7 +124,7 @@ export const PartnershipManagement = () => {
           )
         `)
         .eq("is_partnership", true)
-        .not("partner_officer_id", "is", null); // THIS IS THE FIX - exclude null values
+        .not("partner_officer_id", "is", null);
 
       if (recurringError) {
         console.error("Error fetching recurring partnerships:", recurringError);
@@ -114,7 +134,7 @@ export const PartnershipManagement = () => {
       // Get exception partnerships for each day in range
       const exceptionPromises = datesInRange.map(date => 
         supabase
-                    .from("schedule_exceptions")
+          .from("schedule_exceptions")
           .select(`
             id,
             officer_id,
@@ -144,7 +164,7 @@ export const PartnershipManagement = () => {
             )
           `)
           .eq("is_partnership", true)
-          .not("partner_officer_id", "is", null) 
+          .not("partner_officer_id", "is", null)
           .eq("date", date)
       );
 
@@ -162,7 +182,10 @@ export const PartnershipManagement = () => {
       // Process recurring partnerships
       if (recurringData) {
         for (const recurring of recurringData) {
-          if (!recurring.profiles || !recurring.partner_profile) continue;
+          if (!recurring.profiles || !recurring.partner_profile) {
+            console.log("Skipping recurring partnership with missing profile data:", recurring.id);
+            continue;
+          }
           
           // Check if this partnership is active during any day in the range
           const activeDates: string[] = [];
@@ -205,7 +228,10 @@ export const PartnershipManagement = () => {
 
       // Process exception partnerships
       for (const exception of exceptionPartnerships) {
-        if (!exception.profiles || !exception.partner_profile) continue;
+        if (!exception.profiles || !exception.partner_profile) {
+          console.log("Skipping exception partnership with missing profile data:", exception.id);
+          continue;
+        }
         
         // Check shift filter
         if (filterShift !== "all" && exception.shift_type_id !== filterShift) continue;
@@ -224,6 +250,8 @@ export const PartnershipManagement = () => {
           source: 'exception'
         });
       }
+
+      console.log("📋 Processed partnerships:", allPartnerships.length);
 
       // Validate partnerships (check for reciprocal relationships)
       const validatedPartnerships = allPartnerships.map(partnership => {
@@ -314,6 +342,221 @@ export const PartnershipManagement = () => {
     }
   });
 
+  // Mutation to create partnership
+  const createPartnershipMutation = useMutation({
+    mutationFn: async ({ 
+      regularOfficerId, 
+      ppoOfficerId, 
+      date, 
+      shiftId,
+      type,
+      startDate,
+      endDate,
+      daysOfWeek
+    }: { 
+      regularOfficerId: string; 
+      ppoOfficerId: string; 
+      date?: string; 
+      shiftId: string;
+      type: "one-time" | "recurring";
+      startDate?: string;
+      endDate?: string;
+      daysOfWeek?: number[];
+    }) => {
+      if (type === "one-time") {
+        // Check if officers are already partnered for this date/shift
+        const existingPartnerships = await supabase
+          .from("schedule_exceptions")
+          .select("*")
+          .eq("date", date)
+          .eq("shift_type_id", shiftId)
+          .or(`officer_id.eq.${regularOfficerId},officer_id.eq.${ppoOfficerId}`)
+          .eq("is_partnership", true);
+
+        if (existingPartnerships.data && existingPartnerships.data.length > 0) {
+          throw new Error("One or both officers are already in a partnership for this date and shift");
+        }
+
+        // Create one-time partnership as a schedule exception
+        const { error } = await supabase
+          .from("schedule_exceptions")
+          .insert([
+            {
+              officer_id: regularOfficerId,
+              partner_officer_id: ppoOfficerId,
+              date: date,
+              shift_type_id: shiftId,
+              is_partnership: true,
+              is_off: false,
+              schedule_type: "manual_partnership",
+              position_name: "Riding Partner"
+            },
+            {
+              officer_id: ppoOfficerId,
+              partner_officer_id: regularOfficerId,
+              date: date,
+              shift_type_id: shiftId,
+              is_partnership: true,
+              is_off: false,
+              schedule_type: "manual_partnership",
+              position_name: "Riding Partner (PPO)"
+            }
+          ]);
+
+        if (error) throw error;
+      } else {
+        // Create recurring partnerships for each selected day
+        if (!daysOfWeek || daysOfWeek.length === 0) {
+          throw new Error("Please select at least one day of the week");
+        }
+
+        if (!startDate) {
+          throw new Error("Please select a start date");
+        }
+
+        // Check for existing recurring partnerships
+        const existingPromises = daysOfWeek.map(day =>
+          supabase
+            .from("recurring_schedules")
+            .select("*")
+            .eq("officer_id", regularOfficerId)
+            .eq("partner_officer_id", ppoOfficerId)
+            .eq("shift_type_id", shiftId)
+            .eq("day_of_week", day)
+            .eq("is_partnership", true)
+        );
+
+        const existingResults = await Promise.all(existingPromises);
+        const hasExisting = existingResults.some(result => result.data && result.data.length > 0);
+
+        if (hasExisting) {
+          throw new Error("A recurring partnership already exists for one or more selected days");
+        }
+
+        // Create recurring schedules for each day
+        const recurringPromises = daysOfWeek.map(day =>
+          supabase
+            .from("recurring_schedules")
+            .insert([
+              {
+                officer_id: regularOfficerId,
+                partner_officer_id: ppoOfficerId,
+                shift_type_id: shiftId,
+                day_of_week: day,
+                start_date: startDate,
+                end_date: endDate || null,
+                is_partnership: true,
+                position_name: "Riding Partner"
+              },
+              {
+                officer_id: ppoOfficerId,
+                partner_officer_id: regularOfficerId,
+                shift_type_id: shiftId,
+                day_of_week: day,
+                start_date: startDate,
+                end_date: endDate || null,
+                is_partnership: true,
+                position_name: "Riding Partner (PPO)"
+              }
+            ])
+        );
+
+        const recurringResults = await Promise.all(recurringPromises);
+        const errors = recurringResults.filter(r => r.error).map(r => r.error);
+        
+        if (errors.length > 0) {
+          console.error("Errors creating recurring partnerships:", errors);
+          throw new Error(`Failed to create recurring partnerships: ${errors[0]?.message}`);
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success(`${partnershipType === "one-time" ? "One-time" : "Recurring"} partnership created successfully`);
+      setShowCreateDialog(false);
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ["all-partnerships-range"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create partnership");
+    }
+  });
+
+  // Mutation to update recurring partnership
+  const updateRecurringPartnershipMutation = useMutation({
+    mutationFn: async ({ 
+      partnershipId,
+      startDate,
+      endDate,
+      daysOfWeek
+    }: { 
+      partnershipId: string;
+      startDate: string;
+      endDate?: string;
+      daysOfWeek: number[];
+    }) => {
+      // Get the existing partnership to find its partner
+      const { data: existingPartnership } = await supabase
+        .from("recurring_schedules")
+        .select("*")
+        .eq("id", partnershipId)
+        .single();
+
+      if (!existingPartnership) {
+        throw new Error("Partnership not found");
+      }
+
+      // Find the reciprocal partnership
+      const { data: reciprocalPartnership } = await supabase
+        .from("recurring_schedules")
+        .select("id")
+        .eq("officer_id", existingPartnership.partner_officer_id)
+        .eq("partner_officer_id", existingPartnership.officer_id)
+        .eq("shift_type_id", existingPartnership.shift_type_id)
+        .eq("day_of_week", existingPartnership.day_of_week)
+        .single();
+
+      // Update both partnerships
+      const updates = [
+        supabase
+          .from("recurring_schedules")
+          .update({
+            start_date: startDate,
+            end_date: endDate || null
+          })
+          .eq("id", partnershipId),
+      ];
+
+      if (reciprocalPartnership) {
+        updates.push(
+          supabase
+            .from("recurring_schedules")
+            .update({
+              start_date: startDate,
+              end_date: endDate || null
+            })
+            .eq("id", reciprocalPartnership.id)
+        );
+      }
+
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error).map(r => r.error);
+      
+      if (errors.length > 0) {
+        throw new Error(`Failed to update partnership: ${errors[0]?.message}`);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Recurring partnership updated successfully");
+      setShowEditDialog(false);
+      queryClient.invalidateQueries({ queryKey: ["all-partnerships-range"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update partnership");
+    }
+  });
+
   // Mutation to remove partnership
   const removePartnershipMutation = useMutation({
     mutationFn: async (partnership: any) => {
@@ -377,73 +620,6 @@ export const PartnershipManagement = () => {
     }
   });
 
-  // Mutation to create partnership
-  const createPartnershipMutation = useMutation({
-    mutationFn: async ({ 
-      regularOfficerId, 
-      ppoOfficerId, 
-      date, 
-      shiftId 
-    }: { 
-      regularOfficerId: string; 
-      ppoOfficerId: string; 
-      date: string; 
-      shiftId: string; 
-    }) => {
-      // Check if officers are already partnered for this date/shift
-      const existingPartnerships = await supabase
-        .from("schedule_exceptions")
-        .select("*")
-        .eq("date", date)
-        .eq("shift_type_id", shiftId)
-        .or(`officer_id.eq.${regularOfficerId},officer_id.eq.${ppoOfficerId}`)
-        .eq("is_partnership", true);
-
-      if (existingPartnerships.data && existingPartnerships.data.length > 0) {
-        throw new Error("One or both officers are already in a partnership for this date and shift");
-      }
-
-      // Create partnership as a schedule exception
-      const { error } = await supabase
-        .from("schedule_exceptions")
-        .insert([
-          {
-            officer_id: regularOfficerId,
-            partner_officer_id: ppoOfficerId,
-            date: date,
-            shift_type_id: shiftId,
-            is_partnership: true,
-            is_off: false,
-            schedule_type: "manual_partnership",
-            position_name: "Riding Partner"
-          },
-          {
-            officer_id: ppoOfficerId,
-            partner_officer_id: regularOfficerId,
-            date: date,
-            shift_type_id: shiftId,
-            is_partnership: true,
-            is_off: false,
-            schedule_type: "manual_partnership",
-            position_name: "Riding Partner (PPO)"
-          }
-        ]);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Partnership created successfully");
-      setShowCreateDialog(false);
-      setSelectedRegularOfficer("");
-      setSelectedPPO("");
-      queryClient.invalidateQueries({ queryKey: ["all-partnerships-range"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to create partnership");
-    }
-  });
-
   // Function to fix orphaned partnerships
   const fixOrphanedPartnerships = async () => {
     toast.info("Scanning for orphaned partnerships...");
@@ -482,20 +658,104 @@ export const PartnershipManagement = () => {
     }
   };
 
+  // Function to handle day selection
+  const toggleDay = (day: number) => {
+    setSelectedDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day]
+    );
+  };
+
+  // Function to handle edit day selection
+  const toggleEditDay = (day: number) => {
+    setEditSelectedDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day]
+    );
+  };
+
+  // Function to reset form
+  const resetForm = () => {
+    setSelectedRegularOfficer("");
+    setSelectedPPO("");
+    setPartnershipType("one-time");
+    setSelectedDays([]);
+    setRecurringStartDate(format(new Date(), "yyyy-MM-dd"));
+    setRecurringEndDate("");
+  };
+
   const handleCreatePartnership = () => {
-    // Use the first date in the range for creation
+    // Use the first date in the range for one-time partnerships
     const firstDate = format(dateRange.from, "yyyy-MM-dd");
     
-    if (!selectedRegularOfficer || !selectedPPO || !firstDate || !filterShift || filterShift === "all") {
+    if (!selectedRegularOfficer || !selectedPPO || !filterShift || filterShift === "all") {
       toast.error("Please select both officers and a shift");
       return;
+    }
+
+    if (partnershipType === "one-time" && !firstDate) {
+      toast.error("Please select a date for one-time partnership");
+      return;
+    }
+
+    if (partnershipType === "recurring") {
+      if (selectedDays.length === 0) {
+        toast.error("Please select at least one day of the week for recurring partnership");
+        return;
+      }
+      if (!recurringStartDate) {
+        toast.error("Please select a start date for recurring partnership");
+        return;
+      }
     }
 
     createPartnershipMutation.mutate({
       regularOfficerId: selectedRegularOfficer,
       ppoOfficerId: selectedPPO,
-      date: firstDate,
-      shiftId: filterShift
+      date: partnershipType === "one-time" ? firstDate : undefined,
+      shiftId: filterShift,
+      type: partnershipType,
+      startDate: partnershipType === "recurring" ? recurringStartDate : undefined,
+      endDate: partnershipType === "recurring" ? recurringEndDate || undefined : undefined,
+      daysOfWeek: partnershipType === "recurring" ? selectedDays : undefined
+    });
+  };
+
+  // Function to open edit dialog
+  const handleEditPartnership = (partnership: any) => {
+    if (partnership.type !== "recurring") {
+      toast.error("Only recurring partnerships can be edited");
+      return;
+    }
+
+    setSelectedPartnership(partnership);
+    setEditRecurringStartDate(partnership.startDate);
+    setEditRecurringEndDate(partnership.endDate || "");
+    setEditSelectedDays([partnership.dayOfWeek]);
+    setShowEditDialog(true);
+  };
+
+  // Function to handle edit submission
+  const handleEditPartnershipSubmit = () => {
+    if (!selectedPartnership) return;
+
+    if (editSelectedDays.length === 0) {
+      toast.error("Please select at least one day of the week");
+      return;
+    }
+
+    if (!editRecurringStartDate) {
+      toast.error("Please select a start date");
+      return;
+    }
+
+    updateRecurringPartnershipMutation.mutate({
+      partnershipId: selectedPartnership.id,
+      startDate: editRecurringStartDate,
+      endDate: editRecurringEndDate || undefined,
+      daysOfWeek: editSelectedDays
     });
   };
 
@@ -508,6 +768,12 @@ export const PartnershipManagement = () => {
       return fromFormatted;
     }
     return `${fromFormatted} - ${toFormatted}`;
+  };
+
+  // Format days display
+  const formatDaysDisplay = (days: number[]) => {
+    const dayNames = days.map(day => daysOfWeek.find(d => d.id === day)?.short);
+    return dayNames.join(", ");
   };
 
   return (
@@ -641,12 +907,12 @@ export const PartnershipManagement = () => {
             
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
               <DialogTrigger asChild>
-                <Button className="flex-1">
+                <Button className="flex-1" onClick={() => resetForm()}>
                   <UserCheck className="h-4 w-4 mr-2" />
                   Create Partnership
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Create New Partnership</DialogTitle>
                   <DialogDescription>
@@ -655,6 +921,32 @@ export const PartnershipManagement = () => {
                 </DialogHeader>
                 
                 <div className="space-y-4">
+                  <div>
+                    <Label>Partnership Type</Label>
+                    <div className="flex gap-4 mt-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="one-time"
+                          checked={partnershipType === "one-time"}
+                          onCheckedChange={() => setPartnershipType("one-time")}
+                        />
+                        <Label htmlFor="one-time" className="cursor-pointer">
+                          One-time (Single Date)
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="recurring"
+                          checked={partnershipType === "recurring"}
+                          onCheckedChange={() => setPartnershipType("recurring")}
+                        />
+                        <Label htmlFor="recurring" className="cursor-pointer">
+                          Recurring (Weekly Schedule)
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <div>
                     <Label>Regular Officer</Label>
                     <Select value={selectedRegularOfficer} onValueChange={setSelectedRegularOfficer}>
@@ -688,24 +980,6 @@ export const PartnershipManagement = () => {
                   </div>
                   
                   <div>
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={format(dateRange.from, "yyyy-MM-dd")}
-                      onChange={(e) => {
-                        const newDate = new Date(e.target.value);
-                        setDateRange({
-                          from: newDate,
-                          to: newDate
-                        });
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Currently viewing {formatDateRangeDisplay()}
-                    </p>
-                  </div>
-                  
-                  <div>
                     <Label>Shift</Label>
                     <Select value={filterShift} onValueChange={setFilterShift}>
                       <SelectTrigger>
@@ -721,13 +995,100 @@ export const PartnershipManagement = () => {
                     </Select>
                   </div>
                   
+                  {partnershipType === "one-time" ? (
+                    <div>
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={format(dateRange.from, "yyyy-MM-dd")}
+                        onChange={(e) => {
+                          const newDate = new Date(e.target.value);
+                          setDateRange({
+                            from: newDate,
+                            to: newDate
+                          });
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Currently viewing {formatDateRangeDisplay()}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <Label>Days of Week</Label>
+                        <div className="flex flex-wrap gap-2
+                                                <div className="flex flex-wrap gap-2 mt-2">
+                          {daysOfWeek.map((day) => (
+                            <div key={day.id} className="flex items-center space-x-1">
+                              <Checkbox
+                                id={`day-${day.id}`}
+                                checked={selectedDays.includes(day.id)}
+                                onCheckedChange={() => toggleDay(day.id)}
+                              />
+                              <Label 
+                                htmlFor={`day-${day.id}`} 
+                                className="cursor-pointer text-sm"
+                              >
+                                {day.short}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Selected: {formatDaysDisplay(selectedDays) || 'None'}
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Start Date</Label>
+                          <Input
+                            type="date"
+                            value={recurringStartDate}
+                            onChange={(e) => setRecurringStartDate(e.target.value)}
+                            min={format(new Date(), "yyyy-MM-dd")}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label>End Date (Optional)</Label>
+                          <Input
+                            type="date"
+                            value={recurringEndDate}
+                            onChange={(e) => setRecurringEndDate(e.target.value)}
+                            min={recurringStartDate}
+                            placeholder="Ongoing if empty"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="bg-muted p-3 rounded-md">
+                        <div className="flex items-center gap-2 text-sm">
+                          <CalendarRange className="h-4 w-4" />
+                          <span className="font-medium">Recurring Schedule Summary:</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {selectedDays.length > 0 && recurringStartDate ? (
+                            <>
+                              <p>Every: {formatDaysDisplay(selectedDays)}</p>
+                              <p>From: {recurringStartDate}</p>
+                              <p>Until: {recurringEndDate || "Ongoing"}</p>
+                            </>
+                          ) : (
+                            <p>Complete the form to see schedule summary</p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  
                   <div className="flex gap-2 pt-4">
                     <Button
                       variant="outline"
                       onClick={() => {
                         setShowCreateDialog(false);
-                        setSelectedRegularOfficer("");
-                        setSelectedPPO("");
+                        resetForm();
                       }}
                     >
                       Cancel
@@ -815,7 +1176,7 @@ export const PartnershipManagement = () => {
               <TableRow>
                 <TableHead>Officers</TableHead>
                 <TableHead>Shift</TableHead>
-                <TableHead>Dates</TableHead>
+                <TableHead>Schedule</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -911,12 +1272,16 @@ export const PartnershipManagement = () => {
                           </div>
                         ) : (
                           <div>
-                            <p>Recurring Schedule</p>
-                            <p className="text-sm text-muted-foreground">
-                              Active on {partnership.dates.length} day(s)
-                            </p>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {partnership.startDate} {partnership.endDate ? `- ${partnership.endDate}` : "(Ongoing)"}
+                            <div className="flex items-center gap-2 mb-1">
+                              <Clock className="h-3 w-3" />
+                              <p>Recurring Schedule</p>
+                            </div>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>Day: {daysOfWeek.find(d => d.id === partnership.dayOfWeek)?.label}</p>
+                              <p>Active on {partnership.dates.length} day(s)</p>
+                              <p>
+                                {partnership.startDate} {partnership.endDate ? `- ${partnership.endDate}` : "(Ongoing)"}
+                              </p>
                             </div>
                           </div>
                         )}
@@ -945,18 +1310,30 @@ export const PartnershipManagement = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            if (confirm(`Remove partnership between ${partnership.officer1.full_name} and ${partnership.officer2.full_name}?`)) {
-                              removePartnershipMutation.mutate(partnership);
-                            }
-                          }}
-                          disabled={removePartnershipMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-2">
+                          {partnership.type === "recurring" && partnership.isValid && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditPartnership(partnership)}
+                              disabled={updateRecurringPartnershipMutation.isPending}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (confirm(`Remove partnership between ${partnership.officer1.full_name} and ${partnership.officer2.full_name}?`)) {
+                                removePartnershipMutation.mutate(partnership);
+                              }
+                            }}
+                            disabled={removePartnershipMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -965,6 +1342,117 @@ export const PartnershipManagement = () => {
           </Table>
         </div>
       </CardContent>
+
+      {/* Edit Recurring Partnership Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Recurring Partnership</DialogTitle>
+            <DialogDescription>
+              Update the schedule for {selectedPartnership?.officer1?.full_name} and {selectedPartnership?.officer2?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedPartnership && (
+            <div className="space-y-4">
+              <div className="bg-muted p-3 rounded-md">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4" />
+                  <span className="font-medium">Current Partnership</span>
+                </div>
+                <div className="text-sm space-y-1">
+                  <p>
+                    {selectedPartnership.officer1.full_name} ({selectedPartnership.officer1.rank}) 
+                    & 
+                    {selectedPartnership.officer2.full_name} ({selectedPartnership.officer2.rank})
+                  </p>
+                  <p>Shift: {selectedPartnership.shift?.name}</p>
+                  <p>Day: {daysOfWeek.find(d => d.id === selectedPartnership.dayOfWeek)?.label}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label>Days of Week</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {daysOfWeek.map((day) => (
+                    <div key={day.id} className="flex items-center space-x-1">
+                      <Checkbox
+                        id={`edit-day-${day.id}`}
+                        checked={editSelectedDays.includes(day.id)}
+                        onCheckedChange={() => toggleEditDay(day.id)}
+                      />
+                      <Label 
+                        htmlFor={`edit-day-${day.id}`} 
+                        className="cursor-pointer text-sm"
+                      >
+                        {day.short}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selected: {formatDaysDisplay(editSelectedDays) || 'None'}
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Date</Label>
+                  <Input
+                    type="date"
+                    value={editRecurringStartDate}
+                    onChange={(e) => setEditRecurringStartDate(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label>End Date (Optional)</Label>
+                  <Input
+                    type="date"
+                    value={editRecurringEndDate}
+                    onChange={(e) => setEditRecurringEndDate(e.target.value)}
+                    min={editRecurringStartDate}
+                    placeholder="Ongoing if empty"
+                  />
+                </div>
+              </div>
+              
+              <div className="bg-muted p-3 rounded-md">
+                <div className="flex items-center gap-2 text-sm">
+                  <CalendarRange className="h-4 w-4" />
+                  <span className="font-medium">Updated Schedule Summary:</span>
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {editSelectedDays.length > 0 && editRecurringStartDate ? (
+                    <>
+                      <p>Every: {formatDaysDisplay(editSelectedDays)}</p>
+                      <p>From: {editRecurringStartDate}</p>
+                      <p>Until: {editRecurringEndDate || "Ongoing"}</p>
+                    </>
+                  ) : (
+                    <p>Complete the form to see schedule summary</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditPartnershipSubmit}
+                  disabled={updateRecurringPartnershipMutation.isPending}
+                >
+                  {updateRecurringPartnershipMutation.isPending ? "Updating..." : "Update Partnership"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

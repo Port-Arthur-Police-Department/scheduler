@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,54 @@ interface PDFLayoutSettingsProps {
   isPending: boolean;
 }
 
+// Helper function to migrate old settings to new structure
+const migrateLayoutSettings = (oldSettings: any): LayoutSettings => {
+  if (!oldSettings) {
+    return DEFAULT_LAYOUT_SETTINGS;
+  }
+
+  // Check if this is the new structure (has fontSizes.nameColumn)
+  if (oldSettings.fontSizes?.nameColumn !== undefined) {
+    return oldSettings as LayoutSettings;
+  }
+
+  // Old structure - migrate to new structure
+  console.log("Migrating old layout settings to new structure");
+  
+  return {
+    ...DEFAULT_LAYOUT_SETTINGS,
+    ...oldSettings,
+    fontSizes: {
+      ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+      ...oldSettings.fontSizes,
+      // Set column-specific font sizes from tableContent if not present
+      nameColumn: oldSettings.fontSizes?.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent,
+      beatColumn: oldSettings.fontSizes?.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent,
+      badgeColumn: oldSettings.fontSizes?.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent,
+      notesColumn: oldSettings.fontSizes?.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent,
+      ptoTimeColumn: oldSettings.fontSizes?.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent,
+    },
+    tableSettings: {
+      ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+      ...oldSettings.tableSettings,
+      // Add columnWidths if not present
+      columnWidths: oldSettings.tableSettings?.columnWidths || DEFAULT_LAYOUT_SETTINGS.tableSettings.columnWidths,
+    }
+  };
+};
+
 export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PDFLayoutSettingsProps) => {
-  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(
-    settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS
-  );
+  // Migrate settings on component mount
+  const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>(() => {
+    return migrateLayoutSettings(settings?.pdf_layout_settings);
+  });
+
+  // Update layout settings when props change
+  useEffect(() => {
+    if (settings?.pdf_layout_settings) {
+      setLayoutSettings(migrateLayoutSettings(settings.pdf_layout_settings));
+    }
+  }, [settings]);
 
   const handleFontSizeChange = (section: keyof LayoutSettings['fontSizes'], value: number) => {
     setLayoutSettings(prev => ({
@@ -63,291 +107,559 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
     }));
   };
 
-  // Helper function to apply font presets
-{/* Add this to your Presets tab section */}
-<TabsContent value="presets" className="space-y-4">
-  <div className="space-y-4">
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <Label>Quick Font Presets</Label>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetFontSizes}
-          className="h-7 text-xs"
-        >
-          Reset Fonts
-        </Button>
-      </div>
-      <p className="text-sm text-muted-foreground mb-3">
-        One-click font size sets with automatic saving
-      </p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset('small')}
-          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
-          disabled={isPending}
-        >
-          <div className="text-center">
-            <div className="font-medium text-sm">Small</div>
-            <div className="text-xs text-muted-foreground mt-1">Compact</div>
-            <div className="text-xs mt-1 text-primary">6-8pt</div>
+  // Helper function to apply font presets WITH AUTO-SAVE
+  const applyPreset = (presetName: keyof typeof FONT_SIZE_PRESETS) => {
+    const preset = FONT_SIZE_PRESETS[presetName];
+    
+    // Calculate new settings
+    const newSettings = {
+      ...layoutSettings,
+      fontSizes: {
+        ...layoutSettings.fontSizes,
+        ...preset
+      },
+      tableSettings: {
+        ...layoutSettings.tableSettings,
+        rowHeight: presetName === 'accessibility' || presetName === 'extraLarge' ? 10 : 
+                   presetName === 'large' ? 9 : 
+                   presetName === 'small' ? 7 : 
+                   presetName === 'medium' ? 8 : layoutSettings.tableSettings.rowHeight
+      }
+    };
+    
+    // Update local state
+    setLayoutSettings(newSettings);
+    
+    // Auto-save immediately
+    onSave(newSettings);
+  };
+
+  // Helper function to set row height WITH AUTO-SAVE
+  const setRowHeight = (height: number) => {
+    const newSettings = {
+      ...layoutSettings,
+      tableSettings: {
+        ...layoutSettings.tableSettings,
+        rowHeight: height
+      }
+    };
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  // Helper function for column width changes WITH AUTO-SAVE
+  const handleColumnWidthChange = (column: keyof LayoutSettings['tableSettings']['columnWidths'], value: number) => {
+    const newSettings = {
+      ...layoutSettings,
+      tableSettings: {
+        ...layoutSettings.tableSettings,
+        columnWidths: {
+          ...layoutSettings.tableSettings.columnWidths,
+          [column]: value
+        }
+      }
+    };
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  // Helper function to apply a specific color theme WITH AUTO-SAVE
+  const applyColorTheme = (theme: 'default' | 'high-contrast' | 'grayscale' | 'dark' | 'police' | 'print-friendly') => {
+    const themes = {
+      default: {
+        supervisorHeaderBgColor: "41,128,185",
+        officerHeaderBgColor: "52,152,219",
+        specialHeaderBgColor: "155,89,182",
+        ptoHeaderBgColor: "243,156,18",
+        headerTextColor: "255,255,255",
+        officerTextColor: "44,62,80",
+        supervisorTextColor: "44,62,80",
+        specialAssignmentTextColor: "102,51,153",
+        ptoTextColor: "139,0,0",
+        evenRowColor: "255,255,255",
+        oddRowColor: "248,249,250",
+        primaryColor: "41,128,185",
+        secondaryColor: "52,152,219",
+        accentColor: "155,89,182"
+      },
+      'high-contrast': {
+        supervisorHeaderBgColor: "0,0,0",
+        officerHeaderBgColor: "0,0,139",
+        specialHeaderBgColor: "139,0,139",
+        ptoHeaderBgColor: "165,42,42",
+        headerTextColor: "255,255,255",
+        officerTextColor: "0,0,0",
+        supervisorTextColor: "0,0,0",
+        specialAssignmentTextColor: "0,0,0",
+        ptoTextColor: "0,0,0",
+        evenRowColor: "255,255,255",
+        oddRowColor: "240,240,240",
+        primaryColor: "0,0,0",
+        secondaryColor: "0,0,139",
+        accentColor: "139,0,139"
+      },
+      grayscale: {
+        supervisorHeaderBgColor: "64,64,64",
+        officerHeaderBgColor: "96,96,96",
+        specialHeaderBgColor: "128,128,128",
+        ptoHeaderBgColor: "160,160,160",
+        headerTextColor: "255,255,255",
+        officerTextColor: "0,0,0",
+        supervisorTextColor: "0,0,0",
+        specialAssignmentTextColor: "0,0,0",
+        ptoTextColor: "0,0,0",
+        evenRowColor: "255,255,255",
+        oddRowColor: "245,245,245",
+        primaryColor: "64,64,64",
+        secondaryColor: "96,96,96",
+        accentColor: "128,128,128"
+      },
+      dark: {
+        supervisorHeaderBgColor: "41,128,185",
+        officerHeaderBgColor: "52,152,219",
+        specialHeaderBgColor: "155,89,182",
+        ptoHeaderBgColor: "243,156,18",
+        headerTextColor: "255,255,255",
+        officerTextColor: "230,230,230",
+        supervisorTextColor: "230,230,230",
+        specialAssignmentTextColor: "230,230,230",
+        ptoTextColor: "255,200,200",
+        evenRowColor: "30,30,30",
+        oddRowColor: "40,40,40",
+        primaryColor: "41,128,185",
+        secondaryColor: "52,152,219",
+        accentColor: "155,89,182"
+      },
+      police: {
+        supervisorHeaderBgColor: "0,51,102", // Navy blue
+        officerHeaderBgColor: "0,102,204", // Police blue
+        specialHeaderBgColor: "153,0,0", // Police red
+        ptoHeaderBgColor: "255,153,0", // Orange
+        headerTextColor: "255,255,255",
+        officerTextColor: "0,0,0",
+        supervisorTextColor: "0,0,0",
+        specialAssignmentTextColor: "153,0,0",
+        ptoTextColor: "139,0,0",
+        evenRowColor: "255,255,255",
+        oddRowColor: "245,245,245",
+        primaryColor: "0,51,102",
+        secondaryColor: "0,102,204",
+        accentColor: "153,0,0"
+      },
+      'print-friendly': {
+        supervisorHeaderBgColor: "200,200,200", // Light gray
+        officerHeaderBgColor: "220,220,220", // Lighter gray
+        specialHeaderBgColor: "180,180,180", // Medium gray
+        ptoHeaderBgColor: "160,160,160", // Dark gray
+        headerTextColor: "0,0,0",
+        officerTextColor: "0,0,0",
+        supervisorTextColor: "0,0,0",
+        specialAssignmentTextColor: "0,0,0",
+        ptoTextColor: "0,0,0",
+        evenRowColor: "255,255,255",
+        oddRowColor: "248,248,248",
+        primaryColor: "0,0,0",
+        secondaryColor: "64,64,64",
+        accentColor: "128,128,128"
+      }
+    };
+
+    const newSettings = {
+      ...layoutSettings,
+      colorSettings: {
+        ...layoutSettings.colorSettings,
+        ...themes[theme]
+      }
+    };
+    
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  // Quick reset to default font sizes only
+  const resetFontSizes = () => {
+    const newSettings = {
+      ...layoutSettings,
+      fontSizes: DEFAULT_LAYOUT_SETTINGS.fontSizes
+    };
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  // Quick reset to default table settings only
+  const resetTableSettings = () => {
+    const newSettings = {
+      ...layoutSettings,
+      tableSettings: DEFAULT_LAYOUT_SETTINGS.tableSettings
+    };
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  // Quick reset to default colors only
+  const resetColors = () => {
+    const newSettings = {
+      ...layoutSettings,
+      colorSettings: DEFAULT_LAYOUT_SETTINGS.colorSettings
+    };
+    setLayoutSettings(newSettings);
+    onSave(newSettings);
+  };
+
+  const handleReset = () => {
+    const defaultSettings = DEFAULT_LAYOUT_SETTINGS;
+    setLayoutSettings(defaultSettings);
+    onSave(defaultSettings);
+  };
+
+  const handleSave = () => {
+    onSave(layoutSettings);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Riding List Layout Settings</CardTitle>
+            <CardDescription>
+              Customize the appearance of your PDF riding lists for better readability
+            </CardDescription>
           </div>
-        </Button>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset('medium')}
-          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
-          disabled={isPending}
-        >
-          <div className="text-center">
-            <div className="font-medium text-sm">Medium</div>
-            <div className="text-xs text-muted-foreground mt-1">Standard</div>
-            <div className="text-xs mt-1 text-primary">7-10pt</div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onPreview}
+              disabled={isPending}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              disabled={isPending}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset All
+            </Button>
           </div>
-        </Button>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset('large')}
-          className="h-auto py-3 flex flex-col items-center justify-center border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors"
-          disabled={isPending}
-        >
-          <div className="text-center">
-            <div className="font-medium text-sm">Large</div>
-            <div className="text-xs text-muted-foreground mt-1">Better Read</div>
-            <div className="text-xs mt-1 text-primary font-bold">8-12pt</div>
-          </div>
-        </Button>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset('extraLarge')}
-          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
-          disabled={isPending}
-        >
-          <div className="text-center">
-            <div className="font-medium text-sm">Extra Large</div>
-            <div className="text-xs text-muted-foreground mt-1">Large Print</div>
-            <div className="text-xs mt-1 text-primary">9-14pt</div>
-          </div>
-        </Button>
-        
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset('accessibility')}
-          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
-          disabled={isPending}
-        >
-          <div className="text-center">
-            <div className="font-medium text-sm">Accessibility</div>
-            <div className="text-xs text-muted-foreground mt-1">High Vis</div>
-            <div className="text-xs mt-1 text-primary">10-16pt</div>
-          </div>
-        </Button>
-      </div>
-      
-      {isPending && (
-        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
-          Saving changes...
         </div>
-      )}
-    </div>
-    
-    <Separator />
-    
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <Label>Row Height Presets</Label>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetTableSettings}
-          className="h-7 text-xs"
-        >
-          Reset Table
-        </Button>
-      </div>
-      <p className="text-sm text-muted-foreground mb-2">
-        Adjust spacing between rows (automatically saves)
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRowHeight(6)}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Compact</div>
-            <div className="text-xs text-muted-foreground">6px</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRowHeight(8)}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Standard</div>
-            <div className="text-xs text-muted-foreground">8px</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRowHeight(10)}
-          className="h-10 border-2 border-primary bg-primary/5 hover:bg-primary/10"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium font-bold">Spacious</div>
-            <div className="text-xs text-primary">10px</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRowHeight(12)}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Extra Spacious</div>
-            <div className="text-xs text-muted-foreground">12px</div>
-          </div>
-        </Button>
-      </div>
-    </div>
-    
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <Label>Color Themes</Label>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetColors}
-          className="h-7 text-xs"
-        >
-          Reset Colors
-        </Button>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('default')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Default</div>
-            <div className="text-xs text-muted-foreground">Blue Theme</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('police')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Police</div>
-            <div className="text-xs text-muted-foreground">Blue & Red</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('high-contrast')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">High Contrast</div>
-            <div className="text-xs text-muted-foreground">Accessibility</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('grayscale')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Grayscale</div>
-            <div className="text-xs text-muted-foreground">Print Friendly</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('dark')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Dark</div>
-            <div className="text-xs text-muted-foreground">Dark Mode</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => applyColorTheme('print-friendly')}
-          className="h-10 hover:border-primary hover:bg-primary/5"
-          disabled={isPending}
-        >
-          <div className="text-center w-full">
-            <div className="font-medium">Print Friendly</div>
-            <div className="text-xs text-muted-foreground">Black & White</div>
-          </div>
-        </Button>
-      </div>
-    </div>
-    
-    <div className="bg-muted/50 p-4 rounded-lg">
-      <h4 className="font-medium text-sm mb-2">💡 Tips for Better Readability</h4>
-      <ul className="text-sm text-muted-foreground space-y-1">
-        <li>• Use "Large" or "Accessibility" presets for printed copies</li>
-        <li>• Presets automatically save - no need to click "Save Settings"</li>
-        <li>• Increase row height when using larger fonts</li>
-        <li>• Adjust column widths if text is being cut off</li>
-        <li>• Preview changes before final export</li>
-        <li>• Use "High Contrast" theme for maximum readability</li>
-      </ul>
-    </div>
-  </div>
-</TabsContent>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="presets">
+          <TabsList className="grid grid-cols-5 mb-4">
+            <TabsTrigger value="presets" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Presets</span>
+            </TabsTrigger>
+            <TabsTrigger value="sections" className="flex items-center gap-2">
+              <Table className="h-4 w-4" />
+              <span className="hidden sm:inline">Sections</span>
+            </TabsTrigger>
+            <TabsTrigger value="fonts" className="flex items-center gap-2">
+              <Type className="h-4 w-4" />
+              <span className="hidden sm:inline">Fonts</span>
+            </TabsTrigger>
+            <TabsTrigger value="table" className="flex items-center gap-2">
+              <Table className="h-4 w-4" />
+              <span className="hidden sm:inline">Table</span>
+            </TabsTrigger>
+            <TabsTrigger value="colors" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              <span className="hidden sm:inline">Colors</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* PRESETS TAB */}
+          <TabsContent value="presets" className="space-y-4">
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label>Quick Font Presets</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFontSizes}
+                    className="h-7 text-xs"
+                    disabled={isPending}
+                  >
+                    Reset Fonts
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  One-click font size sets with automatic saving
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset('small')}
+                    className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+                    disabled={isPending}
+                  >
+                    <div className="text-center">
+                      <div className="font-medium text-sm">Small</div>
+                      <div className="text-xs text-muted-foreground mt-1">Compact</div>
+                      <div className="text-xs mt-1 text-primary">6-8pt</div>
+                    </div>
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset('medium')}
+                    className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+                    disabled={isPending}
+                  >
+                    <div className="text-center">
+                      <div className="font-medium text-sm">Medium</div>
+                      <div className="text-xs text-muted-foreground mt-1">Standard</div>
+                      <div className="text-xs mt-1 text-primary">7-10pt</div>
+                    </div>
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset('large')}
+                    className="h-auto py-3 flex flex-col items-center justify-center border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors"
+                    disabled={isPending}
+                  >
+                    <div className="text-center">
+                      <div className="font-medium text-sm">Large</div>
+                      <div className="text-xs text-muted-foreground mt-1">Better Read</div>
+                      <div className="text-xs mt-1 text-primary font-bold">8-12pt</div>
+                    </div>
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset('extraLarge')}
+                    className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+                    disabled={isPending}
+                  >
+                    <div className="text-center">
+                      <div className="font-medium text-sm">Extra Large</div>
+                      <div className="text-xs text-muted-foreground mt-1">Large Print</div>
+                      <div className="text-xs mt-1 text-primary">9-14pt</div>
+                    </div>
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset('accessibility')}
+                    className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+                    disabled={isPending}
+                  >
+                    <div className="text-center">
+                      <div className="font-medium text-sm">Accessibility</div>
+                      <div className="text-xs text-muted-foreground mt-1">High Vis</div>
+                      <div className="text-xs mt-1 text-primary">10-16pt</div>
+                    </div>
+                  </Button>
+                </div>
+                
+                {isPending && (
+                  <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
+                    Saving changes...
+                  </div>
+                )}
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Row Height Presets</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetTableSettings}
+                    className="h-7 text-xs"
+                    disabled={isPending}
+                  >
+                    Reset Table
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Adjust spacing between rows (automatically saves)
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRowHeight(6)}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Compact</div>
+                      <div className="text-xs text-muted-foreground">6px</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRowHeight(8)}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Standard</div>
+                      <div className="text-xs text-muted-foreground">8px</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRowHeight(10)}
+                    className="h-10 border-2 border-primary bg-primary/5 hover:bg-primary/10"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium font-bold">Spacious</div>
+                      <div className="text-xs text-primary">10px</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRowHeight(12)}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Extra Spacious</div>
+                      <div className="text-xs text-muted-foreground">12px</div>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Color Themes</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetColors}
+                    className="h-7 text-xs"
+                    disabled={isPending}
+                  >
+                    Reset Colors
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('default')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Default</div>
+                      <div className="text-xs text-muted-foreground">Blue Theme</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('police')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Police</div>
+                      <div className="text-xs text-muted-foreground">Blue & Red</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('high-contrast')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">High Contrast</div>
+                      <div className="text-xs text-muted-foreground">Accessibility</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('grayscale')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Grayscale</div>
+                      <div className="text-xs text-muted-foreground">Print Friendly</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('dark')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Dark</div>
+                      <div className="text-xs text-muted-foreground">Dark Mode</div>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyColorTheme('print-friendly')}
+                    className="h-10 hover:border-primary hover:bg-primary/5"
+                    disabled={isPending}
+                  >
+                    <div className="text-center w-full">
+                      <div className="font-medium">Print Friendly</div>
+                      <div className="text-xs text-muted-foreground">Black & White</div>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h4 className="font-medium text-sm mb-2">💡 Tips for Better Readability</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• Use "Large" or "Accessibility" presets for printed copies</li>
+                  <li>• Presets automatically save - no need to click "Save Settings"</li>
+                  <li>• Increase row height when using larger fonts</li>
+                  <li>• Adjust column widths if text is being cut off</li>
+                  <li>• Preview changes before final export</li>
+                  <li>• Use "High Contrast" theme for maximum readability</li>
+                </ul>
+              </div>
+            </div>
+          </TabsContent>
 
           {/* SECTIONS TAB */}
           <TabsContent value="sections" className="space-y-4">
@@ -364,6 +676,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       id="showSupervisors"
                       checked={layoutSettings.sections.showSupervisors}
                       onCheckedChange={(checked) => handleSectionToggle('showSupervisors', checked)}
+                      disabled={isPending}
                     />
                   </div>
                   
@@ -376,6 +689,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       id="showOfficers"
                       checked={layoutSettings.sections.showOfficers}
                       onCheckedChange={(checked) => handleSectionToggle('showOfficers', checked)}
+                      disabled={isPending}
                     />
                   </div>
                   
@@ -388,6 +702,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       id="showSpecialAssignments"
                       checked={layoutSettings.sections.showSpecialAssignments}
                       onCheckedChange={(checked) => handleSectionToggle('showSpecialAssignments', checked)}
+                      disabled={isPending}
                     />
                   </div>
                   
@@ -400,6 +715,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       id="showPTO"
                       checked={layoutSettings.sections.showPTO}
                       onCheckedChange={(checked) => handleSectionToggle('showPTO', checked)}
+                      disabled={isPending}
                     />
                   </div>
                   
@@ -412,6 +728,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       id="showStaffingSummary"
                       checked={layoutSettings.sections.showStaffingSummary}
                       onCheckedChange={(checked) => handleSectionToggle('showStaffingSummary', checked)}
+                      disabled={isPending}
                     />
                   </div>
                 </div>
@@ -436,6 +753,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.header.max}
                       step={FONT_SIZE_RANGES.header.step}
                       onValueChange={([value]) => handleFontSizeChange('header', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Shift name and date at top
@@ -453,6 +771,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.tableHeader.max}
                       step={FONT_SIZE_RANGES.tableHeader.step}
                       onValueChange={([value]) => handleFontSizeChange('tableHeader', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Column headers in tables
@@ -477,6 +796,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.nameColumn.max}
                       step={FONT_SIZE_RANGES.nameColumn.step}
                       onValueChange={([value]) => handleFontSizeChange('nameColumn', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Names in all officer columns
@@ -494,6 +814,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.beatColumn.max}
                       step={FONT_SIZE_RANGES.beatColumn.step}
                       onValueChange={([value]) => handleFontSizeChange('beatColumn', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Beat, district, or assignment numbers
@@ -511,6 +832,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.badgeColumn.max}
                       step={FONT_SIZE_RANGES.badgeColumn.step}
                       onValueChange={([value]) => handleFontSizeChange('badgeColumn', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Badge numbers in all tables
@@ -528,6 +850,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.notesColumn.max}
                       step={FONT_SIZE_RANGES.notesColumn.step}
                       onValueChange={([value]) => handleFontSizeChange('notesColumn', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Notes, partnerships, and special info
@@ -552,6 +875,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.ptoTimeColumn.max}
                       step={FONT_SIZE_RANGES.ptoTimeColumn.step}
                       onValueChange={([value]) => handleFontSizeChange('ptoTimeColumn', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Time ranges for PTO entries
@@ -569,6 +893,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={FONT_SIZE_RANGES.footer.max}
                       step={FONT_SIZE_RANGES.footer.step}
                       onValueChange={([value]) => handleFontSizeChange('footer', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Staffing summary and timestamp
@@ -596,6 +921,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={14}
                       step={0.5}
                       onValueChange={([value]) => handleTableSettingChange('rowHeight', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Height of each table row
@@ -613,6 +939,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={8}
                       step={0.5}
                       onValueChange={([value]) => handleTableSettingChange('cellPadding', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Space inside each cell
@@ -631,6 +958,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                     id="showRowStriping"
                     checked={layoutSettings.tableSettings.showRowStriping}
                     onCheckedChange={(checked) => handleTableSettingChange('showRowStriping', checked)}
+                    disabled={isPending}
                   />
                 </div>
                 
@@ -643,6 +971,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                     id="compactMode"
                     checked={layoutSettings.tableSettings.compactMode}
                     onCheckedChange={(checked) => handleTableSettingChange('compactMode', checked)}
+                    disabled={isPending}
                   />
                 </div>
               </div>
@@ -652,7 +981,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
               <div>
                 <h4 className="font-medium mb-3">Column Width Adjustments</h4>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Adjust percentage of table width allocated to each column type
+                  Adjust percentage of table width allocated to each column type (automatically saves)
                 </p>
                 
                 <div className="space-y-4">
@@ -667,6 +996,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={0.5}
                       step={0.01}
                       onValueChange={([value]) => handleColumnWidthChange('name', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Space for officer/supervisor names
@@ -684,6 +1014,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={0.5}
                       step={0.01}
                       onValueChange={([value]) => handleColumnWidthChange('notes', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Space for notes and details
@@ -701,6 +1032,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={0.15}
                       step={0.01}
                       onValueChange={([value]) => handleColumnWidthChange('beat', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Space for beat/district numbers
@@ -718,6 +1050,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
                       max={0.15}
                       step={0.01}
                       onValueChange={([value]) => handleColumnWidthChange('badge', value)}
+                      disabled={isPending}
                     />
                     <p className="text-xs text-muted-foreground">
                       Space for badge numbers
@@ -913,8 +1246,8 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-sm text-muted-foreground">
-            <p>Current settings will apply to all future PDF exports.</p>
-            <p>Use "Preview" to test changes before saving.</p>
+            <p>Note: Presets and column width changes save automatically.</p>
+            <p>Use "Preview" to test changes before final export.</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -931,7 +1264,7 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
               disabled={isPending}
               className="min-w-[100px]"
             >
-              {isPending ? "Saving..." : "Save Settings"}
+              {isPending ? "Saving..." : "Save All Settings"}
             </Button>
           </div>
         </div>

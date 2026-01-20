@@ -772,43 +772,54 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
             <NotificationsBell />
             
             {/* User Profile Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <div className="text-right hidden sm:block">
-                    <p className="font-medium">{profile?.full_name || user?.email}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{primaryRole}</p>
-                  </div>
-                  <UserIcon className="h-4 w-4 md:h-5 md:w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                
-                {/* Change Password - Using the fixed component */}
-                {user && (
-                  <ChangePassword userId={user.id} userEmail={user.email!}>
-                    <DropdownMenuItem 
-                      className="cursor-pointer"
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      <Lock className="h-4 w-4 mr-2" />
-                      Change Password
-                    </DropdownMenuItem>
-                  </ChangePassword>
-                )}
-                
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  className="cursor-pointer text-red-600 focus:text-red-600"
-                  onClick={handleSignOut}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button variant="ghost" className="flex items-center gap-2">
+      <div className="text-right hidden sm:block">
+        <p className="font-medium">{profile?.full_name || user?.email}</p>
+        <p className="text-sm text-muted-foreground capitalize">{primaryRole}</p>
+      </div>
+      <UserIcon className="h-4 w-4 md:h-5 md:w-5" />
+    </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="end" className="w-56">
+    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+    <DropdownMenuSeparator />
+    
+    {/* Change Password - Using the fixed component */}
+    {user && (
+      <ChangePassword userId={user.id} userEmail={user.email!}>
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onSelect={(e) => e.preventDefault()}
+        >
+          <Lock className="h-4 w-4 mr-2" />
+          Change Password
+        </DropdownMenuItem>
+      </ChangePassword>
+    )}
+    
+    {/* PWA Re-enable Option - Only show if PWA is not installed */}
+    {!pwaStatus.isInstalled && user && (
+      <DropdownMenuItem 
+        className="cursor-pointer"
+        onClick={() => enablePwaPromptAgain()}
+      >
+        <Smartphone className="h-4 w-4 mr-2" />
+        Show Install Prompt
+      </DropdownMenuItem>
+    )}
+    
+    <DropdownMenuSeparator />
+    <DropdownMenuItem 
+      className="cursor-pointer text-red-600 focus:text-red-600"
+      onClick={handleSignOut}
+    >
+      <LogOut className="h-4 w-4 mr-2" />
+      Logout
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
           </div>
         </div>
       </header>

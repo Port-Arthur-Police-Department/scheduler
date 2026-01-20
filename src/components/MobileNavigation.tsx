@@ -90,11 +90,10 @@ const MobileNavigation = ({
     officerItems.push({ id: 'requests', label: 'PTO', icon: Clock });
   }
 
-  // Navigation items for admin/supervisor
+  // Navigation items for admin/supervisor - REMOVED "Officers" tab
   const adminSupervisorItems: NavItem[] = [
     { id: 'daily', label: 'Riding List', icon: Calendar },
     { id: 'schedule', label: 'The Book', icon: Calendar },
-    { id: 'officers', label: 'Officers', icon: Users },
     { id: 'vacancies', label: 'Vacancies', icon: AlertTriangle },
     { id: 'staff', label: 'Staff', icon: Users },
   ];

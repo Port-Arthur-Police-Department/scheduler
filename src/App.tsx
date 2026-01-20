@@ -8,32 +8,26 @@ import NotFound from "./pages/NotFound";
 import { useIsMobile } from "./hooks/use-mobile";
 import { UserProvider } from "@/contexts/UserContext";
 import { QueryClientProvider } from "@/providers/QueryClientProvider";
-import { OneSignalDebug } from "@/components/OneSignalDebug";
 import { useEffect, useState } from "react";
-import { X, Download, Bell, Smartphone, CheckCircle, RefreshCw } from "lucide-react";
+import { X, Download, Bell, Smartphone, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 declare global {
   interface Window {
-    OneSignal: any;
     deferredPrompt: any;
   }
 }
 
 const App = () => {
   const isMobile = useIsMobile();
-  const [oneSignalStatus, setOneSignalStatus] = useState<{
-    initialized: boolean;
-    userId: string | null;
+  const [notificationStatus, setNotificationStatus] = useState<{
+    permission: NotificationPermission;
     subscribed: boolean;
-    permission: string;
   }>({
-    initialized: false,
-    userId: null,
-    subscribed: false,
-    permission: 'default'
+    permission: 'default',
+    subscribed: false
   });
   const [pwaStatus, setPwaStatus] = useState({
     isInstallable: false,
@@ -47,11 +41,10 @@ const App = () => {
   const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState<string>('');
-  const [isInitializingOneSignal, setIsInitializingOneSignal] = useState(false);
 
   // Auto-hide status panel after 10 seconds if everything is ready
   useEffect(() => {
-    if (oneSignalStatus.initialized && pwaStatus.serviceWorkerActive) {
+    if (notificationStatus.permission === 'granted' && pwaStatus.serviceWorkerActive) {
       const timer = setTimeout(() => {
         setShowStatusPanel(false);
       }, 10000);
@@ -62,7 +55,7 @@ const App = () => {
         if (timer) clearTimeout(timer);
       };
     }
-  }, [oneSignalStatus.initialized, pwaStatus.serviceWorkerActive]);
+  }, [notificationStatus.permission, pwaStatus.serviceWorkerActive]);
 
   // Enhanced PWA Status Check and Service Worker Registration
   useEffect(() => {
@@ -149,7 +142,6 @@ const App = () => {
       try {
         // Try to register service worker for PWA
         try {
-          // First try at root scope (for PWA)
           const registration = await navigator.serviceWorker.register(
             '/service-worker.js',
             { 
@@ -207,226 +199,55 @@ const App = () => {
     };
   }, []);
 
-  // SIMPLE OneSignal Initialization - Using browser notifications as fallback
+  // Browser Notification Initialization
   useEffect(() => {
-    console.log('🚀 Setting up notifications...');
+    console.log('🔔 Setting up browser notifications...');
     
     const initializeNotifications = async () => {
-      // First, check browser permission
+      // Check browser permission
       const browserPermission = Notification.permission;
       console.log('🔔 Browser notification permission:', browserPermission);
       
-      if (browserPermission === 'granted') {
-        // Already have permission
-        setOneSignalStatus(prev => ({
-          ...prev,
-          permission: 'granted',
-          initialized: true
-        }));
-        
-        // Check if we have a OneSignal ID stored
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('onesignal_user_id, notification_subscribed')
-            .eq('id', session.user.id)
-            .single();
-            
-          if (profile?.onesignal_user_id && profile.notification_subscribed) {
-            setOneSignalStatus(prev => ({
-              ...prev,
-              subscribed: true,
-              userId: profile.onesignal_user_id
-            }));
-            setShowNotificationBanner(false);
-          }
-        }
-      } else if (browserPermission === 'denied') {
-        setOneSignalStatus(prev => ({
-          ...prev,
-          permission: 'denied',
-          initialized: true
-        }));
-        setShowNotificationBanner(false);
-      }
+      // Update state
+      setNotificationStatus(prev => ({
+        ...prev,
+        permission: browserPermission
+      }));
       
-      // Try to initialize OneSignal if available
-      initializeOneSignal();
+      // Check if user has already subscribed (stored in database)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('notification_subscribed')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profile?.notification_subscribed && browserPermission === 'granted') {
+          setNotificationStatus(prev => ({
+            ...prev,
+            subscribed: true
+          }));
+          setShowNotificationBanner(false);
+        } else if (browserPermission === 'default') {
+          // Show banner if permission hasn't been requested yet
+          setShowNotificationBanner(true);
+        }
+      }
     };
     
     initializeNotifications();
   }, []);
 
-  // Try to initialize OneSignal
-  const initializeOneSignal = async () => {
-    if (isInitializingOneSignal || oneSignalStatus.initialized) return;
-    
-    setIsInitializingOneSignal(true);
-    console.log('🔄 Attempting OneSignal initialization...');
-    
-    try {
-      // Check if OneSignal SDK is loaded
-      if (typeof window.OneSignal === 'undefined') {
-        console.log('⏳ OneSignal SDK not loaded yet');
-        setIsInitializingOneSignal(false);
-        return;
-      }
-      
-      // Initialize OneSignal
-      await window.OneSignal.init({
-        appId: "3417d840-c226-40ba-92d6-a7590c31eef3",
-        safari_web_id: "web.onesignal.auto.1d0d9a2a-074d-4411-b3af-2aed688566e1",
-        
-        // Service worker paths for GitHub Pages
-        serviceWorkerPath: '/OneSignalSDKWorker.js',
-        serviceWorkerParam: { scope: '/' },
-        
-        // Disable auto-prompt (we'll handle it manually)
-        autoPrompt: false,
-        
-        // Prompt settings
-        promptOptions: {
-          slidedown: {
-            enabled: true,
-            autoPrompt: false,
-            timeDelay: 3,
-            pageViews: 1,
-            actionMessage: "Get police department shift alerts",
-            acceptButtonText: "ALLOW",
-            cancelButtonText: "NO THANKS"
-          }
-        },
-        
-        // Welcome notification
-        welcomeNotification: {
-          disable: false,
-          title: "Port Arthur PD Notifications",
-          message: "You'll receive shift alerts and emergency notifications"
-        },
-        
-        notifyButton: {
-          enable: false
-        },
-        
-        // GitHub Pages settings
-        allowLocalhostAsSecureOrigin: true,
-        autoResubscribe: true,
-        persistNotification: false,
-        autoRegister: true,
-        httpPermissionRequest: {
-          enable: true
-        }
-      });
-      
-      console.log('✅ OneSignal initialized');
-      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
-      
-      // Check subscription status
-      await checkOneSignalSubscription();
-      
-      // Set up subscription change listener
-      window.OneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-        console.log(`🔔 OneSignal subscriptionChange: ${isSubscribed}`);
-        
-        if (isSubscribed) {
-          try {
-            const onesignalUserId = await window.OneSignal.getUserId();
-            console.log(`🎉 User subscribed with OneSignal ID: ${onesignalUserId}`);
-            
-            // Store in database
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user?.id && onesignalUserId) {
-              await supabase
-                .from('profiles')
-                .update({ 
-                  onesignal_user_id: onesignalUserId,
-                  notification_subscribed: true,
-                  notification_subscribed_at: new Date().toISOString()
-                })
-                .eq('id', session.user.id);
-              
-              console.log('✅ OneSignal ID saved to profile');
-            }
-          } catch (error) {
-            console.error('Error saving OneSignal ID:', error);
-          }
-        }
-        
-        // Get the userId asynchronously
-        let userId = null;
-        if (isSubscribed) {
-          try {
-            userId = await window.OneSignal.getUserId();
-          } catch (error) {
-            console.error('Error getting OneSignal userId:', error);
-          }
-        }
-        
-        setOneSignalStatus(prev => ({
-          ...prev,
-          subscribed: isSubscribed,
-          userId: userId
-        }));
-        
-        if (isSubscribed) {
-          setShowNotificationBanner(false);
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ OneSignal initialization failed:', error);
-      // OneSignal failed, but we still have browser notifications
-      setOneSignalStatus(prev => ({ ...prev, initialized: true }));
-    } finally {
-      setIsInitializingOneSignal(false);
-    }
-  };
-
-  // Check OneSignal subscription status
-  const checkOneSignalSubscription = async () => {
-    if (!window.OneSignal || typeof window.OneSignal.getUserId !== 'function') {
-      return null;
-    }
-    
-    try {
-      const userId = await window.OneSignal.getUserId();
-      const permission = await window.OneSignal.getNotificationPermission();
-      const isSubscribed = !!userId;
-      
-      console.log('🔍 OneSignal Subscription Status:', {
-        userId: userId || 'Not subscribed',
-        permission,
-        isSubscribed
-      });
-      
-      setOneSignalStatus(prev => ({
-        ...prev,
-        userId,
-        subscribed: isSubscribed,
-        permission
-      }));
-      
-      if (isSubscribed) {
-        setShowNotificationBanner(false);
-      }
-      
-      return { userId, isSubscribed, permission };
-    } catch (error) {
-      console.error('Error checking OneSignal subscription:', error);
-      return null;
-    }
-  };
-
-  // WORKING: Manually trigger subscription prompt
+  // Trigger subscription prompt for browser notifications
   const triggerSubscriptionPrompt = async () => {
-    console.log('🎯 Triggering subscription prompt...');
+    console.log('🎯 Requesting browser notification permission...');
     
     // Show loading message
     setSubscriptionMessage('🔄 Requesting notification permission...');
     
     try {
-      // First, try browser's native permission request (this always works)
+      // Request browser permission
       const browserPermission = await Notification.requestPermission();
       console.log('Browser permission result:', browserPermission);
       
@@ -435,14 +256,13 @@ const App = () => {
         setSubscriptionMessage('✅ Browser notifications enabled!');
         
         // Update state
-        setOneSignalStatus(prev => ({
+        setNotificationStatus(prev => ({
           ...prev,
           permission: 'granted',
-          subscribed: true,
-          initialized: true
+          subscribed: true
         }));
         
-        // Store in database (using browser as provider)
+        // Store in database
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.id) {
           await supabase
@@ -460,15 +280,13 @@ const App = () => {
         // Show success message
         toast.success("Notifications enabled! You'll receive shift alerts.");
         
-        // Try to initialize OneSignal after permission is granted
-        setTimeout(() => {
-          initializeOneSignal();
-        }, 1000);
-        
       } else if (browserPermission === 'denied') {
         setSubscriptionMessage('❌ Notifications blocked in browser settings');
-        setOneSignalStatus(prev => ({ ...prev, permission: 'denied' }));
+        setNotificationStatus(prev => ({ ...prev, permission: 'denied' }));
         toast.error("Notifications blocked. Please enable them in browser settings.");
+      } else {
+        setSubscriptionMessage('❌ Notification permission not granted');
+        setNotificationStatus(prev => ({ ...prev, permission: 'default' }));
       }
       
     } catch (error) {
@@ -483,38 +301,29 @@ const App = () => {
     }, 3000);
   };
 
-  // Test notification function
+  // Test notification function using browser notifications
   const testNotification = async () => {
     // First check if we have browser permission
     if (Notification.permission !== 'granted') {
-      alert('You need to enable notifications first.');
+      toast.error('You need to enable notifications first.');
       triggerSubscriptionPrompt();
       return;
     }
     
     try {
-      // Try to send via OneSignal if available
-      if (window.OneSignal && oneSignalStatus.subscribed) {
-        await window.OneSignal.sendSelfNotification({
-          headings: { en: 'Test Notification' },
-          contents: { en: 'This is a test notification from the Police Department Scheduler' },
-          url: window.location.href
-        });
-        toast.success("Test notification sent via OneSignal!");
-      } else {
-        // Fallback to browser notifications
-        const notification = new Notification('Police Department Test', {
-          body: 'This is a test notification from the Police Department Scheduler',
-          icon: '/scheduler/icon-192.png',
-          tag: 'test-notification'
-        });
-        
-        notification.onclick = () => {
-          window.focus();
-        };
-        
-        toast.success("Test notification sent via browser!");
-      }
+      // Use browser notifications
+      const notification = new Notification('Police Department Test', {
+        body: 'This is a test notification from the Police Department Scheduler',
+        icon: '/scheduler/icon-192.png',
+        tag: 'test-notification',
+        badge: '/scheduler/icon-192.png'
+      });
+      
+      notification.onclick = () => {
+        window.focus();
+      };
+      
+      toast.success("Test notification sent via browser!");
     } catch (error) {
       console.error('Error sending test notification:', error);
       toast.error("Failed to send test notification");
@@ -621,8 +430,7 @@ const App = () => {
         <Sonner />
         <HashRouter>
           <UserProvider>
-            {/* OneSignal Debug Component */}
-            {import.meta.env.DEV && <OneSignalDebug />}
+            {/* REMOVED: OneSignal Debug Component */}
             
             {/* Subscription Status Message */}
             {subscriptionMessage && (
@@ -643,7 +451,7 @@ const App = () => {
             )}
             
             {/* Notification Subscription Banner */}
-            {showNotificationBanner && !oneSignalStatus.subscribed && Notification.permission === 'default' && (
+            {showNotificationBanner && !notificationStatus.subscribed && Notification.permission === 'default' && (
               <div className="fixed top-0 left-0 right-0 z-40 bg-blue-600 text-white p-4 shadow-lg">
                 <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -819,9 +627,9 @@ const App = () => {
                     width: '12px',
                     height: '12px',
                     borderRadius: '50%',
-                    background: oneSignalStatus.initialized ? '#10b981' : '#f59e0b'
+                    background: notificationStatus.permission === 'granted' ? '#10b981' : '#f59e0b'
                   }} />
-                  <strong>Notifications:</strong> {oneSignalStatus.subscribed ? '✅ Enabled' : '❌ Disabled'}
+                  <strong>Notifications:</strong> {notificationStatus.subscribed ? '✅ Enabled' : '❌ Disabled'}
                 </div>
                 
                 <div style={{ marginBottom: '8px' }}>
@@ -843,7 +651,7 @@ const App = () => {
                   <button
                     onClick={triggerSubscriptionPrompt}
                     style={{
-                      background: oneSignalStatus.subscribed ? '#10b981' : '#3b82f6',
+                      background: notificationStatus.subscribed ? '#10b981' : '#3b82f6',
                       color: 'white',
                       border: 'none',
                       padding: '8px 12px',
@@ -854,7 +662,7 @@ const App = () => {
                       fontWeight: 'bold'
                     }}
                   >
-                    {oneSignalStatus.subscribed ? '✅ Notifications Enabled' : '🔔 Enable Notifications'}
+                    {notificationStatus.subscribed ? '✅ Notifications Enabled' : '🔔 Enable Notifications'}
                   </button>
                   
                   <button

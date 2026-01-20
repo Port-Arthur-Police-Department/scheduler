@@ -1,5 +1,5 @@
 // src/components/admin/StaffManagement.tsx
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +11,17 @@ import { OfficerProfileDialog } from "./OfficerProfileDialog";
 import { OfficerScheduleManager } from "./OfficerScheduleManager";
 import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
 import { PartnershipManagement } from "./PartnershipManagement";
+import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
-import { auditLogger } from "@/lib/auditLogger";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 
-export const StaffManagement = () => {
+interface StaffManagementProps {
+  userId: string;
+  isAdminOrSupervisor: boolean;
+}
+
+export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagementProps) => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);
   const [managingSchedule, setManagingSchedule] = useState<any>(null);
   const [creatingNewOfficer, setCreatingNewOfficer] = useState(false);
@@ -390,29 +394,15 @@ export const StaffManagement = () => {
             )}
           </TabsContent>
           
-          {/* Schedules Tab Content - Placeholder for now */}
+          {/* Schedules Tab Content - Now with OfficersManagement */}
           <TabsContent value="schedules" className="mt-0">
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">Schedule Management</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Manage officer schedules from the main schedule view or by clicking on individual officers above.
-              </p>
-              <div className="flex flex-col gap-2 max-w-md mx-auto">
-                <p className="text-sm text-muted-foreground">
-                  • Use the "Schedule" button on each officer card to manage their recurring schedules
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  • Visit the Daily Schedule view for day-to-day schedule management
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  • Use the Force List for special assignment management
-                </p>
-              </div>
-            </div>
+            <OfficersManagement 
+              userId={userId} 
+              isAdminOrSupervisor={isAdminOrSupervisor} 
+            />
           </TabsContent>
           
-          {/* Partnerships Tab Content - NEW */}
+          {/* Partnerships Tab Content */}
           <TabsContent value="partnerships" className="mt-0">
             <PartnershipManagement />
           </TabsContent>

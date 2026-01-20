@@ -202,6 +202,7 @@ export const StaffManagement = () => {
         <div className="px-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="officers">Officers</TabsTrigger>
+            <TabsTrigger value="schedules">Schedules</TabsTrigger>
             <TabsTrigger value="partnerships">Partnerships</TabsTrigger>
           </TabsList>
         </div>
@@ -386,6 +387,28 @@ export const StaffManagement = () => {
                 )}
               </div>
             )}
+          </TabsContent>
+          
+          {/* Schedules Tab Content - Placeholder for now */}
+          <TabsContent value="schedules" className="mt-0">
+            <div className="text-center py-12">
+              <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Schedule Management</h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Manage officer schedules from the main schedule view or by clicking on individual officers above.
+              </p>
+              <div className="flex flex-col gap-2 max-w-md mx-auto">
+                <p className="text-sm text-muted-foreground">
+                  • Use the "Schedule" button on each officer card to manage their recurring schedules
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  • Visit the Daily Schedule view for day-to-day schedule management
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  • Use the Force List for special assignment management
+                </p>
+              </div>
+            </div>
           </TabsContent>
           
           {/* Partnerships Tab Content - NEW */}

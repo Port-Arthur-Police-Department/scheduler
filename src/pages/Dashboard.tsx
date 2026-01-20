@@ -931,86 +931,76 @@ case "daily":
         {!isMobile && (
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             {isAdmin ? (
-              // Admin tabs - All tabs including Settings
-              // Dynamically calculate grid columns based on PTO tab visibility
-              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-7' : 'md:grid-cols-6'} gap-1`}>
-                <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
-                  <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Riding List</span>  
-                  <span className="md:hidden">Daily</span>        
-                </TabsTrigger>
-                <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
-                  <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">The Book</span>
-                  <span className="md:hidden">Weekly</span>
-                </TabsTrigger>
-                <TabsTrigger value="officers" className="flex-shrink-0 whitespace-nowrap">
-                  <Users className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Officers</span>
-                  <span className="md:hidden">Officers</span>
-                </TabsTrigger>
-                <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
-                  <AlertTriangle className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Vacancies</span>
-                  <span className="md:hidden">Vacancies</span>
-                </TabsTrigger>
-                <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
-                  <Users className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Staff</span>
-                  <span className="md:hidden">Staff</span>
-                </TabsTrigger>
-                {/* Conditionally show PTO tab */}
-                {showPtoTab && (
-                  <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-                    <Clock className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">PTO</span>
-                    <span className="md:hidden">PTO</span>
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
-                  <Settings className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Settings</span>
-                  <span className="md:hidden">Settings</span>
-                </TabsTrigger>
-              </TabsList>
-            ) : isAdminOrSupervisor ? (
-              // Supervisor tabs - All tabs except Settings
-              // Dynamically calculate grid columns based on PTO tab visibility
-              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-1`}>
-                <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
-                  <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Riding List</span>  
-                  <span className="md:hidden">Daily</span>        
-                </TabsTrigger>
-                <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
-                  <Calendar className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">The Book</span>
-                  <span className="md:hidden">Weekly</span>
-                </TabsTrigger>
-                <TabsTrigger value="officers" className="flex-shrink-0 whitespace-nowrap">
-                  <Users className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Officers</span>
-                  <span className="md:hidden">Officers</span>
-                </TabsTrigger>
-                <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
-                  <AlertTriangle className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Vacancies</span>
-                  <span className="md:hidden">Vacancies</span>
-                </TabsTrigger>
-                <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
-                  <Users className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Staff</span>
-                  <span className="md:hidden">Staff</span>
-                </TabsTrigger>
-                {/* Conditionally show PTO tab */}
-                {showPtoTab && (
-                  <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
-                    <Clock className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">PTO</span>
-                    <span className="md:hidden">PTO</span>
-                  </TabsTrigger>
-                )}
-              </TabsList>
+             // Admin tabs - remove "officers" since it's now in Staff
+<TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-1`}>
+  <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+    <Calendar className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Riding List</span>  
+    <span className="md:hidden">Daily</span>        
+  </TabsTrigger>
+  <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+    <Calendar className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">The Book</span>
+    <span className="md:hidden">Weekly</span>
+  </TabsTrigger>
+  {/* REMOVED: Officers tab - now in Staff Management */}
+  <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
+    <AlertTriangle className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Vacancies</span>
+    <span className="md:hidden">Vacancies</span>
+  </TabsTrigger>
+  <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
+    <Users className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Staff</span>
+    <span className="md:hidden">Staff</span>
+  </TabsTrigger>
+  {/* Conditionally show PTO tab */}
+  {showPtoTab && (
+    <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+      <Clock className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">PTO</span>
+      <span className="md:hidden">PTO</span>
+    </TabsTrigger>
+  )}
+  <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
+    <Settings className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Settings</span>
+    <span className="md:hidden">Settings</span>
+  </TabsTrigger>
+</TabsList>
+
+// Supervisor tabs - remove "officers" since it's now in Staff
+<TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-1`}>
+  <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+    <Calendar className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Riding List</span>  
+    <span className="md:hidden">Daily</span>        
+  </TabsTrigger>
+  <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+    <Calendar className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">The Book</span>
+    <span className="md:hidden">Weekly</span>
+  </TabsTrigger>
+  {/* REMOVED: Officers tab - now in Staff Management */}
+  <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
+    <AlertTriangle className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Vacancies</span>
+    <span className="md:hidden">Vacancies</span>
+  </TabsTrigger>
+  <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
+    <Users className="h-4 w-4 md:mr-2" />
+    <span className="hidden md:inline">Staff</span>
+    <span className="md:hidden">Staff</span>
+  </TabsTrigger>
+  {/* Conditionally show PTO tab */}
+  {showPtoTab && (
+    <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+      <Clock className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">PTO</span>
+      <span className="md:hidden">PTO</span>
+    </TabsTrigger>
+  )}
+</TabsList>
             ) : (
               // Officer tabs - Daily, Weekly, and PTO tabs
               // Dynamically calculate grid columns based on PTO tab visibility

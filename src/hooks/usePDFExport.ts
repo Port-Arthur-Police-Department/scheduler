@@ -1,3 +1,4 @@
+
 import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
@@ -128,8 +129,14 @@ const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['co
 };
 
 // Helper to extract just the number from positions like "District 1", "Beat 2", "District 1/2"
+// UPDATED: Also abbreviate "City-Wide" to "CW"
 const extractBeatNumber = (position: string | undefined): string => {
   if (!position) return "";
+  
+  // Check if it's "City-Wide" (case insensitive)
+  if (position.toLowerCase() === "city-wide") {
+    return "CW";
+  }
   
   // Remove common prefixes and trim whitespace
   const cleanedPosition = position
@@ -172,6 +179,7 @@ const formatFullName = (fullName: string): string => {
   
   return `${firstName} ${lastName}`;
 };
+
 
 // Your actual base64 logo - paste your complete string here
 const getLogoBase64 = (): string => {
@@ -253,19 +261,32 @@ const formatOfficerDisplay = (officer: any) => {
 };
 
 // UPDATED: Function to format partnership details for notes - ONLY PARTNER BADGE IN PARENTHESES
-const formatPartnershipDetails = (person: any) => {
+// Also adds "City-Wide" note when beat is City-Wide
+const formatPartnershipDetails = (person: any, position: string = "") => {
+  let notes = person?.notes || "";
+  
+  // Check if position is "City-Wide" and add note if not already present
+  if (position && position.toLowerCase() === "city-wide") {
+    const cityWideNote = "City-Wide";
+    if (!notes.toLowerCase().includes("city-wide")) {
+      if (notes) {
+        notes = `${cityWideNote} | ${notes}`;
+      } else {
+        notes = cityWideNote;
+      }
+    }
+  }
+  
   if (!person.isCombinedPartnership || !person.partnerData) {
-    return person?.notes || "";
+    return notes;
   }
 
   // Only include the partner badge number in parentheses
   const partnerBadge = person.partnerData.partnerBadge || "";
   let partnershipInfo = partnerBadge ? `(${partnerBadge})` : "";
   
-  // Keep existing notes if any, but remove any existing partnership info to avoid duplication
-  let existingNotes = person?.notes || "";
-  
   // Remove any existing partnership/badge mention from notes to avoid duplication
+  let existingNotes = notes;
   const partnershipPatterns = [
     /PARTNERSHIP:.*/i,
     /PARTNER:.*/i,
@@ -442,7 +463,7 @@ const drawCompactTable = (
       let cellText = cell?.toString() || "";
       const maxTextWidth = colWidths[cellIndex] - (cellPadding * 2);
       
-      // For BEAT column, extract just the number
+      // For BEAT column, extract just the number or abbreviate City-Wide
       const currentHeader = headers[cellIndex].toUpperCase();
       if (currentHeader === "BEAT") {
         cellText = extractBeatNumber(cellText);
@@ -617,11 +638,12 @@ export const usePDFExport = () => {
           
           // UPDATED: Use supervisor formatting with rank
           const displayName = formatSupervisorDisplay(supervisor);
-          const notes = formatPartnershipDetails(supervisor);
+          const position = supervisor?.position || "";
+          const notes = formatPartnershipDetails(supervisor, position);
           
           supervisorsData.push([
             displayName,
-            extractBeatNumber(supervisor?.position || ""), // Extract just beat number
+            extractBeatNumber(position), // Extract just beat number or abbreviate City-Wide
             supervisor?.badge || "",
             supervisor?.unitNumber ? `Unit ${supervisor.unitNumber}` : "",
             notes
@@ -665,11 +687,12 @@ export const usePDFExport = () => {
           
           // UPDATED: Use officer formatting with partnership
           const displayName = formatOfficerDisplay(officer);
-          const notes = formatPartnershipDetails(officer);
+          const position = officer?.position || "";
+          const notes = formatPartnershipDetails(officer, position);
           
           regularOfficersData.push([
             displayName,
-            extractBeatNumber(officer?.position || ""), // Extract just beat number
+            extractBeatNumber(position), // Extract just beat number or abbreviate City-Wide
             officer?.badge || "",
             officer?.unitNumber || "",
             notes
@@ -712,7 +735,8 @@ export const usePDFExport = () => {
           
           // UPDATED: Use officer formatting with partnership
           const displayName = formatOfficerDisplay(officer);
-          const notes = formatPartnershipDetails(officer);
+          const position = officer?.position || "";
+          const notes = formatPartnershipDetails(officer, position);
           
           specialAssignmentData.push([
             displayName,

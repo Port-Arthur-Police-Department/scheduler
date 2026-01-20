@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { auditLogger } from "@/lib/auditLogger";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 
 export const StaffManagement = () => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);

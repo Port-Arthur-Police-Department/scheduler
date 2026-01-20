@@ -22,7 +22,7 @@ export default defineConfig({
         orientation: "portrait-primary",
         scope: "/scheduler/",
         start_url: "/scheduler/",
-        id: "/scheduler/", // Important for scope isolation
+        id: "/scheduler/",
         categories: ["productivity", "business"],
         
         icons: [
@@ -105,10 +105,21 @@ export default defineConfig({
         
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/cdn\.onesignal\.com\/.*/i,
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'onesignal-cache',
+              cacheName: 'google-fonts-static-cache',
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 30
@@ -119,7 +130,7 @@ export default defineConfig({
       },
       
       devOptions: {
-        enabled: true, // Enable in development for testing
+        enabled: true,
         type: 'module',
         navigateFallback: 'index.html'
       }

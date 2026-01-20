@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -22,7 +22,6 @@ declare global {
 
 const App = () => {
   const isMobile = useIsMobile();
-  const location = useLocation();
   const [notificationStatus, setNotificationStatus] = useState<{
     permission: NotificationPermission;
     subscribed: boolean;
@@ -99,7 +98,7 @@ const App = () => {
     };
     
     checkAuthAndManagePrompt();
-  }, [location, pwaStatus.isInstallable, pwaStatus.isInstalled, pwaStatus.serviceWorkerActive]);
+  }, [pwaStatus.isInstallable, pwaStatus.isInstalled, pwaStatus.serviceWorkerActive]);
 
   // Listen for auth state changes
   useEffect(() => {

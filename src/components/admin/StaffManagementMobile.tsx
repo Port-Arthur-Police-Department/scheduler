@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OfficersManagement } from "../staff/OfficersManagement"; 
+import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 
 interface StaffManagementMobileProps {
   userId?: string;

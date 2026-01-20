@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -22,6 +22,7 @@ declare global {
 
 const App = () => {
   const isMobile = useIsMobile();
+  const location = useLocation();
   const [notificationStatus, setNotificationStatus] = useState<{
     permission: NotificationPermission;
     subscribed: boolean;
@@ -34,13 +35,15 @@ const App = () => {
     isInstalled: false,
     serviceWorkerActive: false,
     hasManifest: false,
-    showInstallPrompt: false,
     deferredPrompt: null as any
   });
   const [showStatusPanel, setShowStatusPanel] = useState(true);
   const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [subscriptionMessage, setSubscriptionMessage] = useState<string>('');
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [userLoggedIn, setUserLoggedIn] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Auto-hide status panel after 10 seconds if everything is ready
   useEffect(() => {
@@ -56,6 +59,77 @@ const App = () => {
       };
     }
   }, [notificationStatus.permission, pwaStatus.serviceWorkerActive]);
+
+  // Check authentication status and manage PWA prompt
+  useEffect(() => {
+    const checkAuthAndManagePrompt = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const isAuthenticated = !!session;
+      const userId = session?.user?.id || null;
+      
+      setUserLoggedIn(isAuthenticated);
+      setCurrentUserId(userId);
+      
+      if (isAuthenticated && userId) {
+        // Check if user has dismissed the prompt before
+        const hasDismissedPrompt = localStorage.getItem(`pwa_prompt_dismissed_${userId}`);
+        const hasSeenPromptThisSession = sessionStorage.getItem(`pwa_prompt_shown_${userId}`);
+        
+        // Only show if PWA is installable, not installed, not dismissed, and not shown this session
+        if (pwaStatus.isInstallable && 
+            !pwaStatus.isInstalled && 
+            !hasDismissedPrompt && 
+            !hasSeenPromptThisSession &&
+            pwaStatus.serviceWorkerActive) {
+          
+          // Small delay to ensure user sees they're logged in first
+          setTimeout(() => {
+            setShowInstallPrompt(true);
+            // Mark as shown for this session
+            sessionStorage.setItem(`pwa_prompt_shown_${userId}`, 'true');
+          }, 1500);
+          
+        } else {
+          setShowInstallPrompt(false);
+        }
+      } else {
+        // User is not logged in, hide the prompt
+        setShowInstallPrompt(false);
+      }
+    };
+    
+    checkAuthAndManagePrompt();
+  }, [location, pwaStatus.isInstallable, pwaStatus.isInstalled, pwaStatus.serviceWorkerActive]);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          // Clear session storage when user logs out
+          // This will allow prompt to show for next user
+          const userId = session?.user?.id;
+          if (userId) {
+            sessionStorage.removeItem(`pwa_prompt_shown_${userId}`);
+          }
+          setCurrentUserId(null);
+          setUserLoggedIn(false);
+        } else if (event === 'SIGNED_IN') {
+          // User just logged in - triggers the auth check effect above
+          console.log('User signed in, PWA prompt logic will run');
+        } else if (event === 'INITIAL_SESSION') {
+          // Handle initial session
+          const userId = session?.user?.id;
+          setCurrentUserId(userId);
+          setUserLoggedIn(!!session);
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Enhanced PWA Status Check and Service Worker Registration
   useEffect(() => {
@@ -79,8 +153,7 @@ const App = () => {
             ...prev,
             isInstalled,
             serviceWorkerActive,
-            hasManifest,
-            showInstallPrompt: !isInstalled && serviceWorkerActive && hasManifest
+            hasManifest
           }));
         });
       } else {
@@ -102,20 +175,14 @@ const App = () => {
       setPwaStatus(prev => ({ 
         ...prev, 
         isInstallable: true,
-        deferredPrompt,
-        showInstallPrompt: true
+        deferredPrompt
       }));
       
       // Also save to window for backup
       window.deferredPrompt = e;
       
-      toast.info("Police Scheduler can be installed as an app!", {
-        duration: 5000,
-        action: {
-          label: "Install",
-          onClick: () => installPWA()
-        }
-      });
+      // Don't show toast automatically, we'll show our custom prompt after login
+      console.log('PWA is installable, will show prompt after login if not dismissed');
     };
     
     const handleAppInstalled = () => {
@@ -123,10 +190,9 @@ const App = () => {
       setPwaStatus(prev => ({ 
         ...prev, 
         isInstallable: false, 
-        isInstalled: true,
-        showInstallPrompt: false,
-        deferredPrompt: null
+        isInstalled: true
       }));
+      setShowInstallPrompt(false);
       window.deferredPrompt = null;
       
       toast.success("Police Scheduler installed successfully!");
@@ -330,7 +396,7 @@ const App = () => {
     }
   };
 
-  // WORKING PWA install function
+  // PWA install function
   const installPWA = async () => {
     console.log('📲 Attempting PWA installation...');
     
@@ -356,12 +422,16 @@ const App = () => {
           toast.success("Police Scheduler is installing...");
         } else {
           console.log('❌ User dismissed PWA installation');
-          setPwaStatus(prev => ({ ...prev, showInstallPrompt: false }));
-          toast.info("Installation canceled. You can install later.");
+          // User chose "Not Now" - store dismissal preference
+          if (currentUserId) {
+            localStorage.setItem(`pwa_prompt_dismissed_${currentUserId}`, 'true');
+          }
+          toast.info("Installation canceled. You can install later from settings.");
         }
         
-        // Clear the prompt
+        // Clear the prompt and hide our custom prompt
         setPwaStatus(prev => ({ ...prev, deferredPrompt: null }));
+        setShowInstallPrompt(false);
         window.deferredPrompt = null;
         
       } catch (error) {
@@ -370,6 +440,28 @@ const App = () => {
       }
     } else {
       showManualInstallInstructions();
+    }
+  };
+
+  // Handle dismissing the PWA prompt
+  const handleDismissPrompt = async () => {
+    if (currentUserId) {
+      // Store dismissal preference for this user
+      localStorage.setItem(`pwa_prompt_dismissed_${currentUserId}`, 'true');
+    }
+    
+    setShowInstallPrompt(false);
+    toast.info("You can install the app later from Settings.");
+  };
+
+  // Function to re-enable PWA prompt from settings
+  const enablePwaPromptAgain = async () => {
+    if (currentUserId) {
+      localStorage.removeItem(`pwa_prompt_dismissed_${currentUserId}`);
+      sessionStorage.removeItem(`pwa_prompt_shown_${currentUserId}`);
+      toast.success("PWA install prompt will appear after your next login or page refresh.");
+    } else {
+      toast.error("You need to be logged in to change this setting.");
     }
   };
 
@@ -416,10 +508,6 @@ const App = () => {
     setAutoHideTimer(newTimer);
   };
 
-  const hideInstallPrompt = () => {
-    setPwaStatus(prev => ({ ...prev, showInstallPrompt: false }));
-  };
-
   // Only show in development mode
   const shouldShowPanel = import.meta.env.DEV && showStatusPanel;
 
@@ -430,7 +518,6 @@ const App = () => {
         <Sonner />
         <HashRouter>
           <UserProvider>
-            {/* REMOVED: OneSignal Debug Component */}
             
             {/* Subscription Status Message */}
             {subscriptionMessage && (
@@ -480,8 +567,8 @@ const App = () => {
               </div>
             )}
             
-            {/* Custom PWA Install Prompt */}
-            {pwaStatus.showInstallPrompt && !pwaStatus.isInstalled && (
+            {/* Custom PWA Install Prompt - Shows only after login */}
+            {showInstallPrompt && userLoggedIn && pwaStatus.isInstallable && !pwaStatus.isInstalled && (
               <div className="fixed bottom-4 right-4 z-50 max-w-sm animate-slide-up">
                 <div className="bg-white rounded-lg shadow-xl border border-blue-200 p-4">
                   <div className="flex items-start justify-between mb-3">
@@ -491,11 +578,11 @@ const App = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-900">Install Police Scheduler</h3>
-                        <p className="text-sm text-gray-600">Get quick access to your shifts</p>
+                        <p className="text-sm text-gray-600">Get quick access to your shifts - Recommended for all officers</p>
                       </div>
                     </div>
                     <button
-                      onClick={hideInstallPrompt}
+                      onClick={handleDismissPrompt}
                       className="text-gray-400 hover:text-gray-600 transition-colors"
                     >
                       <X className="h-4 w-4" />
@@ -505,15 +592,15 @@ const App = () => {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm text-gray-700">
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Works offline</span>
+                      <span>Works offline when network is unavailable</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-700">
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Push notifications</span>
+                      <span>Push notifications for shift changes</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-700">
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Quick access from home screen</span>
+                      <span>Quick access from home screen like an app</span>
                     </div>
                   </div>
                   
@@ -526,7 +613,7 @@ const App = () => {
                       Install App
                     </Button>
                     <Button
-                      onClick={hideInstallPrompt}
+                      onClick={handleDismissPrompt}
                       variant="outline"
                       className="flex-1"
                     >
@@ -535,7 +622,7 @@ const App = () => {
                   </div>
                   
                   <p className="text-xs text-gray-500 mt-3">
-                    For all 129+ officers • Secure HTTPS connection
+                    For all 129+ officers • Secure HTTPS connection • Department approved
                   </p>
                 </div>
               </div>
@@ -646,6 +733,14 @@ const App = () => {
                   <strong>PWA:</strong> {pwaStatus.isInstalled ? '✅ Installed' : pwaStatus.serviceWorkerActive ? '📱 Ready' : '🔧 Setting up...'}
                 </div>
                 
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>User Logged In:</strong> {userLoggedIn ? '✅ Yes' : '❌ No'}
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <strong>Prompt Status:</strong> {showInstallPrompt ? '🟡 Showing' : '⚫ Hidden'}
+                </div>
+                
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <button
@@ -682,7 +777,7 @@ const App = () => {
                     Test Notification
                   </button>
                   
-                  {pwaStatus.showInstallPrompt && (
+                  {pwaStatus.isInstallable && !pwaStatus.isInstalled && (
                     <button
                       onClick={installPWA}
                       style={{
@@ -697,6 +792,24 @@ const App = () => {
                       }}
                     >
                       📱 Install App
+                    </button>
+                  )}
+                  
+                  {currentUserId && (
+                    <button
+                      onClick={enablePwaPromptAgain}
+                      style={{
+                        background: '#f59e0b',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      🔄 Reset Prompt
                     </button>
                   )}
                 </div>

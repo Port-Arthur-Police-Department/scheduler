@@ -1,3 +1,6 @@
+
+
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -26,7 +29,6 @@ import { NotificationsBell } from "@/components/NotificationsBell";
 import { ChangePassword } from "@/components/profile/ChangePassword";
 import { StaffManagementMobile } from "@/components/admin/StaffManagementMobile";
 import PoliceNotificationSubscribe from '@/components/PoliceNotificationSubscribe';
-import { useOneSignal } from '@/hooks/useOneSignal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -126,6 +128,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   
   // Notification banner state
   const [showNotificationBanner, setShowNotificationBanner] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [notificationSubscribed, setNotificationSubscribed] = useState(false);
   
   const hash = location.hash.replace('#', '');
   const { 
@@ -161,45 +165,46 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     localStorage.setItem("pdpd-ui-theme", theme);
   }, [theme]);
 
-  // Use the OneSignal hook for subscription status
-  const { 
-    isInitialized: oneSignalInitialized,
-    isSubscribed: oneSignalSubscribed,
-    loading: oneSignalLoading,
-    error: oneSignalError
-  } = useOneSignal();
-
-  // Update notification banner based on OneSignal status
+  // Check browser notification status
   useEffect(() => {
-    console.log('🔔 OneSignal status in Dashboard:', {
-      initialized: oneSignalInitialized,
-      subscribed: oneSignalSubscribed,
-      loading: oneSignalLoading,
-      error: oneSignalError,
-      userHasProfile: !!user
-    });
-    
-    // Show/hide notification banner
-    if (user) {
-      if (oneSignalLoading) {
-        // Still loading, keep banner hidden until we know status
+    const checkNotificationStatus = async () => {
+      if (!user) {
         setShowNotificationBanner(false);
-      } else if (oneSignalError) {
-        // Error loading OneSignal, don't show banner
-        setShowNotificationBanner(false);
-        console.error('OneSignal error:', oneSignalError);
-      } else if (oneSignalSubscribed) {
-        // Already subscribed, hide banner
-        setShowNotificationBanner(false);
-      } else {
-        // Not subscribed, show banner
-        setShowNotificationBanner(true);
+        return;
       }
-    } else {
-      // No user, hide banner
-      setShowNotificationBanner(false);
-    }
-  }, [oneSignalInitialized, oneSignalSubscribed, oneSignalLoading, oneSignalError, user]);
+      
+      // Check browser permission
+      const permission = Notification.permission;
+      setNotificationPermission(permission);
+      
+      // Check if user has subscribed in database
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('notification_subscribed')
+          .eq('id', user.id)
+          .single();
+          
+        const isSubscribed = profile?.notification_subscribed || false;
+        setNotificationSubscribed(isSubscribed);
+        
+        console.log('🔔 Browser notification status:', {
+          permission,
+          isSubscribed,
+          userId: user.id
+        });
+        
+        // Show banner if not subscribed and permission is default
+        if (!isSubscribed && permission === 'default') {
+          setShowNotificationBanner(true);
+        } else {
+          setShowNotificationBanner(false);
+        }
+      }
+    };
+    
+    checkNotificationStatus();
+  }, [user]);
 
   // Fetch website settings
   const { data: websiteSettings } = useQuery({
@@ -303,12 +308,11 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       isMobile,
       activeTab,
       showPtoTab,
-      oneSignalSubscribed,
-      showNotificationBanner,
-      oneSignalInitialized,
-      oneSignalLoading
+      notificationPermission,
+      notificationSubscribed,
+      showNotificationBanner
     });
-  }, [user, profile, primaryRole, isAdminOrSupervisor, roleLoading, isMobile, activeTab, showPtoTab, oneSignalSubscribed, showNotificationBanner, oneSignalInitialized, oneSignalLoading]);
+  }, [user, profile, primaryRole, isAdminOrSupervisor, roleLoading, isMobile, activeTab, showPtoTab, notificationPermission, notificationSubscribed, showNotificationBanner]);
 
   // Add this useEffect to monitor userCurrentShift changes
   useEffect(() => {
@@ -317,6 +321,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       source: "state update"
     });
   }, [userCurrentShift]);
+
 
 
     // Replace this base64 string with your actual logo
@@ -805,12 +810,14 @@ case "daily":
       <main className={`container mx-auto px-4 ${isMobile ? 'pb-24' : 'py-8'}`}>
         
         {/* Police Department Notification Banner */}
-        {user && !oneSignalLoading && !oneSignalSubscribed && showNotificationBanner && (
+        {user && notificationPermission === 'default' && showNotificationBanner && (
           <div className="mb-6">
             <PoliceNotificationSubscribe 
               onSubscribed={() => {
                 console.log('Officer subscribed to notifications');
                 setShowNotificationBanner(false);
+                setNotificationSubscribed(true);
+                setNotificationPermission('granted');
               }}
             />
           </div>

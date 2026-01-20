@@ -1,3 +1,4 @@
+
 import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
@@ -181,16 +182,7 @@ const extractLastName = (fullName: string): string => {
   return lastName.toUpperCase();
 };
 
-// Helper to format name for partnerships (last names only)
-const formatNameForPartnership = (fullName: string): string => {
-  if (!fullName) return "UNKNOWN";
-  
-  const parts = fullName.trim().split(' ');
-  if (parts.length < 2) return fullName.toUpperCase();
-  
-  const lastName = parts[parts.length - 1];
-  return lastName.toUpperCase();
-};
+
 
 // Your actual base64 logo - paste your complete string here
 const getLogoBase64 = (): string => {
@@ -238,21 +230,20 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
   }
 };
 
-// UPDATED: Function to format supervisor display with rank
+// UPDATED: Function to format supervisor display WITHOUT rank in name column
 const formatSupervisorDisplay = (supervisor: any) => {
   if (!supervisor?.name) return "UNKNOWN";
   
   const name = extractLastName(supervisor.name);
-  const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
   
   // If supervisor has a partnership, include partner
   if (supervisor.isCombinedPartnership && supervisor.partnerData) {
     const partnerName = extractLastName(supervisor.partnerData.partnerName);
-    const partnerRank = supervisor.partnerData.partnerRank ? ` (${supervisor.partnerData.partnerRank})` : '';
-    return `${name}${rank} + ${partnerName}${partnerRank}`;
+    return `${name} + ${partnerName}`;
   }
   
-  return `${name}${rank}`;
+  // No partnership, show last name only (NO RANK in name column)
+  return name;
 };
 
 // UPDATED: Function to format officer display with partnership - LAST NAMES ONLY
@@ -646,14 +637,14 @@ export const usePDFExport = () => {
             return; // Skip this supervisor
           }
           
-          // UPDATED: Use supervisor formatting with rank
+          // UPDATED: Use supervisor formatting WITHOUT rank in name column
           const displayName = formatSupervisorDisplay(supervisor);
           const position = supervisor?.position || "";
           const notes = formatPartnershipDetails(supervisor, position);
           
           supervisorsData.push([
             displayName,
-            extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for supervisors
+            extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for beat column
             supervisor?.badge || "",
             supervisor?.unitNumber ? `Unit ${supervisor.unitNumber}` : "",
             notes

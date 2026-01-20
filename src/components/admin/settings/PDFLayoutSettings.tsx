@@ -64,263 +64,290 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
   };
 
   // Helper function to apply font presets
-  const applyPreset = (presetName: keyof typeof FONT_SIZE_PRESETS) => {
-    const preset = FONT_SIZE_PRESETS[presetName];
-    setLayoutSettings(prev => ({
-      ...prev,
-      fontSizes: {
-        ...prev.fontSizes,
-        ...preset
-      }
-    }));
-    
-    // Also adjust row height for certain presets
-    if (presetName === 'accessibility' || presetName === 'extraLarge') {
-      handleTableSettingChange('rowHeight', 10);
-    } else if (presetName === 'large') {
-      handleTableSettingChange('rowHeight', 9);
-    } else if (presetName === 'small') {
-      handleTableSettingChange('rowHeight', 7);
-    }
-  };
-
-  // Helper function to set row height
-  const setRowHeight = (height: number) => {
-    handleTableSettingChange('rowHeight', height);
-  };
-
-  // Helper function for column width changes
-  const handleColumnWidthChange = (column: keyof LayoutSettings['tableSettings']['columnWidths'], value: number) => {
-    setLayoutSettings(prev => ({
-      ...prev,
-      tableSettings: {
-        ...prev.tableSettings,
-        columnWidths: {
-          ...prev.tableSettings.columnWidths,
-          [column]: value
-        }
-      }
-    }));
-  };
-
-  const handleReset = () => {
-    setLayoutSettings(DEFAULT_LAYOUT_SETTINGS);
-    onSave(DEFAULT_LAYOUT_SETTINGS);
-  };
-
-  const handleSave = () => {
-    onSave(layoutSettings);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Riding List Layout Settings</CardTitle>
-            <CardDescription>
-              Customize the appearance of your PDF riding lists for better readability
-            </CardDescription>
+{/* Add this to your Presets tab section */}
+<TabsContent value="presets" className="space-y-4">
+  <div className="space-y-4">
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <Label>Quick Font Presets</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetFontSizes}
+          className="h-7 text-xs"
+        >
+          Reset Fonts
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-3">
+        One-click font size sets with automatic saving
+      </p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyPreset('small')}
+          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+          disabled={isPending}
+        >
+          <div className="text-center">
+            <div className="font-medium text-sm">Small</div>
+            <div className="text-xs text-muted-foreground mt-1">Compact</div>
+            <div className="text-xs mt-1 text-primary">6-8pt</div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onPreview}
-              disabled={isPending}
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Preview
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              disabled={isPending}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset All
-            </Button>
+        </Button>
+        
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyPreset('medium')}
+          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+          disabled={isPending}
+        >
+          <div className="text-center">
+            <div className="font-medium text-sm">Medium</div>
+            <div className="text-xs text-muted-foreground mt-1">Standard</div>
+            <div className="text-xs mt-1 text-primary">7-10pt</div>
           </div>
+        </Button>
+        
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyPreset('large')}
+          className="h-auto py-3 flex flex-col items-center justify-center border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors"
+          disabled={isPending}
+        >
+          <div className="text-center">
+            <div className="font-medium text-sm">Large</div>
+            <div className="text-xs text-muted-foreground mt-1">Better Read</div>
+            <div className="text-xs mt-1 text-primary font-bold">8-12pt</div>
+          </div>
+        </Button>
+        
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyPreset('extraLarge')}
+          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+          disabled={isPending}
+        >
+          <div className="text-center">
+            <div className="font-medium text-sm">Extra Large</div>
+            <div className="text-xs text-muted-foreground mt-1">Large Print</div>
+            <div className="text-xs mt-1 text-primary">9-14pt</div>
+          </div>
+        </Button>
+        
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyPreset('accessibility')}
+          className="h-auto py-3 flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+          disabled={isPending}
+        >
+          <div className="text-center">
+            <div className="font-medium text-sm">Accessibility</div>
+            <div className="text-xs text-muted-foreground mt-1">High Vis</div>
+            <div className="text-xs mt-1 text-primary">10-16pt</div>
+          </div>
+        </Button>
+      </div>
+      
+      {isPending && (
+        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
+          Saving changes...
         </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="presets">
-          <TabsList className="grid grid-cols-5 mb-4">
-            <TabsTrigger value="presets" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Presets</span>
-            </TabsTrigger>
-            <TabsTrigger value="sections" className="flex items-center gap-2">
-              <Table className="h-4 w-4" />
-              <span className="hidden sm:inline">Sections</span>
-            </TabsTrigger>
-            <TabsTrigger value="fonts" className="flex items-center gap-2">
-              <Type className="h-4 w-4" />
-              <span className="hidden sm:inline">Fonts</span>
-            </TabsTrigger>
-            <TabsTrigger value="table" className="flex items-center gap-2">
-              <Table className="h-4 w-4" />
-              <span className="hidden sm:inline">Table</span>
-            </TabsTrigger>
-            <TabsTrigger value="colors" className="flex items-center gap-2">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">Colors</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* PRESETS TAB */}
-          <TabsContent value="presets" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <Label>Quick Font Presets</Label>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Apply pre-configured font size sets for different needs
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('small')}
-                    className="h-auto py-3 flex flex-col items-center justify-center"
-                  >
-                    <div className="text-center">
-                      <div className="font-medium text-sm">Small</div>
-                      <div className="text-xs text-muted-foreground mt-1">Compact view</div>
-                      <div className="text-xs mt-1">6-8pt</div>
-                    </div>
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('medium')}
-                    className="h-auto py-3 flex flex-col items-center justify-center"
-                  >
-                    <div className="text-center">
-                      <div className="font-medium text-sm">Medium</div>
-                      <div className="text-xs text-muted-foreground mt-1">Standard</div>
-                      <div className="text-xs mt-1">7-10pt</div>
-                    </div>
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('large')}
-                    className="h-auto py-3 flex flex-col items-center justify-center border-2 border-primary"
-                  >
-                    <div className="text-center">
-                      <div className="font-medium text-sm">Large</div>
-                      <div className="text-xs text-muted-foreground mt-1">Better readability</div>
-                      <div className="text-xs mt-1">8-12pt</div>
-                    </div>
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('extraLarge')}
-                    className="h-auto py-3 flex flex-col items-center justify-center"
-                  >
-                    <div className="text-center">
-                      <div className="font-medium text-sm">Extra Large</div>
-                      <div className="text-xs text-muted-foreground mt-1">Large print</div>
-                      <div className="text-xs mt-1">9-14pt</div>
-                    </div>
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('accessibility')}
-                    className="h-auto py-3 flex flex-col items-center justify-center"
-                  >
-                    <div className="text-center">
-                      <div className="font-medium text-sm">Accessibility</div>
-                      <div className="text-xs text-muted-foreground mt-1">High visibility</div>
-                      <div className="text-xs mt-1">10-16pt</div>
-                    </div>
-                  </Button>
-                </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <Label>Row Height Presets</Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Adjust spacing between rows for better readability
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRowHeight(6)}
-                    className="h-10"
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Compact</div>
-                      <div className="text-xs text-muted-foreground">6px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRowHeight(8)}
-                    className="h-10"
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Standard</div>
-                      <div className="text-xs text-muted-foreground">8px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRowHeight(10)}
-                    className="h-10"
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Spacious</div>
-                      <div className="text-xs text-muted-foreground">10px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRowHeight(12)}
-                    className="h-10"
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Extra Spacious</div>
-                      <div className="text-xs text-muted-foreground">12px</div>
-                    </div>
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <h4 className="font-medium text-sm mb-2">💡 Tips for Better Readability</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Use "Large" or "Accessibility" presets for printed copies</li>
-                  <li>• Increase row height when using larger fonts</li>
-                  <li>• Adjust column widths if text is being cut off</li>
-                  <li>• Preview changes before final export</li>
-                </ul>
-              </div>
-            </div>
-          </TabsContent>
+      )}
+    </div>
+    
+    <Separator />
+    
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label>Row Height Presets</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetTableSettings}
+          className="h-7 text-xs"
+        >
+          Reset Table
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-2">
+        Adjust spacing between rows (automatically saves)
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setRowHeight(6)}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Compact</div>
+            <div className="text-xs text-muted-foreground">6px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setRowHeight(8)}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Standard</div>
+            <div className="text-xs text-muted-foreground">8px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setRowHeight(10)}
+          className="h-10 border-2 border-primary bg-primary/5 hover:bg-primary/10"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium font-bold">Spacious</div>
+            <div className="text-xs text-primary">10px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setRowHeight(12)}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Extra Spacious</div>
+            <div className="text-xs text-muted-foreground">12px</div>
+          </div>
+        </Button>
+      </div>
+    </div>
+    
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label>Color Themes</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetColors}
+          className="h-7 text-xs"
+        >
+          Reset Colors
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('default')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Default</div>
+            <div className="text-xs text-muted-foreground">Blue Theme</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('police')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Police</div>
+            <div className="text-xs text-muted-foreground">Blue & Red</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('high-contrast')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">High Contrast</div>
+            <div className="text-xs text-muted-foreground">Accessibility</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('grayscale')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Grayscale</div>
+            <div className="text-xs text-muted-foreground">Print Friendly</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('dark')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Dark</div>
+            <div className="text-xs text-muted-foreground">Dark Mode</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => applyColorTheme('print-friendly')}
+          className="h-10 hover:border-primary hover:bg-primary/5"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Print Friendly</div>
+            <div className="text-xs text-muted-foreground">Black & White</div>
+          </div>
+        </Button>
+      </div>
+    </div>
+    
+    <div className="bg-muted/50 p-4 rounded-lg">
+      <h4 className="font-medium text-sm mb-2">💡 Tips for Better Readability</h4>
+      <ul className="text-sm text-muted-foreground space-y-1">
+        <li>• Use "Large" or "Accessibility" presets for printed copies</li>
+        <li>• Presets automatically save - no need to click "Save Settings"</li>
+        <li>• Increase row height when using larger fonts</li>
+        <li>• Adjust column widths if text is being cut off</li>
+        <li>• Preview changes before final export</li>
+        <li>• Use "High Contrast" theme for maximum readability</li>
+      </ul>
+    </div>
+  </div>
+</TabsContent>
 
           {/* SECTIONS TAB */}
           <TabsContent value="sections" className="space-y-4">

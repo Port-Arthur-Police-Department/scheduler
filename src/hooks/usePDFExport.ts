@@ -1,11 +1,55 @@
-
-
 import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { DEFAULT_LAYOUT_SETTINGS, LayoutSettings } from "@/constants/pdfLayoutSettings";
 
 // Layout Settings Interface
+interface LayoutSettings {
+  fontSizes: {
+    header: number;
+    sectionTitle: number;
+    tableHeader: number;
+    tableContent: number;
+    footer: number;
+  };
+  sections: {
+    showSupervisors: boolean;
+    showOfficers: boolean;
+    showSpecialAssignments: boolean;
+    showPTO: boolean;
+    showStaffingSummary: boolean;
+  };
+  tableSettings: {
+    rowHeight: number;
+    cellPadding: number;
+    showRowStriping: boolean;
+    compactMode: boolean;
+  };
+  colorSettings: {
+    // Header Colors - Each section has its own header background
+    supervisorHeaderBgColor: string;
+    officerHeaderBgColor: string;
+    specialHeaderBgColor: string;
+    ptoHeaderBgColor: string;
+    headerTextColor: string; // White text for all headers
+    
+    // Table Content Colors
+    officerTextColor: string;
+    supervisorTextColor: string;
+    specialAssignmentTextColor: string;
+    ptoTextColor: string;
+    
+    // Row Colors
+    evenRowColor: string;
+    oddRowColor: string;
+    
+    // Accent Colors (for top header and other accents)
+    primaryColor: string; // Shift and Date title only
+    secondaryColor: string;
+    accentColor: string;
+  };
+}
+
 interface ExportOptions {
   selectedDate: Date;
   shiftName: string;
@@ -84,8 +128,8 @@ const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['co
 };
 
 // Helper to extract just the number from positions like "District 1", "Beat 2", "District 1/2"
-// UPDATED: Also abbreviate "City-Wide" to "CW" and "Supervisor" to "Sup"
-const extractBeatNumber = (position: string | undefined): string => {
+// UPDATED: Also abbreviate "City-Wide" to "CW" and for supervisors, extract rank abbreviation
+const extractBeatNumber = (position: string | undefined, rank: string = ""): string => {
   if (!position) return "";
   
   // Check if it's "City-Wide" (case insensitive)
@@ -93,9 +137,21 @@ const extractBeatNumber = (position: string | undefined): string => {
     return "CW";
   }
   
-  // Check if it's "Supervisor" (case insensitive)
+  // For supervisors in supervisor table, use rank abbreviation instead of "Sup"
   if (position.toLowerCase() === "supervisor") {
-    return "Sup";
+    if (!rank) return "Sup";
+    
+    const rankLower = rank.toLowerCase();
+    if (rankLower.includes("sergeant") || rankLower.includes("sgt")) {
+      return "Sgt";
+    } else if (rankLower.includes("lieutenant") || rankLower.includes("lt")) {
+      return "LT";
+    } else if (rankLower.includes("captain") || rankLower.includes("cpt")) {
+      return "Cpt";
+    } else {
+      // Return first 3 characters of rank or full rank if shorter
+      return rank.substring(0, Math.min(3, rank.length)).toUpperCase();
+    }
   }
   
   // Remove common prefixes and trim whitespace
@@ -114,32 +170,27 @@ const extractBeatNumber = (position: string | undefined): string => {
   return position;
 };
 
-// Helper to extract first initial and last name from full name
-const formatNameWithInitial = (fullName: string): string => {
+// Helper to extract last name only from full name
+const extractLastName = (fullName: string): string => {
   if (!fullName) return "UNKNOWN";
   
   const parts = fullName.trim().split(' ');
   if (parts.length < 2) return fullName.toUpperCase();
   
-  const firstName = parts[0];
   const lastName = parts[parts.length - 1];
-  
-  return `${firstName.charAt(0).toUpperCase()}. ${lastName.toUpperCase()}`;
+  return lastName.toUpperCase();
 };
 
-// Helper to format full name (first and last) normally
-const formatFullName = (fullName: string): string => {
+// Helper to format name for partnerships (last names only)
+const formatNameForPartnership = (fullName: string): string => {
   if (!fullName) return "UNKNOWN";
   
   const parts = fullName.trim().split(' ');
   if (parts.length < 2) return fullName.toUpperCase();
   
-  const firstName = parts[0].toUpperCase();
-  const lastName = parts[parts.length - 1].toUpperCase();
-  
-  return `${firstName} ${lastName}`;
+  const lastName = parts[parts.length - 1];
+  return lastName.toUpperCase();
 };
-
 
 // Your actual base64 logo - paste your complete string here
 const getLogoBase64 = (): string => {
@@ -147,6 +198,8 @@ const getLogoBase64 = (): string => {
   
   return departmentLogo;
 };
+
+
 
 // Draw actual logo function
 const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
@@ -189,34 +242,32 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
 const formatSupervisorDisplay = (supervisor: any) => {
   if (!supervisor?.name) return "UNKNOWN";
   
-  // If supervisor has a partnership, use initials to save space
+  const name = extractLastName(supervisor.name);
+  const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
+  
+  // If supervisor has a partnership, include partner
   if (supervisor.isCombinedPartnership && supervisor.partnerData) {
-    const name = formatNameWithInitial(supervisor.name);
-    const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
-    const partnerName = formatNameWithInitial(supervisor.partnerData.partnerName);
+    const partnerName = extractLastName(supervisor.partnerData.partnerName);
     const partnerRank = supervisor.partnerData.partnerRank ? ` (${supervisor.partnerData.partnerRank})` : '';
     return `${name}${rank} + ${partnerName}${partnerRank}`;
   }
   
-  // No partnership, show full name
-  const name = formatFullName(supervisor.name);
-  const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
   return `${name}${rank}`;
 };
 
-// UPDATED: Function to format officer display with partnership
+// UPDATED: Function to format officer display with partnership - LAST NAMES ONLY
 const formatOfficerDisplay = (officer: any) => {
   if (!officer?.name) return "UNKNOWN";
   
-  // If officer has a partnership, use initials to save space
+  // If officer has a partnership, include partner
   if (officer.isCombinedPartnership && officer.partnerData) {
-    const name = formatNameWithInitial(officer.name);
-    const partnerName = formatNameWithInitial(officer.partnerData.partnerName);
+    const name = extractLastName(officer.name);
+    const partnerName = extractLastName(officer.partnerData.partnerName);
     return `${name} + ${partnerName}`;
   }
   
-  // No partnership, show full name
-  return formatFullName(officer.name);
+  // No partnership, show last name only
+  return extractLastName(officer.name);
 };
 
 // UPDATED: Function to format partnership details for notes - ONLY PARTNER BADGE IN PARENTHESES
@@ -271,7 +322,7 @@ const formatPartnershipDetails = (person: any, position: string = "") => {
   }
 };
 
-// ENHANCED: Table drawing function with column-specific font sizes and adjustable widths
+// UPDATED: Table drawing function with separate header colors and simplified beat column
 const drawCompactTable = (
   pdf: jsPDF, 
   headers: string[], 
@@ -286,35 +337,29 @@ const drawCompactTable = (
   
   const getColumnWidths = (headers: string[]) => {
     const totalColumns = headers.length;
-    
-    // Use column width settings from layoutSettings with fallback to defaults
-    const columnWidths = layoutSettings.tableSettings?.columnWidths || DEFAULT_LAYOUT_SETTINGS.tableSettings.columnWidths;
-    
-    // Map headers to column width percentages
-    const widthMappings: Record<string, number> = {
-      "REGULAR OFFICERS": columnWidths.name,
-      "SPECIAL ASSIGNMENT OFFICERS": columnWidths.name,
-      "PTO OFFICERS": columnWidths.name,
-      "OFFICERS": columnWidths.name,
-      "SUPERVISORS": columnWidths.name,
-      "BEAT": columnWidths.beat,
-      "ASSIGNMENT": columnWidths.assignment,
-      "BADGE #": columnWidths.badge,
-      "UNIT": columnWidths.unit,
-      "NOTES": columnWidths.notes,
-      "TYPE": columnWidths.type,
-      "TIME": columnWidths.time
+    const baseWidths = {
+      "REGULAR OFFICERS": 0.35,
+      "SPECIAL ASSIGNMENT OFFICERS": 0.35,
+      "PTO OFFICERS": 0.35,
+      "OFFICERS": 0.35,
+      "SUPERVISORS": 0.35,
+      "BEAT": 0.08, // Slightly narrower for just numbers
+      "ASSIGNMENT": 0.22, // Slightly wider to compensate
+      "BADGE #": 0.10,
+      "UNIT": 0.10,
+      "NOTES": 0.35,
+      "TYPE": 0.15,
+      "TIME": 0.35
     };
 
     return headers.map(header => {
-      const widthPercentage = widthMappings[header] || (1 / totalColumns);
+      const widthPercentage = baseWidths[header as keyof typeof baseWidths] || (1 / totalColumns);
       return tableWidth * widthPercentage;
     });
   };
 
   const colWidths = getColumnWidths(headers);
   
-  // Normalize column widths to ensure they fit within table width
   const totalWidth = colWidths.reduce((sum, width) => sum + width, 0);
   if (Math.abs(totalWidth - tableWidth) > 1) {
     const adjustmentFactor = tableWidth / totalWidth;
@@ -354,10 +399,7 @@ const drawCompactTable = (
     pdf.rect(x, y, colWidths[index], rowHeight, 'F');
     
     pdf.setFont("helvetica", "bold");
-    
-    // Use table header font size from settings
-    const headerFontSize = layoutSettings.fontSizes.tableHeader;
-    pdf.setFontSize(headerFontSize);
+    pdf.setFontSize(layoutSettings.fontSizes.tableHeader || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableHeader);
     
     // Use header text color from layout settings
     const headerTextColor = getColorSetting(layoutSettings, 'headerTextColor');
@@ -373,8 +415,9 @@ const drawCompactTable = (
 
   y += rowHeight;
 
-  // Draw data rows with column-specific font sizes
+  // Draw data rows
   pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(layoutSettings.fontSizes.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent);
   
   data.forEach((row, rowIndex) => {
     x = margins.left;
@@ -424,6 +467,7 @@ const drawCompactTable = (
       
       const textColorStr = getColorSetting(layoutSettings, colorKey);
       const textColor = parseColor(textColorStr);
+      
       pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
       
       let cellText = cell?.toString() || "";
@@ -435,35 +479,7 @@ const drawCompactTable = (
         cellText = extractBeatNumber(cellText);
       }
       
-      // Determine appropriate font size based on column type
-      let fontSize = layoutSettings.fontSizes.tableContent; // Default
-      
-      if (currentHeader === "OFFICERS" || currentHeader === "SUPERVISORS" || 
-          currentHeader === "SPECIAL ASSIGNMENT OFFICERS" || currentHeader === "PTO OFFICERS") {
-        fontSize = layoutSettings.fontSizes.nameColumn;
-      } else if (currentHeader === "BEAT") {
-        fontSize = layoutSettings.fontSizes.beatColumn;
-      } else if (currentHeader === "BADGE #") {
-        fontSize = layoutSettings.fontSizes.badgeColumn;
-      } else if (currentHeader === "NOTES") {
-        fontSize = layoutSettings.fontSizes.notesColumn;
-      } else if (currentHeader === "TIME") {
-        fontSize = layoutSettings.fontSizes.ptoTimeColumn;
-      } else if (currentHeader === "TYPE") {
-        fontSize = layoutSettings.fontSizes.badgeColumn; // Use badge size for TYPE
-      } else if (currentHeader === "UNIT") {
-        fontSize = layoutSettings.fontSizes.beatColumn; // Use beat size for UNIT
-      } else if (currentHeader === "ASSIGNMENT") {
-        fontSize = layoutSettings.fontSizes.notesColumn; // Use notes size for ASSIGNMENT
-      }
-      
-      // Ensure minimum font size of 6 for readability
-      fontSize = Math.max(fontSize, 6);
-      pdf.setFontSize(fontSize);
-      
       let displayText = cellText;
-      
-      // Truncate text if it doesn't fit
       if (pdf.getTextWidth(cellText) > maxTextWidth) {
         let truncated = cellText;
         while (pdf.getTextWidth(truncated + "...") > maxTextWidth && truncated.length > 1) {
@@ -490,12 +506,10 @@ const drawCompactTable = (
     
     y += rowHeight;
     
-    // Handle page breaks
     if (y > pdf.internal.pageSize.getHeight() - 30) {
       pdf.addPage();
       y = 30;
       
-      // Redraw headers on new page
       x = margins.left;
       headers.forEach((header, index) => {
         // Get appropriate header background color based on section type
@@ -522,8 +536,7 @@ const drawCompactTable = (
         pdf.rect(x, y, colWidths[index], rowHeight, 'F');
         
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(layoutSettings.fontSizes.tableHeader);
-        
+        pdf.setFontSize(layoutSettings.fontSizes.tableHeader || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableHeader);
         const headerTextColor = getColorSetting(layoutSettings, 'headerTextColor');
         const headerTextColorParsed = parseColor(headerTextColor);
         pdf.setTextColor(headerTextColorParsed[0], headerTextColorParsed[1], headerTextColorParsed[2]);
@@ -564,8 +577,8 @@ export const usePDFExport = () => {
         throw new Error("No shift data or date provided for PDF export");
       }
 
-      // Ensure layoutSettings has all required properties with proper defaults
-      const safeLayoutSettings: LayoutSettings = {
+      // Ensure layoutSettings has all required properties
+      const safeLayoutSettings = {
         ...DEFAULT_LAYOUT_SETTINGS,
         ...layoutSettings,
         fontSizes: {
@@ -578,11 +591,7 @@ export const usePDFExport = () => {
         },
         tableSettings: {
           ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-          ...(layoutSettings?.tableSettings || {}),
-          columnWidths: {
-            ...DEFAULT_LAYOUT_SETTINGS.tableSettings.columnWidths,
-            ...(layoutSettings?.tableSettings?.columnWidths || {})
-          }
+          ...(layoutSettings?.tableSettings || {})
         },
         colorSettings: {
           ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
@@ -620,6 +629,8 @@ export const usePDFExport = () => {
 
       // Supervisors section - Only show if enabled in layout settings
       if (safeLayoutSettings.sections.showSupervisors && shiftData.supervisors && shiftData.supervisors.length > 0) {
+        // NO SECTION TITLE - Just start with table
+        
         const supervisorsData: any[] = [];
 
         shiftData.supervisors.forEach((supervisor: any) => {
@@ -642,7 +653,7 @@ export const usePDFExport = () => {
           
           supervisorsData.push([
             displayName,
-            extractBeatNumber(position), // Extract just beat number or abbreviate City-Wide/Supervisor
+            extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for supervisors
             supervisor?.badge || "",
             supervisor?.unitNumber ? `Unit ${supervisor.unitNumber}` : "",
             notes
@@ -667,6 +678,8 @@ export const usePDFExport = () => {
 
       // SECTION 1: REGULAR OFFICERS TABLE - Only show if enabled
       if (safeLayoutSettings.sections.showOfficers && shiftData.officers && shiftData.officers.length > 0) {
+        // NO SECTION TITLE - Just start with table
+        
         const regularOfficersData: any[] = [];
         
         shiftData.officers.forEach((officer: any) => {
@@ -682,14 +695,14 @@ export const usePDFExport = () => {
             return; // Skip this officer
           }
           
-          // UPDATED: Use officer formatting with partnership
+          // UPDATED: Use officer formatting with partnership - LAST NAMES ONLY
           const displayName = formatOfficerDisplay(officer);
           const position = officer?.position || "";
           const notes = formatPartnershipDetails(officer, position);
           
           regularOfficersData.push([
             displayName,
-            extractBeatNumber(position), // Extract just beat number or abbreviate City-Wide/Supervisor
+            extractBeatNumber(position), // Extract just beat number or abbreviate City-Wide
             officer?.badge || "",
             officer?.unitNumber || "",
             notes
@@ -713,6 +726,8 @@ export const usePDFExport = () => {
 
       // SECTION 2: SPECIAL ASSIGNMENT OFFICERS TABLE - Only show if enabled
       if (safeLayoutSettings.sections.showSpecialAssignments && shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0) {
+        // NO SECTION TITLE - Just start with table
+        
         const specialAssignmentData: any[] = [];
         
         shiftData.specialAssignmentOfficers.forEach((officer: any) => {
@@ -728,7 +743,7 @@ export const usePDFExport = () => {
             return; // Skip this officer
           }
           
-          // UPDATED: Use officer formatting with partnership
+          // UPDATED: Use officer formatting with partnership - LAST NAMES ONLY
           const displayName = formatOfficerDisplay(officer);
           const position = officer?.position || "";
           const notes = formatPartnershipDetails(officer, position);
@@ -759,11 +774,13 @@ export const usePDFExport = () => {
 
       // SECTION 3: PTO/OFF DUTY TABLE - Only show if enabled
       if (safeLayoutSettings.sections.showPTO && shiftData.ptoRecords && shiftData.ptoRecords.length > 0) {
+        // NO SECTION TITLE - Just start with table
+        
         const ptoData: any[] = [];
         
         shiftData.ptoRecords.forEach((record: any) => {
-          // For PTO, always show full name (not abbreviated)
-          const name = record?.name ? formatFullName(record.name) : "UNKNOWN";
+          // For PTO, use last name only
+          const name = record?.name ? extractLastName(record.name) : "UNKNOWN";
           const badge = record?.badge || "";
           const ptoType = record?.ptoType ? record.ptoType.toUpperCase() : "UNKNOWN";
           

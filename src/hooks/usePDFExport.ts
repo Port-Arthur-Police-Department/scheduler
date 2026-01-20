@@ -1,5 +1,3 @@
-
-
 import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
@@ -162,7 +160,18 @@ const formatNameWithInitial = (fullName: string): string => {
   return `${firstName.charAt(0).toUpperCase()}. ${lastName.toUpperCase()}`;
 };
 
-
+// Helper to format full name (first and last) normally
+const formatFullName = (fullName: string): string => {
+  if (!fullName) return "UNKNOWN";
+  
+  const parts = fullName.trim().split(' ');
+  if (parts.length < 2) return fullName.toUpperCase();
+  
+  const firstName = parts[0].toUpperCase();
+  const lastName = parts[parts.length - 1].toUpperCase();
+  
+  return `${firstName} ${lastName}`;
+};
 
 // Your actual base64 logo - paste your complete string here
 const getLogoBase64 = (): string => {
@@ -170,6 +179,7 @@ const getLogoBase64 = (): string => {
   
   return departmentLogo;
 };
+
 
 // Draw actual logo function
 const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
@@ -212,16 +222,18 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
 const formatSupervisorDisplay = (supervisor: any) => {
   if (!supervisor?.name) return "UNKNOWN";
   
-  const name = formatNameWithInitial(supervisor.name);
-  const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
-  
-  // If supervisor has a partnership, include partner
+  // If supervisor has a partnership, use initials to save space
   if (supervisor.isCombinedPartnership && supervisor.partnerData) {
+    const name = formatNameWithInitial(supervisor.name);
+    const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
     const partnerName = formatNameWithInitial(supervisor.partnerData.partnerName);
     const partnerRank = supervisor.partnerData.partnerRank ? ` (${supervisor.partnerData.partnerRank})` : '';
     return `${name}${rank} + ${partnerName}${partnerRank}`;
   }
   
+  // No partnership, show full name
+  const name = formatFullName(supervisor.name);
+  const rank = supervisor.rank ? ` (${supervisor.rank})` : '';
   return `${name}${rank}`;
 };
 
@@ -229,15 +241,15 @@ const formatSupervisorDisplay = (supervisor: any) => {
 const formatOfficerDisplay = (officer: any) => {
   if (!officer?.name) return "UNKNOWN";
   
-  const name = formatNameWithInitial(officer.name);
-  
-  // If officer has a partnership, include partner
+  // If officer has a partnership, use initials to save space
   if (officer.isCombinedPartnership && officer.partnerData) {
+    const name = formatNameWithInitial(officer.name);
     const partnerName = formatNameWithInitial(officer.partnerData.partnerName);
     return `${name} + ${partnerName}`;
   }
   
-  return name;
+  // No partnership, show full name
+  return formatFullName(officer.name);
 };
 
 // UPDATED: Function to format partnership details for notes - ONLY PARTNER BADGE IN PARENTHESES
@@ -733,7 +745,8 @@ export const usePDFExport = () => {
         const ptoData: any[] = [];
         
         shiftData.ptoRecords.forEach((record: any) => {
-          const name = record?.name ? formatNameWithInitial(record.name) : "UNKNOWN";
+          // For PTO, always show full name (not abbreviated)
+          const name = record?.name ? formatFullName(record.name) : "UNKNOWN";
           const badge = record?.badge || "";
           const ptoType = record?.ptoType ? record.ptoType.toUpperCase() : "UNKNOWN";
           

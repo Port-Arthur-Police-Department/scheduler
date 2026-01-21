@@ -367,41 +367,40 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     enabled: open && !emergencyMode && !hasActivePartnership,
   });
   
-  const handleCreatePartnership = async () => {
-    if (!selectedPartner) return;
-    
-    if (emergencyMode) {
-      const partner = emergencyPartners?.find(p => p.id === selectedPartner);
-      console.log("🚨 Creating EMERGENCY partnership:", {
-        ppo: officer.name,
-        ppoRank: officer.rank,
-        partner: partner?.name,
-        partnerRank: partner?.rank,
-        partnerId: selectedPartner,
-        shift: officer.shift.name,
-        date: officer.date || format(new Date(), "yyyy-MM-dd")
-      });
+  // In PartnershipManager.tsx, update handleCreatePartnership:
+const handleCreatePartnership = async () => {
+  if (!selectedPartner) return;
+  
+  if (emergencyMode) {
+    const partner = emergencyPartners?.find(p => p.id === selectedPartner);
+    console.log("🚨 Creating EMERGENCY partnership:", {
+      ppo: officer.name,
+      partner: partner?.name,
+      partnerId: selectedPartner,
+      shift: officer.shift.name,
+      date: officer.date || format(new Date(), "yyyy-MM-dd")
+    });
 
-      onPartnershipChange(officer, selectedPartner);
-    } else {
-      const partner = availablePartners?.find(p => p.id === selectedPartner);
-      console.log("🤝 Creating regular partnership:", {
-        officer: officer.name,
-        officerRank: officer.rank,
-        partner: partner?.full_name,
-        partnerRank: partner?.rank,
-        partnerId: selectedPartner,
-        shift: officer.shift.name,
-        date: officer.date || format(new Date(), "yyyy-MM-dd")
-      });
+    // For emergency partnerships, don't pass position
+    onPartnershipChange(officer, selectedPartner);
+  } else {
+    const partner = availablePartners?.find(p => p.id === selectedPartner);
+    console.log("🤝 Creating regular partnership:", {
+      officer: officer.name,
+      partner: partner?.full_name,
+      partnerId: selectedPartner,
+      shift: officer.shift.name,
+      date: officer.date || format(new Date(), "yyyy-MM-dd")
+    });
 
-      onPartnershipChange(officer, selectedPartner);
-    }
-    
-    setOpen(false);
-    setSelectedPartner("");
-    setEmergencyMode(false);
-  };
+    // For regular partnerships, also don't pass position
+    onPartnershipChange(officer, selectedPartner);
+  }
+  
+  setOpen(false);
+  setSelectedPartner("");
+  setEmergencyMode(false);
+};
   
   const handleRemovePartnership = async () => {
     console.log("🗑️ Removing partnership for:", {

@@ -404,189 +404,211 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
             </TabsTrigger>
           </TabsList>
 
-          {/* PRESETS TAB */}
-          <TabsContent value="presets" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <Label>Quick Font Presets</Label>
-                    {activePreset && (
-                      <p className="text-sm text-muted-foreground">
-                        Currently using: <span className="font-medium text-primary">{activePreset.charAt(0).toUpperCase() + activePreset.slice(1)}</span> preset
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetFontSizes}
-                    className="h-7 text-xs"
-                    disabled={isPending}
-                  >
-                    Reset Fonts
-                  </Button>
+{/* PRESETS TAB - Updated for larger font sizes */}
+<TabsContent value="presets" className="space-y-4">
+  <div className="space-y-4">
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <Label>Quick Font Presets</Label>
+          {activePreset && (
+            <p className="text-sm text-muted-foreground">
+              Currently using: <span className="font-medium text-primary">{activePreset.charAt(0).toUpperCase() + activePreset.slice(1)}</span> preset
+            </p>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetFontSizes}
+          className="h-7 text-xs"
+          disabled={isPending}
+        >
+          Reset Fonts
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-3">
+        One-click font size sets. You can still adjust individual sizes after applying.
+      </p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-2">
+        {Object.entries(FONT_SIZE_PRESETS).map(([presetName, preset]) => {
+          // Calculate the approximate max font size for this preset
+          const maxSize = Math.max(
+            preset.header,
+            preset.tableContent,
+            preset.nameColumn
+          );
+          
+          return (
+            <Button
+              key={presetName}
+              type="button"
+              variant={activePreset === presetName ? "default" : "outline"}
+              size="sm"
+              onClick={() => applyPreset(presetName as keyof typeof FONT_SIZE_PRESETS)}
+              className="h-auto py-3 flex flex-col items-center justify-center transition-colors"
+              disabled={isPending}
+            >
+              <div className="text-center">
+                <div className="font-medium text-sm">
+                  {presetName === 'extraAccessibility' ? 'Extra Access' :
+                   presetName === 'giant' ? 'Giant' :
+                   presetName.charAt(0).toUpperCase() + presetName.slice(1)}
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  One-click font size sets. You can still adjust individual sizes after applying.
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-                  {Object.entries(FONT_SIZE_PRESETS).map(([presetName, preset]) => (
-                    <Button
-                      key={presetName}
-                      type="button"
-                      variant={activePreset === presetName ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => applyPreset(presetName as keyof typeof FONT_SIZE_PRESETS)}
-                      className="h-auto py-3 flex flex-col items-center justify-center transition-colors"
-                      disabled={isPending}
-                    >
-                      <div className="text-center">
-                        <div className="font-medium text-sm">
-                          {presetName.charAt(0).toUpperCase() + presetName.slice(1)}
-                        </div>
-                        <div className="text-xs mt-1">
-                          {preset.tableContent}pt
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-                
-                {isPending && (
-                  <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
-                    Saving changes...
-                  </div>
-                )}
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Row Height Presets</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetTableSettings}
-                    className="h-7 text-xs"
-                    disabled={isPending}
-                  >
-                    Reset Table
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Adjust spacing between rows (automatically saves)
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Button
-                    type="button"
-                    variant={layoutSettings.tableSettings.rowHeight === 6 ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setRowHeight(6)}
-                    className="h-10"
-                    disabled={isPending}
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Compact</div>
-                      <div className="text-xs">6px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={layoutSettings.tableSettings.rowHeight === 8 ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setRowHeight(8)}
-                    className="h-10"
-                    disabled={isPending}
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Standard</div>
-                      <div className="text-xs">8px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={layoutSettings.tableSettings.rowHeight === 10 ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setRowHeight(10)}
-                    className="h-10"
-                    disabled={isPending}
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Spacious</div>
-                      <div className="text-xs">10px</div>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={layoutSettings.tableSettings.rowHeight === 12 ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setRowHeight(12)}
-                    className="h-10"
-                    disabled={isPending}
-                  >
-                    <div className="text-center w-full">
-                      <div className="font-medium">Extra Spacious</div>
-                      <div className="text-xs">12px</div>
-                    </div>
-                  </Button>
+                <div className="text-xs mt-1">
+                  {maxSize}pt max
                 </div>
               </div>
-              
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Color Themes</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetColors}
-                    className="h-7 text-xs"
-                    disabled={isPending}
-                  >
-                    Reset Colors
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Apply complete color schemes
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {(['default', 'police', 'high-contrast', 'grayscale', 'dark', 'print-friendly'] as const).map((theme) => (
-                    <Button
-                      key={theme}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => applyColorTheme(theme)}
-                      className="h-10"
-                      disabled={isPending}
-                    >
-                      <div className="text-center w-full">
-                        <div className="font-medium">
-                          {theme === 'high-contrast' ? 'High Contrast' : 
-                           theme === 'print-friendly' ? 'Print Friendly' :
-                           theme.charAt(0).toUpperCase() + theme.slice(1)}
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <h4 className="font-medium text-sm mb-2">💡 How Presets Work</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Presets only affect font sizes - your other settings remain unchanged</li>
-                  <li>• After applying a preset, you can still adjust individual font sizes</li>
-                  <li>• The preset button will show as active when your settings match that preset</li>
-                  <li>• Changing any font size manually will clear the active preset indicator</li>
-                  <li>• Row height and color themes are separate and don't affect fonts</li>
-                </ul>
+            </Button>
+          );
+        })}
+      </div>
+      
+      {/* Preset descriptions */}
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-2 text-xs text-muted-foreground">
+        <div className="text-center">Small<br/>8-10pt</div>
+        <div className="text-center">Medium<br/>9-12pt</div>
+        <div className="text-center">Large<br/>10-14pt</div>
+        <div className="text-center">Extra Large<br/>11-16pt</div>
+        <div className="text-center">Accessibility<br/>12-18pt</div>
+        <div className="text-center">Extra Access<br/>14-20pt</div>
+        <div className="text-center">Giant<br/>16-22pt</div>
+      </div>
+      
+      {isPending && (
+        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
+          Saving changes...
+        </div>
+      )}
+    </div>
+    
+    <Separator />
+    
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label>Row Height Presets</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetTableSettings}
+          className="h-7 text-xs"
+          disabled={isPending}
+        >
+          Reset Table
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-2">
+        Adjust spacing between rows (automatically saves)
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Button
+          type="button"
+          variant={layoutSettings.tableSettings.rowHeight === 6 ? "default" : "outline"}
+          size="sm"
+          onClick={() => setRowHeight(6)}
+          className="h-10"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Compact</div>
+            <div className="text-xs">6px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant={layoutSettings.tableSettings.rowHeight === 8 ? "default" : "outline"}
+          size="sm"
+          onClick={() => setRowHeight(8)}
+          className="h-10"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Standard</div>
+            <div className="text-xs">8px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant={layoutSettings.tableSettings.rowHeight === 10 ? "default" : "outline"}
+          size="sm"
+          onClick={() => setRowHeight(10)}
+          className="h-10"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Spacious</div>
+            <div className="text-xs">10px</div>
+          </div>
+        </Button>
+        <Button
+          type="button"
+          variant={layoutSettings.tableSettings.rowHeight === 12 ? "default" : "outline"}
+          size="sm"
+          onClick={() => setRowHeight(12)}
+          className="h-10"
+          disabled={isPending}
+        >
+          <div className="text-center w-full">
+            <div className="font-medium">Extra Spacious</div>
+            <div className="text-xs">12px</div>
+          </div>
+        </Button>
+      </div>
+    </div>
+    
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Label>Color Themes</Label>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetColors}
+          className="h-7 text-xs"
+          disabled={isPending}
+        >
+          Reset Colors
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-2">
+        Apply complete color schemes
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {(['default', 'police', 'high-contrast', 'grayscale', 'dark', 'print-friendly'] as const).map((theme) => (
+          <Button
+            key={theme}
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => applyColorTheme(theme)}
+            className="h-10"
+            disabled={isPending}
+          >
+            <div className="text-center w-full">
+              <div className="font-medium">
+                {theme === 'high-contrast' ? 'High Contrast' : 
+                 theme === 'print-friendly' ? 'Print Friendly' :
+                 theme.charAt(0).toUpperCase() + theme.slice(1)}
               </div>
             </div>
-          </TabsContent>
+          </Button>
+        ))}
+      </div>
+    </div>
+    
+    <div className="bg-muted/50 p-4 rounded-lg">
+      <h4 className="font-medium text-sm mb-2">💡 Tips for Large Fonts</h4>
+      <ul className="text-sm text-muted-foreground space-y-1">
+        <li>• Use "Giant" preset for printed copies or maximum readability</li>
+        <li>• Increase row height when using larger fonts (12px recommended for Giant)</li>
+        <li>• Adjust column widths if text overflows or gets cut off</li>
+        <li>• For 129+ officers, consider using wider columns or landscape orientation</li>
+        <li>• Preview before final export to ensure everything fits</li>
+      </ul>
+    </div>
+  </div>
+</TabsContent>
 
           {/* SECTIONS TAB */}
           <TabsContent value="sections" className="space-y-4">
@@ -678,23 +700,23 @@ export const PDFLayoutSettings = ({ settings, onSave, onPreview, isPending }: PD
               <div>
                 <h5 className="font-medium mb-3 text-sm">Header Font Sizes</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Main Header</Label>
-                      <span className="text-sm font-medium">{layoutSettings.fontSizes.header}pt</span>
-                    </div>
-                    <Slider
-                      value={[layoutSettings.fontSizes.header]}
-                      min={FONT_SIZE_RANGES.header.min}
-                      max={FONT_SIZE_RANGES.header.max}
-                      step={FONT_SIZE_RANGES.header.step}
-                      onValueChange={([value]) => handleFontSizeChange('header', value)}
-                      disabled={isPending}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Shift name and date at top
-                    </p>
-                  </div>
+<div className="space-y-2">
+  <div className="flex justify-between">
+    <Label>Main Header</Label>
+    <span className="text-sm font-medium">{layoutSettings.fontSizes.header}pt</span>
+  </div>
+  <Slider
+    value={[layoutSettings.fontSizes.header]}
+    min={FONT_SIZE_RANGES.header.min}
+    max={FONT_SIZE_RANGES.header.max}
+    step={FONT_SIZE_RANGES.header.step}
+    onValueChange={([value]) => handleFontSizeChange('header', value)}
+    disabled={isPending}
+  />
+  <p className="text-xs text-muted-foreground">
+    Shift name and date at top (up to 24pt)
+  </p>
+</div>
                   
                   <div className="space-y-2">
                     <div className="flex justify-between">

@@ -247,71 +247,144 @@ export const EmergencyPartnerReassignment = ({
   });
 
   // Mutation to create emergency partnership - UPDATED TO PRESERVE POSITIONS
- 
-const createEmergencyPartnership = useMutation({
-  mutationFn: async (partnerId: string) => {
-    const partner = availablePartners?.find(p => p.id === partnerId);
-    if (!partner) throw new Error("Selected partner not found");
+  const createEmergencyPartnership = useMutation({
+    mutationFn: async (partnerId: string) => {
+      const partner = availablePartners?.find(p => p.id === partnerId);
+      if (!partner) throw new Error("Selected partner not found");
 
-    console.log("🚨 Creating emergency partnership:", {
-      ppo: ppoOfficer.name,
-      ppoId: ppoOfficer.officerId,
-      partner: partner.name,
-      date,
-      shift: shift.name
-    });
-
-    // Create partnership WITHOUT changing positions
-    const ppoExceptionData: any = {
-      officer_id: ppoOfficer.officerId,
-      partner_officer_id: partnerId,
-      date: date,
-      shift_type_id: shift.id,
-      is_partnership: true,
-      partnership_suspended: false,
-      notes: `Emergency partnership with ${partner.name} - original partner on PTO`,
-      is_off: false,
-      // DO NOT set position_name - let it remain null or keep existing
-      // schedule_type will be determined by the system
-    };
-
-    // Only update partnership fields, not position
-    const { error: ppoError } = await supabase
-      .from("schedule_exceptions")
-      .upsert(ppoExceptionData, {
-        onConflict: 'officer_id,date,shift_type_id'
+      console.log("🚨 Creating emergency partnership:", {
+        ppo: ppoOfficer.name,
+        ppoId: ppoOfficer.officerId,
+        ppoPosition: ppoOfficer.position,
+        partner: partner.name,
+        partnerId: partnerId,
+        partnerPosition: partner.position,
+        date,
+        shift: shift.name,
+        shiftId: shift.id
       });
 
-    if (ppoError) {
-      console.error("Error creating PPO exception:", ppoError);
-      throw ppoError;
-    }
+      // Get the existing schedule data for both officers
+      const { data: ppoExistingSchedule, error: ppoScheduleError } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .eq("officer_id", ppoOfficer.officerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift.id)
+        .maybeSingle();
 
-    const partnerExceptionData: any = {
-      officer_id: partnerId,
-      partner_officer_id: ppoOfficer.officerId,
-      date: date,
-      shift_type_id: shift.id,
-      is_partnership: true,
-      partnership_suspended: false,
-      notes: `Emergency partnership with PPO ${ppoOfficer.name}`,
-      is_off: false,
-      // DO NOT set position_name
-    };
+      if (ppoScheduleError && ppoScheduleError.code !== 'PGRST116') {
+        console.error("Error fetching PPO schedule:", ppoScheduleError);
+        throw ppoScheduleError;
+      }
 
-    const { error: partnerError } = await supabase
-      .from("schedule_exceptions")
-      .upsert(partnerExceptionData, {
-        onConflict: 'officer_id,date,shift_type_id'
-      });
+      const { data: partnerExistingSchedule, error: partnerScheduleError } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .eq("officer_id", partnerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift.id)
+        .maybeSingle();
 
-    if (partnerError) {
-      console.error("Error creating partner exception:", partnerError);
-      throw partnerError;
-    }
+      if (partnerScheduleError && partnerScheduleError.code !== 'PGRST116') {
+        console.error("Error fetching partner schedule:", partnerScheduleError);
+        throw partnerScheduleError;
+      }
 
-    return { partnerName: partner.name };
-  },
+      // PRESERVE existing positions or use null
+      const ppoPosition = ppoExistingSchedule?.position_name || ppoOfficer.position || null;
+      const partnerPosition = partnerExistingSchedule?.position_name || partner.position || null;
+
+      // Create new partnership exception for the PPO - PRESERVE position
+      const ppoExceptionData: any = {
+        officer_id: ppoOfficer.officerId,
+        partner_officer_id: partnerId,
+        date: date,
+        shift_type_id: shift.id,
+        is_partnership: true,
+        partnership_suspended: false,
+        schedule_type: "emergency_partnership",
+        notes: `Emergency partnership with ${partner.name} - original partner on PTO`,
+        is_off: false,
+        // PRESERVE position instead of overwriting
+        position_name: ppoPosition
+      };
+
+      // Add unit number if it exists
+      if (ppoExistingSchedule?.unit_number) {
+        ppoExceptionData.unit_number = ppoExistingSchedule.unit_number;
+      } else if (ppoOfficer.unitNumber) {
+        ppoExceptionData.unit_number = ppoOfficer.unitNumber;
+      }
+
+      const { error: ppoError } = await supabase
+        .from("schedule_exceptions")
+        .upsert(ppoExceptionData, {
+          onConflict: 'officer_id,date,shift_type_id'
+        });
+
+      if (ppoError) {
+        console.error("Error creating PPO exception:", ppoError);
+        throw ppoError;
+      }
+
+      // Create new partnership exception for the partner - PRESERVE position
+      const partnerExceptionData: any = {
+        officer_id: partnerId,
+        partner_officer_id: ppoOfficer.officerId,
+        date: date,
+        shift_type_id: shift.id,
+        is_partnership: true,
+        partnership_suspended: false,
+        schedule_type: "emergency_partnership",
+        notes: `Emergency partnership with PPO ${ppoOfficer.name}`,
+        is_off: false,
+        // PRESERVE position instead of overwriting
+        position_name: partnerPosition
+      };
+
+      // Add unit number if it exists
+      if (partnerExistingSchedule?.unit_number) {
+        partnerExceptionData.unit_number = partnerExistingSchedule.unit_number;
+      } else if (partner.unitNumber) {
+        partnerExceptionData.unit_number = partner.unitNumber;
+      }
+
+      const { error: partnerError } = await supabase
+        .from("schedule_exceptions")
+        .upsert(partnerExceptionData, {
+          onConflict: 'officer_id,date,shift_type_id'
+        });
+
+      if (partnerError) {
+        console.error("Error creating partner exception:", partnerError);
+        throw partnerError;
+      }
+
+      // Log the emergency assignment
+      const { error: logError } = await supabase
+        .from("partnership_exceptions")
+        .insert({
+          officer_id: ppoOfficer.officerId,
+          partner_officer_id: partnerId,
+          date: date,
+          shift_type_id: shift.id,
+          reason: "Emergency assignment - original partner unavailable",
+          exception_type: "emergency_reassignment",
+          created_at: new Date().toISOString()
+        });
+
+      if (logError) {
+        console.error("Error logging partnership exception:", logError);
+        // Don't throw here - the partnership was created successfully
+      }
+
+      return { 
+        partnerName: partner.name,
+        ppoPosition: ppoPosition,
+        partnerPosition: partnerPosition
+      };
+    },
     onSuccess: (data) => {
       toast.success(`Emergency partnership created with ${data.partnerName}. Positions preserved.`);
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });

@@ -72,6 +72,15 @@ const COLORS = {
   border: [222, 226, 230]
 };
 
+// Helper to calculate appropriate row height based on font size
+const calculateRowHeight = (fontSize: number): number => {
+  // Base row height for 8pt font
+  const baseHeight = 7;
+  // Add 0.5mm per point above 8
+  if (fontSize <= 8) return baseHeight;
+  return baseHeight + (fontSize - 8) * 0.5;
+};
+
 // Helper function to convert hex/rgb string to array - FIXED with better error handling
 const parseColor = (colorString: string | undefined): number[] => {
   // If colorString is undefined or null, return default color
@@ -313,7 +322,7 @@ const formatPartnershipDetails = (person: any, position: string = "") => {
   }
 };
 
-// UPDATED: Table drawing function with separate header colors and simplified beat column
+// ENHANCED: Table drawing function with support for larger font sizes and column-specific fonts
 const drawCompactTable = (
   pdf: jsPDF, 
   headers: string[], 
@@ -326,21 +335,24 @@ const drawCompactTable = (
   const pageWidth = pdf.internal.pageSize.getWidth();
   const tableWidth = pageWidth - margins.left - margins.right;
   
+  // Use column width settings from layoutSettings with fallback to defaults
   const getColumnWidths = (headers: string[]) => {
     const totalColumns = headers.length;
+    const columnWidths = layoutSettings.tableSettings?.columnWidths || DEFAULT_LAYOUT_SETTINGS.tableSettings.columnWidths;
+    
     const baseWidths = {
-      "REGULAR OFFICERS": 0.35,
-      "SPECIAL ASSIGNMENT OFFICERS": 0.35,
-      "PTO OFFICERS": 0.35,
-      "OFFICERS": 0.35,
-      "SUPERVISORS": 0.35,
-      "BEAT": 0.08, // Slightly narrower for just numbers
-      "ASSIGNMENT": 0.22, // Slightly wider to compensate
-      "BADGE #": 0.10,
-      "UNIT": 0.10,
-      "NOTES": 0.35,
-      "TYPE": 0.15,
-      "TIME": 0.35
+      "REGULAR OFFICERS": columnWidths.name,
+      "SPECIAL ASSIGNMENT OFFICERS": columnWidths.name,
+      "PTO OFFICERS": columnWidths.name,
+      "OFFICERS": columnWidths.name,
+      "SUPERVISORS": columnWidths.name,
+      "BEAT": columnWidths.beat,
+      "ASSIGNMENT": columnWidths.assignment,
+      "BADGE #": columnWidths.badge,
+      "UNIT": columnWidths.unit,
+      "NOTES": columnWidths.notes,
+      "TYPE": columnWidths.type,
+      "TIME": columnWidths.time
     };
 
     return headers.map(header => {
@@ -360,8 +372,48 @@ const drawCompactTable = (
   }
 
   let y = startY;
-  const rowHeight = layoutSettings.tableSettings.rowHeight || DEFAULT_LAYOUT_SETTINGS.tableSettings.rowHeight;
-  const cellPadding = layoutSettings.tableSettings.cellPadding || DEFAULT_LAYOUT_SETTINGS.tableSettings.cellPadding;
+  
+  // Calculate dynamic row height based on font sizes
+  const baseRowHeight = layoutSettings.tableSettings.rowHeight || DEFAULT_LAYOUT_SETTINGS.tableSettings.rowHeight;
+  
+  // Find the maximum font size in this table for this section
+  let maxFontSize = 8; // Default minimum
+  if (sectionType === 'supervisors') {
+    maxFontSize = Math.max(
+      layoutSettings.fontSizes.nameColumn,
+      layoutSettings.fontSizes.beatColumn,
+      layoutSettings.fontSizes.badgeColumn,
+      layoutSettings.fontSizes.notesColumn
+    );
+  } else if (sectionType === 'special') {
+    maxFontSize = Math.max(
+      layoutSettings.fontSizes.nameColumn,
+      layoutSettings.fontSizes.badgeColumn,
+      layoutSettings.fontSizes.notesColumn
+    );
+  } else if (sectionType === 'pto') {
+    maxFontSize = Math.max(
+      layoutSettings.fontSizes.nameColumn,
+      layoutSettings.fontSizes.badgeColumn,
+      layoutSettings.fontSizes.ptoTimeColumn
+    );
+  } else { // officers
+    maxFontSize = Math.max(
+      layoutSettings.fontSizes.nameColumn,
+      layoutSettings.fontSizes.beatColumn,
+      layoutSettings.fontSizes.badgeColumn,
+      layoutSettings.fontSizes.notesColumn
+    );
+  }
+  
+  // Adjust row height based on font size (0.5mm per point above 8pt)
+  const fontAdjustment = Math.max(0, (maxFontSize - 8) * 0.5);
+  const rowHeight = Math.max(baseRowHeight + fontAdjustment, 6); // Minimum 6mm
+  
+  const cellPadding = Math.max(
+    layoutSettings.tableSettings.cellPadding || DEFAULT_LAYOUT_SETTINGS.tableSettings.cellPadding,
+    2 // Minimum padding for large fonts
+  );
 
   // Draw headers - center all headers
   let x = margins.left;
@@ -397,18 +449,47 @@ const drawCompactTable = (
     const headerTextColorParsed = parseColor(headerTextColor);
     pdf.setTextColor(headerTextColorParsed[0], headerTextColorParsed[1], headerTextColorParsed[2]);
     
-    const textWidth = pdf.getTextWidth(header);
-    const textX = x + (colWidths[index] - textWidth) / 2;
-    pdf.text(header, Math.max(textX, x + 2), y + rowHeight - cellPadding);
+    // Adjust header text if it's too wide
+    let displayHeader = header;
+    const maxHeaderWidth = colWidths[index] - (cellPadding * 2);
+    let headerTextWidth = pdf.getTextWidth(displayHeader);
+    
+    if (headerTextWidth > maxHeaderWidth) {
+      // Try to abbreviate common headers
+      const abbreviations: Record<string, string> = {
+        "SPECIAL ASSIGNMENT OFFICERS": "SPECIAL ASSIGN",
+        "REGULAR OFFICERS": "OFFICERS",
+        "PTO OFFICERS": "PTO",
+        "SUPERVISORS": "SUP",
+        "ASSIGNMENT": "ASSIGN",
+        "SPECIAL ASSIGNMENT": "SPECIAL"
+      };
+      
+      if (abbreviations[header]) {
+        displayHeader = abbreviations[header];
+        headerTextWidth = pdf.getTextWidth(displayHeader);
+      }
+      
+      // If still too wide, truncate
+      if (headerTextWidth > maxHeaderWidth) {
+        let truncated = displayHeader;
+        while (pdf.getTextWidth(truncated + "...") > maxHeaderWidth && truncated.length > 1) {
+          truncated = truncated.substring(0, truncated.length - 1);
+        }
+        displayHeader = truncated + (truncated.length < displayHeader.length ? "..." : "");
+      }
+    }
+    
+    const textX = x + (colWidths[index] - pdf.getTextWidth(displayHeader)) / 2;
+    pdf.text(displayHeader, Math.max(textX, x + 2), y + rowHeight - cellPadding);
     
     x += colWidths[index];
   });
 
   y += rowHeight;
 
-  // Draw data rows
+  // Draw data rows with column-specific font sizes
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(layoutSettings.fontSizes.tableContent || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableContent);
   
   data.forEach((row, rowIndex) => {
     x = margins.left;
@@ -458,7 +539,6 @@ const drawCompactTable = (
       
       const textColorStr = getColorSetting(layoutSettings, colorKey);
       const textColor = parseColor(textColorStr);
-      
       pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
       
       let cellText = cell?.toString() || "";
@@ -470,7 +550,36 @@ const drawCompactTable = (
         cellText = extractBeatNumber(cellText);
       }
       
+      // Determine appropriate font size based on column type
+      let fontSize = layoutSettings.fontSizes.tableContent; // Default
+      
+      if (currentHeader === "OFFICERS" || currentHeader === "SUPERVISORS" || 
+          currentHeader === "SPECIAL ASSIGNMENT OFFICERS" || currentHeader === "PTO OFFICERS" ||
+          currentHeader === "REGULAR OFFICERS") {
+        fontSize = layoutSettings.fontSizes.nameColumn;
+      } else if (currentHeader === "BEAT") {
+        fontSize = layoutSettings.fontSizes.beatColumn;
+      } else if (currentHeader === "BADGE #") {
+        fontSize = layoutSettings.fontSizes.badgeColumn;
+      } else if (currentHeader === "NOTES") {
+        fontSize = layoutSettings.fontSizes.notesColumn;
+      } else if (currentHeader === "TIME") {
+        fontSize = layoutSettings.fontSizes.ptoTimeColumn;
+      } else if (currentHeader === "TYPE") {
+        fontSize = layoutSettings.fontSizes.badgeColumn; // Use badge size for TYPE
+      } else if (currentHeader === "UNIT") {
+        fontSize = layoutSettings.fontSizes.beatColumn; // Use beat size for UNIT
+      } else if (currentHeader === "ASSIGNMENT") {
+        fontSize = layoutSettings.fontSizes.notesColumn; // Use notes size for ASSIGNMENT
+      }
+      
+      // Ensure minimum font size for readability
+      fontSize = Math.max(fontSize, 6);
+      pdf.setFontSize(fontSize);
+      
       let displayText = cellText;
+      
+      // Truncate text if it doesn't fit
       if (pdf.getTextWidth(cellText) > maxTextWidth) {
         let truncated = cellText;
         while (pdf.getTextWidth(truncated + "...") > maxTextWidth && truncated.length > 1) {
@@ -482,14 +591,17 @@ const drawCompactTable = (
       // Center specific columns: BADGE #, BEAT, UNIT, TYPE
       const centerColumns = ["BADGE #", "BEAT", "UNIT", "TYPE"];
       
+      // Calculate text Y position to center vertically within row
+      const textY = y + rowHeight - (rowHeight - fontSize * 0.35) / 2;
+      
       if (centerColumns.includes(currentHeader)) {
         // Center align for badge#, beat, unit, type
         const textWidth = pdf.getTextWidth(displayText);
         const textX = x + (colWidths[cellIndex] - textWidth) / 2;
-        pdf.text(displayText, Math.max(textX, x + 2), y + rowHeight - cellPadding);
+        pdf.text(displayText, Math.max(textX, x + 2), textY);
       } else {
         // Left align for other columns
-        pdf.text(displayText, x + cellPadding, y + rowHeight - cellPadding);
+        pdf.text(displayText, x + cellPadding, textY);
       }
       
       x += colWidths[cellIndex];
@@ -497,10 +609,13 @@ const drawCompactTable = (
     
     y += rowHeight;
     
-    if (y > pdf.internal.pageSize.getHeight() - 30) {
+    // Handle page breaks with larger margins for big fonts
+    const pageBreakMargin = Math.max(30, maxFontSize * 2); // Dynamic margin based on font size
+    if (y > pdf.internal.pageSize.getHeight() - pageBreakMargin) {
       pdf.addPage();
-      y = 30;
+      y = 30; // Reset to top margin
       
+      // Redraw headers on new page
       x = margins.left;
       headers.forEach((header, index) => {
         // Get appropriate header background color based on section type
@@ -527,14 +642,43 @@ const drawCompactTable = (
         pdf.rect(x, y, colWidths[index], rowHeight, 'F');
         
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(layoutSettings.fontSizes.tableHeader || DEFAULT_LAYOUT_SETTINGS.fontSizes.tableHeader);
+        pdf.setFontSize(layoutSettings.fontSizes.tableHeader);
+        
         const headerTextColor = getColorSetting(layoutSettings, 'headerTextColor');
         const headerTextColorParsed = parseColor(headerTextColor);
         pdf.setTextColor(headerTextColorParsed[0], headerTextColorParsed[1], headerTextColorParsed[2]);
         
-        const textWidth = pdf.getTextWidth(header);
-        const textX = x + (colWidths[index] - textWidth) / 2;
-        pdf.text(header, Math.max(textX, x + 2), y + rowHeight - cellPadding);
+        // Adjust header text for new page (same logic as above)
+        let displayHeader = header;
+        const maxHeaderWidth = colWidths[index] - (cellPadding * 2);
+        let headerTextWidth = pdf.getTextWidth(displayHeader);
+        
+        if (headerTextWidth > maxHeaderWidth) {
+          const abbreviations: Record<string, string> = {
+            "SPECIAL ASSIGNMENT OFFICERS": "SPECIAL ASSIGN",
+            "REGULAR OFFICERS": "OFFICERS",
+            "PTO OFFICERS": "PTO",
+            "SUPERVISORS": "SUP",
+            "ASSIGNMENT": "ASSIGN",
+            "SPECIAL ASSIGNMENT": "SPECIAL"
+          };
+          
+          if (abbreviations[header]) {
+            displayHeader = abbreviations[header];
+            headerTextWidth = pdf.getTextWidth(displayHeader);
+          }
+          
+          if (headerTextWidth > maxHeaderWidth) {
+            let truncated = displayHeader;
+            while (pdf.getTextWidth(truncated + "...") > maxHeaderWidth && truncated.length > 1) {
+              truncated = truncated.substring(0, truncated.length - 1);
+            }
+            displayHeader = truncated + (truncated.length < displayHeader.length ? "..." : "");
+          }
+        }
+        
+        const textX = x + (colWidths[index] - pdf.getTextWidth(displayHeader)) / 2;
+        pdf.text(displayHeader, Math.max(textX, x + 2), y + rowHeight - cellPadding);
         
         x += colWidths[index];
       });

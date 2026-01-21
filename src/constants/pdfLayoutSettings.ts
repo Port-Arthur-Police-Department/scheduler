@@ -57,17 +57,16 @@ export interface LayoutSettings {
 
 export const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
   fontSizes: {
-    header: 10,
-    sectionTitle: 9,
-    tableHeader: 7,
-    tableContent: 7,
-    footer: 7,
-    // NEW: Default column font sizes (same as tableContent for consistency)
-    nameColumn: 7,
-    beatColumn: 7,
-    badgeColumn: 7,
-    notesColumn: 7,
-    ptoTimeColumn: 7
+    header: 12, // Increased default
+    sectionTitle: 10, // Increased default
+    tableHeader: 9, // Increased default
+    tableContent: 9, // Increased default
+    footer: 9, // Increased default
+    nameColumn: 9, // Increased default
+    beatColumn: 9, // Increased default
+    badgeColumn: 9, // Increased default
+    notesColumn: 9, // Increased default
+    ptoTimeColumn: 9 // Increased default
   },
   sections: {
     showSupervisors: true,
@@ -81,7 +80,6 @@ export const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
     cellPadding: 3,
     showRowStriping: true,
     compactMode: false,
-    // NEW: Column width percentages
     columnWidths: {
       name: 0.35,
       beat: 0.08,
@@ -111,35 +109,11 @@ export const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
   }
 };
 
-// NEW: Font size presets for quick selection
+// NEW: Updated font size presets with MUCH larger sizes
 export const FONT_SIZE_PRESETS = {
   small: {
-    header: 8,
-    sectionTitle: 7,
-    tableHeader: 6,
-    tableContent: 6,
-    footer: 6,
-    nameColumn: 6,
-    beatColumn: 6,
-    badgeColumn: 6,
-    notesColumn: 6,
-    ptoTimeColumn: 6
-  },
-  medium: {
     header: 10,
     sectionTitle: 9,
-    tableHeader: 7,
-    tableContent: 7,
-    footer: 7,
-    nameColumn: 7,
-    beatColumn: 7,
-    badgeColumn: 7,
-    notesColumn: 7,
-    ptoTimeColumn: 7
-  },
-  large: {
-    header: 12,
-    sectionTitle: 10,
     tableHeader: 8,
     tableContent: 8,
     footer: 8,
@@ -149,9 +123,9 @@ export const FONT_SIZE_PRESETS = {
     notesColumn: 8,
     ptoTimeColumn: 8
   },
-  extraLarge: {
-    header: 14,
-    sectionTitle: 11,
+  medium: {
+    header: 12,
+    sectionTitle: 10,
     tableHeader: 9,
     tableContent: 9,
     footer: 9,
@@ -161,8 +135,8 @@ export const FONT_SIZE_PRESETS = {
     notesColumn: 9,
     ptoTimeColumn: 9
   },
-  accessibility: {
-    header: 16,
+  large: {
+    header: 14,
     sectionTitle: 12,
     tableHeader: 10,
     tableContent: 10,
@@ -172,19 +146,69 @@ export const FONT_SIZE_PRESETS = {
     badgeColumn: 10,
     notesColumn: 10,
     ptoTimeColumn: 10
+  },
+  extraLarge: {
+    header: 16,
+    sectionTitle: 13,
+    tableHeader: 11,
+    tableContent: 11,
+    footer: 11,
+    nameColumn: 11,
+    beatColumn: 11,
+    badgeColumn: 11,
+    notesColumn: 11,
+    ptoTimeColumn: 11
+  },
+  accessibility: {
+    header: 18,
+    sectionTitle: 14,
+    tableHeader: 12,
+    tableContent: 12,
+    footer: 12,
+    nameColumn: 12,
+    beatColumn: 12,
+    badgeColumn: 12,
+    notesColumn: 12,
+    ptoTimeColumn: 12
+  },
+  // NEW: Extra large preset for maximum readability
+  extraAccessibility: {
+    header: 20,
+    sectionTitle: 16,
+    tableHeader: 14,
+    tableContent: 14,
+    footer: 14,
+    nameColumn: 14,
+    beatColumn: 14,
+    badgeColumn: 14,
+    notesColumn: 14,
+    ptoTimeColumn: 14
+  },
+  // NEW: Giant preset for printed copies
+  giant: {
+    header: 22,
+    sectionTitle: 18,
+    tableHeader: 16,
+    tableContent: 16,
+    footer: 16,
+    nameColumn: 16,
+    beatColumn: 16,
+    badgeColumn: 16,
+    notesColumn: 16,
+    ptoTimeColumn: 16
   }
 };
 
-// NEW: Font size ranges for validation
+// NEW: Updated font size ranges for validation - MUCH larger maximums
 export const FONT_SIZE_RANGES = {
-  header: { min: 8, max: 20, step: 0.5 },
-  sectionTitle: { min: 8, max: 16, step: 0.5 },
-  tableHeader: { min: 6, max: 14, step: 0.5 },
-  tableContent: { min: 6, max: 14, step: 0.5 },
-  footer: { min: 6, max: 12, step: 0.5 },
-  nameColumn: { min: 6, max: 14, step: 0.5 },
-  beatColumn: { min: 6, max: 14, step: 0.5 },
-  badgeColumn: { min: 6, max: 14, step: 0.5 },
-  notesColumn: { min: 6, max: 14, step: 0.5 },
-  ptoTimeColumn: { min: 6, max: 14, step: 0.5 }
+  header: { min: 8, max: 24, step: 0.5 },
+  sectionTitle: { min: 8, max: 20, step: 0.5 },
+  tableHeader: { min: 8, max: 18, step: 0.5 },
+  tableContent: { min: 8, max: 18, step: 0.5 },
+  footer: { min: 8, max: 16, step: 0.5 },
+  nameColumn: { min: 8, max: 18, step: 0.5 },
+  beatColumn: { min: 8, max: 18, step: 0.5 },
+  badgeColumn: { min: 8, max: 18, step: 0.5 },
+  notesColumn: { min: 8, max: 18, step: 0.5 },
+  ptoTimeColumn: { min: 8, max: 18, step: 0.5 }
 };

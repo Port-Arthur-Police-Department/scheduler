@@ -786,13 +786,13 @@ export const usePDFExport = () => {
           const position = supervisor?.position || "";
           const notes = formatPartnershipDetails(supervisor, position);
           
-          supervisorsData.push([
-            displayName,
-            extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for beat column
-            supervisor?.badge || "",
-            supervisor?.unitNumber ? `Unit ${supervisor.unitNumber}` : "",
-            notes
-          ]);
+supervisorsData.push([
+  displayName,
+  extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for beat column
+  supervisor?.badge || "",
+  supervisor?.unitNumber || "", // <-- Remove "Unit " prefix
+  notes
+]);
         });
 
         // Only draw the table if there are supervisors after filtering

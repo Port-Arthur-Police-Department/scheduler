@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Users, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { parseISO } from "date-fns";
+import { parseISO, format } from "date-fns";
 
 interface EmergencyPartnerReassignmentProps {
   ppoOfficer: any;
@@ -67,6 +67,8 @@ export const EmergencyPartnerReassignment = ({
           partnership_suspended,
           is_off,
           notes,
+          position_name,
+          unit_number,
           profiles:officer_id (
             id,
             full_name,
@@ -95,6 +97,8 @@ export const EmergencyPartnerReassignment = ({
           start_date,
           end_date,
           notes,
+          position_name,
+          unit_number,
           profiles:profiles!recurring_schedules_officer_id_fkey (
             id,
             full_name,
@@ -134,6 +138,8 @@ export const EmergencyPartnerReassignment = ({
             name: exception.profiles.full_name,
             badge: exception.profiles.badge_number,
             rank: exception.profiles.rank,
+            position: exception.position_name,
+            unitNumber: exception.unit_number,
             isPartnership: exception.is_partnership,
             partnershipSuspended: exception.partnership_suspended,
             source: 'exception',
@@ -179,6 +185,8 @@ export const EmergencyPartnerReassignment = ({
             name: recurring.profiles.full_name,
             badge: recurring.profiles.badge_number,
             rank: recurring.profiles.rank,
+            position: recurring.position_name,
+            unitNumber: recurring.unit_number,
             isPartnership: recurring.is_partnership,
             partnershipSuspended: recurring.partnership_suspended,
             source: 'recurring',
@@ -191,6 +199,7 @@ export const EmergencyPartnerReassignment = ({
       console.log("👮 Total officers found (before filtering):", Array.from(allOfficers.values()).map(o => ({
         name: o.name,
         rank: o.rank,
+        position: o.position,
         source: o.source,
         hasPartnership: o.isPartnership,
         partnershipSuspended: o.partnershipSuspended
@@ -211,13 +220,14 @@ export const EmergencyPartnerReassignment = ({
         }
         
         // Officer is available for emergency assignment
-        console.log(`✅ Available for emergency assignment: ${officer.name} (${officer.rank}) - Source: ${officer.source}`);
+        console.log(`✅ Available for emergency assignment: ${officer.name} (${officer.rank}) - Position: ${officer.position} - Source: ${officer.source}`);
         return true;
       });
 
       console.log("🚨 Emergency partners found:", availablePartners.map(p => ({
         name: p.name,
         rank: p.rank,
+        position: p.position,
         source: p.source,
         hasSuspendedPartnership: p.partnershipSuspended
       })));
@@ -236,7 +246,7 @@ export const EmergencyPartnerReassignment = ({
     enabled: open
   });
 
-  // Mutation to create emergency partnership
+  // Mutation to create emergency partnership - UPDATED TO PRESERVE POSITIONS
   const createEmergencyPartnership = useMutation({
     mutationFn: async (partnerId: string) => {
       const partner = availablePartners?.find(p => p.id === partnerId);
@@ -245,27 +255,72 @@ export const EmergencyPartnerReassignment = ({
       console.log("🚨 Creating emergency partnership:", {
         ppo: ppoOfficer.name,
         ppoId: ppoOfficer.officerId,
+        ppoPosition: ppoOfficer.position,
         partner: partner.name,
         partnerId: partnerId,
+        partnerPosition: partner.position,
         date,
         shift: shift.name,
         shiftId: shift.id
       });
 
-      // Create new partnership exception for the PPO
+      // Get the existing schedule data for both officers
+      const { data: ppoExistingSchedule, error: ppoScheduleError } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .eq("officer_id", ppoOfficer.officerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift.id)
+        .maybeSingle();
+
+      if (ppoScheduleError && ppoScheduleError.code !== 'PGRST116') {
+        console.error("Error fetching PPO schedule:", ppoScheduleError);
+        throw ppoScheduleError;
+      }
+
+      const { data: partnerExistingSchedule, error: partnerScheduleError } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .eq("officer_id", partnerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift.id)
+        .maybeSingle();
+
+      if (partnerScheduleError && partnerScheduleError.code !== 'PGRST116') {
+        console.error("Error fetching partner schedule:", partnerScheduleError);
+        throw partnerScheduleError;
+      }
+
+      // PRESERVE existing positions or use null
+      const ppoPosition = ppoExistingSchedule?.position_name || ppoOfficer.position || null;
+      const partnerPosition = partnerExistingSchedule?.position_name || partner.position || null;
+
+      // Create new partnership exception for the PPO - PRESERVE position
+      const ppoExceptionData: any = {
+        officer_id: ppoOfficer.officerId,
+        partner_officer_id: partnerId,
+        date: date,
+        shift_type_id: shift.id,
+        is_partnership: true,
+        partnership_suspended: false,
+        schedule_type: "emergency_partnership",
+        notes: `Emergency partnership with ${partner.name} - original partner on PTO`,
+        is_off: false,
+        // PRESERVE position instead of overwriting
+        position_name: ppoPosition
+      };
+
+      // Add unit number if it exists
+      if (ppoExistingSchedule?.unit_number) {
+        ppoExceptionData.unit_number = ppoExistingSchedule.unit_number;
+      } else if (ppoOfficer.unitNumber) {
+        ppoExceptionData.unit_number = ppoOfficer.unitNumber;
+      }
+
       const { error: ppoError } = await supabase
         .from("schedule_exceptions")
-        .insert({
-          officer_id: ppoOfficer.officerId,
-          partner_officer_id: partnerId,
-          date: date,
-          shift_type_id: shift.id,
-          is_partnership: true,
-          partnership_suspended: false,
-          schedule_type: "emergency_partnership",
-          position_name: "Riding Partner (PPO)",
-          notes: `Emergency assignment with ${partner.name} - original partner unavailable`,
-          is_off: false
+        .upsert(ppoExceptionData, {
+          onConflict: 'officer_id,date,shift_type_id'
         });
 
       if (ppoError) {
@@ -273,20 +328,32 @@ export const EmergencyPartnerReassignment = ({
         throw ppoError;
       }
 
-      // Create new partnership exception for the partner
+      // Create new partnership exception for the partner - PRESERVE position
+      const partnerExceptionData: any = {
+        officer_id: partnerId,
+        partner_officer_id: ppoOfficer.officerId,
+        date: date,
+        shift_type_id: shift.id,
+        is_partnership: true,
+        partnership_suspended: false,
+        schedule_type: "emergency_partnership",
+        notes: `Emergency partnership with PPO ${ppoOfficer.name}`,
+        is_off: false,
+        // PRESERVE position instead of overwriting
+        position_name: partnerPosition
+      };
+
+      // Add unit number if it exists
+      if (partnerExistingSchedule?.unit_number) {
+        partnerExceptionData.unit_number = partnerExistingSchedule.unit_number;
+      } else if (partner.unitNumber) {
+        partnerExceptionData.unit_number = partner.unitNumber;
+      }
+
       const { error: partnerError } = await supabase
         .from("schedule_exceptions")
-        .insert({
-          officer_id: partnerId,
-          partner_officer_id: ppoOfficer.officerId,
-          date: date,
-          shift_type_id: shift.id,
-          is_partnership: true,
-          partnership_suspended: false,
-          schedule_type: "emergency_partnership",
-          position_name: "Emergency Riding Partner",
-          notes: `Emergency assignment with PPO ${ppoOfficer.name}`,
-          is_off: false
+        .upsert(partnerExceptionData, {
+          onConflict: 'officer_id,date,shift_type_id'
         });
 
       if (partnerError) {
@@ -312,10 +379,14 @@ export const EmergencyPartnerReassignment = ({
         // Don't throw here - the partnership was created successfully
       }
 
-      return { partnerName: partner.name };
+      return { 
+        partnerName: partner.name,
+        ppoPosition: ppoPosition,
+        partnerPosition: partnerPosition
+      };
     },
     onSuccess: (data) => {
-      toast.success(`Emergency partnership created with ${data.partnerName}`);
+      toast.success(`Emergency partnership created with ${data.partnerName}. Positions preserved.`);
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["emergency-partners"] });
@@ -353,11 +424,14 @@ export const EmergencyPartnerReassignment = ({
               <p className="font-medium">{ppoOfficer.name}</p>
               {ppoOfficer.badge && <span className="text-sm text-amber-700">({ppoOfficer.badge})</span>}
             </div>
-            <p className="text-sm text-amber-700 mt-1">Shift: {shift.name}</p>
-            <p className="text-sm text-amber-700">Date: {date}</p>
+            {ppoOfficer.position && (
+              <p className="text-sm text-amber-700 mt-1">Current Position: {ppoOfficer.position}</p>
+            )}
+            <p className="text-sm text-amber-700">Shift: {shift.name}</p>
+            <p className="text-sm text-amber-700">Date: {format(parseISO(date), "MMM d, yyyy")}</p>
             {ppoOfficer.partnerData?.partnerName && (
               <p className="text-sm text-amber-700 mt-1">
-                Original partner: {ppoOfficer.partnerData.partnerName} (unavailable)
+                Original partner: {ppoOfficer.partnerData.partnerName} (on PTO)
               </p>
             )}
           </div>
@@ -394,6 +468,7 @@ export const EmergencyPartnerReassignment = ({
                         </div>
                         <span className="text-xs text-muted-foreground">
                           Badge: {partner.badge} • {partner.rank}
+                          {partner.position && ` • Position: ${partner.position}`}
                           {partner.partnershipSuspended && (
                             <span className="text-amber-600"> • Available (Partner on PTO)</span>
                           )}
@@ -408,6 +483,7 @@ export const EmergencyPartnerReassignment = ({
             {availablePartners && availablePartners.length > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
                 Select a regular officer (non-PPO) to partner with this PPO for today only.
+                Their current positions will be preserved.
               </p>
             )}
           </div>
@@ -430,12 +506,13 @@ export const EmergencyPartnerReassignment = ({
           
           {/* Warning Note */}
           <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
-            <p className="font-medium mb-1">Note:</p>
+            <p className="font-medium mb-1">Important:</p>
             <ul className="list-disc pl-4 space-y-1">
               <li>This is a one-time assignment for today only</li>
               <li>The original partnership will resume tomorrow</li>
-              <li>Both officers will be marked as partnered for today's shift</li>
+              <li>Both officers will keep their current positions/assignments</li>
               <li>Only regular officers (non-PPOs) are available for emergency assignments</li>
+              <li>Positions/districts will be assigned separately later</li>
             </ul>
           </div>
         </div>

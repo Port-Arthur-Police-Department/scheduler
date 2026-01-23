@@ -21,6 +21,7 @@ import { SettingsInstructions } from "./settings/SettingsInstructions";
 import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 
 // Constants
 export const DEFAULT_COLORS = {

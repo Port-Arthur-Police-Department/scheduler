@@ -26,6 +26,7 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
+import { sortOfficersByLastName } from "@/utils/sortingUtils";
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -944,12 +945,12 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
             <SelectValue placeholder="Choose an officer" />
           </SelectTrigger>
           <SelectContent>
-            {officers?.map((officer) => (
-              <SelectItem key={officer.id} value={officer.id}>
-                {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
+  {sortOfficersByLastName(officers || []).map((officer) => (
+    <SelectItem key={officer.id} value={officer.id}>
+      {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
+    </SelectItem>
+  ))}
+</SelectContent>
         </Select>
       </div>
 

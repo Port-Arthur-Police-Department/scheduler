@@ -116,7 +116,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
-  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]); // FIXED
+  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
+  
+  // Track UI settings separately for immediate updates
+  const [uiSettings, setUiSettings] = useState<any>(null);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -200,61 +203,118 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       return data;
     },
     retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes stale time
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 
   // Update local state when settings load
   useEffect(() => {
-    if (settings?.color_settings) {
-      setColorSettings(settings.color_settings);
-    }
-    if (settings?.pto_type_visibility) {
-      setPtoVisibility(settings.pto_type_visibility);
-    }
-    if (settings?.anniversary_alert_recipients) { // ADD THIS
-      setAnniversaryRecipients(settings.anniversary_alert_recipients);
+    if (settings) {
+      setUiSettings(settings);
+      if (settings.color_settings) {
+        setColorSettings(settings.color_settings);
+      }
+      if (settings.pto_type_visibility) {
+        setPtoVisibility(settings.pto_type_visibility);
+      }
+      if (settings.anniversary_alert_recipients) {
+        setAnniversaryRecipients(settings.anniversary_alert_recipients);
+      }
     }
   }, [settings]);
 
-// Update settings mutation - SIMPLIFIED VERSION
-const updateSettingsMutation = useMutation({
-  mutationFn: async (newSettings: any) => {
-    console.log('Updating settings:', newSettings);
-    
-    const { data, error } = await supabase
-      .from('website_settings')
-      .upsert({
-        ...newSettings,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+  // Update settings mutation with optimistic updates
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (newSettings: any) => {
+      console.log('Updating settings:', newSettings);
+      
+      const { data, error } = await supabase
+        .from('website_settings')
+        .upsert({
+          ...newSettings,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error updating settings:', error);
-      throw error;
-    }
-    
-    return data;
-  },
-  onSuccess: (data) => {
-    // Update the query cache with the new data
-    queryClient.setQueryData(['website-settings'], data);
-    toast.success("Settings updated successfully");
-  },
-  onError: (error) => {
-    console.error("Error updating settings:", error);
-    toast.error("Failed to update settings");
-  },
-});
+      if (error) {
+        console.error('Error updating settings:', error);
+        throw error;
+      }
+      
+      return data;
+    },
+    onMutate: async (newSettings) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['website-settings'] });
+      
+      // Snapshot the previous value
+      const previousSettings = queryClient.getQueryData(['website-settings']);
+      
+      // Update UI settings immediately for optimistic update
+      if (uiSettings) {
+        const updatedUiSettings = { ...uiSettings, ...newSettings };
+        setUiSettings(updatedUiSettings);
+        
+        // Update specific local states if needed
+        if (newSettings.color_settings) {
+          setColorSettings(newSettings.color_settings);
+        }
+        if (newSettings.pto_type_visibility) {
+          setPtoVisibility(newSettings.pto_type_visibility);
+        }
+        if (newSettings.anniversary_alert_recipients) {
+          setAnniversaryRecipients(newSettings.anniversary_alert_recipients);
+        }
+      }
+      
+      return { previousSettings };
+    },
+    onSuccess: (data) => {
+      // Update the query cache with the new data
+      queryClient.setQueryData(['website-settings'], data);
+      // Also update UI settings with complete server response
+      setUiSettings(data);
+      
+      // IMPORTANT: Invalidate other queries that depend on settings
+      queryClient.invalidateQueries({ queryKey: ['website-settings-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['staffing-overview'] });
+      
+      toast.success("Settings updated successfully");
+    },
+    onError: (error, variables, context) => {
+      console.error("Error updating settings:", error);
+      
+      // Revert to previous settings on error
+      if (context?.previousSettings) {
+        queryClient.setQueryData(['website-settings'], context.previousSettings);
+        setUiSettings(context.previousSettings);
+      }
+      
+      toast.error("Failed to update settings");
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure we have fresh data
+      queryClient.invalidateQueries({ queryKey: ['website-settings'] });
+    },
+  });
 
+  // Optimistic toggle handler
   const handleToggle = (key: string, value: boolean) => {
+    if (!uiSettings) return;
+    
+    // Update UI immediately
+    const updatedUiSettings = { ...uiSettings, [key]: value };
+    setUiSettings(updatedUiSettings);
+    
+    // Send to server
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       [key]: value,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
-      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+      anniversary_alert_recipients: anniversaryRecipients,
+      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -270,15 +330,15 @@ const updateSettingsMutation = useMutation({
     setAnniversaryRecipients(newRecipients);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       anniversary_alert_recipients: newRecipients,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
-      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
-  const handleTestAnniversaryCheck = async () => { // ADD THIS FUNCTION
+  const handleTestAnniversaryCheck = async () => {
     try {
       await manuallyCheckAnniversaries();
       toast.success('Manual anniversary check completed');
@@ -293,11 +353,11 @@ const updateSettingsMutation = useMutation({
     setPtoVisibility(newPtoVisibility);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       pto_type_visibility: newPtoVisibility,
       color_settings: colorSettings,
-      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
-      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+      anniversary_alert_recipients: anniversaryRecipients,
+      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -323,11 +383,11 @@ const updateSettingsMutation = useMutation({
     setColorSettings(newColors);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       color_settings: newColors,
       pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
-      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+      anniversary_alert_recipients: anniversaryRecipients,
+      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -335,16 +395,15 @@ const updateSettingsMutation = useMutation({
     console.log('Saving PDF layout settings:', layoutSettings);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       pdf_layout_settings: layoutSettings,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
+      anniversary_alert_recipients: anniversaryRecipients,
     });
   };
 
   const generatePreviewData = () => {
-    // Create mock data for preview
     const mockData = {
       shift: {
         name: "DAY SHIFT",
@@ -419,19 +478,19 @@ const updateSettingsMutation = useMutation({
   const resetToDefaults = () => {
     setColorSettings(DEFAULT_COLORS);
     setPtoVisibility(DEFAULT_PTO_VISIBILITY);
-    setAnniversaryRecipients(["admin", "supervisor"]); // ADD THIS
+    setAnniversaryRecipients(["admin", "supervisor"]);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      id: uiSettings?.id,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-      anniversary_alert_recipients: ["admin", "supervisor"], // ADD THIS
+      anniversary_alert_recipients: ["admin", "supervisor"],
       pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
       ...DEFAULT_NOTIFICATION_SETTINGS,
     });
   };
 
-  if (isLoading) {
+  if (isLoading || !uiSettings) {
     return (
       <Card>
         <CardContent className="flex justify-center items-center py-8">
@@ -445,28 +504,28 @@ const updateSettingsMutation = useMutation({
   return (
     <div className="space-y-6">
       <PDFLayoutSettings 
-        settings={settings}
+        settings={uiSettings}
         onSave={handleLayoutSettingsSave}
         onPreview={generatePreviewData}
         isPending={updateSettingsMutation.isPending}
       />
 
       <NotificationSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
 
       <AnniversaryAlertSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         handleRecipientChange={handleRecipientChange}
-        onTest={handleTestAnniversaryCheck} // ADD THIS
+        onTest={handleTestAnniversaryCheck}
         isPending={updateSettingsMutation.isPending}
       />
 
       <PTOSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
@@ -481,7 +540,7 @@ const updateSettingsMutation = useMutation({
         colorSettings={colorSettings}
         handleColorChange={handleColorChange}
         isPending={updateSettingsMutation.isPending}
-        settings={settings}
+        settings={uiSettings}
         ptoVisibility={ptoVisibility}
         updateSettingsMutation={updateSettingsMutation}
         setColorSettings={setColorSettings}
@@ -507,9 +566,9 @@ const updateSettingsMutation = useMutation({
         open={pdfPreviewOpen}
         onOpenChange={setPdfPreviewOpen}
         previewData={previewData}
-        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+        layoutSettings={uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
         selectedDate={new Date()}
       />
     </div>
   );
-};;
+};

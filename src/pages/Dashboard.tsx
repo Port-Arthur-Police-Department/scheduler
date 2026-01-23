@@ -617,6 +617,29 @@ useEffect(() => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+ // In Dashboard component, add this useEffect:
+useEffect(() => {
+  // Register for background sync if PWA is installed
+  const registerBackgroundSync = async () => {
+    if (pwaStatus.isInstalled && 'serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Check if background sync is supported
+        if ('sync' in registration) {
+          // Register for sync when online
+          await registration.sync.register('anniversary-check');
+          console.log('✅ Background sync registered');
+        }
+      } catch (error) {
+        console.warn('⚠️ Background sync not available:', error);
+      }
+    }
+  };
+  
+  registerBackgroundSync();
+}, [pwaStatus.isInstalled, user?.id]);
+
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase

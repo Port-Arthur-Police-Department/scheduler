@@ -321,25 +321,9 @@ useEffect(() => {
     },
   });
 
-  // Helper function to get settings with fallback
-  const getSetting = (key: string, defaultValue: boolean = true): boolean => {
-    if (!websiteSettings) return defaultValue;
-    
-    // If the key exists in websiteSettings, use it
-    if (websiteSettings[key] !== undefined) {
-      return websiteSettings[key];
-    }
-    
-    // Otherwise check DEFAULT_NOTIFICATION_SETTINGS
-    if (DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] !== undefined) {
-      return DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] as boolean;
-    }
-    
-    return defaultValue;
-  };
 
-  // NEW: Get PTO tab visibility setting
-  const showPtoTab = getSetting('show_pto_tab', true);
+const showPtoTab = websiteSettings?.show_pto_tab ?? true;
+const showStaffingOverview = websiteSettings?.show_staffing_overview ?? true;
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {

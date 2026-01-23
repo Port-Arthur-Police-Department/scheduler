@@ -100,6 +100,9 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   show_pto_balances: false,
   pto_balances_visible: false,
   show_pto_tab: true,
+  enable_anniversary_alerts: false,
+  enable_birthday_alerts: false,
+  anniversary_alert_recipients: ["admin", "supervisor"],
 };
 
 interface WebsiteSettingsProps {
@@ -111,9 +114,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
-  // ADD THESE STATES FOR PDF LAYOUT:
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(
+  settings?.anniversary_alert_recipients || ["admin", "supervisor"]
+);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -203,6 +208,26 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       setPtoVisibility(settings.pto_type_visibility);
     }
   }, [settings]);
+
+  const handleRecipientChange = (recipient: string, checked: boolean) => {
+  let newRecipients = [...anniversaryRecipients];
+  
+  if (checked && !newRecipients.includes(recipient)) {
+    newRecipients.push(recipient);
+  } else if (!checked && newRecipients.includes(recipient)) {
+    newRecipients = newRecipients.filter(r => r !== recipient);
+  }
+  
+  setAnniversaryRecipients(newRecipients);
+  
+  updateSettingsMutation.mutate({
+    id: settings?.id,
+    anniversary_alert_recipients: newRecipients,
+    color_settings: colorSettings,
+    pto_type_visibility: ptoVisibility,
+    pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+  });
+};
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
@@ -410,6 +435,13 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
+
+      <AnniversaryAlertSettings 
+  settings={settings}
+  handleToggle={handleToggle}
+  handleRecipientChange={handleRecipientChange}
+  isPending={updateSettingsMutation.isPending}
+/>
 
       <PTOSettings 
         settings={settings}

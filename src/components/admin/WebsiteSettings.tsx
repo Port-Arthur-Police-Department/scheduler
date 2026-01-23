@@ -17,11 +17,11 @@ import { PasswordResetManager } from "./PasswordResetManager";
 import { AuditLogViewer } from "./settings/AuditLogViewer";
 import { ManualAlertSender } from "./settings/ManualAlertSender";
 import { SettingsInstructions } from "./settings/SettingsInstructions";
-// ADD THESE IMPORTS:
 import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
+import { manuallyCheckAnniversaries } from '@/utils/anniversaryChecker'; // ADD THIS IMPORT
 
 // Constants
 export const DEFAULT_COLORS = {
@@ -116,9 +116,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
-  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(
-  settings?.anniversary_alert_recipients || ["admin", "supervisor"]
-);
+  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]); // FIXED
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -142,7 +140,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
               ...DEFAULT_NOTIFICATION_SETTINGS,
               color_settings: DEFAULT_COLORS,
               pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS // ADD THIS
+              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS
             })
             .select()
             .single();
@@ -194,6 +192,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         }
       }
       
+      // Handle anniversary_alert_recipients specifically
+      if (!data.anniversary_alert_recipients) {
+        data.anniversary_alert_recipients = DEFAULT_NOTIFICATION_SETTINGS.anniversary_alert_recipients;
+      }
+      
       return data;
     },
     retry: 1,
@@ -207,27 +210,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     if (settings?.pto_type_visibility) {
       setPtoVisibility(settings.pto_type_visibility);
     }
+    if (settings?.anniversary_alert_recipients) { // ADD THIS
+      setAnniversaryRecipients(settings.anniversary_alert_recipients);
+    }
   }, [settings]);
-
-  const handleRecipientChange = (recipient: string, checked: boolean) => {
-  let newRecipients = [...anniversaryRecipients];
-  
-  if (checked && !newRecipients.includes(recipient)) {
-    newRecipients.push(recipient);
-  } else if (!checked && newRecipients.includes(recipient)) {
-    newRecipients = newRecipients.filter(r => r !== recipient);
-  }
-  
-  setAnniversaryRecipients(newRecipients);
-  
-  updateSettingsMutation.mutate({
-    id: settings?.id,
-    anniversary_alert_recipients: newRecipients,
-    color_settings: colorSettings,
-    pto_type_visibility: ptoVisibility,
-    pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
-  });
-};
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
@@ -266,8 +252,39 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       [key]: value,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
+      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
       pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
+  };
+
+  const handleRecipientChange = (recipient: string, checked: boolean) => {
+    let newRecipients = [...anniversaryRecipients];
+    
+    if (checked && !newRecipients.includes(recipient)) {
+      newRecipients.push(recipient);
+    } else if (!checked && newRecipients.includes(recipient)) {
+      newRecipients = newRecipients.filter(r => r !== recipient);
+    }
+    
+    setAnniversaryRecipients(newRecipients);
+    
+    updateSettingsMutation.mutate({
+      id: settings?.id,
+      anniversary_alert_recipients: newRecipients,
+      color_settings: colorSettings,
+      pto_type_visibility: ptoVisibility,
+      pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
+    });
+  };
+
+  const handleTestAnniversaryCheck = async () => { // ADD THIS FUNCTION
+    try {
+      await manuallyCheckAnniversaries();
+      toast.success('Manual anniversary check completed');
+    } catch (error) {
+      console.error('Error testing anniversary check:', error);
+      toast.error('Failed to run anniversary check');
+    }
   };
 
   const handlePtoVisibilityToggle = (key: string, value: boolean) => {
@@ -278,6 +295,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       id: settings?.id,
       pto_type_visibility: newPtoVisibility,
       color_settings: colorSettings,
+      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
       pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
@@ -307,11 +325,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       id: settings?.id,
       color_settings: newColors,
       pto_type_visibility: ptoVisibility,
+      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
       pdf_layout_settings: settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
-  // ADD THIS: Handler for PDF layout settings
   const handleLayoutSettingsSave = (layoutSettings: any) => {
     console.log('Saving PDF layout settings:', layoutSettings);
     
@@ -320,10 +338,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       pdf_layout_settings: layoutSettings,
       color_settings: colorSettings,
       pto_type_visibility: ptoVisibility,
+      anniversary_alert_recipients: anniversaryRecipients, // ADD THIS
     });
   };
 
-  // ADD THIS: Function to generate preview data
   const generatePreviewData = () => {
     // Create mock data for preview
     const mockData = {
@@ -400,11 +418,14 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const resetToDefaults = () => {
     setColorSettings(DEFAULT_COLORS);
     setPtoVisibility(DEFAULT_PTO_VISIBILITY);
+    setAnniversaryRecipients(["admin", "supervisor"]); // ADD THIS
+    
     updateSettingsMutation.mutate({
       id: settings?.id,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-      pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS, // ADD THIS
+      anniversary_alert_recipients: ["admin", "supervisor"], // ADD THIS
+      pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
       ...DEFAULT_NOTIFICATION_SETTINGS,
     });
   };
@@ -422,7 +443,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
   return (
     <div className="space-y-6">
-      {/* Add PDF Layout Settings at the top for easy access */}
       <PDFLayoutSettings 
         settings={settings}
         onSave={handleLayoutSettingsSave}
@@ -437,11 +457,12 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       />
 
       <AnniversaryAlertSettings 
-  settings={settings}
-  handleToggle={handleToggle}
-  handleRecipientChange={handleRecipientChange}
-  isPending={updateSettingsMutation.isPending}
-/>
+        settings={settings}
+        handleToggle={handleToggle}
+        handleRecipientChange={handleRecipientChange}
+        onTest={handleTestAnniversaryCheck} // ADD THIS
+        isPending={updateSettingsMutation.isPending}
+      />
 
       <PTOSettings 
         settings={settings}
@@ -490,4 +511,4 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       />
     </div>
   );
-};
+};;

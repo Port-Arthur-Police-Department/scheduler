@@ -1,3 +1,4 @@
+// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,12 +14,29 @@ import { X, Download, Bell, Smartphone, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { backgroundTaskManager } from '@/utils/backgroundTaskManager';
 import { setupDailyCheck } from '@/utils/scheduledTasks';
 
 declare global {
   interface Window {
     deferredPrompt: any;
   }
+}
+
+// Helper function for VAPID key conversion (you'll need to generate and add your VAPID public key)
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 const App = () => {
@@ -44,6 +62,153 @@ const App = () => {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [userLoggedIn, setUserLoggedIn] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [serviceWorkerRegistration, setServiceWorkerRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null);
+
+  // Save push subscription to database
+  const savePushSubscription = async (subscription: PushSubscription) => {
+    if (!currentUserId) return;
+
+    try {
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .upsert({
+          subscription: JSON.stringify(subscription),
+          user_id: currentUserId,
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) {
+        console.error('❌ Failed to save push subscription:', error);
+      } else {
+        console.log('✅ Push subscription saved to database');
+      }
+    } catch (error) {
+      console.error('❌ Error saving push subscription:', error);
+    }
+  };
+
+  // Register for push notifications
+  const registerForPushNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.log('❌ Push notifications not supported');
+      return null;
+    }
+
+    try {
+      // Check notification permission
+      let permission = Notification.permission;
+      
+      if (permission === 'default') {
+        console.log('🔔 Requesting notification permission...');
+        permission = await Notification.requestPermission();
+        setNotificationStatus(prev => ({ ...prev, permission }));
+      }
+      
+      if (permission !== 'granted') {
+        console.log('❌ Notification permission not granted:', permission);
+        return null;
+      }
+
+      // Get service worker registration
+      const registration = await navigator.serviceWorker.ready;
+      setServiceWorkerRegistration(registration);
+
+      // Check if already subscribed
+      const existingSubscription = await registration.pushManager.getSubscription();
+      if (existingSubscription) {
+        console.log('✅ Already subscribed to push notifications');
+        setPushSubscription(existingSubscription);
+        await savePushSubscription(existingSubscription);
+        return registration;
+      }
+
+      // Subscribe to push notifications (requires VAPID public key)
+      // TODO: Replace with your actual VAPID public key
+      const vapidPublicKey = 'YOUR_VAPID_PUBLIC_KEY_HERE'; // Generate this: web-push generate-vapid-keys
+      
+      // For development/testing without VAPID key, we'll skip subscription
+      // but still show that we're ready for notifications
+      if (!vapidPublicKey || vapidPublicKey === 'YOUR_VAPID_PUBLIC_KEY_HERE') {
+        console.log('⚠️ VAPID key not configured. Push notifications will work only when app is open.');
+        setNotificationStatus(prev => ({ ...prev, subscribed: true }));
+        return registration;
+      }
+
+      try {
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+        });
+
+        console.log('✅ Push subscription created:', subscription);
+        setPushSubscription(subscription);
+        setNotificationStatus(prev => ({ ...prev, subscribed: true }));
+        await savePushSubscription(subscription);
+        
+        return registration;
+      } catch (subscriptionError) {
+        console.error('❌ Push subscription failed:', subscriptionError);
+        // Fallback to service worker notifications without push
+        setNotificationStatus(prev => ({ ...prev, subscribed: true }));
+        return registration;
+      }
+
+    } catch (error) {
+      console.error('❌ Push registration failed:', error);
+      return null;
+    }
+  };
+
+  // Initialize background tasks for PWA
+  const initializeBackgroundTasks = async () => {
+    if (pwaStatus.serviceWorkerActive && userLoggedIn) {
+      console.log('🔄 Initializing background tasks for PWA');
+      
+      try {
+        // Initialize background task manager
+        await backgroundTaskManager.initialize();
+        
+        // Set up regular daily check for in-app notifications
+        setupDailyCheck();
+        
+        // Register for background sync if available
+        if (serviceWorkerRegistration && 'sync' in serviceWorkerRegistration) {
+          try {
+            await serviceWorkerRegistration.sync.register('anniversary-check');
+            console.log('✅ Background sync registered');
+          } catch (syncError) {
+            console.warn('⚠️ Background sync not available:', syncError);
+          }
+        }
+        
+        // Send test notification for verification (development only)
+        if (import.meta.env.DEV) {
+          setTimeout(() => {
+            if (serviceWorkerRegistration) {
+              serviceWorkerRegistration.showNotification('PAPD Scheduler', {
+                body: 'Background tasks are now active',
+                icon: '/scheduler/icons/icon-192.png',
+                tag: 'background-test',
+                requireInteraction: false,
+                data: {
+                  type: 'test',
+                  timestamp: new Date().toISOString(),
+                  url: '/scheduler/#/dashboard'
+                }
+              }).then(() => {
+                console.log('✅ Test notification sent');
+              });
+            }
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('❌ Failed to initialize background tasks:', error);
+      }
+    }
+  };
 
   // Auto-hide status panel after 10 seconds if everything is ready
   useEffect(() => {
@@ -92,6 +257,14 @@ const App = () => {
         } else {
           setShowInstallPrompt(false);
         }
+        
+        // Initialize background tasks for authenticated users
+        initializeBackgroundTasks();
+        
+        // Register for push notifications
+        if (pwaStatus.serviceWorkerActive) {
+          registerForPushNotifications();
+        }
       } else {
         // User is not logged in, hide the prompt
         setShowInstallPrompt(false);
@@ -104,30 +277,52 @@ const App = () => {
   // Listen for auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        console.log('🔄 Auth state changed:', event, 'User ID:', session?.user?.id);
+        
         if (event === 'SIGNED_OUT') {
           // Clear session storage when user logs out
-          // This will allow prompt to show for next user
           const userId = session?.user?.id;
           if (userId) {
             sessionStorage.removeItem(`pwa_prompt_shown_${userId}`);
           }
           setCurrentUserId(null);
           setUserLoggedIn(false);
+          setPushSubscription(null);
+          setServiceWorkerRegistration(null);
+          
+          // Clean up background tasks
+          backgroundTaskManager.destroy();
         } else if (event === 'SIGNED_IN') {
-          // User just logged in - triggers the auth check effect above
-          console.log('User signed in, PWA prompt logic will run');
+          // User just logged in
+          console.log('User signed in, initializing PWA features');
+          const userId = session?.user?.id;
+          setCurrentUserId(userId);
+          setUserLoggedIn(true);
+          
+          // Small delay to ensure other initialization is complete
+          setTimeout(() => {
+            if (pwaStatus.serviceWorkerActive) {
+              initializeBackgroundTasks();
+              registerForPushNotifications();
+            }
+          }, 1000);
         } else if (event === 'INITIAL_SESSION') {
           // Handle initial session
           const userId = session?.user?.id;
           setCurrentUserId(userId);
           setUserLoggedIn(!!session);
         }
+        
+        // Invalidate queries when user changes
+        // (queryClient would need to be available here, you might need to lift it up)
       }
     );
     
     return () => {
       subscription.unsubscribe();
+      // Clean up background tasks on unmount
+      backgroundTaskManager.destroy();
     };
   }, []);
 
@@ -155,6 +350,11 @@ const App = () => {
             serviceWorkerActive,
             hasManifest
           }));
+          
+          // If service worker is active, store the registration
+          if (registration) {
+            setServiceWorkerRegistration(registration);
+          }
         });
       } else {
         setPwaStatus(prev => ({
@@ -181,7 +381,6 @@ const App = () => {
       // Also save to window for backup
       window.deferredPrompt = e;
       
-      // Don't show toast automatically, we'll show our custom prompt after login
       console.log('PWA is installable, will show prompt after login if not dismissed');
     };
     
@@ -196,6 +395,11 @@ const App = () => {
       window.deferredPrompt = null;
       
       toast.success("Police Scheduler installed successfully!");
+      
+      // Initialize background tasks after installation
+      if (userLoggedIn) {
+        initializeBackgroundTasks();
+      }
     };
     
     // Register service workers for PWA
@@ -209,37 +413,31 @@ const App = () => {
         // Try to register service worker for PWA
         try {
           const registration = await navigator.serviceWorker.register(
-            '/service-worker.js',
+            '/scheduler/service-worker.js',
             { 
-              scope: '/',
+              scope: '/scheduler/',
               updateViaCache: 'none'
             }
           );
           console.log('✅ PWA Service Worker registered:', registration.scope);
+          setServiceWorkerRegistration(registration);
           
           if (registration.active) {
             setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
           }
-        } catch (error) {
-          console.log('⚠️ PWA service worker registration failed, trying scheduler path:', error);
           
-          // Fallback to scheduler path
-          try {
-            const schedulerReg = await navigator.serviceWorker.register(
-              '/scheduler/service-worker.js',
-              { 
-                scope: '/scheduler/',
-                updateViaCache: 'none'
-              }
-            );
-            console.log('✅ Scheduler service worker registered:', schedulerReg.scope);
+          // Listen for service worker messages
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            console.log('📨 Message from service worker:', event.data);
             
-            if (schedulerReg.active) {
+            if (event.data && event.data.type === 'SERVICE_WORKER_READY') {
+              console.log('✅ Service worker ready:', event.data.message);
               setPwaStatus(prev => ({ ...prev, serviceWorkerActive: true }));
             }
-          } catch (schedulerError) {
-            console.error('❌ Scheduler service worker also failed:', schedulerError);
-          }
+          });
+          
+        } catch (error) {
+          console.error('❌ PWA service worker registration failed:', error);
         }
         
       } catch (error) {
@@ -279,14 +477,6 @@ const App = () => {
         ...prev,
         permission: browserPermission
       }));
-
-      useEffect(() => {
-  // Setup anniversary check when PWA is active and user is logged in
-  if (pwaStatus.serviceWorkerActive && userLoggedIn) {
-    console.log('📅 App: Setting up scheduled tasks for PWA');
-    setupDailyCheck();
-  }
-}, [pwaStatus.serviceWorkerActive, userLoggedIn]);
       
       // Check if user has already subscribed (stored in database)
       const { data: { session } } = await supabase.auth.getSession();
@@ -351,6 +541,11 @@ const App = () => {
         
         setShowNotificationBanner(false);
         
+        // Register for push notifications if service worker is active
+        if (pwaStatus.serviceWorkerActive) {
+          await registerForPushNotifications();
+        }
+        
         // Show success message
         toast.success("Notifications enabled! You'll receive shift alerts.");
         
@@ -375,32 +570,72 @@ const App = () => {
     }, 3000);
   };
 
-  // Test notification function using browser notifications
+  // Test notification function using service worker
   const testNotification = async () => {
-    // First check if we have browser permission
+    // Check permission first
     if (Notification.permission !== 'granted') {
       toast.error('You need to enable notifications first.');
-      triggerSubscriptionPrompt();
+      await triggerSubscriptionPrompt();
       return;
     }
     
     try {
-      // Use browser notifications
-      const notification = new Notification('Police Department Test', {
-        body: 'This is a test notification from the Police Department Scheduler',
-        icon: '/scheduler/icon-192.png',
-        tag: 'test-notification',
-        badge: '/scheduler/icon-192.png'
-      });
-      
-      notification.onclick = () => {
-        window.focus();
-      };
-      
-      toast.success("Test notification sent via browser!");
+      if (serviceWorkerRegistration) {
+        // Use service worker for notification
+        await serviceWorkerRegistration.showNotification('Port Arthur PD Test', {
+          body: 'This is a test notification from the Police Department Scheduler',
+          icon: '/scheduler/icons/icon-192.png',
+          badge: '/scheduler/icons/badge-96.png',
+          tag: 'test-notification',
+          requireInteraction: false,
+          data: {
+            type: 'test',
+            timestamp: new Date().toISOString(),
+            url: '/scheduler/#/dashboard'
+          }
+        });
+        
+        toast.success("Test notification sent!");
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        // Fallback to browser notifications
+        const notification = new Notification('Port Arthur PD Test', {
+          body: 'This is a test notification from the Police Department Scheduler',
+          icon: '/scheduler/icons/icon-192.png',
+          tag: 'test-notification'
+        });
+        
+        notification.onclick = () => {
+          window.focus();
+        };
+        
+        toast.success("Test notification sent via browser!");
+      } else {
+        toast.error("Notifications not available. Please enable them.");
+      }
     } catch (error) {
       console.error('Error sending test notification:', error);
       toast.error("Failed to send test notification");
+    }
+  };
+
+  // Send test push notification through service worker
+  const testPushNotification = async () => {
+    if (!serviceWorkerRegistration) {
+      toast.error("Service worker not ready. Please refresh the page.");
+      return;
+    }
+    
+    try {
+      // Send message to service worker to show test notification
+      if (serviceWorkerRegistration.active) {
+        serviceWorkerRegistration.active.postMessage({
+          type: 'TEST_NOTIFICATION'
+        });
+        toast.success("Test push notification requested!");
+      }
+    } catch (error) {
+      console.error('Error sending test push notification:', error);
+      toast.error("Failed to send test push notification");
     }
   };
 
@@ -468,6 +703,13 @@ const App = () => {
       localStorage.removeItem(`pwa_prompt_dismissed_${currentUserId}`);
       sessionStorage.removeItem(`pwa_prompt_shown_${currentUserId}`);
       toast.success("PWA install prompt will appear after your next login or page refresh.");
+      
+      // If PWA is installable, show prompt immediately
+      if (pwaStatus.isInstallable && !pwaStatus.isInstalled) {
+        setTimeout(() => {
+          setShowInstallPrompt(true);
+        }, 1000);
+      }
     } else {
       toast.error("You need to be logged in to change this setting.");
     }
@@ -610,6 +852,10 @@ const App = () => {
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
                       <span>Quick access from home screen like an app</span>
                     </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                      <span>Background anniversary & birthday alerts</span>
+                    </div>
                   </div>
                   
                   <div className="flex gap-2 mt-4">
@@ -746,6 +992,10 @@ const App = () => {
                 </div>
                 
                 <div style={{ marginBottom: '12px' }}>
+                  <strong>Service Worker:</strong> {serviceWorkerRegistration ? '✅ Active' : '❌ Not Ready'}
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
                   <strong>Prompt Status:</strong> {showInstallPrompt ? '🟡 Showing' : '⚫ Hidden'}
                 </div>
                 
@@ -782,91 +1032,25 @@ const App = () => {
                     }}
                     disabled={Notification.permission !== 'granted'}
                   >
-                    Test Notification
+                    Test Browser Notification
+                  </button>
+                  
+                  <button
+                    onClick={testPushNotification}
+                    style={{
+                      background: '#ec4899',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                    disabled={!serviceWorkerRegistration}
+                  >
+                    Test Push Notification
                   </button>
                   
                   {pwaStatus.isInstallable && !pwaStatus.isInstalled && (
                     <button
-                      onClick={installPWA}
-                      style={{
-                        background: '#10b981',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                    >
-                      📱 Install App
-                    </button>
-                  )}
-                  
-                  {currentUserId && (
-                    <button
-                      onClick={enablePwaPromptAgain}
-                      style={{
-                        background: '#f59e0b',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                    >
-                      🔄 Reset Prompt
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : import.meta.env.DEV && (
-              <button
-                onClick={handleShowPanel}
-                style={{
-                  position: 'fixed',
-                  top: 10,
-                  right: 10,
-                  background: '#1e293b',
-                  color: 'white',
-                  border: 'none',
-                  padding: '6px 10px',
-                  borderRadius: '20px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  zIndex: 9999,
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
-                }}
-              >
-                Status
-              </button>
-            )}
-            
-            <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<Dashboard isMobile={isMobile} />} />
-                <Route path="/auth" element={<Auth />} />
-                
-                {/* Tab-specific routes */}
-                <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} initialTab="daily" />} />
-                <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} initialTab="schedule" />} />
-                <Route path="/vacancies" element={<Dashboard isMobile={isMobile} initialTab="vacancies" />} />
-                <Route path="/staff" element={<Dashboard isMobile={isMobile} initialTab="staff" />} />
-                <Route path="/time-off" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
-                <Route path="/pto" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
-                <Route path="/settings" element={<Dashboard isMobile={isMobile} initialTab="settings" />} />
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </div>
-          </UserProvider>
-        </HashRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-};
-
-export default App;

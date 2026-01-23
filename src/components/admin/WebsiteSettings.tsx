@@ -155,49 +155,51 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         throw error;
       }
 
-      // Merge with defaults to ensure all properties exist
-      data.color_settings = { ...DEFAULT_COLORS, ...(data.color_settings || {}) };
-      data.pto_type_visibility = { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) };
+      // Create a base object with all DEFAULT_NOTIFICATION_SETTINGS
+      const baseSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
+      
+      // Merge database data on top of defaults
+      const mergedData = {
+        ...baseSettings,
+        ...data,
+        // Ensure nested objects are properly merged
+        color_settings: { ...DEFAULT_COLORS, ...(data.color_settings || {}) },
+        pto_type_visibility: { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) }
+      };
       
       // Ensure pdf_layout_settings exists and has all defaults
-      if (!data.pdf_layout_settings) {
-        data.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
+      if (!mergedData.pdf_layout_settings) {
+        mergedData.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
       } else {
         // Deep merge with defaults
-        data.pdf_layout_settings = {
+        mergedData.pdf_layout_settings = {
           ...DEFAULT_LAYOUT_SETTINGS,
-          ...data.pdf_layout_settings,
+          ...mergedData.pdf_layout_settings,
           fontSizes: {
             ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
-            ...(data.pdf_layout_settings.fontSizes || {})
+            ...(mergedData.pdf_layout_settings.fontSizes || {})
           },
           sections: {
             ...DEFAULT_LAYOUT_SETTINGS.sections,
-            ...(data.pdf_layout_settings.sections || {})
+            ...(mergedData.pdf_layout_settings.sections || {})
           },
           tableSettings: {
             ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-            ...(data.pdf_layout_settings.tableSettings || {})
+            ...(mergedData.pdf_layout_settings.tableSettings || {})
           },
           colorSettings: {
             ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
-            ...(data.pdf_layout_settings.colorSettings || {})
+            ...(mergedData.pdf_layout_settings.colorSettings || {})
           }
         };
       }
       
-      for (const key in DEFAULT_NOTIFICATION_SETTINGS) {
-        if (data[key] === undefined) {
-          data[key] = DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS];
-        }
+      // Specifically handle anniversary_alert_recipients if it doesn't exist
+      if (!mergedData.anniversary_alert_recipients) {
+        mergedData.anniversary_alert_recipients = DEFAULT_NOTIFICATION_SETTINGS.anniversary_alert_recipients;
       }
       
-      // Handle anniversary_alert_recipients specifically
-      if (!data.anniversary_alert_recipients) {
-        data.anniversary_alert_recipients = DEFAULT_NOTIFICATION_SETTINGS.anniversary_alert_recipients;
-      }
-      
-      return data;
+      return mergedData;
     },
     retry: 1,
   });
@@ -215,17 +217,24 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     }
   }, [settings]);
 
-  // SIMPLE FIX: Update settings mutation with minimal updates
+  // Update settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: async (newSettings: any) => {
-      console.log('Updating settings:', newSettings);
+    mutationFn: async (updates: any) => {
+      console.log('Updating settings with:', updates);
+      
+      // Get current settings from cache first
+      const currentSettings = queryClient.getQueryData(['website-settings']) || {};
+      
+      // Merge updates with current settings
+      const newSettings = {
+        ...currentSettings,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
       
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert({
-          ...newSettings,
-          updated_at: new Date().toISOString(),
-        })
+        .upsert(newSettings)
         .select()
         .single();
 
@@ -237,7 +246,48 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       return data;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['website-settings'], data);
+      // Merge the returned data with existing settings
+      queryClient.setQueryData(['website-settings'], (oldData: any) => ({
+        ...oldData,
+        ...data,
+        // Ensure nested objects are properly merged
+        color_settings: { 
+          ...DEFAULT_COLORS, 
+          ...(oldData?.color_settings || {}), 
+          ...(data.color_settings || {}) 
+        },
+        pto_type_visibility: { 
+          ...DEFAULT_PTO_VISIBILITY, 
+          ...(oldData?.pto_type_visibility || {}), 
+          ...(data.pto_type_visibility || {}) 
+        },
+        pdf_layout_settings: {
+          ...DEFAULT_LAYOUT_SETTINGS,
+          ...(oldData?.pdf_layout_settings || {}),
+          ...(data.pdf_layout_settings || {}),
+          // Deep merge for nested objects in pdf_layout_settings
+          fontSizes: {
+            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+            ...(oldData?.pdf_layout_settings?.fontSizes || {}),
+            ...(data.pdf_layout_settings?.fontSizes || {})
+          },
+          sections: {
+            ...DEFAULT_LAYOUT_SETTINGS.sections,
+            ...(oldData?.pdf_layout_settings?.sections || {}),
+            ...(data.pdf_layout_settings?.sections || {})
+          },
+          tableSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+            ...(oldData?.pdf_layout_settings?.tableSettings || {}),
+            ...(data.pdf_layout_settings?.tableSettings || {})
+          },
+          colorSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
+            ...(oldData?.pdf_layout_settings?.colorSettings || {}),
+            ...(data.pdf_layout_settings?.colorSettings || {})
+          }
+        }
+      }));
       toast.success("Settings updated successfully");
     },
     onError: (error) => {
@@ -246,9 +296,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     },
   });
 
-  // MINIMAL FIX: Update only the field that changed
   const handleToggle = (key: string, value: boolean) => {
-    // Only send the field that's being changed
     updateSettingsMutation.mutate({
       id: settings?.id,
       [key]: value,

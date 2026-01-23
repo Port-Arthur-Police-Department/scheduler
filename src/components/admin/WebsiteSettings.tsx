@@ -21,7 +21,6 @@ import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
-import { manuallyCheckAnniversaries } from '@/utils/anniversaryChecker';
 
 // Constants
 export const DEFAULT_COLORS = {
@@ -320,16 +319,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
-  const handleTestAnniversaryCheck = async () => {
-    try {
-      await manuallyCheckAnniversaries();
-      toast.success('Manual anniversary check completed');
-    } catch (error) {
-      console.error('Error testing anniversary check:', error);
-      toast.error('Failed to run anniversary check');
-    }
-  };
-
   const handlePtoVisibilityToggle = (key: string, value: boolean) => {
     const newPtoVisibility = { ...ptoVisibility, [key]: value };
     setPtoVisibility(newPtoVisibility);
@@ -493,7 +482,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         settings={settings}
         handleToggle={handleToggle}
         handleRecipientChange={handleRecipientChange}
-        onTest={handleTestAnniversaryCheck}
         isPending={updateSettingsMutation.isPending}
       />
 

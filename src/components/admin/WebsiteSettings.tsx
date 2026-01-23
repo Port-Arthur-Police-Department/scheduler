@@ -517,11 +517,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         isPending={updateSettingsMutation.isPending}
       />
 
-      <NotificationSettings 
-        settings={uiSettings}
-        handleToggle={handleToggle}
-        isPending={updateSettingsMutation.isPending}
-      />
+<NotificationSettings 
+  settings={settings}
+  handleToggle={handleToggle}
+  isPending={updateSettingsMutation.isPending}
+/>
 
       <AnniversaryAlertSettings 
         settings={uiSettings}

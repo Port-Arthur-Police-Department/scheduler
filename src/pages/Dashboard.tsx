@@ -322,15 +322,13 @@ useEffect(() => {
   });
 
 
-// Keep the getSetting function but FIX it:
+// In both Dashboard.tsx and MobileNavigation.tsx:
 const getSetting = (key: string, defaultValue: boolean = true): boolean => {
   if (!websiteSettings) return defaultValue;
   
-  // FIX: Use hasOwnProperty to properly check if key exists
+  // FIX: Check if property exists (including false values)
   if (websiteSettings.hasOwnProperty(key)) {
-    const value = websiteSettings[key];
-    // Return the value even if it's false
-    return value;
+    return websiteSettings[key];
   }
   
   return defaultValue;

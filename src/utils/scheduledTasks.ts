@@ -1,6 +1,6 @@
 import { checkAnniversariesAndBirthdays } from './anniversaryChecker';
+import { backgroundTaskManager } from './backgroundTaskManager';
 
-// Run once per day at 8:00 AM
 export const setupScheduledTasks = () => {
   const now = new Date();
   const targetTime = new Date(
@@ -10,7 +10,6 @@ export const setupScheduledTasks = () => {
     8, 0, 0 // 8:00 AM
   );
   
-  // If it's already past 8:00 AM today, schedule for tomorrow
   if (now > targetTime) {
     targetTime.setDate(targetTime.getDate() + 1);
   }
@@ -18,21 +17,55 @@ export const setupScheduledTasks = () => {
   const delay = targetTime.getTime() - now.getTime();
   
   setTimeout(() => {
-    // Run the check
+    // Run check
     checkAnniversariesAndBirthdays();
     
-    // Schedule next check for 24 hours later
+    // Schedule next check
     setInterval(checkAnniversariesAndBirthdays, 24 * 60 * 60 * 1000);
   }, delay);
   
   console.log(`📅 Scheduled anniversary check for ${targetTime.toLocaleString()}`);
 };
 
-// Alternatively, use a simpler approach for testing
 export const setupDailyCheck = () => {
-  // Check immediately on load (for testing)
+  console.log('📅 Setting up daily checks');
+  
+  // Check immediately on load
   checkAnniversariesAndBirthdays();
   
   // Then check every 24 hours
-  setInterval(checkAnniversariesAndBirthdays, 24 * 60 * 60 * 1000);
+  const dailyCheckInterval = setInterval(checkAnniversariesAndBirthdays, 24 * 60 * 60 * 1000);
+  
+  // Return cleanup function
+  return () => {
+    clearInterval(dailyCheckInterval);
+  };
+};
+
+// New function specifically for PWA background
+export const setupPWABackgroundTasks = () => {
+  console.log('📱 Setting up PWA background tasks');
+  
+  // Try to register for periodic background sync
+  if ('periodicSync' in (navigator as any)) {
+    (navigator as any).periodicSync.register('anniversary-sync', {
+      minInterval: 24 * 60 * 60 * 1000, // 24 hours minimum
+    }).then(() => {
+      console.log('✅ Periodic background sync registered');
+    }).catch(err => {
+      console.warn('⚠️ Periodic background sync not supported:', err);
+    });
+  }
+  
+  // Use background fetch for iOS
+  if ('backgroundFetch' in (navigator as any)) {
+    (navigator as any).backgroundFetch.fetch('anniversary-fetch', ['/api/anniversary-check'], {
+      title: 'Police Department Anniversary Check',
+      downloadTotal: 1024, // 1KB
+    }).then(backgroundFetch => {
+      console.log('✅ Background fetch registered:', backgroundFetch.id);
+    }).catch(err => {
+      console.warn('⚠️ Background fetch not available:', err);
+    });
+  }
 };

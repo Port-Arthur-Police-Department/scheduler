@@ -462,6 +462,21 @@ const createProfileMutation = useMutation({
                 />
               </div>
 
+              
+<div className="space-y-2">
+  <Label htmlFor="birthday">Birthday</Label>
+  <Input
+    id="birthday"
+    type="date"
+    value={officerData.birthday || ''}
+    onChange={(e) => setOfficerData({...officerData, birthday: e.target.value})}
+    disabled={isPending}
+  />
+  <p className="text-xs text-muted-foreground">
+    Used for birthday alerts in settings
+  </p>
+</div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email *</Label>
                 <Input

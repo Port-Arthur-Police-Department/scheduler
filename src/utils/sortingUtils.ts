@@ -154,6 +154,16 @@ export const isSupervisor = (officer: OfficerForSorting): boolean => {
          rank.includes('sgt');
 };
 
+export const sortOfficersByLastName = (officers: any[]): any[] => {
+  if (!officers || officers.length === 0) return [];
+  
+  return [...officers].sort((a, b) => {
+    const lastNameA = getLastName(a.full_name || a.officerName || '');
+    const lastNameB = getLastName(b.full_name || b.officerName || '');
+    return lastNameA.localeCompare(lastNameB);
+  });
+};
+
 export const isPPOByRank = (rank: string | undefined | null): boolean => {
   if (!rank) return false;
   const rankLower = rank.toLowerCase().trim();

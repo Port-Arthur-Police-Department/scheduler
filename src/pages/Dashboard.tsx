@@ -322,8 +322,23 @@ useEffect(() => {
   });
 
 
-const showPtoTab = websiteSettings?.show_pto_tab ?? true;
-const showStaffingOverview = websiteSettings?.show_staffing_overview ?? true;
+// Keep the getSetting function but FIX it:
+const getSetting = (key: string, defaultValue: boolean = true): boolean => {
+  if (!websiteSettings) return defaultValue;
+  
+  // FIX: Use hasOwnProperty to properly check if key exists
+  if (websiteSettings.hasOwnProperty(key)) {
+    const value = websiteSettings[key];
+    // Return the value even if it's false
+    return value;
+  }
+  
+  return defaultValue;
+};
+
+// Then update ALL usages to use the fixed function:
+const showPtoTab = getSetting('show_pto_tab', true);
+const showStaffingOverview = getSetting('show_staffing_overview', true);
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {

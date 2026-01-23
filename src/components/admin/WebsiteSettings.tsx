@@ -21,7 +21,7 @@ import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
-import { manuallyCheckAnniversaries } from '@/utils/anniversaryChecker'; // ADD THIS IMPORT
+import { manuallyCheckAnniversaries } from '@/utils/anniversaryChecker';
 
 // Constants
 export const DEFAULT_COLORS = {
@@ -117,9 +117,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
-  
-  // Track UI settings separately for immediate updates
-  const [uiSettings, setUiSettings] = useState<any>(null);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -203,27 +200,22 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       return data;
     },
     retry: 1,
-    staleTime: 5 * 60 * 1000, // 5 minutes stale time
-    gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 
   // Update local state when settings load
   useEffect(() => {
-    if (settings) {
-      setUiSettings(settings);
-      if (settings.color_settings) {
-        setColorSettings(settings.color_settings);
-      }
-      if (settings.pto_type_visibility) {
-        setPtoVisibility(settings.pto_type_visibility);
-      }
-      if (settings.anniversary_alert_recipients) {
-        setAnniversaryRecipients(settings.anniversary_alert_recipients);
-      }
+    if (settings?.color_settings) {
+      setColorSettings(settings.color_settings);
+    }
+    if (settings?.pto_type_visibility) {
+      setPtoVisibility(settings.pto_type_visibility);
+    }
+    if (settings?.anniversary_alert_recipients) {
+      setAnniversaryRecipients(settings.anniversary_alert_recipients);
     }
   }, [settings]);
 
-  // Update settings mutation with optimistic updates
+  // SIMPLE FIX: Update settings mutation with minimal updates
   const updateSettingsMutation = useMutation({
     mutationFn: async (newSettings: any) => {
       console.log('Updating settings:', newSettings);
@@ -244,84 +236,22 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       
       return data;
     },
-    onMutate: async (newSettings) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['website-settings'] });
-      
-      // Snapshot the previous value
-      const previousSettings = queryClient.getQueryData(['website-settings']);
-      
-      // Update UI settings immediately for optimistic update
-      if (uiSettings) {
-        const updatedUiSettings = { ...uiSettings, ...newSettings };
-        setUiSettings(updatedUiSettings);
-        
-        // Update specific local states if needed
-        if (newSettings.color_settings) {
-          setColorSettings(newSettings.color_settings);
-        }
-        if (newSettings.pto_type_visibility) {
-          setPtoVisibility(newSettings.pto_type_visibility);
-        }
-        if (newSettings.anniversary_alert_recipients) {
-          setAnniversaryRecipients(newSettings.anniversary_alert_recipients);
-        }
-      }
-      
-      return { previousSettings };
-    },
     onSuccess: (data) => {
-      // Update the query cache with the new data
       queryClient.setQueryData(['website-settings'], data);
-      // Also update UI settings with complete server response
-      setUiSettings(data);
-      
-      // IMPORTANT: Invalidate other queries that depend on settings
-      queryClient.invalidateQueries({ queryKey: ['website-settings-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['staffing-overview'] });
-      
       toast.success("Settings updated successfully");
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       console.error("Error updating settings:", error);
-      
-      // Revert to previous settings on error
-      if (context?.previousSettings) {
-        queryClient.setQueryData(['website-settings'], context.previousSettings);
-        setUiSettings(context.previousSettings);
-      }
-      
       toast.error("Failed to update settings");
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure we have fresh data
-      queryClient.invalidateQueries({ queryKey: ['website-settings'] });
     },
   });
 
+  // MINIMAL FIX: Update only the field that changed
   const handleToggle = (key: string, value: boolean) => {
-  // Minimal update - only what's changing
-  const updateData: any = {
-    id: settings?.id,
-    [key]: value,
-    updated_at: new Date().toISOString(),
-  };
-  
-  updateSettingsMutation.mutate(updateData);
-};
-    
-    // Update UI immediately
-    const updatedUiSettings = { ...uiSettings, [key]: value };
-    setUiSettings(updatedUiSettings);
-    
-    // Send to server
+    // Only send the field that's being changed
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       [key]: value,
-      color_settings: colorSettings,
-      pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients,
-      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -337,11 +267,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setAnniversaryRecipients(newRecipients);
     
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       anniversary_alert_recipients: newRecipients,
-      color_settings: colorSettings,
-      pto_type_visibility: ptoVisibility,
-      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -360,11 +287,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setPtoVisibility(newPtoVisibility);
     
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       pto_type_visibility: newPtoVisibility,
-      color_settings: colorSettings,
-      anniversary_alert_recipients: anniversaryRecipients,
-      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -390,11 +314,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setColorSettings(newColors);
     
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       color_settings: newColors,
-      pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients,
-      pdf_layout_settings: uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS,
     });
   };
 
@@ -402,11 +323,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     console.log('Saving PDF layout settings:', layoutSettings);
     
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       pdf_layout_settings: layoutSettings,
-      color_settings: colorSettings,
-      pto_type_visibility: ptoVisibility,
-      anniversary_alert_recipients: anniversaryRecipients,
     });
   };
 
@@ -488,7 +406,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setAnniversaryRecipients(["admin", "supervisor"]);
     
     updateSettingsMutation.mutate({
-      id: uiSettings?.id,
+      id: settings?.id,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
       anniversary_alert_recipients: ["admin", "supervisor"],
@@ -497,7 +415,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
-  if (isLoading || !uiSettings) {
+  if (isLoading) {
     return (
       <Card>
         <CardContent className="flex justify-center items-center py-8">
@@ -511,20 +429,20 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   return (
     <div className="space-y-6">
       <PDFLayoutSettings 
-        settings={uiSettings}
+        settings={settings}
         onSave={handleLayoutSettingsSave}
         onPreview={generatePreviewData}
         isPending={updateSettingsMutation.isPending}
       />
 
-<NotificationSettings 
-  settings={settings}
-  handleToggle={handleToggle}
-  isPending={updateSettingsMutation.isPending}
-/>
+      <NotificationSettings 
+        settings={settings}
+        handleToggle={handleToggle}
+        isPending={updateSettingsMutation.isPending}
+      />
 
       <AnniversaryAlertSettings 
-        settings={uiSettings}
+        settings={settings}
         handleToggle={handleToggle}
         handleRecipientChange={handleRecipientChange}
         onTest={handleTestAnniversaryCheck}
@@ -532,7 +450,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       />
 
       <PTOSettings 
-        settings={uiSettings}
+        settings={settings}
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
@@ -547,7 +465,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         colorSettings={colorSettings}
         handleColorChange={handleColorChange}
         isPending={updateSettingsMutation.isPending}
-        settings={uiSettings}
+        settings={settings}
         ptoVisibility={ptoVisibility}
         updateSettingsMutation={updateSettingsMutation}
         setColorSettings={setColorSettings}
@@ -573,7 +491,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         open={pdfPreviewOpen}
         onOpenChange={setPdfPreviewOpen}
         previewData={previewData}
-        layoutSettings={uiSettings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
         selectedDate={new Date()}
       />
     </div>

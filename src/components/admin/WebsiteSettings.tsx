@@ -299,9 +299,16 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     },
   });
 
-  // Optimistic toggle handler
   const handleToggle = (key: string, value: boolean) => {
-    if (!uiSettings) return;
+  // Minimal update - only what's changing
+  const updateData: any = {
+    id: settings?.id,
+    [key]: value,
+    updated_at: new Date().toISOString(),
+  };
+  
+  updateSettingsMutation.mutate(updateData);
+};
     
     // Update UI immediately
     const updatedUiSettings = { ...uiSettings, [key]: value };

@@ -13,6 +13,7 @@ import { X, Download, Bell, Smartphone, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { setupDailyCheck } from '@/utils/scheduledTasks';
 
 declare global {
   interface Window {
@@ -278,6 +279,14 @@ const App = () => {
         ...prev,
         permission: browserPermission
       }));
+
+      useEffect(() => {
+  // Setup anniversary check when PWA is active and user is logged in
+  if (pwaStatus.serviceWorkerActive && userLoggedIn) {
+    console.log('📅 App: Setting up scheduled tasks for PWA');
+    setupDailyCheck();
+  }
+}, [pwaStatus.serviceWorkerActive, userLoggedIn]);
       
       // Check if user has already subscribed (stored in database)
       const { data: { session } } = await supabase.auth.getSession();

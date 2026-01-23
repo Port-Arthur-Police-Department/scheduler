@@ -1,4 +1,4 @@
-// src/hooks/useWebsiteSettings.ts - FIXED VERSION
+// src/hooks/useWebsiteSettings.ts - UPDATED VERSION
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
@@ -12,18 +12,26 @@ export const useWebsiteSettings = () => {
           .from('website_settings')
           .select('*')
           .limit(1)
-          .maybeSingle(); // Use maybeSingle instead of single
+          .single();
         
         if (error) {
-          console.error('Error fetching website settings:', error);
+          // If no settings exist yet, return default values
+          if (error.code === 'PGRST116') {
+            return {
+              enable_notifications: false,
+              show_pto_balances: false,
+              pto_balances_visible: false,
+              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
+              show_staffing_overview: true,
+              show_pto_tab: true,
+              enable_anniversary_alerts: false,
+              enable_birthday_alerts: false,
+              anniversary_alert_recipients: ["admin", "supervisor"],
+            };
+          }
           throw error;
         }
-        
-        // If no settings exist, return null
-        if (!data) {
-          return null;
-        }
-        
+
         // Ensure pdf_layout_settings exists and has all required fields
         if (!data.pdf_layout_settings) {
           data.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
@@ -54,14 +62,17 @@ export const useWebsiteSettings = () => {
         return data;
       } catch (error) {
         console.error('Error in useWebsiteSettings:', error);
-        // Return a default structure on error
+        // Return default structure on error
         return {
           enable_notifications: false,
           show_pto_balances: false,
           pto_balances_visible: false,
           pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
-          show_pto_tab: true,
           show_staffing_overview: true,
+          show_pto_tab: true,
+          enable_anniversary_alerts: false,
+          enable_birthday_alerts: false,
+          anniversary_alert_recipients: ["admin", "supervisor"],
         };
       }
     }
@@ -73,7 +84,7 @@ export const useUpdateWebsiteSettings = () => {
   
   return useMutation({
     mutationFn: async (settings: any) => {
-      console.log('Updating settings:', settings);
+      console.log('useUpdateWebsiteSettings: Saving settings with ID:', settings?.id);
       
       const { data, error } = await supabase
         .from('website_settings')
@@ -87,7 +98,6 @@ export const useUpdateWebsiteSettings = () => {
         console.error('Supabase update error:', error);
         throw error;
       }
-      
       return data;
     },
     onSuccess: () => {

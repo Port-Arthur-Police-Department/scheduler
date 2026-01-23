@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User as UserIcon, Lock } from "lucide-react";
+import { setupDailyCheck } from '@/utils/scheduledTasks';
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";
@@ -230,6 +231,15 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       toast.error("You need to be logged in to change this setting");
     }
   };
+
+ // Initialize daily anniversary check
+useEffect(() => {
+  if (user?.id) {
+    console.log('📅 Setting up anniversary check for user:', user.id);
+    // Use the simpler version for testing
+    setupDailyCheck();
+  }
+}, [user?.id]);
 
   // Apply theme to document
   useEffect(() => {

@@ -1,4 +1,4 @@
-// src/hooks/useWebsiteSettings.ts
+// src/hooks/useWebsiteSettings.ts - SIMPLIFIED
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
@@ -8,65 +8,50 @@ export const useWebsiteSettings = () => {
   return useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('website_settings')
-        .select('*')
-        .single();
-      
-      if (error) {
-        // If no settings exist yet, return default values
-        if (error.code === 'PGRST116') {
-          return {
-            ...DEFAULT_NOTIFICATION_SETTINGS,
-            color_settings: DEFAULT_COLORS,
-            pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-            pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
-          };
-        }
-        throw error;
-      }
-
-      // Create a base object with all DEFAULT_NOTIFICATION_SETTINGS
-      const baseSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
-      
-      // Merge database data on top of defaults
-      const mergedData = {
-        ...baseSettings,
-        ...data,
-        // Ensure nested objects are properly merged
-        color_settings: { ...DEFAULT_COLORS, ...(data.color_settings || {}) },
-        pto_type_visibility: { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) }
-      };
-      
-      // Ensure pdf_layout_settings exists and has all defaults
-      if (!mergedData.pdf_layout_settings) {
-        mergedData.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
-      } else {
-        // Deep merge with defaults
-        mergedData.pdf_layout_settings = {
-          ...DEFAULT_LAYOUT_SETTINGS,
-          ...mergedData.pdf_layout_settings,
-          fontSizes: {
-            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
-            ...(mergedData.pdf_layout_settings.fontSizes || {})
-          },
-          sections: {
-            ...DEFAULT_LAYOUT_SETTINGS.sections,
-            ...(mergedData.pdf_layout_settings.sections || {})
-          },
-          tableSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-            ...(mergedData.pdf_layout_settings.tableSettings || {})
-          },
-          colorSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
-            ...(mergedData.pdf_layout_settings.colorSettings || {})
+      try {
+        const { data, error } = await supabase
+          .from('website_settings')
+          .select('*')
+          .single();
+        
+        if (error) {
+          // If no settings exist, return defaults
+          if (error.code === 'PGRST116') {
+            return {
+              ...DEFAULT_NOTIFICATION_SETTINGS,
+              color_settings: DEFAULT_COLORS,
+              pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
+            };
           }
+          throw error;
+        }
+        
+        // Merge with defaults for any missing fields
+        return {
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...DEFAULT_COLORS,
+          ...DEFAULT_PTO_VISIBILITY,
+          ...data,
+          color_settings: { ...DEFAULT_COLORS, ...(data.color_settings || {}) },
+          pto_type_visibility: { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) },
+          pdf_layout_settings: { 
+            ...DEFAULT_LAYOUT_SETTINGS, 
+            ...(data.pdf_layout_settings || {}) 
+          },
+        };
+      } catch (error) {
+        console.error('Error fetching website settings:', error);
+        // Return defaults on error
+        return {
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          color_settings: DEFAULT_COLORS,
+          pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+          pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
         };
       }
-      
-      return mergedData;
-    }
+    },
+    retry: 2,
   });
 };
 
@@ -75,17 +60,30 @@ export const useUpdateWebsiteSettings = () => {
   
   return useMutation({
     mutationFn: async (settings: any) => {
+      console.log('Saving settings to database:', settings);
+      
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert(settings)
+        .upsert({
+          ...settings,
+          updated_at: new Date().toISOString(),
+        })
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Settings saved successfully:', data);
+      queryClient.setQueryData(['website-settings'], data);
       queryClient.invalidateQueries({ queryKey: ['website-settings'] });
+    },
+    onError: (error) => {
+      console.error('Error saving settings:', error);
     }
   });
 };

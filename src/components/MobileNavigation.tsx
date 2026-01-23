@@ -47,24 +47,7 @@ const MobileNavigation = ({
     },
   });
 
-  // Helper function to get settings with fallback
-  const getSetting = (key: string, defaultValue: boolean = true): boolean => {
-    if (!websiteSettings) return defaultValue;
-    
-    // If the key exists in websiteSettings, use it
-    if (websiteSettings[key] !== undefined) {
-      return websiteSettings[key];
-    }
-    
-    // Otherwise check DEFAULT_NOTIFICATION_SETTINGS
-    if (DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] !== undefined) {
-      return DEFAULT_NOTIFICATION_SETTINGS[key as keyof typeof DEFAULT_NOTIFICATION_SETTINGS] as boolean;
-    }
-    
-    return defaultValue;
-  };
-
-  const showPtoTab = getSetting('show_pto_tab', true);
+const showPtoTab = websiteSettings?.show_pto_tab ?? true;
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

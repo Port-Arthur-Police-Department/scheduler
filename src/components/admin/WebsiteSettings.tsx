@@ -1,4 +1,4 @@
-// src/components/admin/WebsiteSettings.tsx - FIXED VERSION
+// src/components/admin/WebsiteSettings.tsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 
-// Constants - KEEP YOUR ORIGINAL DEFAULTS
+// Constants
 export const DEFAULT_COLORS = {
   // PDF Export Colors
   pdf_supervisor_pto_bg: "255,255,200",
@@ -99,7 +99,6 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   show_pto_balances: false,
   pto_balances_visible: false,
   show_pto_tab: true,
-  // NEW: Anniversary alert settings
   enable_anniversary_alerts: false,
   enable_birthday_alerts: false,
   anniversary_alert_recipients: ["admin", "supervisor"],
@@ -118,18 +117,22 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [previewData, setPreviewData] = useState<any>(null);
   const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
 
-  // Use a simpler query - similar to your original working version
+  // Fetch current settings
   const { data: settings, isLoading } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
+      console.log('Fetching website settings...');
+      
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
         .single();
 
       if (error) {
+        console.log('Error fetching settings:', error);
+        
         if (error.code === 'PGRST116') {
-          // Create default settings
+          console.log('No settings found, creating default...');
           const { data: newSettings, error: createError } = await supabase
             .from('website_settings')
             .insert({
@@ -151,19 +154,18 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         throw error;
       }
 
-      // SIMPLE MERGE - don't overcomplicate it
-      // Ensure nested objects exist
-      const result = {
+      // Merge with defaults to ensure all properties exist
+      const mergedData = {
         ...DEFAULT_NOTIFICATION_SETTINGS,
         ...data,
         color_settings: { ...DEFAULT_COLORS, ...(data.color_settings || {}) },
         pto_type_visibility: { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) },
-        pdf_layout_settings: { ...DEFAULT_LAYOUT_SETTINGS, ...(data.pdf_layout_settings || {}) },
-        anniversary_alert_recipients: data.anniversary_alert_recipients || ["admin", "supervisor"]
+        pdf_layout_settings: { ...DEFAULT_LAYOUT_SETTINGS, ...(data.pdf_layout_settings || {}) }
       };
       
-      return result;
+      return mergedData;
     },
+    retry: 1,
   });
 
   // Update local state when settings load
@@ -179,26 +181,37 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     }
   }, [settings]);
 
-  // Simple mutation - like your original working version
+  // Update settings mutation - CRITICAL FIX: Always include the ID
   const updateSettingsMutation = useMutation({
-    mutationFn: async (settingsUpdates: any) => {
-      // Get ID from current settings
-      const id = settings?.id;
+    mutationFn: async (updates: any) => {
+      console.log('Updating settings with ID:', settings?.id, 'Updates:', updates);
+      
+      // ALWAYS include the ID to update existing record, not create new one
+      const dataToUpdate = {
+        ...updates,
+        id: settings?.id, // CRITICAL: This ensures we update, not create new
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log('Data being sent to Supabase:', dataToUpdate);
       
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert({
-          id,
-          ...settingsUpdates,
-          updated_at: new Date().toISOString(),
+        .upsert(dataToUpdate, {
+          onConflict: 'id' // Ensure it updates based on ID
         })
         .select()
         .single();
+
+      if (error) {
+        console.error('Error updating settings:', error);
+        throw error;
+      }
       
-      if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
+      console.log('Settings updated successfully:', data);
       queryClient.invalidateQueries({ queryKey: ['website-settings'] });
       toast.success("Settings updated successfully");
     },
@@ -208,9 +221,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     },
   });
 
-  // Simple handlers - like your original
+  // ALL handlers must include the ID
   const handleToggle = (key: string, value: boolean) => {
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       [key]: value,
     });
   };
@@ -227,6 +241,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setAnniversaryRecipients(newRecipients);
     
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       anniversary_alert_recipients: newRecipients,
     });
   };
@@ -236,6 +251,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setPtoVisibility(newPtoVisibility);
     
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       pto_type_visibility: newPtoVisibility,
     });
   };
@@ -262,12 +278,16 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setColorSettings(newColors);
     
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       color_settings: newColors,
     });
   };
 
   const handleLayoutSettingsSave = (layoutSettings: any) => {
+    console.log('Saving PDF layout settings:', layoutSettings);
+    
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       pdf_layout_settings: layoutSettings,
     });
   };
@@ -350,6 +370,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setAnniversaryRecipients(["admin", "supervisor"]);
     
     updateSettingsMutation.mutate({
+      id: settings?.id, // MUST include ID
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
       anniversary_alert_recipients: ["admin", "supervisor"],
@@ -428,6 +449,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
       <SettingsInstructions />
 
+      {/* PDF Preview Dialog */}
       <PDFPreviewDialog
         open={pdfPreviewOpen}
         onOpenChange={setPdfPreviewOpen}

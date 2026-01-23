@@ -65,25 +65,53 @@ const App = () => {
   const [serviceWorkerRegistration, setServiceWorkerRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null);
 
-  // Save push subscription to database
+  // Save push subscription to existing user_push_subscriptions table
   const savePushSubscription = async (subscription: PushSubscription) => {
     if (!currentUserId) return;
 
     try {
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .upsert({
-          subscription: JSON.stringify(subscription),
-          user_id: currentUserId,
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
+      const subscriptionJson = JSON.stringify(subscription);
+      
+      // Check if subscription already exists for this user
+      const { data: existing } = await supabase
+        .from('user_push_subscriptions')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .single();
 
-      if (error) {
-        console.error('❌ Failed to save push subscription:', error);
+      if (existing) {
+        // Update existing subscription
+        const { error } = await supabase
+          .from('user_push_subscriptions')
+          .update({
+            subscription: subscriptionJson,
+            updated_at: new Date().toISOString(),
+            is_active: true
+          })
+          .eq('user_id', currentUserId);
+
+        if (error) {
+          console.error('❌ Failed to update push subscription:', error);
+        } else {
+          console.log('✅ Push subscription updated in database');
+        }
       } else {
-        console.log('✅ Push subscription saved to database');
+        // Insert new subscription
+        const { error } = await supabase
+          .from('user_push_subscriptions')
+          .insert({
+            user_id: currentUserId,
+            subscription: subscriptionJson,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_active: true
+          });
+
+        if (error) {
+          console.error('❌ Failed to save push subscription:', error);
+        } else {
+          console.log('✅ Push subscription saved to database');
+        }
       }
     } catch (error) {
       console.error('❌ Error saving push subscription:', error);
@@ -116,18 +144,45 @@ const App = () => {
       const registration = await navigator.serviceWorker.ready;
       setServiceWorkerRegistration(registration);
 
-      // Check if already subscribed
+      // Check if already subscribed in database
+      if (currentUserId) {
+        const { data: existingDbSubscription } = await supabase
+          .from('user_push_subscriptions')
+          .select('subscription, is_active')
+          .eq('user_id', currentUserId)
+          .eq('is_active', true)
+          .single();
+
+        if (existingDbSubscription?.subscription) {
+          try {
+            const existingSubscription = JSON.parse(existingDbSubscription.subscription);
+            // Check if subscription is still valid
+            const existing = await registration.pushManager.getSubscription();
+            if (existing && existing.endpoint === existingSubscription.endpoint) {
+              console.log('✅ Existing push subscription found and valid');
+              setPushSubscription(existingSubscription);
+              setNotificationStatus(prev => ({ ...prev, subscribed: true }));
+              return registration;
+            }
+          } catch (error) {
+            console.log('⚠️ Existing subscription invalid, creating new one');
+          }
+        }
+      }
+
+      // Check if already subscribed in browser
       const existingSubscription = await registration.pushManager.getSubscription();
       if (existingSubscription) {
         console.log('✅ Already subscribed to push notifications');
         setPushSubscription(existingSubscription);
+        setNotificationStatus(prev => ({ ...prev, subscribed: true }));
         await savePushSubscription(existingSubscription);
         return registration;
       }
 
       // Subscribe to push notifications (requires VAPID public key)
       // TODO: Replace with your actual VAPID public key
-      const vapidPublicKey = 'YOUR_VAPID_PUBLIC_KEY_HERE'; // Generate this: web-push generate-vapid-keys
+      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'YOUR_VAPID_PUBLIC_KEY_HERE';
       
       // For development/testing without VAPID key, we'll skip subscription
       // but still show that we're ready for notifications
@@ -313,9 +368,6 @@ const App = () => {
           setCurrentUserId(userId);
           setUserLoggedIn(!!session);
         }
-        
-        // Invalidate queries when user changes
-        // (queryClient would need to be available here, you might need to lift it up)
       }
     );
     
@@ -1054,3 +1106,86 @@ const App = () => {
                   
                   {pwaStatus.isInstallable && !pwaStatus.isInstalled && (
                     <button
+                      onClick={installPWA}
+                      style={{
+                        background: '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      📱 Install App
+                    </button>
+                  )}
+                  
+                  {currentUserId && (
+                    <button
+                      onClick={enablePwaPromptAgain}
+                      style={{
+                        background: '#f59e0b',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      🔄 Reset Prompt
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : import.meta.env.DEV && (
+              <button
+                onClick={handleShowPanel}
+                style={{
+                  position: 'fixed',
+                  top: 10,
+                  right: 10,
+                  background: '#1e293b',
+                  color: 'white',
+                  border: 'none',
+                  padding: '6px 10px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  zIndex: 9999,
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
+                }}
+              >
+                Status
+              </button>
+            )}
+            
+            <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard isMobile={isMobile} />} />
+                <Route path="/auth" element={<Auth />} />
+                
+                {/* Tab-specific routes */}
+                <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} initialTab="daily" />} />
+                <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} initialTab="schedule" />} />
+                <Route path="/vacancies" element={<Dashboard isMobile={isMobile} initialTab="vacancies" />} />
+                <Route path="/staff" element={<Dashboard isMobile={isMobile} initialTab="staff" />} />
+                <Route path="/time-off" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
+                <Route path="/pto" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
+                <Route path="/settings" element={<Dashboard isMobile={isMobile} initialTab="settings" />} />
+                
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
+          </UserProvider>
+        </HashRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
+
+export default App;

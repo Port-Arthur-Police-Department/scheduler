@@ -215,36 +215,37 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     }
   }, [settings]);
 
-  // Update settings mutation
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (newSettings: any) => {
-      console.log('Updating settings:', newSettings);
-      
-      const { data, error } = await supabase
-        .from('website_settings')
-        .upsert({
-          ...newSettings,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+// Update settings mutation - SIMPLIFIED VERSION
+const updateSettingsMutation = useMutation({
+  mutationFn: async (newSettings: any) => {
+    console.log('Updating settings:', newSettings);
+    
+    const { data, error } = await supabase
+      .from('website_settings')
+      .upsert({
+        ...newSettings,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
 
-      if (error) {
-        console.error('Error updating settings:', error);
-        throw error;
-      }
-      
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['website-settings'] });
-      toast.success("Settings updated successfully");
-    },
-    onError: (error) => {
-      console.error("Error updating settings:", error);
-      toast.error("Failed to update settings");
-    },
-  });
+    if (error) {
+      console.error('Error updating settings:', error);
+      throw error;
+    }
+    
+    return data;
+  },
+  onSuccess: (data) => {
+    // Update the query cache with the new data
+    queryClient.setQueryData(['website-settings'], data);
+    toast.success("Settings updated successfully");
+  },
+  onError: (error) => {
+    console.error("Error updating settings:", error);
+    toast.error("Failed to update settings");
+  },
+});
 
   const handleToggle = (key: string, value: boolean) => {
     updateSettingsMutation.mutate({

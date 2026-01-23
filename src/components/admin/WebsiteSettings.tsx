@@ -1,4 +1,4 @@
-// src/components/admin/WebsiteSettings.tsx - CORRECTED VERSION
+// src/components/admin/WebsiteSettings.tsx - WORKING VERSION
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,110 +111,83 @@ interface WebsiteSettingsProps {
 
 export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: WebsiteSettingsProps) => {
   const queryClient = useQueryClient();
-  const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
-  const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
 
-  // SIMPLIFIED: Use the hook instead of custom query
-  const { data: settings, isLoading } = useQuery({
+  // Use a simpler query approach
+  const { data: settings, isLoading, refetch } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
-      console.log('Fetching website settings...');
-      
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single
 
       if (error) {
-        console.log('Error fetching settings:', error);
-        
-        if (error.code === 'PGRST116') {
-          console.log('No settings found, creating default...');
-          const { data: newSettings, error: createError } = await supabase
-            .from('website_settings')
-            .insert({
-              ...DEFAULT_NOTIFICATION_SETTINGS,
-              color_settings: DEFAULT_COLORS,
-              pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-              pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS
-            })
-            .select()
-            .single();
-
-          if (createError) {
-            console.error('Error creating default settings:', createError);
-            throw createError;
-          }
-          
-          return newSettings;
-        }
+        console.error('Error fetching settings:', error);
         throw error;
       }
 
-      // Return data as-is - let the defaults be applied in the UI
+      // If no settings exist, return null (we'll handle creation on save)
+      if (!data) {
+        return null;
+      }
+
       return data;
     },
-    retry: 1,
   });
 
-  // Update local state when settings load
-  useEffect(() => {
-    if (settings?.color_settings) {
-      setColorSettings(prev => ({ ...DEFAULT_COLORS, ...settings.color_settings }));
-    }
-    if (settings?.pto_type_visibility) {
-      setPtoVisibility(prev => ({ ...DEFAULT_PTO_VISIBILITY, ...settings.pto_type_visibility }));
-    }
-  }, [settings]);
+  // Create a default settings object for the UI
+  const uiSettings = settings || {};
 
-  // SIMPLIFIED mutation - just update what's passed
+  // Simplified mutation - just upsert the data
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: any) => {
-      console.log('Updating settings with:', updates);
+      console.log('Attempting to save settings:', updates);
       
-      // First, get the current settings from DB to ensure we have everything
-      const { data: currentData } = await supabase
-        .from('website_settings')
-        .select('*')
-        .single();
+      // Get the current ID or create new
+      const settingsId = settings?.id;
       
-      // Merge current data with updates
-      const mergedData = {
-        ...currentData,
+      // Prepare data for upsert
+      const dataToSave = {
+        ...(settings || {}),
         ...updates,
-        id: settings?.id,
         updated_at: new Date().toISOString(),
       };
-      
-      console.log('Merged data for upsert:', mergedData);
-      
+
+      if (settingsId) {
+        dataToSave.id = settingsId;
+      }
+
+      console.log('Data being saved to Supabase:', dataToSave);
+
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert(mergedData)
+        .upsert(dataToSave)
         .select()
         .single();
 
       if (error) {
-        console.error('Error updating settings:', error);
+        console.error('Supabase error:', error);
         throw error;
       }
-      
+
+      console.log('Successfully saved:', data);
       return data;
     },
     onSuccess: (data) => {
+      console.log('Mutation successful, updating cache with:', data);
       // Update the cache with the new data
       queryClient.setQueryData(['website-settings'], data);
       toast.success("Settings updated successfully");
     },
-    onError: (error) => {
-      console.error("Error updating settings:", error);
-      toast.error("Failed to update settings");
+    onError: (error: any) => {
+      console.error("Mutation error:", error);
+      toast.error(`Failed to update settings: ${error.message}`);
     },
   });
 
-  // SIMPLIFIED handlers
+  // Handler for simple boolean toggles
   const handleToggle = (key: string, value: boolean) => {
     console.log(`Toggling ${key} to ${value}`);
     updateSettingsMutation.mutate({
@@ -222,8 +195,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
+  // Handler for recipient changes
   const handleRecipientChange = (recipient: string, checked: boolean) => {
-    const currentRecipients = settings?.anniversary_alert_recipients || ["admin", "supervisor"];
+    const currentRecipients = uiSettings.anniversary_alert_recipients || ["admin", "supervisor"];
     let newRecipients = [...currentRecipients];
     
     if (checked && !newRecipients.includes(recipient)) {
@@ -239,8 +213,9 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
+  // Handler for PTO visibility toggles
   const handlePtoVisibilityToggle = (key: string, value: boolean) => {
-    const currentPtoVisibility = settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY;
+    const currentPtoVisibility = uiSettings.pto_type_visibility || DEFAULT_PTO_VISIBILITY;
     const newPtoVisibility = { ...currentPtoVisibility, [key]: value };
     
     updateSettingsMutation.mutate({
@@ -248,6 +223,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
+  // Handler for color changes
   const handleColorChange = (key: string, value: string) => {
     const hexToRgbString = (hex: string): string => {
       hex = hex.replace('#', '');
@@ -266,7 +242,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     };
 
     const rgbValue = hexToRgbString(value);
-    const currentColors = settings?.color_settings || DEFAULT_COLORS;
+    const currentColors = uiSettings.color_settings || DEFAULT_COLORS;
     const newColors = { ...currentColors, [key]: rgbValue };
     
     updateSettingsMutation.mutate({
@@ -274,6 +250,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
+  // Handler for layout settings
   const handleLayoutSettingsSave = (layoutSettings: any) => {
     console.log('Saving PDF layout settings:', layoutSettings);
     
@@ -282,6 +259,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     });
   };
 
+  // Generate preview data
   const generatePreviewData = () => {
     const mockData = {
       shift: {
@@ -354,13 +332,22 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     setPdfPreviewOpen(true);
   };
 
+  // Reset to defaults
   const resetToDefaults = () => {
-    updateSettingsMutation.mutate({
-      ...DEFAULT_NOTIFICATION_SETTINGS,
-      color_settings: DEFAULT_COLORS,
-      pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-      pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
-    });
+    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+      updateSettingsMutation.mutate({
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        color_settings: DEFAULT_COLORS,
+        pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+        pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
+      });
+    }
+  };
+
+  // Force refetch if needed
+  const handleManualRefresh = () => {
+    refetch();
+    toast.info('Refreshing settings...');
   };
 
   if (isLoading) {
@@ -376,50 +363,71 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Website Settings</h2>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleManualRefresh}
+            disabled={updateSettingsMutation.isPending}
+          >
+            Refresh
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={resetToDefaults}
+            disabled={updateSettingsMutation.isPending}
+          >
+            Reset to Defaults
+          </Button>
+        </div>
+      </div>
+
       <PDFLayoutSettings 
-        settings={settings}
+        settings={uiSettings}
         onSave={handleLayoutSettingsSave}
         onPreview={generatePreviewData}
         isPending={updateSettingsMutation.isPending}
       />
 
       <NotificationSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
 
       <AnniversaryAlertSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         handleRecipientChange={handleRecipientChange}
         isPending={updateSettingsMutation.isPending}
       />
 
       <PTOSettings 
-        settings={settings}
+        settings={uiSettings}
         handleToggle={handleToggle}
         isPending={updateSettingsMutation.isPending}
       />
 
       <PTOVisibilitySettings 
-        ptoVisibility={settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
+        ptoVisibility={uiSettings.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
         handlePtoVisibilityToggle={handlePtoVisibilityToggle}
         isPending={updateSettingsMutation.isPending}
       />
 
       <ScheduleColorSettings 
-        colorSettings={settings?.color_settings || DEFAULT_COLORS}
+        colorSettings={uiSettings.color_settings || DEFAULT_COLORS}
         handleColorChange={handleColorChange}
         isPending={updateSettingsMutation.isPending}
-        settings={settings}
-        ptoVisibility={settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
+        settings={uiSettings}
+        ptoVisibility={uiSettings.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
         updateSettingsMutation={updateSettingsMutation}
-        setColorSettings={setColorSettings}
       />
 
       <ColorCustomizationSettings 
-        colorSettings={settings?.color_settings || DEFAULT_COLORS}
+        colorSettings={uiSettings.color_settings || DEFAULT_COLORS}
         handleColorChange={handleColorChange}
         resetToDefaults={resetToDefaults}
         isPending={updateSettingsMutation.isPending}
@@ -438,7 +446,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         open={pdfPreviewOpen}
         onOpenChange={setPdfPreviewOpen}
         previewData={previewData}
-        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+        layoutSettings={uiSettings.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
         selectedDate={new Date()}
       />
     </div>

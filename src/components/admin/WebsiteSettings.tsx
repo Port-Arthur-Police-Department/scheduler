@@ -1,4 +1,4 @@
-// src/components/admin/WebsiteSettings.tsx - MAIN REFACTORED COMPONENT
+// src/components/admin/WebsiteSettings.tsx - CORRECTED VERSION
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,9 +115,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
-  const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
 
-  // Fetch current settings
+  // SIMPLIFIED: Use the hook instead of custom query
   const { data: settings, isLoading } = useQuery({
     queryKey: ['website-settings'],
     queryFn: async () => {
@@ -154,51 +153,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         throw error;
       }
 
-      // Create a base object with all DEFAULT_NOTIFICATION_SETTINGS
-      const baseSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
-      
-      // Merge database data on top of defaults
-      const mergedData = {
-        ...baseSettings,
-        ...data,
-        // Ensure nested objects are properly merged
-        color_settings: { ...DEFAULT_COLORS, ...(data.color_settings || {}) },
-        pto_type_visibility: { ...DEFAULT_PTO_VISIBILITY, ...(data.pto_type_visibility || {}) }
-      };
-      
-      // Ensure pdf_layout_settings exists and has all defaults
-      if (!mergedData.pdf_layout_settings) {
-        mergedData.pdf_layout_settings = DEFAULT_LAYOUT_SETTINGS;
-      } else {
-        // Deep merge with defaults
-        mergedData.pdf_layout_settings = {
-          ...DEFAULT_LAYOUT_SETTINGS,
-          ...mergedData.pdf_layout_settings,
-          fontSizes: {
-            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
-            ...(mergedData.pdf_layout_settings.fontSizes || {})
-          },
-          sections: {
-            ...DEFAULT_LAYOUT_SETTINGS.sections,
-            ...(mergedData.pdf_layout_settings.sections || {})
-          },
-          tableSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-            ...(mergedData.pdf_layout_settings.tableSettings || {})
-          },
-          colorSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
-            ...(mergedData.pdf_layout_settings.colorSettings || {})
-          }
-        };
-      }
-      
-      // Specifically handle anniversary_alert_recipients if it doesn't exist
-      if (!mergedData.anniversary_alert_recipients) {
-        mergedData.anniversary_alert_recipients = DEFAULT_NOTIFICATION_SETTINGS.anniversary_alert_recipients;
-      }
-      
-      return mergedData;
+      // Return data as-is - let the defaults be applied in the UI
+      return data;
     },
     retry: 1,
   });
@@ -206,34 +162,37 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   // Update local state when settings load
   useEffect(() => {
     if (settings?.color_settings) {
-      setColorSettings(settings.color_settings);
+      setColorSettings(prev => ({ ...DEFAULT_COLORS, ...settings.color_settings }));
     }
     if (settings?.pto_type_visibility) {
-      setPtoVisibility(settings.pto_type_visibility);
-    }
-    if (settings?.anniversary_alert_recipients) {
-      setAnniversaryRecipients(settings.anniversary_alert_recipients);
+      setPtoVisibility(prev => ({ ...DEFAULT_PTO_VISIBILITY, ...settings.pto_type_visibility }));
     }
   }, [settings]);
 
-  // Update settings mutation
+  // SIMPLIFIED mutation - just update what's passed
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: any) => {
       console.log('Updating settings with:', updates);
       
-      // Get current settings from cache first
-      const currentSettings = queryClient.getQueryData(['website-settings']) || {};
+      // First, get the current settings from DB to ensure we have everything
+      const { data: currentData } = await supabase
+        .from('website_settings')
+        .select('*')
+        .single();
       
-      // Merge updates with current settings
-      const newSettings = {
-        ...currentSettings,
+      // Merge current data with updates
+      const mergedData = {
+        ...currentData,
         ...updates,
+        id: settings?.id,
         updated_at: new Date().toISOString(),
       };
       
+      console.log('Merged data for upsert:', mergedData);
+      
       const { data, error } = await supabase
         .from('website_settings')
-        .upsert(newSettings)
+        .upsert(mergedData)
         .select()
         .single();
 
@@ -245,48 +204,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       return data;
     },
     onSuccess: (data) => {
-      // Merge the returned data with existing settings
-      queryClient.setQueryData(['website-settings'], (oldData: any) => ({
-        ...oldData,
-        ...data,
-        // Ensure nested objects are properly merged
-        color_settings: { 
-          ...DEFAULT_COLORS, 
-          ...(oldData?.color_settings || {}), 
-          ...(data.color_settings || {}) 
-        },
-        pto_type_visibility: { 
-          ...DEFAULT_PTO_VISIBILITY, 
-          ...(oldData?.pto_type_visibility || {}), 
-          ...(data.pto_type_visibility || {}) 
-        },
-        pdf_layout_settings: {
-          ...DEFAULT_LAYOUT_SETTINGS,
-          ...(oldData?.pdf_layout_settings || {}),
-          ...(data.pdf_layout_settings || {}),
-          // Deep merge for nested objects in pdf_layout_settings
-          fontSizes: {
-            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
-            ...(oldData?.pdf_layout_settings?.fontSizes || {}),
-            ...(data.pdf_layout_settings?.fontSizes || {})
-          },
-          sections: {
-            ...DEFAULT_LAYOUT_SETTINGS.sections,
-            ...(oldData?.pdf_layout_settings?.sections || {}),
-            ...(data.pdf_layout_settings?.sections || {})
-          },
-          tableSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-            ...(oldData?.pdf_layout_settings?.tableSettings || {}),
-            ...(data.pdf_layout_settings?.tableSettings || {})
-          },
-          colorSettings: {
-            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
-            ...(oldData?.pdf_layout_settings?.colorSettings || {}),
-            ...(data.pdf_layout_settings?.colorSettings || {})
-          }
-        }
-      }));
+      // Update the cache with the new data
+      queryClient.setQueryData(['website-settings'], data);
       toast.success("Settings updated successfully");
     },
     onError: (error) => {
@@ -295,15 +214,17 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     },
   });
 
+  // SIMPLIFIED handlers
   const handleToggle = (key: string, value: boolean) => {
+    console.log(`Toggling ${key} to ${value}`);
     updateSettingsMutation.mutate({
-      id: settings?.id,
       [key]: value,
     });
   };
 
   const handleRecipientChange = (recipient: string, checked: boolean) => {
-    let newRecipients = [...anniversaryRecipients];
+    const currentRecipients = settings?.anniversary_alert_recipients || ["admin", "supervisor"];
+    let newRecipients = [...currentRecipients];
     
     if (checked && !newRecipients.includes(recipient)) {
       newRecipients.push(recipient);
@@ -311,20 +232,18 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       newRecipients = newRecipients.filter(r => r !== recipient);
     }
     
-    setAnniversaryRecipients(newRecipients);
+    console.log('Updating recipients to:', newRecipients);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
       anniversary_alert_recipients: newRecipients,
     });
   };
 
   const handlePtoVisibilityToggle = (key: string, value: boolean) => {
-    const newPtoVisibility = { ...ptoVisibility, [key]: value };
-    setPtoVisibility(newPtoVisibility);
+    const currentPtoVisibility = settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY;
+    const newPtoVisibility = { ...currentPtoVisibility, [key]: value };
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
       pto_type_visibility: newPtoVisibility,
     });
   };
@@ -347,11 +266,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     };
 
     const rgbValue = hexToRgbString(value);
-    const newColors = { ...colorSettings, [key]: rgbValue };
-    setColorSettings(newColors);
+    const currentColors = settings?.color_settings || DEFAULT_COLORS;
+    const newColors = { ...currentColors, [key]: rgbValue };
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
       color_settings: newColors,
     });
   };
@@ -360,7 +278,6 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     console.log('Saving PDF layout settings:', layoutSettings);
     
     updateSettingsMutation.mutate({
-      id: settings?.id,
       pdf_layout_settings: layoutSettings,
     });
   };
@@ -438,17 +355,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   };
 
   const resetToDefaults = () => {
-    setColorSettings(DEFAULT_COLORS);
-    setPtoVisibility(DEFAULT_PTO_VISIBILITY);
-    setAnniversaryRecipients(["admin", "supervisor"]);
-    
     updateSettingsMutation.mutate({
-      id: settings?.id,
+      ...DEFAULT_NOTIFICATION_SETTINGS,
       color_settings: DEFAULT_COLORS,
       pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-      anniversary_alert_recipients: ["admin", "supervisor"],
       pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
-      ...DEFAULT_NOTIFICATION_SETTINGS,
     });
   };
 
@@ -492,23 +403,23 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       />
 
       <PTOVisibilitySettings 
-        ptoVisibility={ptoVisibility}
+        ptoVisibility={settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
         handlePtoVisibilityToggle={handlePtoVisibilityToggle}
         isPending={updateSettingsMutation.isPending}
       />
 
       <ScheduleColorSettings 
-        colorSettings={colorSettings}
+        colorSettings={settings?.color_settings || DEFAULT_COLORS}
         handleColorChange={handleColorChange}
         isPending={updateSettingsMutation.isPending}
         settings={settings}
-        ptoVisibility={ptoVisibility}
+        ptoVisibility={settings?.pto_type_visibility || DEFAULT_PTO_VISIBILITY}
         updateSettingsMutation={updateSettingsMutation}
         setColorSettings={setColorSettings}
       />
 
       <ColorCustomizationSettings 
-        colorSettings={colorSettings}
+        colorSettings={settings?.color_settings || DEFAULT_COLORS}
         handleColorChange={handleColorChange}
         resetToDefaults={resetToDefaults}
         isPending={updateSettingsMutation.isPending}

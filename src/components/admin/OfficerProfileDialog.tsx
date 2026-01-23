@@ -1,3 +1,4 @@
+// src/components/admin/OfficerProfileDialog.tsx
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Award, Clock, TrendingUp } from "lucide-react";
+import { CalendarIcon, Award, Clock, TrendingUp, Cake } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -32,6 +33,7 @@ interface OfficerProfileDialogProps {
     comp_hours?: number | null;
     holiday_hours?: number | null;
     rank?: string | null;
+    birthday?: string | null; // ADDED: Birthday field
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -89,6 +91,10 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   const [promotionDateLieutenant, setPromotionDateLieutenant] = useState<Date | undefined>();
   const [promotionDateLieutenantInput, setPromotionDateLieutenantInput] = useState<string>("");
   
+  // ADDED: Birthday state
+  const [birthday, setBirthday] = useState<Date | undefined>();
+  const [birthdayInput, setBirthdayInput] = useState<string>("");
+  
   const [serviceCreditOverride, setServiceCreditOverride] = useState<string>(
     officer?.service_credit_override?.toString() || ""
   );
@@ -112,6 +118,8 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       const parsedHireDate = parseDateWithoutTimezone(officer?.hire_date || null);
       const parsedSergeantDate = parseDateWithoutTimezone(officer?.promotion_date_sergeant || null);
       const parsedLieutenantDate = parseDateWithoutTimezone(officer?.promotion_date_lieutenant || null);
+      // ADDED: Parse birthday
+      const parsedBirthday = parseDateWithoutTimezone(officer?.birthday || null);
       
       setHireDate(parsedHireDate);
       setHireDateInput(parsedHireDate ? formatDateForInput(parsedHireDate) : "");
@@ -121,6 +129,10 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       
       setPromotionDateLieutenant(parsedLieutenantDate);
       setPromotionDateLieutenantInput(parsedLieutenantDate ? formatDateForInput(parsedLieutenantDate) : "");
+      
+      // ADDED: Set birthday state
+      setBirthday(parsedBirthday);
+      setBirthdayInput(parsedBirthday ? formatDateForInput(parsedBirthday) : "");
       
       setServiceCreditOverride(officer?.service_credit_override?.toString() || "");
       setFormData({
@@ -154,99 +166,105 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   };
 
   const updateProfileMutation = useMutation({
-// In the updateProfileMutation mutationFn - FIXED VERSION
-mutationFn: async (data: typeof formData) => {
-  if (!officer?.id) throw new Error("No officer ID provided");
-  
-  // Get current user for audit logging
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-  
-  // Get old data first for audit logging
-  const { data: oldProfile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", officer.id)
-    .single();
+    mutationFn: async (data: typeof formData) => {
+      if (!officer?.id) throw new Error("No officer ID provided");
+      
+      // Get current user for audit logging
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      // Get old data first for audit logging
+      const { data: oldProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", officer.id)
+        .single();
 
-  // Prepare profile data - use the input values directly
-  const profileData: any = {
-    full_name: data.full_name,
-    email: data.email,
-    phone: data.phone || null,
-    badge_number: data.badge_number || null,
-    rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
-    service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-  };
+      // Prepare profile data - use the input values directly
+      const profileData: any = {
+        full_name: data.full_name,
+        email: data.email,
+        phone: data.phone || null,
+        badge_number: data.badge_number || null,
+        rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
+        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+      };
 
-  // Add dates using the input values to avoid timezone conversion
-  if (hireDateInput) {
-    profileData.hire_date = hireDateInput;
-  } else {
-    profileData.hire_date = null;
-  }
-  
-  if (promotionDateSergeantInput) {
-    profileData.promotion_date_sergeant = promotionDateSergeantInput;
-  } else {
-    profileData.promotion_date_sergeant = null;
-  }
-  
-  if (promotionDateLieutenantInput) {
-    profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
-  } else {
-    profileData.promotion_date_lieutenant = null;
-  }
+      // Add dates using the input values to avoid timezone conversion
+      if (hireDateInput) {
+        profileData.hire_date = hireDateInput;
+      } else {
+        profileData.hire_date = null;
+      }
+      
+      // ADDED: Add birthday
+      if (birthdayInput) {
+        profileData.birthday = birthdayInput;
+      } else {
+        profileData.birthday = null;
+      }
+      
+      if (promotionDateSergeantInput) {
+        profileData.promotion_date_sergeant = promotionDateSergeantInput;
+      } else {
+        profileData.promotion_date_sergeant = null;
+      }
+      
+      if (promotionDateLieutenantInput) {
+        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+      } else {
+        profileData.promotion_date_lieutenant = null;
+      }
 
-  // Only include PTO balances if they are enabled in settings
-  if (settings?.show_pto_balances) {
-    profileData.vacation_hours = Number(data.vacation_hours) || 0;
-    profileData.sick_hours = Number(data.sick_hours) || 0;
-    profileData.comp_hours = Number(data.comp_hours) || 0;
-    profileData.holiday_hours = Number(data.holiday_hours) || 0;
-  }
+      // Only include PTO balances if they are enabled in settings
+      if (settings?.show_pto_balances) {
+        profileData.vacation_hours = Number(data.vacation_hours) || 0;
+        profileData.sick_hours = Number(data.sick_hours) || 0;
+        profileData.comp_hours = Number(data.comp_hours) || 0;
+        profileData.holiday_hours = Number(data.holiday_hours) || 0;
+      }
 
-  // Update profile
-  const { error } = await supabase
-    .from("profiles")
-    .update(profileData)
-    .eq("id", officer.id);
+      // Update profile
+      const { error } = await supabase
+        .from("profiles")
+        .update(profileData)
+        .eq("id", officer.id);
 
-  if (error) throw error;
+      if (error) throw error;
 
-  // AUDIT LOGGING: Log profile update
-  if (currentUser) {
-    await auditLogger.logProfileUpdate(
-      officer.id,
-      data.full_name || officer.full_name, // Use the new name from form
-      oldProfile,
-      profileData,
-      currentUser.id,
-      currentUser.email,
-     // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
-    );
-  } // <-- THIS CLOSING BRACE WAS MISSING
+      // AUDIT LOGGING: Log profile update
+      if (currentUser) {
+        await auditLogger.logProfileUpdate(
+          officer.id,
+          data.full_name || officer.full_name, // Use the new name from form
+          oldProfile,
+          profileData,
+          currentUser.id,
+          currentUser.email,
+        // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
+        );
+      }
 
-  // Update user role based on new rank
-  const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
-    const rankLower = rank.toLowerCase();
-    if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
-    if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
-    return 'officer';
-  };
+      // Update user role based on new rank
+      const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
+        const rankLower = rank.toLowerCase();
+        if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
+        if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
+        return 'officer';
+      };
 
-  const newRole = getRoleFromRank(data.rank);
-  
-  // Update the user_roles table
-  const { error: roleError } = await supabase
-    .from('user_roles')
-    .update({ role: newRole as any })
-    .eq('user_id', officer.id);
+      const newRole = getRoleFromRank(data.rank);
+      
+      // Update the user_roles table
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .update({ role: newRole as any })
+        .eq('user_id', officer.id);
 
-  if (roleError) {
-    console.error('Failed to update role:', roleError);
-    // Don't throw - the profile was updated successfully, just role update failed
-  }
-},
+      if (roleError) {
+        console.error('Failed to update role:', roleError);
+        // Don't throw - the profile was updated successfully, just role update failed
+      }
+    },
     onSuccess: () => {
       toast.success("Profile updated successfully");
       queryClient.invalidateQueries({ queryKey: ["all-officers"] });
@@ -258,86 +276,93 @@ mutationFn: async (data: typeof formData) => {
     },
   });
 
-const createProfileMutation = useMutation({
-  mutationFn: async (data: typeof formData) => {
-    // Get current user for audit logging
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    
-    // Prepare profile data
-    const profileData: any = {
-      email: data.email,
-      full_name: data.full_name,
-      phone: data.phone,
-      badge_number: data.badge_number,
-      rank: data.rank,
-      service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
-    };
+  const createProfileMutation = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      // Get current user for audit logging
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      // Prepare profile data
+      const profileData: any = {
+        email: data.email,
+        full_name: data.full_name,
+        phone: data.phone,
+        badge_number: data.badge_number,
+        rank: data.rank,
+        service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+      };
 
-    // Add dates using input values
-    if (hireDateInput) {
-      profileData.hire_date = hireDateInput;
-    } else {
-      profileData.hire_date = null;
-    }
-    
-    if (promotionDateSergeantInput) {
-      profileData.promotion_date_sergeant = promotionDateSergeantInput;
-    } else {
-      profileData.promotion_date_sergeant = null;
-    }
-    
-    if (promotionDateLieutenantInput) {
-      profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
-    } else {
-      profileData.promotion_date_lieutenant = null;
-    }
+      // Add dates using input values
+      if (hireDateInput) {
+        profileData.hire_date = hireDateInput;
+      } else {
+        profileData.hire_date = null;
+      }
+      
+      // ADDED: Add birthday
+      if (birthdayInput) {
+        profileData.birthday = birthdayInput;
+      } else {
+        profileData.birthday = null;
+      }
+      
+      if (promotionDateSergeantInput) {
+        profileData.promotion_date_sergeant = promotionDateSergeantInput;
+      } else {
+        profileData.promotion_date_sergeant = null;
+      }
+      
+      if (promotionDateLieutenantInput) {
+        profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
+      } else {
+        profileData.promotion_date_lieutenant = null;
+      }
 
-    // Only include PTO balances if they are enabled in settings
-    if (settings?.show_pto_balances) {
-      profileData.vacation_hours = Number(data.vacation_hours) || 0;
-      profileData.sick_hours = Number(data.sick_hours) || 0;
-      profileData.comp_hours = Number(data.comp_hours) || 0;
-      profileData.holiday_hours = Number(data.holiday_hours) || 0;
-    }
+      // Only include PTO balances if they are enabled in settings
+      if (settings?.show_pto_balances) {
+        profileData.vacation_hours = Number(data.vacation_hours) || 0;
+        profileData.sick_hours = Number(data.sick_hours) || 0;
+        profileData.comp_hours = Number(data.comp_hours) || 0;
+        profileData.holiday_hours = Number(data.holiday_hours) || 0;
+      }
 
-    const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(profileData),
-    })
+      const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData),
+      })
 
-    const result = await response.json()
-    
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to create user')
-    }
-    
-    // AUDIT LOGGING: Log profile creation
-    if (currentUser) {
-      await auditLogger.logProfileUpdate(
-        result.userId,
-        data.full_name, // Use the new officer's name
-        null, // No old data for creation
-        profileData,
-        currentUser.id,
-        currentUser.email,
-      //  `Created profile for ${data.full_name}`
-      );
-    } // <-- THIS CLOSING BRACE WAS ALSO MISSING
-    
-    return result;
-  },
-  onSuccess: (result) => {
-    toast.success(result.message || "Profile created successfully");
-    queryClient.invalidateQueries({ queryKey: ["all-officers"] });
-    onOpenChange(false);
-  },
-  onError: (error: any) => {
-    toast.error(error.message);
-  },
-});
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create user')
+      }
+      
+      // AUDIT LOGGING: Log profile creation
+      if (currentUser) {
+        await auditLogger.logProfileUpdate(
+          result.userId,
+          data.full_name, // Use the new officer's name
+          null, // No old data for creation
+          profileData,
+          currentUser.id,
+          currentUser.email,
+        //  `Created profile for ${data.full_name}`
+        );
+      }
+      
+      return result;
+    },
+    onSuccess: (result) => {
+      toast.success(result.message || "Profile created successfully");
+      queryClient.invalidateQueries({ queryKey: ["all-officers"] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
 
   // Handle date input changes
   const handleHireDateInputChange = (value: string) => {
@@ -367,6 +392,17 @@ const createProfileMutation = useMutation({
       setPromotionDateLieutenant(new Date(year, month - 1, day));
     } else {
       setPromotionDateLieutenant(undefined);
+    }
+  };
+
+  // ADDED: Handle birthday input changes
+  const handleBirthdayInputChange = (value: string) => {
+    setBirthdayInput(value);
+    if (value) {
+      const [year, month, day] = value.split('-').map(Number);
+      setBirthday(new Date(year, month - 1, day));
+    } else {
+      setBirthday(undefined);
     }
   };
 
@@ -462,21 +498,6 @@ const createProfileMutation = useMutation({
                 />
               </div>
 
-              
-<div className="space-y-2">
-  <Label htmlFor="birthday">Birthday</Label>
-  <Input
-    id="birthday"
-    type="date"
-    value={officerData.birthday || ''}
-    onChange={(e) => setOfficerData({...officerData, birthday: e.target.value})}
-    disabled={isPending}
-  />
-  <p className="text-xs text-muted-foreground">
-    Used for birthday alerts in settings
-  </p>
-</div>
-
               <div className="space-y-2">
                 <Label htmlFor="email">Email *</Label>
                 <Input
@@ -566,6 +587,55 @@ const createProfileMutation = useMutation({
                     </PopoverContent>
                   </Popover>
                 </div>
+              </div>
+
+              {/* ADDED: Birthday Field */}
+              <div className="space-y-2">
+                <Label htmlFor="birthday" className="flex items-center gap-2">
+                  <Cake className="h-4 w-4" />
+                  Birthday
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="birthday"
+                    type="date"
+                    value={birthdayInput}
+                    onChange={(e) => handleBirthdayInputChange(e.target.value)}
+                    max={formatDateForInput(new Date())}
+                    className="flex-1"
+                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={birthday}
+                        onSelect={(date) => {
+                          if (date) {
+                            setBirthday(date);
+                            setBirthdayInput(formatDateForInput(date));
+                          } else {
+                            setBirthday(undefined);
+                            setBirthdayInput("");
+                          }
+                        }}
+                        disabled={(date) => date > new Date()}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Used for birthday alerts in settings
+                </p>
               </div>
 
               {isEditing && (

@@ -1,4 +1,4 @@
-// src/components/admin/settings/PDFPreviewDialog.tsx - FIXED VERSION
+// src/components/admin/settings/PDFPreviewDialog.tsx - FIXED LAYOUT VERSION
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
@@ -70,6 +70,13 @@ const getOfficerName = (officer: any): string => {
          "Unknown Officer";
 };
 
+// Helper to extract beat number from position
+const extractBeatNumber = (position: string): string => {
+  if (!position) return '';
+  const match = position.match(/\d+/);
+  return match ? match[0] : '';
+};
+
 export const PDFPreviewDialog = ({ 
   open, 
   onOpenChange, 
@@ -106,6 +113,7 @@ export const PDFPreviewDialog = ({
         position: supervisor.position || supervisor.rank || "Supervisor",
         badge: supervisor.badge || supervisor.badgeNumber || supervisor.id || "",
         unitNumber: supervisor.unitNumber || supervisor.unit || supervisor.carNumber || "",
+        beat: extractBeatNumber(supervisor.position || supervisor.rank || ""),
         // Additional fields that might exist
         ...supervisor
       })),
@@ -116,6 +124,7 @@ export const PDFPreviewDialog = ({
         position: officer.position || officer.assignment || officer.beat || "",
         badge: officer.badge || officer.badgeNumber || officer.id || "",
         unitNumber: officer.unitNumber || officer.unit || officer.carNumber || "",
+        beat: extractBeatNumber(officer.position || officer.assignment || officer.beat || ""),
         // Additional fields that might exist
         ...officer
       })),
@@ -232,31 +241,35 @@ export const PDFPreviewDialog = ({
             minHeight: '842px', 
             width: '595px', 
             margin: '0 auto',
-            fontFamily: 'Helvetica, Arial, sans-serif'
+            fontFamily: 'Helvetica, Arial, sans-serif',
+            boxSizing: 'border-box'
           }}>
             {/* Header */}
-            <div className="flex items-start mb-6">
+            <div className="flex items-start mb-6" style={{ boxSizing: 'border-box' }}>
               <div 
                 className="w-16 h-16 flex items-center justify-center text-white font-bold text-xs"
                 style={{ 
                   backgroundColor: `rgb(${primaryColor.join(',')})`,
-                  borderRadius: '2px'
+                  borderRadius: '2px',
+                  flexShrink: 0
                 }}
               >
                 LOGO
               </div>
-              <div className="ml-4">
+              <div className="ml-4" style={{ flex: 1 }}>
                 <div style={{ 
                   fontSize: `${safeLayoutSettings.fontSizes.header}pt`,
                   fontWeight: 'bold',
                   color: `rgb(${primaryColor.join(',')})`,
-                  marginBottom: '2px'
+                  marginBottom: '2px',
+                  lineHeight: '1.2'
                 }}>
                   {processedData.shift.name} • {processedData.shift.start_time}-{processedData.shift.end_time}
                 </div>
                 <div style={{
                   fontSize: `${safeLayoutSettings.fontSizes.header}pt`,
-                  color: `rgb(${primaryColor.join(',')})`
+                  color: `rgb(${primaryColor.join(',')})`,
+                  lineHeight: '1.2'
                 }}>
                   {selectedDate.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
@@ -265,23 +278,27 @@ export const PDFPreviewDialog = ({
 
             {/* Supervisors Section */}
             {safeLayoutSettings.sections.showSupervisors && processedData.supervisors.length > 0 && (
-              <div className="mb-8">
-                <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
+              <div className="mb-8" style={{ boxSizing: 'border-box' }}>
+                <div className="border rounded overflow-hidden" style={{ 
+                  borderColor: '#dee2e6',
+                  borderWidth: `${safeLayoutSettings.tableSettings.borderWidth || 1}px`
+                }}>
                   {/* Table Header */}
                   <div style={{
                     backgroundColor: `rgb(${getHeaderColorForSection(safeLayoutSettings, 'supervisors').join(',')})`,
                     color: `rgb(${headerTextColor.join(',')})`,
                     fontSize: `${safeLayoutSettings.fontSizes.tableHeader}pt`,
                     padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                    display: 'grid',
-                    gridTemplateColumns: '35% 8% 15% 10% 32%',
-                    fontWeight: 'bold'
+                    display: 'flex',
+                    fontWeight: 'bold',
+                    borderBottom: `${safeLayoutSettings.tableSettings.borderWidth || 1}px solid #dee2e6`,
+                    alignItems: 'center'
                   }}>
-                    <div>SUPERVISORS</div>
-                    <div style={{ textAlign: 'center' }}>BEAT</div>
-                    <div style={{ textAlign: 'center' }}>BADGE #</div>
-                    <div style={{ textAlign: 'center' }}>UNIT</div>
-                    <div>NOTES</div>
+                    <div style={{ width: '35%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>SUPERVISORS</div>
+                    <div style={{ width: '8%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BEAT</div>
+                    <div style={{ width: '15%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BADGE #</div>
+                    <div style={{ width: '10%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>UNIT</div>
+                    <div style={{ width: '32%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>NOTES</div>
                   </div>
                   
                   {/* Table Rows */}
@@ -292,26 +309,55 @@ export const PDFPreviewDialog = ({
                         : `rgb(${evenRowColor.join(',')})`,
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                      height: `${safeLayoutSettings.tableSettings.rowHeight}px`,
-                      display: 'grid',
-                      gridTemplateColumns: '35% 8% 15% 10% 32%',
+                      minHeight: `${safeLayoutSettings.tableSettings.rowHeight}px`,
+                      display: 'flex',
                       alignItems: 'center',
-                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
+                      borderBottom: index < processedData.supervisors.length - 1 ? '1px solid #dee2e6' : 'none',
+                      borderTop: index === 0 ? 'none' : '1px solid #dee2e6'
                     }}>
-                      <div style={{ color: `rgb(${supervisorTextColor.join(',')})` }}>{supervisor.name}</div>
                       <div style={{ 
+                        width: '35%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${supervisorTextColor.join(',')})`,
-                        textAlign: 'center'
-                      }}>{supervisor.position?.match(/\d+/)?.[0] || ''}</div>
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{supervisor.name}</div>
                       <div style={{ 
+                        width: '8%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${supervisorTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{supervisor.beat}</div>
+                      <div style={{ 
+                        width: '15%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${supervisorTextColor.join(',')})`,
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{supervisor.badge}</div>
                       <div style={{ 
+                        width: '10%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${supervisorTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{supervisor.unitNumber}</div>
-                      <div style={{ color: `rgb(${supervisorTextColor.join(',')})` }}>
+                      <div style={{ 
+                        width: '32%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${supervisorTextColor.join(',')})`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
                         {supervisor.notes || supervisor.comments || 'Partnership details...'}
                       </div>
                     </div>
@@ -322,23 +368,27 @@ export const PDFPreviewDialog = ({
 
             {/* Officers Section */}
             {safeLayoutSettings.sections.showOfficers && processedData.officers.length > 0 && (
-              <div className="mb-8">
-                <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
+              <div className="mb-8" style={{ boxSizing: 'border-box' }}>
+                <div className="border rounded overflow-hidden" style={{ 
+                  borderColor: '#dee2e6',
+                  borderWidth: `${safeLayoutSettings.tableSettings.borderWidth || 1}px`
+                }}>
                   {/* Table Header */}
                   <div style={{
                     backgroundColor: `rgb(${getHeaderColorForSection(safeLayoutSettings, 'officers').join(',')})`,
                     color: `rgb(${headerTextColor.join(',')})`,
                     fontSize: `${safeLayoutSettings.fontSizes.tableHeader}pt`,
                     padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                    display: 'grid',
-                    gridTemplateColumns: '35% 8% 15% 10% 32%',
-                    fontWeight: 'bold'
+                    display: 'flex',
+                    fontWeight: 'bold',
+                    borderBottom: `${safeLayoutSettings.tableSettings.borderWidth || 1}px solid #dee2e6`,
+                    alignItems: 'center'
                   }}>
-                    <div>OFFICERS</div>
-                    <div style={{ textAlign: 'center' }}>BEAT</div>
-                    <div style={{ textAlign: 'center' }}>BADGE #</div>
-                    <div style={{ textAlign: 'center' }}>UNIT</div>
-                    <div>NOTES</div>
+                    <div style={{ width: '35%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>OFFICERS</div>
+                    <div style={{ width: '8%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BEAT</div>
+                    <div style={{ width: '15%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BADGE #</div>
+                    <div style={{ width: '10%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>UNIT</div>
+                    <div style={{ width: '32%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>NOTES</div>
                   </div>
                   
                   {/* Table Rows */}
@@ -349,26 +399,55 @@ export const PDFPreviewDialog = ({
                         : `rgb(${evenRowColor.join(',')})`,
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                      height: `${safeLayoutSettings.tableSettings.rowHeight}px`,
-                      display: 'grid',
-                      gridTemplateColumns: '35% 8% 15% 10% 32%',
+                      minHeight: `${safeLayoutSettings.tableSettings.rowHeight}px`,
+                      display: 'flex',
                       alignItems: 'center',
-                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
+                      borderBottom: index < processedData.officers.length - 1 ? '1px solid #dee2e6' : 'none',
+                      borderTop: index === 0 ? 'none' : '1px solid #dee2e6'
                     }}>
-                      <div style={{ color: `rgb(${officerTextColor.join(',')})` }}>{officer.name}</div>
                       <div style={{ 
+                        width: '35%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${officerTextColor.join(',')})`,
-                        textAlign: 'center'
-                      }}>{officer.position?.match(/\d+/)?.[0] || ''}</div>
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{officer.name}</div>
                       <div style={{ 
+                        width: '8%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${officerTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{officer.beat}</div>
+                      <div style={{ 
+                        width: '15%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${officerTextColor.join(',')})`,
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{officer.badge}</div>
                       <div style={{ 
+                        width: '10%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${officerTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{officer.unitNumber}</div>
-                      <div style={{ color: `rgb(${officerTextColor.join(',')})` }}>
+                      <div style={{ 
+                        width: '32%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${officerTextColor.join(',')})`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
                         {officer.notes || officer.comments || 'Regular assignment...'}
                       </div>
                     </div>
@@ -379,23 +458,27 @@ export const PDFPreviewDialog = ({
 
             {/* Special Assignments Section */}
             {safeLayoutSettings.sections.showSpecialAssignments && processedData.specialAssignmentOfficers.length > 0 && (
-              <div className="mb-8">
-                <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
+              <div className="mb-8" style={{ boxSizing: 'border-box' }}>
+                <div className="border rounded overflow-hidden" style={{ 
+                  borderColor: '#dee2e6',
+                  borderWidth: `${safeLayoutSettings.tableSettings.borderWidth || 1}px`
+                }}>
                   {/* Table Header */}
                   <div style={{
                     backgroundColor: `rgb(${getHeaderColorForSection(safeLayoutSettings, 'special').join(',')})`,
                     color: `rgb(${headerTextColor.join(',')})`,
                     fontSize: `${safeLayoutSettings.fontSizes.tableHeader}pt`,
                     padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                    display: 'grid',
-                    gridTemplateColumns: '35% 22% 15% 10% 18%',
-                    fontWeight: 'bold'
+                    display: 'flex',
+                    fontWeight: 'bold',
+                    borderBottom: `${safeLayoutSettings.tableSettings.borderWidth || 1}px solid #dee2e6`,
+                    alignItems: 'center'
                   }}>
-                    <div>SPECIAL ASSIGNMENT OFFICERS</div>
-                    <div>ASSIGNMENT</div>
-                    <div style={{ textAlign: 'center' }}>BADGE #</div>
-                    <div style={{ textAlign: 'center' }}>UNIT</div>
-                    <div>NOTES</div>
+                    <div style={{ width: '35%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>SPECIAL ASSIGNMENT OFFICERS</div>
+                    <div style={{ width: '22%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>ASSIGNMENT</div>
+                    <div style={{ width: '15%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BADGE #</div>
+                    <div style={{ width: '10%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>UNIT</div>
+                    <div style={{ width: '18%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>NOTES</div>
                   </div>
                   
                   {/* Table Rows */}
@@ -406,23 +489,54 @@ export const PDFPreviewDialog = ({
                         : `rgb(${evenRowColor.join(',')})`,
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                      height: `${safeLayoutSettings.tableSettings.rowHeight}px`,
-                      display: 'grid',
-                      gridTemplateColumns: '35% 22% 15% 10% 18%',
+                      minHeight: `${safeLayoutSettings.tableSettings.rowHeight}px`,
+                      display: 'flex',
                       alignItems: 'center',
-                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
+                      borderBottom: index < processedData.specialAssignmentOfficers.length - 1 ? '1px solid #dee2e6' : 'none',
+                      borderTop: index === 0 ? 'none' : '1px solid #dee2e6'
                     }}>
-                      <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>{officer.name}</div>
-                      <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>{officer.position}</div>
                       <div style={{ 
+                        width: '35%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${specialTextColor.join(',')})`,
-                        textAlign: 'center'
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{officer.name}</div>
+                      <div style={{ 
+                        width: '22%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${specialTextColor.join(',')})`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{officer.position}</div>
+                      <div style={{ 
+                        width: '15%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${specialTextColor.join(',')})`,
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{officer.badge}</div>
                       <div style={{ 
+                        width: '10%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${specialTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{officer.unitNumber}</div>
-                      <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>
+                      <div style={{ 
+                        width: '18%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${specialTextColor.join(',')})`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
                         {officer.notes || officer.comments || 'Special duty...'}
                       </div>
                     </div>
@@ -433,22 +547,26 @@ export const PDFPreviewDialog = ({
 
             {/* PTO Section */}
             {safeLayoutSettings.sections.showPTO && processedData.ptoRecords.length > 0 && (
-              <div className="mb-8">
-                <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
+              <div className="mb-8" style={{ boxSizing: 'border-box' }}>
+                <div className="border rounded overflow-hidden" style={{ 
+                  borderColor: '#dee2e6',
+                  borderWidth: `${safeLayoutSettings.tableSettings.borderWidth || 1}px`
+                }}>
                   {/* Table Header */}
                   <div style={{
                     backgroundColor: `rgb(${getHeaderColorForSection(safeLayoutSettings, 'pto').join(',')})`,
                     color: `rgb(${headerTextColor.join(',')})`,
                     fontSize: `${safeLayoutSettings.fontSizes.tableHeader}pt`,
                     padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                    display: 'grid',
-                    gridTemplateColumns: '35% 15% 15% 35%',
-                    fontWeight: 'bold'
+                    display: 'flex',
+                    fontWeight: 'bold',
+                    borderBottom: `${safeLayoutSettings.tableSettings.borderWidth || 1}px solid #dee2e6`,
+                    alignItems: 'center'
                   }}>
-                    <div>PTO OFFICERS</div>
-                    <div style={{ textAlign: 'center' }}>BADGE #</div>
-                    <div style={{ textAlign: 'center' }}>TYPE</div>
-                    <div style={{ textAlign: 'center' }}>TIME</div>
+                    <div style={{ width: '35%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px` }}>PTO OFFICERS</div>
+                    <div style={{ width: '15%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>BADGE #</div>
+                    <div style={{ width: '15%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>TYPE</div>
+                    <div style={{ width: '35%', padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`, textAlign: 'center' }}>TIME</div>
                   </div>
                   
                   {/* Table Rows */}
@@ -459,24 +577,46 @@ export const PDFPreviewDialog = ({
                         : `rgb(${evenRowColor.join(',')})`,
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
-                      height: `${safeLayoutSettings.tableSettings.rowHeight}px`,
-                      display: 'grid',
-                      gridTemplateColumns: '35% 15% 15% 35%',
+                      minHeight: `${safeLayoutSettings.tableSettings.rowHeight}px`,
+                      display: 'flex',
                       alignItems: 'center',
-                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
+                      borderBottom: index < processedData.ptoRecords.length - 1 ? '1px solid #dee2e6' : 'none',
+                      borderTop: index === 0 ? 'none' : '1px solid #dee2e6'
                     }}>
-                      <div style={{ color: `rgb(${ptoTextColor.join(',')})` }}>{record.name}</div>
                       <div style={{ 
+                        width: '35%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${ptoTextColor.join(',')})`,
-                        textAlign: 'center'
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>{record.name}</div>
+                      <div style={{ 
+                        width: '15%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
+                        color: `rgb(${ptoTextColor.join(',')})`,
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{record.badge}</div>
                       <div style={{ 
+                        width: '15%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${ptoTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{record.ptoType}</div>
                       <div style={{ 
+                        width: '35%', 
+                        padding: `0 ${safeLayoutSettings.tableSettings.columnSpacing || 4}px`,
                         color: `rgb(${ptoTextColor.join(',')})`,
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>{record.startTime}-{record.endTime}</div>
                     </div>
                   ))}
@@ -486,11 +626,16 @@ export const PDFPreviewDialog = ({
             
             {/* Staffing Summary */}
             {safeLayoutSettings.sections.showStaffingSummary && (
-              <div className="mt-8 pt-4 border-t" style={{ borderColor: '#dee2e6' }}>
+              <div className="mt-8 pt-4 border-t" style={{ 
+                borderColor: '#dee2e6',
+                borderTopWidth: `${safeLayoutSettings.tableSettings.borderWidth || 1}px`,
+                boxSizing: 'border-box'
+              }}>
                 <div style={{
                   fontSize: `${safeLayoutSettings.fontSizes.footer}pt`,
                   fontWeight: 'bold',
-                  color: `rgb(${primaryColor.join(',')})`
+                  color: `rgb(${primaryColor.join(',')})`,
+                  marginBottom: '4px'
                 }}>
                   STAFFING: Supervisors {processedData.currentSupervisors}/{processedData.minSupervisors} • 
                   Officers {processedData.currentOfficers}/{processedData.minOfficers}
@@ -498,8 +643,7 @@ export const PDFPreviewDialog = ({
                 <div style={{
                   fontSize: `${safeLayoutSettings.fontSizes.footer}pt`,
                   color: `rgb(${primaryColor.join(',')})`,
-                  textAlign: 'right',
-                  marginTop: '2px'
+                  textAlign: 'right'
                 }}>
                   Generated: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 </div>

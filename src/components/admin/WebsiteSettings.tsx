@@ -1,4 +1,4 @@
-// src/components/admin/WebsiteSettings.tsx - UPDATED WITH CURRENT SETTINGS AS DEFAULTS
+// src/components/admin/WebsiteSettings.tsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -119,6 +119,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [activeTab, setActiveTab] = useState("notifications");
+  const [isResetting, setIsResetting] = useState(false);
 
   // Helper function to get PTO records
   const getPTORecordsForDate = async (date: Date): Promise<any[]> => {
@@ -209,6 +210,8 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
       return mergedData;
     },
     retry: 1,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Update local state when settings load
@@ -224,7 +227,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     }
   }, [settings]);
 
-  // Update settings mutation - CRITICAL FIX: Always include the ID
+  // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: any) => {
       console.log('Updating settings with ID:', settings?.id, 'Updates:', updates);
@@ -255,7 +258,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     },
     onSuccess: (data) => {
       console.log('Settings updated successfully:', data);
-      queryClient.invalidateQueries({ queryKey: ['website-settings'] });
+      // Force an immediate refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ['website-settings'],
+        refetchType: 'active'
+      });
       toast.success("Settings updated successfully");
     },
     onError: (error) => {
@@ -568,19 +575,60 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     }
   };
 
-  const resetToDefaults = () => {
-    setColorSettings(DEFAULT_COLORS);
-    setPtoVisibility(DEFAULT_PTO_VISIBILITY);
-    setAnniversaryRecipients(["admin", "supervisor"]);
+  // FIXED: Reset to defaults function with proper UI updates
+  const resetToDefaults = async () => {
+    setIsResetting(true);
+    const toastId = toast.loading("Resetting all settings to defaults...");
     
-    updateSettingsMutation.mutate({
-      id: settings?.id, // MUST include ID
-      color_settings: DEFAULT_COLORS,
-      pto_type_visibility: DEFAULT_PTO_VISIBILITY,
-      anniversary_alert_recipients: ["admin", "supervisor"],
-      pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
-      ...DEFAULT_NOTIFICATION_SETTINGS,
-    });
+    try {
+      // Update local state immediately for instant UI feedback
+      setColorSettings(DEFAULT_COLORS);
+      setPtoVisibility(DEFAULT_PTO_VISIBILITY);
+      setAnniversaryRecipients(["admin", "supervisor"]);
+      
+      // Create the reset data
+      const resetData = {
+        id: settings?.id,
+        color_settings: DEFAULT_COLORS,
+        pto_type_visibility: DEFAULT_PTO_VISIBILITY,
+        anniversary_alert_recipients: ["admin", "supervisor"],
+        pdf_layout_settings: DEFAULT_LAYOUT_SETTINGS,
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+      };
+
+      // Update the database
+      const { data, error } = await supabase
+        .from('website_settings')
+        .upsert(resetData, {
+          onConflict: 'id'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Force a complete refresh of the settings
+      queryClient.invalidateQueries({ 
+        queryKey: ['website-settings'],
+        refetchType: 'active'
+      });
+      
+      // Refetch fresh data
+      await queryClient.refetchQueries({ 
+        queryKey: ['website-settings'] 
+      });
+      
+      toast.dismiss(toastId);
+      toast.success("All settings have been reset to defaults");
+      
+    } catch (error) {
+      console.error("Error resetting settings:", error);
+      toast.error("Failed to reset settings");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   if (isLoading) {
@@ -688,7 +736,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             colorSettings={colorSettings}
             handleColorChange={handleColorChange}
             resetToDefaults={resetToDefaults}
-            isPending={updateSettingsMutation.isPending}
+            isPending={updateSettingsMutation.isPending || isResetting}
           />
         </TabsContent>
 
@@ -714,14 +762,21 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
         </TabsContent>
       </Tabs>
 
-      {/* Reset All Settings Button */}
+      {/* Reset All Settings Button - UPDATED */}
       <div className="flex justify-end">
         <Button 
           variant="outline" 
           onClick={resetToDefaults}
-          disabled={updateSettingsMutation.isPending}
+          disabled={isLoading || updateSettingsMutation.isPending || isResetting}
         >
-          Reset All Settings to Defaults
+          {isResetting || updateSettingsMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              {isResetting ? "Resetting..." : "Saving..."}
+            </>
+          ) : (
+            "Reset All Settings to Defaults"
+          )}
         </Button>
       </div>
 

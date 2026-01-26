@@ -1,4 +1,4 @@
-// src/components/admin/WebsiteSettings.tsx - COMPLETE FIXED VERSION
+// src/components/admin/WebsiteSettings.tsx - UPDATED WITH CURRENT SETTINGS AS DEFAULTS
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Eye } from "lucide-react";
-import { SettingsTabs } from '@/components/admin/SettingsTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Import sub-components
 import { NotificationSettings } from "./settings/NotificationSettings";
@@ -23,7 +23,7 @@ import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 
-// Constants
+// Constants - UPDATED WITH YOUR CURRENT SETTINGS FROM SUPABASE
 export const DEFAULT_COLORS = {
   // PDF Export Colors
   pdf_supervisor_pto_bg: "255,255,200",
@@ -118,6 +118,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const [previewData, setPreviewData] = useState<any>(null);
   const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState("notifications");
 
   // Helper function to get PTO records
   const getPTORecordsForDate = async (date: Date): Promise<any[]> => {
@@ -593,33 +594,145 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     );
   }
 
- return (
-  <div className="space-y-6">
-    <SettingsTabs
-      isAdmin={isAdmin}
-      isSupervisor={isSupervisor}
-      settings={settings}
-      ptoVisibility={ptoVisibility}
-      colorSettings={colorSettings}
-      handleToggle={handleToggle}
-      handleRecipientChange={handleRecipientChange}
-      handlePtoVisibilityToggle={handlePtoVisibilityToggle}
-      handleColorChange={handleColorChange}
-      handleLayoutSettingsSave={handleLayoutSettingsSave}
-      generatePreviewData={generatePreviewData}
-      resetToDefaults={resetToDefaults}
-      isPending={updateSettingsMutation.isPending}
-      isGeneratingPreview={isGeneratingPreview}
-    />
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 h-auto">
+          <TabsTrigger value="notifications" className="py-2">
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="pdf" className="py-2">
+            PDF Layout
+          </TabsTrigger>
+          <TabsTrigger value="pto" className="py-2">
+            PTO Settings
+          </TabsTrigger>
+          <TabsTrigger value="colors" className="py-2">
+            Colors
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="py-2">
+            Alerts
+          </TabsTrigger>
+          <TabsTrigger value="system" className="py-2">
+            System
+          </TabsTrigger>
+        </TabsList>
 
-    {/* PDF Preview Dialog */}
-    <PDFPreviewDialog
-      open={pdfPreviewOpen}
-      onOpenChange={setPdfPreviewOpen}
-      previewData={previewData}
-      layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
-      selectedDate={new Date()}
-    />
-  </div>
-);
+        {/* NOTIFICATIONS TAB */}
+        <TabsContent value="notifications" className="space-y-6 mt-6">
+          <NotificationSettings 
+            settings={settings}
+            handleToggle={handleToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+
+          <AnniversaryAlertSettings 
+            settings={settings}
+            handleToggle={handleToggle}
+            handleRecipientChange={handleRecipientChange}
+            isPending={updateSettingsMutation.isPending}
+          />
+
+          <PTOSettings 
+            settings={settings}
+            handleToggle={handleToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+
+          <PTOVisibilitySettings 
+            ptoVisibility={ptoVisibility}
+            handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+        </TabsContent>
+
+        {/* PDF LAYOUT TAB */}
+        <TabsContent value="pdf" className="space-y-6 mt-6">
+          <PDFLayoutSettings 
+            settings={settings}
+            onSave={handleLayoutSettingsSave}
+            onPreview={generatePreviewData}
+            isPending={updateSettingsMutation.isPending}
+            isPreviewLoading={isGeneratingPreview}
+          />
+        </TabsContent>
+
+        {/* PTO SETTINGS TAB */}
+        <TabsContent value="pto" className="space-y-6 mt-6">
+          <PTOSettings 
+            settings={settings}
+            handleToggle={handleToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+
+          <PTOVisibilitySettings 
+            ptoVisibility={ptoVisibility}
+            handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+        </TabsContent>
+
+        {/* COLORS TAB */}
+        <TabsContent value="colors" className="space-y-6 mt-6">
+          <ScheduleColorSettings 
+            colorSettings={colorSettings}
+            handleColorChange={handleColorChange}
+            isPending={updateSettingsMutation.isPending}
+            settings={settings}
+            ptoVisibility={ptoVisibility}
+            updateSettingsMutation={updateSettingsMutation}
+            setColorSettings={setColorSettings}
+          />
+
+          <ColorCustomizationSettings 
+            colorSettings={colorSettings}
+            handleColorChange={handleColorChange}
+            resetToDefaults={resetToDefaults}
+            isPending={updateSettingsMutation.isPending}
+          />
+        </TabsContent>
+
+        {/* ALERTS TAB */}
+        <TabsContent value="alerts" className="space-y-6 mt-6">
+          {(isAdmin || isSupervisor) && <ManualAlertSender />}
+          
+          <AnniversaryAlertSettings 
+            settings={settings}
+            handleToggle={handleToggle}
+            handleRecipientChange={handleRecipientChange}
+            isPending={updateSettingsMutation.isPending}
+          />
+        </TabsContent>
+
+        {/* SYSTEM TAB */}
+        <TabsContent value="system" className="space-y-6 mt-6">
+          {(isAdmin || isSupervisor) && <PasswordResetManager />}
+
+          <AuditLogViewer />
+
+          <SettingsInstructions />
+        </TabsContent>
+      </Tabs>
+
+      {/* Reset All Settings Button */}
+      <div className="flex justify-end">
+        <Button 
+          variant="outline" 
+          onClick={resetToDefaults}
+          disabled={updateSettingsMutation.isPending}
+        >
+          Reset All Settings to Defaults
+        </Button>
+      </div>
+
+      {/* PDF Preview Dialog */}
+      <PDFPreviewDialog
+        open={pdfPreviewOpen}
+        onOpenChange={setPdfPreviewOpen}
+        previewData={previewData}
+        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+        selectedDate={new Date()}
+      />
+    </div>
+  );
 };

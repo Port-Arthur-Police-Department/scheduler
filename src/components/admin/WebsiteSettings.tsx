@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Eye } from "lucide-react";
-import { SettingsTabs } from "./SettingsTabs";
+import { SettingsTabs } from '@/components/admin/SettingsTab';
 
 // Import sub-components
 import { NotificationSettings } from "./settings/NotificationSettings";

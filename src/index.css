@@ -114,6 +114,51 @@ All colors MUST be HSL.
   }
 }
 
+/* ========== CRITICAL FIXES FOR DARK MODE ========== */
+
+/* Override inline white backgrounds in dark mode */
+.dark [style*="background-color: rgb(240, 248, 255)"],
+.dark [style*="background-color: rgb(240 248 255)"],
+.dark [style*="background-color:#f0f8ff"],
+.dark [style*="background-color: aliceblue"] {
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark [style*="border-color: rgb(240, 248, 255)"],
+.dark [style*="border-color: rgb(240 248 255)"],
+.dark [style*="border-color:#f0f8ff"],
+.dark [style*="border-color: aliceblue"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Fix for white text on white background */
+.dark [style*="color: rgb(255, 255, 255)"],
+.dark [style*="color: rgb(255 255 255)"],
+.dark [style*="color:#ffffff"],
+.dark [style*="color: white"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Specifically target the officer card background issue */
+.dark .space-y-2 > div[style*="background-color: rgb(240, 248, 255)"] {
+  background-color: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Fix for text within white-background elements */
+.dark div[style*="background-color: rgb(240, 248, 255)"] p,
+.dark div[style*="background-color: rgb(240, 248, 255)"] div,
+.dark div[style*="background-color: rgb(240, 248, 255)"] span,
+.dark div[style*="background-color: rgb(240, 248, 255)"] label {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Fix for muted text specifically */
+.dark div[style*="background-color: rgb(240, 248, 255)"] .text-muted-foreground,
+.dark div[style*="background-color: rgb(240, 248, 255)"] [class*="text-muted"] {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
 /* ========== MATCHING DASHBOARD BLUR EFFECTS ========== */
 /* Exact same as Dashboard header: bg-card/50 backdrop-blur-sm */
 .dashboard-blur {
@@ -480,4 +525,13 @@ All colors MUST be HSL.
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Additional fix for officer schedule view */
+.dark .rounded-b-lg[style*="background-color: rgb(240, 248, 255)"] {
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark .rounded-md[style*="background-color: rgb(240, 248, 255)"] {
+  background-color: hsl(var(--accent) / 0.1) !important;
 }

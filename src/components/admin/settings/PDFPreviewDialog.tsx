@@ -1,4 +1,4 @@
-// src/components/admin/settings/PDFPreviewDialog.tsx - FIXED BACKGROUND COLOR VERSION
+// src/components/admin/settings/PDFPreviewDialog.tsx - FIXED SUPERVISOR ROWS
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
@@ -206,8 +206,6 @@ export const PDFPreviewDialog = ({
   const supervisorTextColor = parseColorForPreview(safeLayoutSettings.colorSettings.supervisorTextColor);
   const specialTextColor = parseColorForPreview(safeLayoutSettings.colorSettings.specialAssignmentTextColor);
   const ptoTextColor = parseColorForPreview(safeLayoutSettings.colorSettings.ptoTextColor);
-  const evenRowColor = parseColorForPreview(safeLayoutSettings.colorSettings.evenRowColor);
-  const oddRowColor = parseColorForPreview(safeLayoutSettings.colorSettings.oddRowColor);
 
   // If no data is loaded yet, show loading state
   if (!processedData) {
@@ -304,9 +302,8 @@ export const PDFPreviewDialog = ({
                   {/* Table Rows */}
                   {processedData.supervisors.map((supervisor: any, index: number) => (
                     <div key={index} style={{
-                      backgroundColor: safeLayoutSettings.tableSettings.showRowStriping && index % 2 === 1
-                        ? `rgb(${oddRowColor.join(',')})`
-                        : `rgb(${evenRowColor.join(',')})`,
+                      // FIXED: Removed background color for supervisor rows too
+                      backgroundColor: '#ffffff', // Always white for supervisor rows
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
                       minHeight: `${safeLayoutSettings.tableSettings.rowHeight}px`,
@@ -394,7 +391,6 @@ export const PDFPreviewDialog = ({
                   {/* Table Rows */}
                   {processedData.officers.map((officer: any, index: number) => (
                     <div key={index} style={{
-                      // REMOVE BACKGROUND COLOR - Use white background for officer rows
                       backgroundColor: '#ffffff', // Always white for officer rows
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
@@ -483,7 +479,6 @@ export const PDFPreviewDialog = ({
                   {/* Table Rows */}
                   {processedData.specialAssignmentOfficers.map((officer: any, index: number) => (
                     <div key={index} style={{
-                      // REMOVE BACKGROUND COLOR - Use white background for special assignment rows
                       backgroundColor: '#ffffff', // Always white for special assignment rows
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,
@@ -570,7 +565,6 @@ export const PDFPreviewDialog = ({
                   {/* Table Rows */}
                   {processedData.ptoRecords.map((record: any, index: number) => (
                     <div key={index} style={{
-                      // REMOVE BACKGROUND COLOR - Use white background for PTO rows
                       backgroundColor: '#ffffff', // Always white for PTO rows
                       fontSize: `${safeLayoutSettings.fontSizes.tableContent}pt`,
                       padding: `${safeLayoutSettings.tableSettings.cellPadding}px`,

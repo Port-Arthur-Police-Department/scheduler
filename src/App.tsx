@@ -282,6 +282,32 @@ const App = () => {
     }
   }, [notificationStatus.permission, pwaStatus.serviceWorkerActive]);
 
+  // Add this useEffect in your App.tsx, around line 200 (after the other useEffects)
+useEffect(() => {
+  // Clean inline styles on mount
+  cleanAllInlineStyles();
+  
+  // Set up a mutation observer to clean styles dynamically
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'childList') {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === 1) { // Element node
+            cleanAllInlineStyles();
+          }
+        });
+      }
+    });
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  return () => observer.disconnect();
+}, []);
+
   // Check authentication status and manage PWA prompt
   useEffect(() => {
     const checkAuthAndManagePrompt = async () => {

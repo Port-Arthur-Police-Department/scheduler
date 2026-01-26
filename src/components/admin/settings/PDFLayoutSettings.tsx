@@ -1,4 +1,4 @@
-// src/components/admin/settings/PDFLayoutSettings.tsx - RESTORED FULL VERSION
+// src/components/admin/settings/PDFLayoutSettings.tsx - WITH COLOR PICKERS
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Eye, Loader2 } from "lucide-react";
+import { Save, Eye, Loader2, Palette } from "lucide-react";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { toast } from "sonner";
 
@@ -19,6 +19,41 @@ interface PDFLayoutSettingsProps {
   isPending: boolean;
   isPreviewLoading?: boolean;
 }
+
+// Helper function to convert RGB string to hex
+const rgbToHex = (rgbString: string): string => {
+  if (!rgbString) return "#000000";
+  
+  const parts = rgbString.split(',').map(num => parseInt(num.trim(), 10));
+  if (parts.length !== 3 || parts.some(num => isNaN(num))) {
+    return "#000000";
+  }
+  
+  const [r, g, b] = parts;
+  return "#" + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }).join("");
+};
+
+// Helper function to convert hex to RGB string
+const hexToRgb = (hex: string): string => {
+  hex = hex.replace('#', '');
+  
+  if (hex.length === 3) {
+    hex = hex.split('').map(char => char + char).join('');
+  }
+  
+  if (hex.length !== 6) {
+    return "0,0,0";
+  }
+  
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  
+  return `${r},${g},${b}`;
+};
 
 export const PDFLayoutSettings = ({ 
   settings, 
@@ -83,6 +118,8 @@ export const PDFLayoutSettings = ({
     };
   });
 
+  const [showColorPicker, setShowColorPicker] = useState<{[key: string]: boolean}>({});
+
   const handleSectionToggle = (section: string, value: boolean) => {
     setLayoutSettings(prev => ({
       ...prev,
@@ -123,6 +160,11 @@ export const PDFLayoutSettings = ({
     }));
   };
 
+  const handleHexColorChange = (setting: string, hexValue: string) => {
+    const rgbValue = hexToRgb(hexValue);
+    handleColorChange(setting, rgbValue);
+  };
+
   const handleColumnOrderChange = (section: string, value: string) => {
     setLayoutSettings(prev => ({
       ...prev,
@@ -130,6 +172,13 @@ export const PDFLayoutSettings = ({
         ...prev.columnOrder,
         [section]: value
       }
+    }));
+  };
+
+  const toggleColorPicker = (setting: string) => {
+    setShowColorPicker(prev => ({
+      ...prev,
+      [setting]: !prev[setting]
     }));
   };
 
@@ -141,6 +190,22 @@ export const PDFLayoutSettings = ({
   const handlePreview = () => {
     onPreview();
   };
+
+  // Color settings configuration with labels
+  const colorSettingsConfig = [
+    { key: 'primaryColor', label: 'Primary Color', description: 'Used for headers and titles' },
+    { key: 'headerTextColor', label: 'Header Text Color', description: '' },
+    { key: 'supervisorHeaderBgColor', label: 'Supervisor Header BG', description: '' },
+    { key: 'officerHeaderBgColor', label: 'Officer Header BG', description: '' },
+    { key: 'specialHeaderBgColor', label: 'Special Assignment Header BG', description: '' },
+    { key: 'ptoHeaderBgColor', label: 'PTO Header BG', description: '' },
+    { key: 'officerTextColor', label: 'Officer Text Color', description: '' },
+    { key: 'supervisorTextColor', label: 'Supervisor Text Color', description: '' },
+    { key: 'specialAssignmentTextColor', label: 'Special Assignment Text Color', description: '' },
+    { key: 'ptoTextColor', label: 'PTO Text Color', description: '' },
+    { key: 'evenRowColor', label: 'Even Row Color', description: '' },
+    { key: 'oddRowColor', label: 'Odd Row Color', description: '' },
+  ];
 
   return (
     <Card>
@@ -431,130 +496,75 @@ export const PDFLayoutSettings = ({
 
         <Separator />
 
-        {/* Color Settings */}
+        {/* Color Settings with Color Pickers */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Color Settings (R,G,B format)</h3>
+          <h3 className="text-lg font-semibold">Color Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="primaryColor">Primary Color</Label>
-              <Input
-                id="primaryColor"
-                value={layoutSettings.colorSettings.primaryColor}
-                onChange={(e) => handleColorChange('primaryColor', e.target.value)}
-                placeholder="e.g., 44,62,80"
-              />
-              <div className="text-sm text-gray-500 mt-1">Used for headers and titles</div>
-            </div>
-
-            <div>
-              <Label htmlFor="headerTextColor">Header Text Color</Label>
-              <Input
-                id="headerTextColor"
-                value={layoutSettings.colorSettings.headerTextColor}
-                onChange={(e) => handleColorChange('headerTextColor', e.target.value)}
-                placeholder="e.g., 255,255,255"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="supervisorHeaderBgColor">Supervisor Header BG</Label>
-              <Input
-                id="supervisorHeaderBgColor"
-                value={layoutSettings.colorSettings.supervisorHeaderBgColor}
-                onChange={(e) => handleColorChange('supervisorHeaderBgColor', e.target.value)}
-                placeholder="e.g., 52,152,219"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="officerHeaderBgColor">Officer Header BG</Label>
-              <Input
-                id="officerHeaderBgColor"
-                value={layoutSettings.colorSettings.officerHeaderBgColor}
-                onChange={(e) => handleColorChange('officerHeaderBgColor', e.target.value)}
-                placeholder="e.g., 46,204,113"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="specialHeaderBgColor">Special Assignment Header BG</Label>
-              <Input
-                id="specialHeaderBgColor"
-                value={layoutSettings.colorSettings.specialHeaderBgColor}
-                onChange={(e) => handleColorChange('specialHeaderBgColor', e.target.value)}
-                placeholder="e.g., 155,89,182"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="ptoHeaderBgColor">PTO Header BG</Label>
-              <Input
-                id="ptoHeaderBgColor"
-                value={layoutSettings.colorSettings.ptoHeaderBgColor}
-                onChange={(e) => handleColorChange('ptoHeaderBgColor', e.target.value)}
-                placeholder="e.g., 241,196,15"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="officerTextColor">Officer Text Color</Label>
-              <Input
-                id="officerTextColor"
-                value={layoutSettings.colorSettings.officerTextColor}
-                onChange={(e) => handleColorChange('officerTextColor', e.target.value)}
-                placeholder="e.g., 0,0,0"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="supervisorTextColor">Supervisor Text Color</Label>
-              <Input
-                id="supervisorTextColor"
-                value={layoutSettings.colorSettings.supervisorTextColor}
-                onChange={(e) => handleColorChange('supervisorTextColor', e.target.value)}
-                placeholder="e.g., 0,0,0"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="specialAssignmentTextColor">Special Assignment Text Color</Label>
-              <Input
-                id="specialAssignmentTextColor"
-                value={layoutSettings.colorSettings.specialAssignmentTextColor}
-                onChange={(e) => handleColorChange('specialAssignmentTextColor', e.target.value)}
-                placeholder="e.g., 0,0,0"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="ptoTextColor">PTO Text Color</Label>
-              <Input
-                id="ptoTextColor"
-                value={layoutSettings.colorSettings.ptoTextColor}
-                onChange={(e) => handleColorChange('ptoTextColor', e.target.value)}
-                placeholder="e.g., 0,0,0"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="evenRowColor">Even Row Color</Label>
-              <Input
-                id="evenRowColor"
-                value={layoutSettings.colorSettings.evenRowColor}
-                onChange={(e) => handleColorChange('evenRowColor', e.target.value)}
-                placeholder="e.g., 255,255,255"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="oddRowColor">Odd Row Color</Label>
-              <Input
-                id="oddRowColor"
-                value={layoutSettings.colorSettings.oddRowColor}
-                onChange={(e) => handleColorChange('oddRowColor', e.target.value)}
-                placeholder="e.g., 248,249,250"
-              />
-            </div>
+            {colorSettingsConfig.map((config) => {
+              const currentValue = layoutSettings.colorSettings[config.key];
+              const hexValue = rgbToHex(currentValue);
+              
+              return (
+                <div key={config.key} className="space-y-2">
+                  <Label htmlFor={config.key}>{config.label}</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id={config.key}
+                        value={currentValue}
+                        onChange={(e) => handleColorChange(config.key, e.target.value)}
+                        placeholder="e.g., 44,62,80"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1 h-7 w-7"
+                        onClick={() => toggleColorPicker(config.key)}
+                        title="Pick color"
+                      >
+                        <Palette className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div 
+                      className="w-10 h-10 rounded border cursor-pointer"
+                      style={{ backgroundColor: hexValue }}
+                      onClick={() => toggleColorPicker(config.key)}
+                      title="Click to pick color"
+                    />
+                  </div>
+                  
+                  {/* Color Picker Popup */}
+                  {showColorPicker[config.key] && (
+                    <div className="absolute z-50 mt-1 p-2 bg-white border rounded shadow-lg">
+                      <input
+                        type="color"
+                        value={hexValue}
+                        onChange={(e) => handleHexColorChange(config.key, e.target.value)}
+                        className="w-full h-8 cursor-pointer"
+                      />
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm">{hexValue}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleColorPicker(config.key)}
+                        >
+                          Close
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {config.description && (
+                    <div className="text-sm text-gray-500">{config.description}</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

@@ -1,9 +1,10 @@
-// src/components/admin/settings/PDFPreviewDialog.tsx
+// src/components/admin/settings/PDFPreviewDialog.tsx - FIXED VERSION
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { usePDFExport } from "@/hooks/usePDFExport";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { useEffect, useState } from "react";
 
 interface PDFPreviewDialogProps {
   open: boolean;
@@ -45,6 +46,30 @@ const getHeaderColorForSection = (layoutSettings: any, sectionType: string): num
   }
 };
 
+// Helper to safely extract data from previewData
+const getSectionData = (previewData: any, sectionKey: string): any[] => {
+  if (!previewData) return [];
+  
+  // Try different possible data structures
+  const data = previewData[sectionKey] || 
+               previewData[sectionKey.toLowerCase()] || 
+               previewData[`${sectionKey}Data`] || 
+               [];
+  
+  return Array.isArray(data) ? data : [];
+};
+
+// Helper to get officer name safely
+const getOfficerName = (officer: any): string => {
+  if (!officer) return "Unknown Officer";
+  
+  return officer.name || 
+         officer.fullName || 
+         officer.officerName || 
+         `${officer.firstName || ''} ${officer.lastName || ''}`.trim() || 
+         "Unknown Officer";
+};
+
 export const PDFPreviewDialog = ({ 
   open, 
   onOpenChange, 
@@ -53,13 +78,92 @@ export const PDFPreviewDialog = ({
   selectedDate 
 }: PDFPreviewDialogProps) => {
   const { exportToPDF } = usePDFExport();
+  const [processedData, setProcessedData] = useState<any>(null);
+
+  useEffect(() => {
+    if (previewData) {
+      console.log("Preview Data Structure:", previewData); // Debug log
+      processPreviewData();
+    }
+  }, [previewData]);
+
+  const processPreviewData = () => {
+    if (!previewData) {
+      setProcessedData(null);
+      return;
+    }
+
+    const processed = {
+      shift: previewData.shift || {
+        name: "Shift Name",
+        start_time: "00:00",
+        end_time: "23:59"
+      },
+      
+      // Extract supervisors with fallback
+      supervisors: getSectionData(previewData, 'supervisors').map((supervisor: any) => ({
+        name: getOfficerName(supervisor),
+        position: supervisor.position || supervisor.rank || "Supervisor",
+        badge: supervisor.badge || supervisor.badgeNumber || supervisor.id || "",
+        unitNumber: supervisor.unitNumber || supervisor.unit || supervisor.carNumber || "",
+        // Additional fields that might exist
+        ...supervisor
+      })),
+      
+      // Extract officers with fallback
+      officers: getSectionData(previewData, 'officers').map((officer: any) => ({
+        name: getOfficerName(officer),
+        position: officer.position || officer.assignment || officer.beat || "",
+        badge: officer.badge || officer.badgeNumber || officer.id || "",
+        unitNumber: officer.unitNumber || officer.unit || officer.carNumber || "",
+        // Additional fields that might exist
+        ...officer
+      })),
+      
+      // Extract special assignments
+      specialAssignmentOfficers: getSectionData(previewData, 'specialAssignmentOfficers').map((officer: any) => ({
+        name: getOfficerName(officer),
+        position: officer.position || officer.assignment || officer.specialAssignment || "Special Assignment",
+        badge: officer.badge || officer.badgeNumber || officer.id || "",
+        unitNumber: officer.unitNumber || officer.unit || officer.carNumber || "",
+        // Additional fields that might exist
+        ...officer
+      })),
+      
+      // Extract PTO records
+      ptoRecords: getSectionData(previewData, 'ptoRecords').map((record: any) => ({
+        name: getOfficerName(record),
+        badge: record.badge || record.badgeNumber || record.id || "",
+        ptoType: record.ptoType || record.type || record.absenceType || "PTO",
+        startTime: record.startTime || record.start || "00:00",
+        endTime: record.endTime || record.end || "23:59",
+        // Additional fields that might exist
+        ...record
+      })),
+      
+      // Staffing counts with fallbacks
+      currentSupervisors: previewData.currentSupervisors || 
+                         previewData.supervisorCount || 
+                         getSectionData(previewData, 'supervisors').length || 
+                         0,
+      minSupervisors: previewData.minSupervisors || previewData.requiredSupervisors || 0,
+      currentOfficers: previewData.currentOfficers || 
+                      previewData.officerCount || 
+                      getSectionData(previewData, 'officers').length || 
+                      0,
+      minOfficers: previewData.minOfficers || previewData.requiredOfficers || 0
+    };
+
+    console.log("Processed Preview Data:", processed); // Debug log
+    setProcessedData(processed);
+  };
 
   const handleExportPreview = async () => {
     if (!previewData) return;
     
     await exportToPDF({
       selectedDate,
-      shiftName: previewData.shift.name,
+      shiftName: previewData.shift?.name || "Shift",
       shiftData: previewData,
       layoutSettings
     });
@@ -96,6 +200,25 @@ export const PDFPreviewDialog = ({
   const evenRowColor = parseColorForPreview(safeLayoutSettings.colorSettings.evenRowColor);
   const oddRowColor = parseColorForPreview(safeLayoutSettings.colorSettings.oddRowColor);
 
+  // If no data is loaded yet, show loading state
+  if (!processedData) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>PDF Layout Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-4 text-gray-500">Loading preview data...</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -129,7 +252,7 @@ export const PDFPreviewDialog = ({
                   color: `rgb(${primaryColor.join(',')})`,
                   marginBottom: '2px'
                 }}>
-                  {previewData?.shift.name} • {previewData?.shift.start_time}-{previewData?.shift.end_time}
+                  {processedData.shift.name} • {processedData.shift.start_time}-{processedData.shift.end_time}
                 </div>
                 <div style={{
                   fontSize: `${safeLayoutSettings.fontSizes.header}pt`,
@@ -141,9 +264,8 @@ export const PDFPreviewDialog = ({
             </div>
 
             {/* Supervisors Section */}
-            {safeLayoutSettings.sections.showSupervisors && previewData?.supervisors?.length > 0 && (
+            {safeLayoutSettings.sections.showSupervisors && processedData.supervisors.length > 0 && (
               <div className="mb-8">
-                {/* NO SECTION TITLE - Just the table */}
                 <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
                   {/* Table Header */}
                   <div style={{
@@ -163,7 +285,7 @@ export const PDFPreviewDialog = ({
                   </div>
                   
                   {/* Table Rows */}
-                  {previewData.supervisors.map((supervisor: any, index: number) => (
+                  {processedData.supervisors.map((supervisor: any, index: number) => (
                     <div key={index} style={{
                       backgroundColor: safeLayoutSettings.tableSettings.showRowStriping && index % 2 === 1
                         ? `rgb(${oddRowColor.join(',')})`
@@ -174,7 +296,7 @@ export const PDFPreviewDialog = ({
                       display: 'grid',
                       gridTemplateColumns: '35% 8% 15% 10% 32%',
                       alignItems: 'center',
-                      borderTop: '1px solid #dee2e6'
+                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
                     }}>
                       <div style={{ color: `rgb(${supervisorTextColor.join(',')})` }}>{supervisor.name}</div>
                       <div style={{ 
@@ -189,7 +311,9 @@ export const PDFPreviewDialog = ({
                         color: `rgb(${supervisorTextColor.join(',')})`,
                         textAlign: 'center'
                       }}>{supervisor.unitNumber}</div>
-                      <div style={{ color: `rgb(${supervisorTextColor.join(',')})` }}>Partnership details...</div>
+                      <div style={{ color: `rgb(${supervisorTextColor.join(',')})` }}>
+                        {supervisor.notes || supervisor.comments || 'Partnership details...'}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -197,9 +321,8 @@ export const PDFPreviewDialog = ({
             )}
 
             {/* Officers Section */}
-            {safeLayoutSettings.sections.showOfficers && previewData?.officers?.length > 0 && (
+            {safeLayoutSettings.sections.showOfficers && processedData.officers.length > 0 && (
               <div className="mb-8">
-                {/* NO SECTION TITLE - Just the table */}
                 <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
                   {/* Table Header */}
                   <div style={{
@@ -219,7 +342,7 @@ export const PDFPreviewDialog = ({
                   </div>
                   
                   {/* Table Rows */}
-                  {previewData.officers.map((officer: any, index: number) => (
+                  {processedData.officers.map((officer: any, index: number) => (
                     <div key={index} style={{
                       backgroundColor: safeLayoutSettings.tableSettings.showRowStriping && index % 2 === 1
                         ? `rgb(${oddRowColor.join(',')})`
@@ -230,7 +353,7 @@ export const PDFPreviewDialog = ({
                       display: 'grid',
                       gridTemplateColumns: '35% 8% 15% 10% 32%',
                       alignItems: 'center',
-                      borderTop: '1px solid #dee2e6'
+                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
                     }}>
                       <div style={{ color: `rgb(${officerTextColor.join(',')})` }}>{officer.name}</div>
                       <div style={{ 
@@ -245,7 +368,9 @@ export const PDFPreviewDialog = ({
                         color: `rgb(${officerTextColor.join(',')})`,
                         textAlign: 'center'
                       }}>{officer.unitNumber}</div>
-                      <div style={{ color: `rgb(${officerTextColor.join(',')})` }}>Regular assignment...</div>
+                      <div style={{ color: `rgb(${officerTextColor.join(',')})` }}>
+                        {officer.notes || officer.comments || 'Regular assignment...'}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -253,9 +378,8 @@ export const PDFPreviewDialog = ({
             )}
 
             {/* Special Assignments Section */}
-            {safeLayoutSettings.sections.showSpecialAssignments && previewData?.specialAssignmentOfficers?.length > 0 && (
+            {safeLayoutSettings.sections.showSpecialAssignments && processedData.specialAssignmentOfficers.length > 0 && (
               <div className="mb-8">
-                {/* NO SECTION TITLE - Just the table */}
                 <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
                   {/* Table Header */}
                   <div style={{
@@ -275,7 +399,7 @@ export const PDFPreviewDialog = ({
                   </div>
                   
                   {/* Table Rows */}
-                  {previewData.specialAssignmentOfficers.map((officer: any, index: number) => (
+                  {processedData.specialAssignmentOfficers.map((officer: any, index: number) => (
                     <div key={index} style={{
                       backgroundColor: safeLayoutSettings.tableSettings.showRowStriping && index % 2 === 1
                         ? `rgb(${oddRowColor.join(',')})`
@@ -286,7 +410,7 @@ export const PDFPreviewDialog = ({
                       display: 'grid',
                       gridTemplateColumns: '35% 22% 15% 10% 18%',
                       alignItems: 'center',
-                      borderTop: '1px solid #dee2e6'
+                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
                     }}>
                       <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>{officer.name}</div>
                       <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>{officer.position}</div>
@@ -298,7 +422,9 @@ export const PDFPreviewDialog = ({
                         color: `rgb(${specialTextColor.join(',')})`,
                         textAlign: 'center'
                       }}>{officer.unitNumber}</div>
-                      <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>Special duty...</div>
+                      <div style={{ color: `rgb(${specialTextColor.join(',')})` }}>
+                        {officer.notes || officer.comments || 'Special duty...'}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -306,9 +432,8 @@ export const PDFPreviewDialog = ({
             )}
 
             {/* PTO Section */}
-            {safeLayoutSettings.sections.showPTO && previewData?.ptoRecords?.length > 0 && (
+            {safeLayoutSettings.sections.showPTO && processedData.ptoRecords.length > 0 && (
               <div className="mb-8">
-                {/* NO SECTION TITLE - Just the table */}
                 <div className="border rounded overflow-hidden" style={{ borderColor: '#dee2e6' }}>
                   {/* Table Header */}
                   <div style={{
@@ -327,7 +452,7 @@ export const PDFPreviewDialog = ({
                   </div>
                   
                   {/* Table Rows */}
-                  {previewData.ptoRecords.map((record: any, index: number) => (
+                  {processedData.ptoRecords.map((record: any, index: number) => (
                     <div key={index} style={{
                       backgroundColor: safeLayoutSettings.tableSettings.showRowStriping && index % 2 === 1
                         ? `rgb(${oddRowColor.join(',')})`
@@ -338,7 +463,7 @@ export const PDFPreviewDialog = ({
                       display: 'grid',
                       gridTemplateColumns: '35% 15% 15% 35%',
                       alignItems: 'center',
-                      borderTop: '1px solid #dee2e6'
+                      borderTop: index > 0 ? '1px solid #dee2e6' : 'none'
                     }}>
                       <div style={{ color: `rgb(${ptoTextColor.join(',')})` }}>{record.name}</div>
                       <div style={{ 
@@ -367,8 +492,8 @@ export const PDFPreviewDialog = ({
                   fontWeight: 'bold',
                   color: `rgb(${primaryColor.join(',')})`
                 }}>
-                  STAFFING: Supervisors {previewData?.currentSupervisors}/{previewData?.minSupervisors} • 
-                  Officers {previewData?.currentOfficers}/{previewData?.minOfficers}
+                  STAFFING: Supervisors {processedData.currentSupervisors}/{processedData.minSupervisors} • 
+                  Officers {processedData.currentOfficers}/{processedData.minOfficers}
                 </div>
                 <div style={{
                   fontSize: `${safeLayoutSettings.fontSizes.footer}pt`,

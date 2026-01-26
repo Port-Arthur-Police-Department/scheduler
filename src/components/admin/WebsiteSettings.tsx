@@ -593,73 +593,25 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   }
 
   return (
-    <div className="space-y-6">
-      <PDFLayoutSettings 
-        settings={settings}
-        onSave={handleLayoutSettingsSave}
-        onPreview={generatePreviewData}
-        isPending={updateSettingsMutation.isPending}
-        isPreviewLoading={isGeneratingPreview}
-      />
-
-      <NotificationSettings 
-        settings={settings}
-        handleToggle={handleToggle}
-        isPending={updateSettingsMutation.isPending}
-      />
-
-      <AnniversaryAlertSettings 
-        settings={settings}
-        handleToggle={handleToggle}
-        handleRecipientChange={handleRecipientChange}
-        isPending={updateSettingsMutation.isPending}
-      />
-
-      <PTOSettings 
-        settings={settings}
-        handleToggle={handleToggle}
-        isPending={updateSettingsMutation.isPending}
-      />
-
-      <PTOVisibilitySettings 
-        ptoVisibility={ptoVisibility}
-        handlePtoVisibilityToggle={handlePtoVisibilityToggle}
-        isPending={updateSettingsMutation.isPending}
-      />
-
-      <ScheduleColorSettings 
-        colorSettings={colorSettings}
-        handleColorChange={handleColorChange}
-        isPending={updateSettingsMutation.isPending}
-        settings={settings}
-        ptoVisibility={ptoVisibility}
-        updateSettingsMutation={updateSettingsMutation}
-        setColorSettings={setColorSettings}
-      />
-
-      <ColorCustomizationSettings 
-        colorSettings={colorSettings}
-        handleColorChange={handleColorChange}
-        resetToDefaults={resetToDefaults}
-        isPending={updateSettingsMutation.isPending}
-      />
-
-      {(isAdmin || isSupervisor) && <PasswordResetManager />}
-
-      <AuditLogViewer />
-
-      {(isAdmin || isSupervisor) && <ManualAlertSender />}
-
-      <SettingsInstructions />
-
-      {/* PDF Preview Dialog */}
-      <PDFPreviewDialog
-        open={pdfPreviewOpen}
-        onOpenChange={setPdfPreviewOpen}
-        previewData={previewData}
-        layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
-        selectedDate={new Date()}
-      />
-    </div>
-  );
+  <SettingsTabs
+    isAdmin={isAdmin}
+    isSupervisor={isSupervisor}
+    settings={settings}
+    ptoVisibility={ptoVisibility}
+    colorSettings={colorSettings}
+    anniversaryRecipients={anniversaryRecipients}
+    isLoading={isLoading}
+    updateSettingsMutation={updateSettingsMutation}
+    isPending={updateSettingsMutation.isPending}
+    isGeneratingPreview={isGeneratingPreview}
+    handleToggle={handleToggle}
+    handleRecipientChange={handleRecipientChange}
+    handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+    handleColorChange={handleColorChange}
+    handleLayoutSettingsSave={handleLayoutSettingsSave}
+    generatePreviewData={generatePreviewData}
+    resetToDefaults={resetToDefaults}
+    setColorSettings={setColorSettings}
+  />
+);
 };

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Eye } from "lucide-react";
+import { SettingsTabs } from "./SettingsTabs";
 
 // Import sub-components
 import { NotificationSettings } from "./settings/NotificationSettings";
@@ -592,26 +593,33 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     );
   }
 
-  return (
-  <SettingsTabs
-    isAdmin={isAdmin}
-    isSupervisor={isSupervisor}
-    settings={settings}
-    ptoVisibility={ptoVisibility}
-    colorSettings={colorSettings}
-    anniversaryRecipients={anniversaryRecipients}
-    isLoading={isLoading}
-    updateSettingsMutation={updateSettingsMutation}
-    isPending={updateSettingsMutation.isPending}
-    isGeneratingPreview={isGeneratingPreview}
-    handleToggle={handleToggle}
-    handleRecipientChange={handleRecipientChange}
-    handlePtoVisibilityToggle={handlePtoVisibilityToggle}
-    handleColorChange={handleColorChange}
-    handleLayoutSettingsSave={handleLayoutSettingsSave}
-    generatePreviewData={generatePreviewData}
-    resetToDefaults={resetToDefaults}
-    setColorSettings={setColorSettings}
-  />
+ return (
+  <div className="space-y-6">
+    <SettingsTabs
+      isAdmin={isAdmin}
+      isSupervisor={isSupervisor}
+      settings={settings}
+      ptoVisibility={ptoVisibility}
+      colorSettings={colorSettings}
+      handleToggle={handleToggle}
+      handleRecipientChange={handleRecipientChange}
+      handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+      handleColorChange={handleColorChange}
+      handleLayoutSettingsSave={handleLayoutSettingsSave}
+      generatePreviewData={generatePreviewData}
+      resetToDefaults={resetToDefaults}
+      isPending={updateSettingsMutation.isPending}
+      isGeneratingPreview={isGeneratingPreview}
+    />
+
+    {/* PDF Preview Dialog */}
+    <PDFPreviewDialog
+      open={pdfPreviewOpen}
+      onOpenChange={setPdfPreviewOpen}
+      previewData={previewData}
+      layoutSettings={settings?.pdf_layout_settings || DEFAULT_LAYOUT_SETTINGS}
+      selectedDate={new Date()}
+    />
+  </div>
 );
 };

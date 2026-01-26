@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add this to your index.css file, right after @tailwind utilities; */
+/* NUCLEAR DARK MODE FIX - Overrides ALL inline styles */
+html.dark [style*="background-color"] {
+  background-color: hsl(var(--card)) !important;
+}
+
+html.dark [style*="border-color"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+html.dark [style*="color"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Specifically target aliceblue backgrounds */
+html.dark [style*="240, 248, 255"],
+html.dark [style*="aliceblue"] {
+  background-color: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Fix text inside these elements */
+html.dark [style*="240, 248, 255"] *,
+html.dark [style*="aliceblue"] * {
+  color: hsl(var(--foreground)) !important;
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */

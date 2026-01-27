@@ -1184,8 +1184,8 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
         full_name, 
         badge_number, 
         rank,
-      birthday,
-      hire_date 
+        birthday,
+        hire_date 
       ),
       shift_types (
         id, 

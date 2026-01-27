@@ -1102,68 +1102,73 @@ export const usePDFExport = () => {
         yPosition += 8;
       }
 
-      // ================================================
-      // BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
-      // ================================================
-      const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
-      if (specialOccasions.length > 0) {
-        // Separate birthdays and anniversaries
-        const birthdays = specialOccasions.filter(occ => occ.type === 'birthday');
-        const anniversaries = specialOccasions.filter(occ => occ.type === 'anniversary');
-        
-        // Set font for special occasions
-        pdf.setFontSize(safeLayoutSettings.fontSizes.footer);
-        pdf.setFont("helvetica", "bold");
-        
-        // Use accent color for special occasions
-        const accentColorStr = getColorSetting(safeLayoutSettings, 'accentColor') || "155,89,182";
-        const accentColor = parseColor(accentColorStr);
-        pdf.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-        
-        // Add a subtle separator line
-        pdf.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-        pdf.setLineWidth(0.3);
-        pdf.line(15, yPosition, pageWidth - 15, yPosition);
-        yPosition += 6;
-        
-        // Draw birthdays
-        if (birthdays.length > 0) {
-          const birthdayNames = birthdays.map(b => b.displayName).join(', ');
-          const birthdayText = `🎂 BIRTHDAYS: ${birthdayNames}`;
-          
-          // Check if text fits on one line
-          if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
-            pdf.text(birthdayText, 15, yPosition);
-            yPosition += 5;
-          } else {
-            // Handle multi-line if needed
-            const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
-            pdf.text(lines, 15, yPosition);
-            yPosition += (lines.length * 5);
-          }
-        }
-        
-        // Draw anniversaries
-        if (anniversaries.length > 0) {
-          const anniversaryNames = anniversaries.map(a => a.displayName).join(', ');
-          const anniversaryText = `🎖️ ANNIVERSARIES: ${anniversaryNames}`;
-          
-          // Check if text fits on one line
-          if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
-            pdf.text(anniversaryText, 15, yPosition);
-            yPosition += 5;
-          } else {
-            // Handle multi-line if needed
-            const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
-            pdf.text(lines, 15, yPosition);
-            yPosition += (lines.length * 5);
-          }
-        }
-        
-        // Reset text color
-        pdf.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-        yPosition += 4;
+// ================================================
+// BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
+// ================================================
+// Only show if enabled in layout settings
+if (safeLayoutSettings.sections.showSpecialOccasions) {
+  const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
+  if (specialOccasions.length > 0) {
+    // Separate birthdays and anniversaries
+    const birthdays = specialOccasions.filter(occ => occ.type === 'birthday');
+    const anniversaries = specialOccasions.filter(occ => occ.type === 'anniversary');
+    
+    // Set font for special occasions
+    pdf.setFontSize(safeLayoutSettings.fontSizes.footer);
+    pdf.setFont("helvetica", "bold");
+    
+    // Use accent color for special occasions
+    const accentColorStr = getColorSetting(safeLayoutSettings, 'accentColor') || "155,89,182";
+    const accentColor = parseColor(accentColorStr);
+    pdf.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+    
+    // Add a subtle separator line
+    pdf.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+    pdf.setLineWidth(0.3);
+    pdf.line(15, yPosition, pageWidth - 15, yPosition);
+    yPosition += 6;
+    
+    // Draw birthdays
+    if (birthdays.length > 0) {
+      const birthdayNames = birthdays.map(b => b.displayName).join(', ');
+      const birthdayText = `🎂 BIRTHDAYS: ${birthdayNames}`;
+      
+      // Check if text fits on one line
+      if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+        pdf.text(birthdayText, 15, yPosition);
+        yPosition += 5;
+      } else {
+        // Handle multi-line if needed
+        const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+        pdf.text(lines, 15, yPosition);
+        yPosition += (lines.length * 5);
       }
+    }
+    
+    // Draw anniversaries
+    if (anniversaries.length > 0) {
+      const anniversaryNames = anniversaries.map(a => a.displayName).join(', ');
+      const anniversaryText = `🎖️ ANNIVERSARIES: ${anniversaryNames}`;
+      
+      // Check if text fits on one line
+      if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+        pdf.text(anniversaryText, 15, yPosition);
+        yPosition += 5;
+      } else {
+        // Handle multi-line if needed
+        const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+        pdf.text(lines, 15, yPosition);
+        yPosition += (lines.length * 5);
+      }
+    }
+    
+    // Reset text color
+    pdf.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    yPosition += 4;
+  }
+} else {
+  console.log("Special occasions section is disabled in layout settings");
+}
 
       // Save the PDF
       const dateStr = format(selectedDate, "yyyy-MM-dd");

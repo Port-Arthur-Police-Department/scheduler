@@ -8,6 +8,7 @@ export interface LayoutSettings {
     showPTO: boolean;
     showStaffingSummary: boolean;
     showLogoSection: boolean;
+    showSpecialOccasions: booolean,
   };
   fontSizes: {
     header: number;

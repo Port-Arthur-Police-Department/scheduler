@@ -602,8 +602,6 @@ export const DailyScheduleView = ({
                 </div>
               </div>
 
- // In DailyScheduleView.tsx, modify the OfficerSection components to include showSpecialOccasions:
-
 {/* Supervisor Section */}
 <OfficerSection
   title="Supervisors"

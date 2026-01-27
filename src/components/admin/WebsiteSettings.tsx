@@ -22,6 +22,7 @@ import { PDFLayoutSettings } from "./settings/PDFLayoutSettings";
 import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
+import { EventsDashboardSettings } from "./settings/EventsDashboardSettings";
 
 // Constants - UPDATED WITH YOUR CURRENT SETTINGS FROM SUPABASE
 export const DEFAULT_COLORS = {
@@ -653,26 +654,29 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 h-auto">
-          <TabsTrigger value="notifications" className="py-2">
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger value="pdf" className="py-2">
-            PDF Layout
-          </TabsTrigger>
-          <TabsTrigger value="pto" className="py-2">
-            PTO Settings
-          </TabsTrigger>
-          <TabsTrigger value="colors" className="py-2">
-            Colors
-          </TabsTrigger>
-          <TabsTrigger value="alerts" className="py-2">
-            Alerts
-          </TabsTrigger>
-          <TabsTrigger value="system" className="py-2">
-            System
-          </TabsTrigger>
-        </TabsList>
+<TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 h-auto">
+  <TabsTrigger value="notifications" className="py-2">
+    Notifications
+  </TabsTrigger>
+  <TabsTrigger value="pdf" className="py-2">
+    PDF Layout
+  </TabsTrigger>
+  <TabsTrigger value="pto" className="py-2">
+    PTO Settings
+  </TabsTrigger>
+  <TabsTrigger value="events" className="py-2"> {/* NEW TAB */}
+    Events Dashboard
+  </TabsTrigger>
+  <TabsTrigger value="colors" className="py-2">
+    Colors
+  </TabsTrigger>
+  <TabsTrigger value="alerts" className="py-2">
+    Alerts
+  </TabsTrigger>
+  <TabsTrigger value="system" className="py-2">
+    System
+  </TabsTrigger>
+</TabsList>
 
         {/* NOTIFICATIONS TAB */}
         <TabsContent value="notifications" className="space-y-6 mt-6">
@@ -724,6 +728,15 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           <PTOVisibilitySettings 
             ptoVisibility={ptoVisibility}
             handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+            isPending={updateSettingsMutation.isPending}
+          />
+        </TabsContent>
+
+                {/* EVENTS DASHBOARD TAB */}
+        <TabsContent value="events" className="space-y-6 mt-6">
+          <EventsDashboardSettings 
+            settings={settings}
+            handleToggle={handleToggle}
             isPending={updateSettingsMutation.isPending}
           />
         </TabsContent>

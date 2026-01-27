@@ -103,7 +103,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/_/],
         cleanupOutdatedCaches: true,
         
-        // ADD THIS LINE TO FIX THE BUILD ERROR
+        // ADD ONLY THIS LINE - NOTHING ELSE
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         
         runtimeCaching: [

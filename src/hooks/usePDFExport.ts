@@ -1162,8 +1162,10 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
       }
     }
     
-    // Reset text color
-    pdf.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    // Reset text color - FIX: Use primary color instead of undefined darkColor
+    const primaryColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');
+    const primaryColor = parseColor(primaryColorStr);
+    pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     yPosition += 4;
   }
 } else {

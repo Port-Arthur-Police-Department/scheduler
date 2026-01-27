@@ -143,6 +143,9 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
               </div>
             </div>
 
+// In scheduler/src/components/admin/settings/EventsDashboardSettings.tsx
+// Update the radio button handlers around line 120-150:
+
             {/* Month Scope */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="font-medium flex items-center gap-2">
@@ -153,15 +156,15 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 Choose what time period to show events for
               </p>
               
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-4">
                 <div className="flex items-center space-x-2">
                   <input
                     type="radio"
                     id="scope_current"
-                    name="month_scope"
+                    name="events_dashboard_month_scope"
                     value="current"
                     checked={settings?.events_dashboard_month_scope === 'current'}
-                    onChange={(e) => handleToggle("events_dashboard_month_scope", e.target.value)}
+                    onChange={() => handleToggle("events_dashboard_month_scope", "current")}
                     disabled={isPending}
                     className="h-4 w-4"
                   />
@@ -174,16 +177,19 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                   <input
                     type="radio"
                     id="scope_upcoming"
-                    name="month_scope"
+                    name="events_dashboard_month_scope"
                     value="upcoming"
                     checked={settings?.events_dashboard_month_scope === 'upcoming'}
-                    onChange={(e) => handleToggle("events_dashboard_month_scope", e.target.value)}
+                    onChange={() => handleToggle("events_dashboard_month_scope", "upcoming")}
                     disabled={isPending}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="scope_upcoming" className="text-sm">
                     Upcoming 30 Days
                   </Label>
+                </div>
+              </div>
+            </div>
                 </div>
               </div>
             </div>

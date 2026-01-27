@@ -1108,6 +1108,7 @@ export const usePDFExport = () => {
 // Only show if enabled in layout settings
 if (safeLayoutSettings.sections.showSpecialOccasions) {
   const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
+  
   if (specialOccasions.length > 0) {
     // Separate birthdays and anniversaries
     const birthdays = specialOccasions.filter(occ => occ.type === 'birthday');
@@ -1162,16 +1163,18 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
       }
     }
     
-    // Reset text color - FIX: Use primary color instead of undefined darkColor
+    // Reset text color
     const primaryColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');
     const primaryColor = parseColor(primaryColorStr);
     pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     yPosition += 4;
   }
+  
+  // Log the success with special occasions count
+  console.log(`✅ PDF exported successfully with ${specialOccasions.length} special occasions`);
 } else {
   console.log("Special occasions section is disabled in layout settings");
 }
-
       // Save the PDF
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const dayOfWeek = format(selectedDate, "EEEE").toUpperCase();

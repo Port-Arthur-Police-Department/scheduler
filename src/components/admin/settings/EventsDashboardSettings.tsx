@@ -1,14 +1,14 @@
-// File: components/admin/settings/EventsDashboardSettings.tsx
+// File: scheduler/src/components/admin/settings/EventsDashboardSettings.tsx
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Cake, Award, Users, Eye, EyeOff } from "lucide-react";
+import { Calendar, Cake, Award, Eye } from "lucide-react";
 
 interface EventsDashboardSettingsProps {
   settings: any;
-  handleToggle: (key: string, value: boolean) => void;
+  handleToggle: (key: string, value: any) => void; // Updated to accept any value
   isPending: boolean;
 }
 
@@ -17,6 +17,21 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
   handleToggle,
   isPending
 }) => {
+  // Handle radio button changes
+  const handleRadioChange = (key: string, value: string) => {
+    handleToggle(key, value);
+  };
+
+  // Handle checkbox changes - ensure boolean values
+  const handleCheckboxChange = (key: string, checked: boolean) => {
+    handleToggle(key, checked);
+  };
+
+  // Handle switch changes
+  const handleSwitchChange = (key: string, checked: boolean) => {
+    handleToggle(key, checked);
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -43,13 +58,13 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
           <Switch
             id="enable_events_dashboard"
             checked={settings?.enable_events_dashboard || false}
-            onCheckedChange={(checked) => handleToggle("enable_events_dashboard", checked)}
+            onCheckedChange={(checked) => handleSwitchChange("enable_events_dashboard", checked)}
             disabled={isPending}
           />
         </div>
 
         {/* Only show role settings if module is enabled */}
-        {settings?.enable_events_dashboard && (
+        {(settings?.enable_events_dashboard || false) && (
           <>
             {/* Role Visibility */}
             <div className="space-y-3 pt-4 border-t">
@@ -65,8 +80,8 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="visible_admins"
-                    checked={settings?.events_dashboard_visible_to_admins || true}
-                    onCheckedChange={(checked) => handleToggle("events_dashboard_visible_to_admins", checked as boolean)}
+                    checked={settings?.events_dashboard_visible_to_admins !== false}
+                    onCheckedChange={(checked) => handleCheckboxChange("events_dashboard_visible_to_admins", checked as boolean)}
                     disabled={isPending}
                   />
                   <Label htmlFor="visible_admins" className="text-sm">
@@ -77,8 +92,8 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="visible_supervisors"
-                    checked={settings?.events_dashboard_visible_to_supervisors || true}
-                    onCheckedChange={(checked) => handleToggle("events_dashboard_visible_to_supervisors", checked as boolean)}
+                    checked={settings?.events_dashboard_visible_to_supervisors !== false}
+                    onCheckedChange={(checked) => handleCheckboxChange("events_dashboard_visible_to_supervisors", checked as boolean)}
                     disabled={isPending}
                   />
                   <Label htmlFor="visible_supervisors" className="text-sm">
@@ -89,8 +104,8 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="visible_officers"
-                    checked={settings?.events_dashboard_visible_to_officers || true}
-                    onCheckedChange={(checked) => handleToggle("events_dashboard_visible_to_officers", checked as boolean)}
+                    checked={settings?.events_dashboard_visible_to_officers !== false}
+                    onCheckedChange={(checked) => handleCheckboxChange("events_dashboard_visible_to_officers", checked as boolean)}
                     disabled={isPending}
                   />
                   <Label htmlFor="visible_officers" className="text-sm">
@@ -114,14 +129,14 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Cake className="h-4 w-4" />
-                    <Label htmlFor="show_birthdays" className="text-sm">
+                    <Label htmlFor="events_dashboard_show_birthdays" className="text-sm">
                       Birthdays
                     </Label>
                   </div>
                   <Switch
-                    id="show_birthdays"
-                    checked={settings?.events_dashboard_show_birthdays || true}
-                    onCheckedChange={(checked) => handleToggle("events_dashboard_show_birthdays", checked)}
+                    id="events_dashboard_show_birthdays"
+                    checked={settings?.events_dashboard_show_birthdays !== false}
+                    onCheckedChange={(checked) => handleSwitchChange("events_dashboard_show_birthdays", checked)}
                     disabled={isPending}
                   />
                 </div>
@@ -129,22 +144,19 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Award className="h-4 w-4" />
-                    <Label htmlFor="show_anniversaries" className="text-sm">
+                    <Label htmlFor="events_dashboard_show_anniversaries" className="text-sm">
                       Hire Date Anniversaries
                     </Label>
                   </div>
                   <Switch
-                    id="show_anniversaries"
-                    checked={settings?.events_dashboard_show_anniversaries || true}
-                    onCheckedChange={(checked) => handleToggle("events_dashboard_show_anniversaries", checked)}
+                    id="events_dashboard_show_anniversaries"
+                    checked={settings?.events_dashboard_show_anniversaries !== false}
+                    onCheckedChange={(checked) => handleSwitchChange("events_dashboard_show_anniversaries", checked)}
                     disabled={isPending}
                   />
                 </div>
               </div>
             </div>
-
-// In scheduler/src/components/admin/settings/EventsDashboardSettings.tsx
-// Update the radio button handlers around line 120-150:
 
             {/* Month Scope */}
             <div className="space-y-3 pt-4 border-t">
@@ -164,7 +176,7 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                     name="events_dashboard_month_scope"
                     value="current"
                     checked={settings?.events_dashboard_month_scope === 'current'}
-                    onChange={() => handleToggle("events_dashboard_month_scope", "current")}
+                    onChange={() => handleRadioChange("events_dashboard_month_scope", "current")}
                     disabled={isPending}
                     className="h-4 w-4"
                   />
@@ -180,7 +192,7 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                     name="events_dashboard_month_scope"
                     value="upcoming"
                     checked={settings?.events_dashboard_month_scope === 'upcoming'}
-                    onChange={() => handleToggle("events_dashboard_month_scope", "upcoming")}
+                    onChange={() => handleRadioChange("events_dashboard_month_scope", "upcoming")}
                     disabled={isPending}
                     className="h-4 w-4"
                   />
@@ -190,7 +202,16 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                 </div>
               </div>
             </div>
-                </div>
+
+            {/* Test Data Info */}
+            <div className="pt-4 border-t">
+              <div className="space-y-1 text-sm">
+                <p className="text-muted-foreground">Data Requirements:</p>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                  <li>Birthdays require <code className="text-xs bg-muted px-1 py-0.5 rounded">birthday</code> field in profiles</li>
+                  <li>Anniversaries require <code className="text-xs bg-muted px-1 py-0.5 rounded">hire_date</code> field in profiles</li>
+                  <li>Only active officers are shown</li>
+                </ul>
               </div>
             </div>
           </>

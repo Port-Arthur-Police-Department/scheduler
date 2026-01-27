@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { DEFAULT_LAYOUT_SETTINGS, LayoutSettings } from "@/constants/pdfLayoutSettings";
+import { parseISO } from "date-fns";
 
 // Layout Settings Interface
 interface LayoutSettings {
@@ -135,6 +136,109 @@ const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['co
     return DEFAULT_LAYOUT_SETTINGS.colorSettings[key] || "44,62,80";
   }
   return color;
+};
+
+// Add these helper functions inside your usePDFExport hook or in a utility file
+const hasBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
+  if (!birthday) return false;
+  
+  try {
+    const birthDate = parseISO(birthday);
+    const today = date;
+    
+    // Compare month and day only
+    return birthDate.getMonth() === today.getMonth() && 
+           birthDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing birthday:", birthday, error);
+    return false;
+  }
+};
+
+const hasAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
+  if (!hireDate) return false;
+  
+  try {
+    const anniversaryDate = parseISO(hireDate);
+    const today = date;
+    
+    // Compare month and day only
+    return anniversaryDate.getMonth() === today.getMonth() && 
+           anniversaryDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing hire date:", hireDate, error);
+    return false;
+  }
+};
+
+const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+  if (!hireDate) return 0;
+  
+  try {
+    const hireDateObj = parseISO(hireDate);
+    const today = date;
+    
+    let years = today.getFullYear() - hireDateObj.getFullYear();
+    
+    // Adjust if anniversary hasn't occurred yet this year
+    if (today.getMonth() < hireDateObj.getMonth() || 
+        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+      years--;
+    }
+    
+    return Math.max(0, years);
+  } catch (error) {
+    console.error("Error calculating years of service:", hireDate, error);
+    return 0;
+  }
+};
+
+// Function to collect special occasions from shift data
+const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
+  const specialOccasions = [];
+  
+  // Helper function to add occasion
+  const addIfSpecialOccasion = (person: any) => {
+    if (!person || !person.name) return;
+    
+    // Check birthday
+    if (person.birthday && hasBirthdayToday(person.birthday, selectedDate)) {
+      specialOccasions.push({
+        name: person.name,
+        type: 'birthday' as const,
+        icon: '🎂',
+        text: 'Birthday',
+        displayName: extractLastName(person.name) // Use last name for display
+      });
+    }
+    
+    // Check anniversary
+    if (person.hire_date && hasAnniversaryToday(person.hire_date, selectedDate)) {
+      const years = calculateYearsOfService(person.hire_date, selectedDate);
+      specialOccasions.push({
+        name: person.name,
+        type: 'anniversary' as const,
+        icon: '🎖️',
+        text: `Year ${years} Anniversary`,
+        displayName: extractLastName(person.name) // Use last name for display
+      });
+    }
+  };
+  
+  // Check all officer categories
+  if (shiftData.supervisors) {
+    shiftData.supervisors.forEach((supervisor: any) => addIfSpecialOccasion(supervisor));
+  }
+  
+  if (shiftData.officers) {
+    shiftData.officers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  if (shiftData.specialAssignmentOfficers) {
+    shiftData.specialAssignmentOfficers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  return specialOccasions;
 };
 
 // Helper to extract just the number from positions like "District 1", "Beat 2", "District 1/2"

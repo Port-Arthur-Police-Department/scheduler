@@ -1062,10 +1062,16 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
         {title}
       </h4>
       {ptoRecords.map((ptoRecord) => {
-        // Calculate birthday/anniversary status for PTO records too
-        const isBirthday = showSpecialOccasions && isBirthdayToday(ptoRecord.birthday, new Date());
-        const isAnniversary = showSpecialOccasions && isAnniversaryToday(ptoRecord.hire_date, new Date());
-        const yearsOfService = showSpecialOccasions ? calculateYearsOfService(ptoRecord.hire_date, new Date()) : 0;
+        // RECALCULATE for PTO records too
+        const isBirthday = showSpecialOccasions && ptoRecord.birthday 
+          ? isBirthdayToday(ptoRecord.birthday, new Date())
+          : false;
+        const isAnniversary = showSpecialOccasions && ptoRecord.hire_date 
+          ? isAnniversaryToday(ptoRecord.hire_date, new Date())
+          : false;
+        const yearsOfService = showSpecialOccasions && ptoRecord.hire_date 
+          ? calculateYearsOfService(ptoRecord.hire_date, new Date())
+          : 0;
 
         return (
           <div 
@@ -1081,7 +1087,7 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
                 <div className="flex items-center gap-2 mb-1">
                   <p className="font-medium">{ptoRecord.name}</p>
                   
-                  {/* ADD INDICATORS FOR PTO RECORDS TOO */}
+                  {/* Use recalculated values */}
                   {showSpecialOccasions && (
                     <>
                       {isBirthday && (

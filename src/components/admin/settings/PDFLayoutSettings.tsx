@@ -79,6 +79,7 @@ export const PDFLayoutSettings = ({
         showPTO: true,
         showStaffingSummary: true,
         showLogoSection: true,
+        showSpecialOccasions: true,
         ...defaultSettings.sections
       },
       tableSettings: {

@@ -27,6 +27,8 @@ export const useWebsiteSettings = () => {
               enable_anniversary_alerts: false,
               enable_birthday_alerts: false,
               anniversary_alert_recipients: ["admin", "supervisor"],
+              enable_events_dashboard: false,
+              show_special_occasions_in_schedule: true, // Default to true
             };
           }
           throw error;
@@ -59,6 +61,14 @@ export const useWebsiteSettings = () => {
           };
         }
         
+        // Ensure new fields have defaults if not present
+        if (data.show_special_occasions_in_schedule === undefined) {
+          data.show_special_occasions_in_schedule = true;
+        }
+        if (data.enable_events_dashboard === undefined) {
+          data.enable_events_dashboard = false;
+        }
+        
         return data;
       } catch (error) {
         console.error('Error in useWebsiteSettings:', error);
@@ -73,6 +83,8 @@ export const useWebsiteSettings = () => {
           enable_anniversary_alerts: false,
           enable_birthday_alerts: false,
           anniversary_alert_recipients: ["admin", "supervisor"],
+          enable_events_dashboard: false,
+          show_special_occasions_in_schedule: true, // Default to true
         };
       }
     }

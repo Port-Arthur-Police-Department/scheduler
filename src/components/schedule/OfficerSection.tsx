@@ -22,7 +22,8 @@ interface OfficerSectionProps {
   onPartnershipChange?: (officer: any, partnerOfficerId?: string) => void;
   isUpdating?: boolean;
   sectionType?: "regular" | "special" | "pto";
-  colorSettings?: any; // Add this
+  colorSettings?: any;
+  showSpecialOccasions?: boolean;
 }
 
 export const OfficerSection = ({
@@ -43,7 +44,8 @@ export const OfficerSection = ({
   onPartnershipChange,
   isUpdating = false,
   sectionType = "regular",
-  colorSettings
+  colorSettings,
+  showSpecialOccasions = true
 }: OfficerSectionProps) => {
   const isPTOSection = sectionType === "pto";
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
@@ -195,6 +197,7 @@ const getSectionStyle = () => {
                 isUpdating={isUpdating}
                 sectionType={sectionType}
                 backgroundColor={backgroundColor}
+                showSpecialOccasions={showSpecialOccasions}
               />
             ))
             .filter(Boolean)}

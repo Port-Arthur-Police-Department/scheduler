@@ -103,9 +103,6 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/_/],
         cleanupOutdatedCaches: true,
         
-        // FIX: Add this to increase cache size limit
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
-        
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -146,35 +143,9 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
-    
-    // FIX: chunkSizeWarningLimit goes here, not in rollupOptions
-    chunkSizeWarningLimit: 1000,
-    
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
-      },
-      // FIX: Correct manual chunks syntax
-      output: {
-        manualChunks(id) {
-          // Split large dependencies into separate chunks
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('@mui')) {
-              return 'vendor-mui';
-            }
-            if (id.includes('jspdf') || id.includes('html2canvas')) {
-              return 'vendor-pdf';
-            }
-            if (id.includes('date-fns') || id.includes('lodash') || id.includes('axios')) {
-              return 'vendor-utils';
-            }
-            // Group all other node_modules into vendor chunk
-            return 'vendor';
-          }
-        }
       }
     }
   },

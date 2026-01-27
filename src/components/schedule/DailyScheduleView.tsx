@@ -27,6 +27,7 @@ import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
+import { parseISO } from "date-fns";
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -779,7 +780,62 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
     },
   });
 
-  const predefinedPositions = PREDEFINED_POSITIONS;
+  // Add these helper functions near the top of DailyScheduleView.tsx (after imports)
+import { parseISO } from "date-fns";
+
+const hasBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
+  if (!birthday) return false;
+  
+  try {
+    const birthDate = parseISO(birthday);
+    const today = date;
+    
+    // Compare month and day only
+    return birthDate.getMonth() === today.getMonth() && 
+           birthDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing birthday:", birthday, error);
+    return false;
+  }
+};
+
+const hasAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
+  if (!hireDate) return false;
+  
+  try {
+    const anniversaryDate = parseISO(hireDate);
+    const today = date;
+    
+    // Compare month and day only
+    return anniversaryDate.getMonth() === today.getMonth() && 
+           anniversaryDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing hire date:", hireDate, error);
+    return false;
+  }
+};
+
+const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+  if (!hireDate) return 0;
+  
+  try {
+    const hireDateObj = parseISO(hireDate);
+    const today = date;
+    
+    let years = today.getFullYear() - hireDateObj.getFullYear();
+    
+    // Adjust if anniversary hasn't occurred yet this year
+    if (today.getMonth() < hireDateObj.getMonth() || 
+        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+      years--;
+    }
+    
+    return Math.max(0, years);
+  } catch (error) {
+    console.error("Error calculating years of service:", hireDate, error);
+    return 0;
+  }
+};
 
   // Helper function to check if a shift crosses midnight
   const doesShiftCrossMidnight = (startTime: string, endTime: string): boolean => {
@@ -1331,65 +1387,95 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
           customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
         }
 
-        const finalData = workingException ? {
-          scheduleId: workingException.id,
-          officerId: r.officer_id,
-          name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
-          badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
-          rank: officerRank,
-          isPPO: isProbationary,
-          position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
-          unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
-          notes: workingException.notes,
-          type: "recurring" as const,
-          originalScheduleId: r.id,
-          customTime: customTime,
-          hasPTO: !!ptoException,
-          ptoData: ptoException ? {
-            id: ptoException.id,
-            ptoType: ptoException.reason,
-            startTime: ptoException.custom_start_time || shift.start_time,
-            endTime: ptoException.custom_end_time || shift.end_time,
-            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-          } : undefined,
-          isPartnership: workingException.is_partnership || r.is_partnership,
-          partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
-          partnershipSuspended: workingException.partnership_suspended || false,
-          shift: shift,
-          isExtraShift: false,
-          // Add for emergency partner functionality
-          date: dateStr,
-          dayOfWeek: dayOfWeek
-        } : {
-          scheduleId: r.id,
-          officerId: r.officer_id,
-          name: r.profiles?.full_name || "Unknown",
-          badge: r.profiles?.badge_number,
-          rank: officerRank,
-          isPPO: isProbationary,
-          position: r.position_name || defaultAssignment?.position_name,
-          unitNumber: r.unit_number || defaultAssignment?.unit_number,
-          notes: null,
-          type: "recurring" as const,
-          originalScheduleId: r.id,
-          customTime: customTime,
-          hasPTO: !!ptoException,
-          ptoData: ptoException ? {
-            id: ptoException.id,
-            ptoType: ptoException.reason,
-            startTime: ptoException.custom_start_time || shift.start_time,
-            endTime: ptoException.custom_end_time || shift.end_time,
-            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-          } : undefined,
-          isPartnership: r.is_partnership,
-          partnerOfficerId: r.partner_officer_id,
-          partnershipSuspended: r.partnership_suspended || false,
-          shift: shift,
-          isExtraShift: false,
-          // Add for emergency partner functionality
-          date: dateStr,
-          dayOfWeek: dayOfWeek
-        };
+const finalData = workingException ? {
+  scheduleId: workingException.id,
+  officerId: r.officer_id,
+  name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
+  badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
+  rank: officerRank,
+  isPPO: isProbationary,
+  position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
+  unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
+  notes: workingException.notes,
+  type: "recurring" as const,
+  originalScheduleId: r.id,
+  customTime: customTime,
+  hasPTO: !!ptoException,
+  ptoData: ptoException ? {
+    id: ptoException.id,
+    ptoType: ptoException.reason,
+    startTime: ptoException.custom_start_time || shift.start_time,
+    endTime: ptoException.custom_end_time || shift.end_time,
+    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+  } : undefined,
+  isPartnership: workingException.is_partnership || r.is_partnership,
+  partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
+  partnershipSuspended: workingException.partnership_suspended || false,
+  shift: shift,
+  isExtraShift: false,
+  // Add for emergency partner functionality
+  date: dateStr,
+  dayOfWeek: dayOfWeek,
+  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE:
+  birthday: workingException.profiles?.birthday || r.profiles?.birthday,
+  hire_date: workingException.profiles?.hire_date || r.profiles?.hire_date,
+  isBirthdayToday: workingException.profiles?.birthday 
+    ? isBirthdayToday(workingException.profiles.birthday, selectedDate)
+    : r.profiles?.birthday 
+      ? isBirthdayToday(r.profiles.birthday, selectedDate)
+      : false,
+  isAnniversaryToday: workingException.profiles?.hire_date 
+    ? isAnniversaryToday(workingException.profiles.hire_date, selectedDate)
+    : r.profiles?.hire_date 
+      ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
+      : false,
+  yearsOfService: workingException.profiles?.hire_date 
+    ? calculateYearsOfService(workingException.profiles.hire_date, selectedDate)
+    : r.profiles?.hire_date 
+      ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
+      : 0
+} : {
+  scheduleId: r.id,
+  officerId: r.officer_id,
+  name: r.profiles?.full_name || "Unknown",
+  badge: r.profiles?.badge_number,
+  rank: officerRank,
+  isPPO: isProbationary,
+  position: r.position_name || defaultAssignment?.position_name,
+  unitNumber: r.unit_number || defaultAssignment?.unit_number,
+  notes: null,
+  type: "recurring" as const,
+  originalScheduleId: r.id,
+  customTime: customTime,
+  hasPTO: !!ptoException,
+  ptoData: ptoException ? {
+    id: ptoException.id,
+    ptoType: ptoException.reason,
+    startTime: ptoException.custom_start_time || shift.start_time,
+    endTime: ptoException.custom_end_time || shift.end_time,
+    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+  } : undefined,
+  isPartnership: r.is_partnership,
+  partnerOfficerId: r.partner_officer_id,
+  partnershipSuspended: r.partnership_suspended || false,
+  shift: shift,
+  isExtraShift: false,
+  // Add for emergency partner functionality
+  date: dateStr,
+  dayOfWeek: dayOfWeek,
+  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE FOR NON-EXCEPTION OFFICERS:
+  birthday: r.profiles?.birthday,
+  hire_date: r.profiles?.hire_date,
+  isBirthdayToday: r.profiles?.birthday 
+    ? isBirthdayToday(r.profiles.birthday, selectedDate)
+    : false,
+  isAnniversaryToday: r.profiles?.hire_date 
+    ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
+    : false,
+  yearsOfService: r.profiles?.hire_date 
+    ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
+    : 0
+};
 
         allOfficersMap.set(officerKey, finalData);
       });
@@ -1440,41 +1526,53 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
           customTime = `${e.custom_start_time} - ${e.custom_end_time}`;
         }
 
-        const officerData = {
-          scheduleId: e.id,
-          officerId: e.officer_id,
-          name: e.profiles?.full_name || "Unknown",
-          badge: e.profiles?.badge_number,
-          rank: officerRank,
-          isPPO: isProbationary,
-          position: e.position_name || defaultAssignment?.position_name,
-          unitNumber: e.unit_number || defaultAssignment?.unit_number,
-          notes: e.notes,
-          type: isRegularRecurring ? "recurring" : "exception" as const,
-          originalScheduleId: null,
-          customTime: customTime,
-          hasPTO: !!ptoException,
-          ptoData: ptoException ? {
-            id: ptoException.id,
-            ptoType: ptoException.reason,
-            startTime: ptoException.custom_start_time || shift.start_time,
-            endTime: ptoException.custom_end_time || shift.end_time,
-            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-          } : undefined,
-          isPartnership: e.is_partnership,
-          partnerOfficerId: e.partner_officer_id,
-          partnershipSuspended: e.partnership_suspended || false,
-          shift: shift,
-          isExtraShift: !isRegularRecurring,
-          // Add for emergency partner functionality
-          date: dateStr,
-          dayOfWeek: dayOfWeek,
-          // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
-          custom_start_time: e.custom_start_time,
-          custom_end_time: e.custom_end_time,
-          hours_worked: e.hours_worked,
-          is_partial_shift: e.is_partial_shift,
-        };
+   const officerData = {
+  scheduleId: e.id,
+  officerId: e.officer_id,
+  name: e.profiles?.full_name || "Unknown",
+  badge: e.profiles?.badge_number,
+  rank: officerRank,
+  isPPO: isProbationary,
+  position: e.position_name || defaultAssignment?.position_name,
+  unitNumber: e.unit_number || defaultAssignment?.unit_number,
+  notes: e.notes,
+  type: isRegularRecurring ? "recurring" : "exception" as const,
+  originalScheduleId: null,
+  customTime: customTime,
+  hasPTO: !!ptoException,
+  ptoData: ptoException ? {
+    id: ptoException.id,
+    ptoType: ptoException.reason,
+    startTime: ptoException.custom_start_time || shift.start_time,
+    endTime: ptoException.custom_end_time || shift.end_time,
+    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+  } : undefined,
+  isPartnership: e.is_partnership,
+  partnerOfficerId: e.partner_officer_id,
+  partnershipSuspended: e.partnership_suspended || false,
+  shift: shift,
+  isExtraShift: !isRegularRecurring,
+  // Add for emergency partner functionality
+  date: dateStr,
+  dayOfWeek: dayOfWeek,
+  // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
+  custom_start_time: e.custom_start_time,
+  custom_end_time: e.custom_end_time,
+  hours_worked: e.hours_worked,
+  is_partial_shift: e.is_partial_shift,
+  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE:
+  birthday: e.profiles?.birthday,
+  hire_date: e.profiles?.hire_date,
+  isBirthdayToday: e.profiles?.birthday 
+    ? isBirthdayToday(e.profiles.birthday, selectedDate)
+    : false,
+  isAnniversaryToday: e.profiles?.hire_date 
+    ? isAnniversaryToday(e.profiles.hire_date, selectedDate)
+    : false,
+  yearsOfService: e.profiles?.hire_date 
+    ? calculateYearsOfService(e.profiles.hire_date, selectedDate)
+    : 0
+};
 
         allOfficersMap.set(officerKey, officerData);
       });
@@ -1619,23 +1717,35 @@ for (const officer of allOfficers) {
   }
 }
 
-    // FIRST: Get all officers with full day PTO for the PTO section
-    const shiftPTORecords = ptoExceptions?.filter(e => 
-      e.shift_type_id === shift.id
-    ).map(e => ({
-      id: e.id,
-      officerId: e.officer_id,
-      name: e.profiles?.full_name || "Unknown",
-      badge: e.profiles?.badge_number,
-      rank: e.profiles?.rank,
-      ptoType: e.reason || "PTO",
-      startTime: e.custom_start_time || shift.start_time,
-      endTime: e.custom_end_time || shift.end_time,
-      isFullShift: !e.custom_start_time && !e.custom_end_time,
-      shiftTypeId: shift.id,
-      unitNumber: e.unit_number,
-      notes: e.notes
-    })) || [];
+// FIRST: Get all officers with full day PTO for the PTO section
+const shiftPTORecords = ptoExceptions?.filter(e => 
+  e.shift_type_id === shift.id
+).map(e => ({
+  id: e.id,
+  officerId: e.officer_id,
+  name: e.profiles?.full_name || "Unknown",
+  badge: e.profiles?.badge_number,
+  rank: e.profiles?.rank,
+  ptoType: e.reason || "PTO",
+  startTime: e.custom_start_time || shift.start_time,
+  endTime: e.custom_end_time || shift.end_time,
+  isFullShift: !e.custom_start_time && !e.custom_end_time,
+  shiftTypeId: shift.id,
+  unitNumber: e.unit_number,
+  notes: e.notes,
+  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS FOR PTO RECORDS TOO:
+  birthday: e.profiles?.birthday,
+  hire_date: e.profiles?.hire_date,
+  isBirthdayToday: e.profiles?.birthday 
+    ? isBirthdayToday(e.profiles.birthday, selectedDate)
+    : false,
+  isAnniversaryToday: e.profiles?.hire_date 
+    ? isAnniversaryToday(e.profiles.hire_date, selectedDate)
+    : false,
+  yearsOfService: e.profiles?.hire_date 
+    ? calculateYearsOfService(e.profiles.hire_date, selectedDate)
+    : 0
+})) || [];
 
 // Function to check if officer is in a partnership
 const isInPartnership = (officer: any) => {

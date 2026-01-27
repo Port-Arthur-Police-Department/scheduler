@@ -91,7 +91,7 @@ export const DEFAULT_PTO_VISIBILITY = {
 export const DEFAULT_NOTIFICATION_SETTINGS = {
   enable_notifications: false,
   enable_mass_alert_sending: true,
-  show_staffing_overview: true,
+  show_staffing_overview: false,
   enable_vacancy_alerts: true,
   enable_pto_request_notifications: true,
   enable_pto_status_notifications: true,
@@ -100,7 +100,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   show_vacancy_alert_buttons: true,
   show_pto_balances: false,
   pto_balances_visible: false,
-  show_pto_tab: true,
+  show_pto_tab: false,
   enable_anniversary_alerts: false,
   enable_birthday_alerts: false,
   anniversary_alert_recipients: ["admin", "supervisor"],

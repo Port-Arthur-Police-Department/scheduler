@@ -103,14 +103,8 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/_/],
         cleanupOutdatedCaches: true,
         
-        // ADD THIS TO FIX THE ERROR
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB (default is 2 MB)
-        
-        // OPTIONAL: Exclude large files from precaching
-        globIgnores: [
-          '**/assets/main-*.js', // Exclude the large main bundle
-          '**/assets/*-*.js.map' // Exclude source maps
-        ],
+        // FIX: Add this to increase cache size limit
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         
         runtimeCaching: [
           {
@@ -134,18 +128,6 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
-          },
-          // ADD THIS: Cache your main bundle at runtime
-          {
-            urlPattern: /\/scheduler\/assets\/main-.*\.js/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'main-bundle-cache',
-              expiration: {
-                maxEntries: 1,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 1 week
-              }
-            }
           }
         ]
       },
@@ -165,26 +147,36 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     
-    // ADD THESE OPTIONS TO REDUCE BUNDLE SIZE
+    // FIX: chunkSizeWarningLimit goes here, not in rollupOptions
+    chunkSizeWarningLimit: 1000,
+    
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
       },
+      // FIX: Correct manual chunks syntax
       output: {
-        manualChunks: {
+        manualChunks(id) {
           // Split large dependencies into separate chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
-          'vendor-pdf': ['jspdf', 'html2canvas'],
-          'vendor-utils': ['date-fns', 'lodash', 'axios']
-        },
-        // Increase warning limit
-        chunkSizeWarningLimit: 1500
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@mui')) {
+              return 'vendor-mui';
+            }
+            if (id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'vendor-pdf';
+            }
+            if (id.includes('date-fns') || id.includes('lodash') || id.includes('axios')) {
+              return 'vendor-utils';
+            }
+            // Group all other node_modules into vendor chunk
+            return 'vendor';
+          }
+        }
       }
-    },
-    
-    // Enable chunk size warnings
-    chunkSizeWarningLimit: 1000
+    }
   },
   
   server: {

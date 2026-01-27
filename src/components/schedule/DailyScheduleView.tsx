@@ -29,6 +29,62 @@ import { isPPOByRank } from "@/utils/ppoUtils";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
 import { parseISO } from "date-fns";
 
+// Add these helper functions RIGHT HERE - after all imports but before any components
+
+const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
+  if (!birthday) return false;
+  
+  try {
+    const birthDate = parseISO(birthday);
+    const today = date;
+    
+    // Compare month and day only
+    return birthDate.getMonth() === today.getMonth() && 
+           birthDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing birthday:", birthday, error);
+    return false;
+  }
+};
+
+const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
+  if (!hireDate) return false;
+  
+  try {
+    const anniversaryDate = parseISO(hireDate);
+    const today = date;
+    
+    // Compare month and day only
+    return anniversaryDate.getMonth() === today.getMonth() && 
+           anniversaryDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing hire date:", hireDate, error);
+    return false;
+  }
+};
+
+const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+  if (!hireDate) return 0;
+  
+  try {
+    const hireDateObj = parseISO(hireDate);
+    const today = date;
+    
+    let years = today.getFullYear() - hireDateObj.getFullYear();
+    
+    // Adjust if anniversary hasn't occurred yet this year
+    if (today.getMonth() < hireDateObj.getMonth() || 
+        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+      years--;
+    }
+    
+    return Math.max(0, years);
+  } catch (error) {
+    console.error("Error calculating years of service:", hireDate, error);
+    return 0;
+  }
+};
+
 interface DailyScheduleViewProps {
   selectedDate: Date;
   filterShiftId?: string;

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Clock, Users, MapPin, FileText, Edit, Trash2, UserPlus, Download, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, isToday, isTomorrow, isYesterday, addDays, subDays, parseISO } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday, addDays, subDays } from "date-fns";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -38,64 +38,6 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 // Add Popover and Calendar imports
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-
-// Add AlertTriangleIcon import
-import { AlertTriangle as AlertTriangleIcon } from "lucide-react";
-
-// Helper functions for birthday/anniversary checks
-const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
-  if (!birthday) return false;
-  
-  try {
-    const birthDate = parseISO(birthday);
-    const today = date;
-    
-    // Compare month and day only
-    return birthDate.getMonth() === today.getMonth() && 
-           birthDate.getDate() === today.getDate();
-  } catch (error) {
-    console.error("Error parsing birthday:", birthday, error);
-    return false;
-  }
-};
-
-const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
-  if (!hireDate) return false;
-  
-  try {
-    const anniversaryDate = parseISO(hireDate);
-    const today = date;
-    
-    // Compare month and day only
-    return anniversaryDate.getMonth() === today.getMonth() && 
-           anniversaryDate.getDate() === today.getDate();
-  } catch (error) {
-    console.error("Error parsing hire date:", hireDate, error);
-    return false;
-  }
-};
-
-const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
-  if (!hireDate) return 0;
-  
-  try {
-    const hireDateObj = parseISO(hireDate);
-    const today = date;
-    
-    let years = today.getFullYear() - hireDateObj.getFullYear();
-    
-    // Adjust if anniversary hasn't occurred yet this year
-    if (today.getMonth() < hireDateObj.getMonth() || 
-        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
-      years--;
-    }
-    
-    return Math.max(0, years);
-  } catch (error) {
-    console.error("Error calculating years of service:", hireDate, error);
-    return 0;
-  }
-};
 
 // In DailyScheduleViewMobile.tsx - Update the props interface
 interface DailyScheduleViewMobileProps {
@@ -130,12 +72,6 @@ export const DailyScheduleViewMobile = ({
   
   // This should now use the LOCAL selectedDate state
   const dateStr = format(selectedDate, "yyyy-MM-dd");
-  
-  // Add website settings hook
-  const { data: websiteSettings } = useWebsiteSettings();
-  
-  // Check if we should show special occasions
-  const showSpecialOccasions = websiteSettings?.show_special_occasions_in_schedule !== false;
   
   // Add useEffect to update selectedShiftId when userCurrentShift changes
   useEffect(() => {
@@ -175,14 +111,14 @@ export const DailyScheduleViewMobile = ({
   });
 
   // Fetch schedule data only for the selected shift
-  const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
-    queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
-    queryFn: () => {
-      if (!selectedShiftId) return Promise.resolve([]);
-      return getScheduleData(selectedDate, selectedShiftId); 
-    },
-    enabled: !!selectedShiftId,
-  });
+const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } = useQuery({
+  queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
+  queryFn: () => {
+    if (!selectedShiftId) return Promise.resolve([]);
+    return getScheduleData(selectedDate, selectedShiftId); 
+  },
+  enabled: !!selectedShiftId,
+});
 
   const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
 
@@ -332,15 +268,15 @@ export const DailyScheduleViewMobile = ({
   };
 
   // Export shift to PDF
-  const handleExportShiftToPDF = async (shiftData: any) => {
-    try {
-      toast.info("Generating PDF...");
-      const result = await exportToPDF({
-        selectedDate: selectedDate, 
-        shiftName: shiftData.shift.name,
-        shiftData: shiftData,
-        layoutSettings: DEFAULT_LAYOUT_SETTINGS
-      });
+const handleExportShiftToPDF = async (shiftData: any) => {
+  try {
+    toast.info("Generating PDF...");
+    const result = await exportToPDF({
+      selectedDate: selectedDate, 
+      shiftName: shiftData.shift.name,
+      shiftData: shiftData,
+      layoutSettings: DEFAULT_LAYOUT_SETTINGS
+    });
 
       if (result.success) {
         toast.success("PDF exported successfully");
@@ -583,7 +519,6 @@ export const DailyScheduleViewMobile = ({
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
                         sectionType="supervisor"
-                        showSpecialOccasions={showSpecialOccasions}
                       />
                     )}
 
@@ -597,7 +532,6 @@ export const DailyScheduleViewMobile = ({
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
                         sectionType="regular"
-                        showSpecialOccasions={showSpecialOccasions}
                       />
                     )}
 
@@ -611,7 +545,6 @@ export const DailyScheduleViewMobile = ({
                         onOfficerAction={handleOfficerAction}
                         canEdit={canEdit}
                         sectionType="special"
-                        showSpecialOccasions={showSpecialOccasions}
                       />
                     )}
 
@@ -621,7 +554,6 @@ export const DailyScheduleViewMobile = ({
                         title="Time Off"
                         ptoRecords={shiftData.ptoRecords}
                         canEdit={canEdit}
-                        showSpecialOccasions={showSpecialOccasions}
                       />
                     )}
                   </div>
@@ -693,7 +625,6 @@ interface OfficerSectionMobileProps {
   onOfficerAction: (officer: any, action: string) => void;
   canEdit: boolean;
   sectionType?: "regular" | "supervisor" | "special" | "pto";
-  showSpecialOccasions?: boolean;
 }
 
 // Define background colors based on section type
@@ -704,8 +635,7 @@ const OfficerSectionMobile = ({
   onToggleOfficer,
   onOfficerAction,
   canEdit,
-  sectionType = "regular",
-  showSpecialOccasions = false
+  sectionType = "regular"
 }: OfficerSectionMobileProps) => {
   // Add this hook to get website settings
   const { data: websiteSettings } = useWebsiteSettings();
@@ -786,31 +716,6 @@ const OfficerSectionMobile = ({
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{officer.name}</p>
-                  
-                  {/* BIRTHDAY AND ANNIVERSARY INDICATORS */}
-                  {showSpecialOccasions && (
-                    <>
-                      {officer.isBirthdayToday && (
-                        <Badge 
-                          variant="outline" 
-                          className="bg-pink-100 text-pink-800 border-pink-300 text-xs"
-                          title="Birthday Today!"
-                        >
-                          🎂
-                        </Badge>
-                      )}
-                      {officer.isAnniversaryToday && (
-                        <Badge 
-                          variant="outline" 
-                          className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
-                          title={`${officer.yearsOfService} Year Anniversary`}
-                        >
-                          🎖️
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                  
                   {isProbationary && (
                     <Badge 
                       variant="outline" 
@@ -910,38 +815,6 @@ const OfficerSectionMobile = ({
                   </div>
                 )}
 
-                {/* Anniversary Details */}
-                {showSpecialOccasions && officer.isAnniversaryToday && officer.yearsOfService > 0 && (
-                  <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
-                    <div className="flex items-center">
-                      <span className="mr-2">🎖️</span>
-                      <div>
-                        <p className="text-sm font-medium text-amber-800">
-                          {officer.yearsOfService} Year{officer.yearsOfService > 1 ? 's' : ''} of Service
-                        </p>
-                        <p className="text-xs text-amber-700">
-                          Hire date: {officer.hire_date ? format(parseISO(officer.hire_date), 'MMM d, yyyy') : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Birthday Details */}
-                {showSpecialOccasions && officer.isBirthdayToday && (
-                  <div className="flex items-center gap-2 p-2 bg-pink-50 rounded border border-pink-200">
-                    <div className="flex items-center">
-                      <span className="mr-2">🎂</span>
-                      <div>
-                        <p className="text-sm font-medium text-pink-800">Birthday Today!</p>
-                        <p className="text-xs text-pink-700">
-                          Born: {officer.birthday ? format(parseISO(officer.birthday), 'MMM d, yyyy') : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Partnership Suspended Notice */}
                 {officer.partnershipSuspended && officer.isPartnership && ( // ADD THIS
                   <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
@@ -1033,10 +906,9 @@ interface PTOSectionMobileProps {
   title: string;
   ptoRecords: any[];
   canEdit: boolean;
-  showSpecialOccasions?: boolean;
 }
 
-const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = false }: PTOSectionMobileProps) => {
+const PTOSectionMobile = ({ title, ptoRecords, canEdit }: PTOSectionMobileProps) => {
   const { data: websiteSettings } = useWebsiteSettings();
   
   const colors = websiteSettings?.color_settings || {};
@@ -1064,33 +936,7 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
         >
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="font-medium">{ptoRecord.name}</p>
-                
-                {/* ADD INDICATORS FOR PTO RECORDS TOO */}
-                {showSpecialOccasions && (
-                  <>
-                    {ptoRecord.isBirthdayToday && (
-                      <Badge 
-                        variant="outline" 
-                        className="bg-pink-100 text-pink-800 border-pink-300 text-xs"
-                        title="Birthday Today!"
-                      >
-                        🎂
-                      </Badge>
-                    )}
-                    {ptoRecord.isAnniversaryToday && (
-                      <Badge 
-                        variant="outline" 
-                        className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
-                        title={`${ptoRecord.yearsOfService} Year Anniversary`}
-                      >
-                        🎖️
-                      </Badge>
-                    )}
-                  </>
-                )}
-              </div>
+              <p className="font-medium">{ptoRecord.name}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="outline" className="text-xs">
                   {ptoRecord.ptoType}
@@ -1110,19 +956,6 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
               )}
               {ptoRecord.notes && (
                 <p className="text-sm mt-1">{ptoRecord.notes}</p>
-              )}
-              
-              {/* Add anniversary/birthday details for PTO records */}
-              {showSpecialOccasions && ptoRecord.isAnniversaryToday && ptoRecord.yearsOfService > 0 && (
-                <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200">
-                  <span className="text-sm font-medium">🎖️ {ptoRecord.yearsOfService} Year{ptoRecord.yearsOfService > 1 ? 's' : ''} Anniversary</span>
-                </div>
-              )}
-              
-              {showSpecialOccasions && ptoRecord.isBirthdayToday && (
-                <div className="mt-2 p-2 bg-pink-50 rounded border border-pink-200">
-                  <span className="text-sm font-medium">🎂 Birthday Today!</span>
-                </div>
               )}
             </div>
             {canEdit && (

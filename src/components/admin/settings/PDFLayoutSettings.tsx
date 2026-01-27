@@ -277,6 +277,18 @@ export const PDFLayoutSettings = ({
               />
               <Label htmlFor="showPTO">PTO Section</Label>
             </div>
+             {/* Add this NEW switch for Special Occasions */}
+    <div className="flex items-center space-x-2">
+      <Switch
+        id="showSpecialOccasions"
+        checked={layoutSettings.sections.showSpecialOccasions || true}
+        onCheckedChange={(checked) => handleSectionToggle('showSpecialOccasions', checked)}
+      />
+      <Label htmlFor="showSpecialOccasions" className="flex items-center gap-1">
+        <span>Special Occasions</span>
+        <span className="text-xs text-muted-foreground">(🎂🎖️)</span>
+      </Label>
+    </div>
             <div className="flex items-center space-x-2">
               <Switch
                 id="showStaffingSummary"

@@ -546,36 +546,39 @@ export const DailyScheduleView = ({
                 </div>
               </div>
 
-              {/* Use OfficerSection components */}
-              <OfficerSection
-                title="Supervisors"
-                officers={shiftData.supervisors}
-                minCount={shiftData.minSupervisors}
-                currentCount={shiftData.currentSupervisors}
-                isUnderstaffed={supervisorsUnderstaffed}
-                canEdit={canEdit}
-                onSavePosition={handleSavePosition}
-                onSaveUnitNumber={handleSaveUnitNumber}
-                onSaveNotes={handleSaveNotes}
-                onAssignPTO={(officer) => {
-                  setSelectedOfficer({
-                    officerId: officer.officerId,
-                    name: officer.name,
-                    scheduleId: officer.scheduleId,
-                    type: officer.type,
-                  });
-                  setSelectedShift(officer.shift);
-                  setPtoDialogOpen(true);
-                }}
-                onRemoveOfficer={removeOfficerMutation.mutate}
-                onPartnershipChange={handlePartnershipChange}
-                onEmergencyPartner={handleEmergencyPartner} // ADD THIS
-                isUpdating={updateScheduleMutation.isPending}
-                sectionType="regular"
-                colorSettings={websiteSettings?.color_settings}
-              />
+ // In DailyScheduleView.tsx, modify the OfficerSection components to include showSpecialOccasions:
 
-             {/* Officer Section */}
+{/* Supervisor Section */}
+<OfficerSection
+  title="Supervisors"
+  officers={shiftData.supervisors}
+  minCount={shiftData.minSupervisors}
+  currentCount={shiftData.currentSupervisors}
+  isUnderstaffed={supervisorsUnderstaffed}
+  canEdit={canEdit}
+  onSavePosition={handleSavePosition}
+  onSaveUnitNumber={handleSaveUnitNumber}
+  onSaveNotes={handleSaveNotes}
+  onAssignPTO={(officer) => {
+    setSelectedOfficer({
+      officerId: officer.officerId,
+      name: officer.name,
+      scheduleId: officer.scheduleId,
+      type: officer.type,
+    });
+    setSelectedShift(officer.shift);
+    setPtoDialogOpen(true);
+  }}
+  onRemoveOfficer={removeOfficerMutation.mutate}
+  onPartnershipChange={handlePartnershipChange}
+  onEmergencyPartner={handleEmergencyPartner}
+  isUpdating={updateScheduleMutation.isPending}
+  sectionType="regular"
+  colorSettings={websiteSettings?.color_settings}
+  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
+/>
+
+{/* Officer Section */}
 <OfficerSection
   title="Officers"
   officers={shiftData.officers}
@@ -602,38 +605,8 @@ export const DailyScheduleView = ({
   isUpdating={updateScheduleMutation.isPending}
   sectionType="regular"
   colorSettings={websiteSettings?.color_settings}
+  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
 />
-
-{/* Suspended Partnerships Section */}
-{shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
-  <OfficerSection
-    title="Partnerships (Suspended)"
-    officers={shiftData.suspendedPartnershipOfficers}
-    minCount={0}
-    currentCount={shiftData.suspendedPartnershipOfficers.length}
-    isUnderstaffed={false}
-    canEdit={canEdit}
-    onSavePosition={handleSavePosition}
-    onSaveUnitNumber={handleSaveUnitNumber}
-    onSaveNotes={handleSaveNotes}
-    onAssignPTO={(officer) => {
-      setSelectedOfficer({
-        officerId: officer.officerId,
-        name: officer.name,
-        scheduleId: officer.scheduleId,
-        type: officer.type,
-      });
-      setSelectedShift(officer.shift);
-      setPtoDialogOpen(true);
-    }}
-    onRemoveOfficer={removeOfficerMutation.mutate}
-    onPartnershipChange={handlePartnershipChange}
-    onEmergencyPartner={handleEmergencyPartner}
-    isUpdating={updateScheduleMutation.isPending}
-    sectionType="suspendedPartnership"
-    colorSettings={websiteSettings?.color_settings}
-  />
-)}
 
 {/* Special Assignment Section */}
 {shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
@@ -663,6 +636,7 @@ export const DailyScheduleView = ({
     isUpdating={updateScheduleMutation.isPending}
     sectionType="special"
     colorSettings={websiteSettings?.color_settings}
+    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
   />
 )}
 
@@ -779,9 +753,6 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
       return profiles;
     },
   });
-
-  // Add these helper functions near the top of DailyScheduleView.tsx (after imports)
-import { parseISO } from "date-fns";
 
 const hasBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
   if (!birthday) return false;

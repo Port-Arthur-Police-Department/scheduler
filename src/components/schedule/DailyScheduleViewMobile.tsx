@@ -707,12 +707,9 @@ const OfficerSectionMobile = ({
   sectionType = "regular",
   showSpecialOccasions = false
 }: OfficerSectionMobileProps) => {
-  // Add this hook to get website settings
   const { data: websiteSettings } = useWebsiteSettings();
   
-  // Define background colors based on section type
   const getSectionStyle = () => {
-    // Get colors from settings or use defaults
     const colors = websiteSettings?.color_settings || {};
     
     switch (sectionType) {
@@ -768,11 +765,17 @@ const OfficerSectionMobile = ({
         const key = `${officer.officerId}-${officer.scheduleId}`;
         const isExpanded = expandedOfficers.has(key);
         const isProbationary = officer.rank === 'Probationary';
-
-        // Calculate birthday/anniversary status for this officer
-        const isBirthday = showSpecialOccasions && isBirthdayToday(officer.birthday, new Date());
-        const isAnniversary = showSpecialOccasions && isAnniversaryToday(officer.hire_date, new Date());
-        const yearsOfService = showSpecialOccasions ? calculateYearsOfService(officer.hire_date, new Date()) : 0;
+        
+        // RECALCULATE birthday/anniversary status - don't rely on officer data
+        const isBirthday = showSpecialOccasions && officer.birthday 
+          ? isBirthdayToday(officer.birthday, new Date())
+          : false;
+        const isAnniversary = showSpecialOccasions && officer.hire_date 
+          ? isAnniversaryToday(officer.hire_date, new Date())
+          : false;
+        const yearsOfService = showSpecialOccasions && officer.hire_date 
+          ? calculateYearsOfService(officer.hire_date, new Date())
+          : 0;
 
         return (
           <div 
@@ -792,7 +795,7 @@ const OfficerSectionMobile = ({
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{officer.name}</p>
                   
-                  {/* BIRTHDAY AND ANNIVERSARY INDICATORS */}
+                  {/* BIRTHDAY AND ANNIVERSARY INDICATORS - USE RECALCULATED VALUES */}
                   {showSpecialOccasions && (
                     <>
                       {isBirthday && (
@@ -915,7 +918,7 @@ const OfficerSectionMobile = ({
                   </div>
                 )}
 
-                {/* Anniversary Details */}
+                    {/* Anniversary Details - USE RECALCULATED VALUES */}
                 {showSpecialOccasions && isAnniversary && yearsOfService > 0 && (
                   <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
                     <div className="flex items-center">
@@ -932,7 +935,7 @@ const OfficerSectionMobile = ({
                   </div>
                 )}
 
-                {/* Birthday Details */}
+                {/* Birthday Details - USE RECALCULATED VALUES */}
                 {showSpecialOccasions && isBirthday && (
                   <div className="flex items-center gap-2 p-2 bg-pink-50 rounded border border-pink-200">
                     <div className="flex items-center">

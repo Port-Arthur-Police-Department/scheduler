@@ -34,16 +34,12 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { OfficerSection } from "./OfficerSection";
 
 // Add Popover and Calendar imports
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
-// Add AlertTriangleIcon import
-import { AlertTriangle as AlertTriangleIcon } from "lucide-react";
-
-// Helper functions for birthday/anniversary checks
+// Helper functions for birthday/anniversary checks - THESE MUST BE AT THE TOP
 const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
   if (!birthday) return false;
   
@@ -708,9 +704,12 @@ const OfficerSectionMobile = ({
   sectionType = "regular",
   showSpecialOccasions = false
 }: OfficerSectionMobileProps) => {
+  // Add this hook to get website settings
   const { data: websiteSettings } = useWebsiteSettings();
   
+  // Define background colors based on section type
   const getSectionStyle = () => {
+    // Get colors from settings or use defaults
     const colors = websiteSettings?.color_settings || {};
     
     switch (sectionType) {
@@ -766,17 +765,11 @@ const OfficerSectionMobile = ({
         const key = `${officer.officerId}-${officer.scheduleId}`;
         const isExpanded = expandedOfficers.has(key);
         const isProbationary = officer.rank === 'Probationary';
-        
-        // RECALCULATE birthday/anniversary status - don't rely on officer data
-        const isBirthday = showSpecialOccasions && officer.birthday 
-          ? isBirthdayToday(officer.birthday, new Date())
-          : false;
-        const isAnniversary = showSpecialOccasions && officer.hire_date 
-          ? isAnniversaryToday(officer.hire_date, new Date())
-          : false;
-        const yearsOfService = showSpecialOccasions && officer.hire_date 
-          ? calculateYearsOfService(officer.hire_date, new Date())
-          : 0;
+
+        // Calculate birthday/anniversary status for this officer using the helper functions
+        const isBirthday = showSpecialOccasions && isBirthdayToday(officer.birthday, new Date());
+        const isAnniversary = showSpecialOccasions && isAnniversaryToday(officer.hire_date, new Date());
+        const yearsOfService = showSpecialOccasions ? calculateYearsOfService(officer.hire_date, new Date()) : 0;
 
         return (
           <div 
@@ -796,7 +789,7 @@ const OfficerSectionMobile = ({
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{officer.name}</p>
                   
-                  {/* BIRTHDAY AND ANNIVERSARY INDICATORS - USE RECALCULATED VALUES */}
+                  {/* BIRTHDAY AND ANNIVERSARY INDICATORS */}
                   {showSpecialOccasions && (
                     <>
                       {isBirthday && (
@@ -828,12 +821,12 @@ const OfficerSectionMobile = ({
                       PPO
                     </Badge>
                   )}
-                  {officer.partnershipSuspended && officer.isPartnership && ( // ADD THIS
+                  {officer.partnershipSuspended && officer.isPartnership && (
                     <Badge 
                       variant="outline" 
                       className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
                     >
-                      <AlertTriangleIcon className="h-3 w-3 mr-1" />
+                      <AlertTriangle className="h-3 w-3 mr-1" />
                     </Badge>
                   )}
                   {officer.isPartnership && !officer.partnershipSuspended && (
@@ -919,7 +912,7 @@ const OfficerSectionMobile = ({
                   </div>
                 )}
 
-                    {/* Anniversary Details - USE RECALCULATED VALUES */}
+                {/* Anniversary Details */}
                 {showSpecialOccasions && isAnniversary && yearsOfService > 0 && (
                   <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
                     <div className="flex items-center">
@@ -936,7 +929,7 @@ const OfficerSectionMobile = ({
                   </div>
                 )}
 
-                {/* Birthday Details - USE RECALCULATED VALUES */}
+                {/* Birthday Details */}
                 {showSpecialOccasions && isBirthday && (
                   <div className="flex items-center gap-2 p-2 bg-pink-50 rounded border border-pink-200">
                     <div className="flex items-center">
@@ -952,9 +945,9 @@ const OfficerSectionMobile = ({
                 )}
 
                 {/* Partnership Suspended Notice */}
-                {officer.partnershipSuspended && officer.isPartnership && ( // ADD THIS
+                {officer.partnershipSuspended && officer.isPartnership && (
                   <div className="flex items-center gap-2 p-2 bg-amber-50 rounded border border-amber-200">
-                    <AlertTriangleIcon className="h-4 w-4 text-amber-600" />
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
                     <div>
                       <p className="text-sm font-medium text-amber-800">Partnership Suspended</p>
                       <p className="text-sm text-amber-700">
@@ -1011,7 +1004,7 @@ const OfficerSectionMobile = ({
                             onClick={() => onOfficerAction(officer, 'emergency-partner')}
                             className="text-amber-600"
                           >
-                            <AlertTriangleIcon className="h-4 w-4 mr-2" />
+                            <AlertTriangle className="h-4 w-4 mr-2" />
                             Emergency Partner
                           </DropdownMenuItem>
                         )}
@@ -1063,16 +1056,10 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
         {title}
       </h4>
       {ptoRecords.map((ptoRecord) => {
-        // RECALCULATE for PTO records too
-        const isBirthday = showSpecialOccasions && ptoRecord.birthday 
-          ? isBirthdayToday(ptoRecord.birthday, new Date())
-          : false;
-        const isAnniversary = showSpecialOccasions && ptoRecord.hire_date 
-          ? isAnniversaryToday(ptoRecord.hire_date, new Date())
-          : false;
-        const yearsOfService = showSpecialOccasions && ptoRecord.hire_date 
-          ? calculateYearsOfService(ptoRecord.hire_date, new Date())
-          : 0;
+        // Calculate birthday/anniversary status for PTO records too
+        const isBirthday = showSpecialOccasions && isBirthdayToday(ptoRecord.birthday, new Date());
+        const isAnniversary = showSpecialOccasions && isAnniversaryToday(ptoRecord.hire_date, new Date());
+        const yearsOfService = showSpecialOccasions ? calculateYearsOfService(ptoRecord.hire_date, new Date()) : 0;
 
         return (
           <div 
@@ -1088,7 +1075,7 @@ const PTOSectionMobile = ({ title, ptoRecords, canEdit, showSpecialOccasions = f
                 <div className="flex items-center gap-2 mb-1">
                   <p className="font-medium">{ptoRecord.name}</p>
                   
-                  {/* Use recalculated values */}
+                  {/* ADD INDICATORS FOR PTO RECORDS TOO */}
                   {showSpecialOccasions && (
                     <>
                       {isBirthday && (

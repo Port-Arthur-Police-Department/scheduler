@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Cake, Award, Eye } from "lucide-react";
+import { Calendar, Cake, Award, Eye, Bell } from "lucide-react";
 
 interface EventsDashboardSettingsProps {
   settings: any;
@@ -59,6 +59,25 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
             id="enable_events_dashboard"
             checked={settings?.enable_events_dashboard || false}
             onCheckedChange={(checked) => handleSwitchChange("enable_events_dashboard", checked)}
+            disabled={isPending}
+          />
+        </div>
+
+        {/* NEW: Special Occasions in Schedule Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="show_special_occasions_in_schedule" className="font-medium flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Show Birthday/Anniversary Badges
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Display 🎂 and 🎖️ badges on officer schedule cards for birthdays and anniversaries
+            </p>
+          </div>
+          <Switch
+            id="show_special_occasions_in_schedule"
+            checked={settings?.show_special_occasions_in_schedule !== false}
+            onCheckedChange={(checked) => handleSwitchChange("show_special_occasions_in_schedule", checked)}
             disabled={isPending}
           />
         </div>

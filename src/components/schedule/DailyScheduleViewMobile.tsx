@@ -34,6 +34,7 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { OfficerSection } from "./OfficerSection";
 
 // Add Popover and Calendar imports
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

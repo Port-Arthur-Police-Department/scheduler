@@ -1,9 +1,10 @@
 
+
+// usePDFExport.ts - WITH BIRTHDAY AND ANNIVERSARY INDICATORS
 import { useCallback } from "react";
 import jsPDF from "jspdf";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { DEFAULT_LAYOUT_SETTINGS, LayoutSettings } from "@/constants/pdfLayoutSettings";
-import { parseISO } from "date-fns";
 
 // Layout Settings Interface
 interface LayoutSettings {
@@ -138,109 +139,6 @@ const getColorSetting = (settings: LayoutSettings, key: keyof LayoutSettings['co
   return color;
 };
 
-// Add these helper functions inside your usePDFExport hook or in a utility file
-const hasBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
-  if (!birthday) return false;
-  
-  try {
-    const birthDate = parseISO(birthday);
-    const today = date;
-    
-    // Compare month and day only
-    return birthDate.getMonth() === today.getMonth() && 
-           birthDate.getDate() === today.getDate();
-  } catch (error) {
-    console.error("Error parsing birthday:", birthday, error);
-    return false;
-  }
-};
-
-const hasAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
-  if (!hireDate) return false;
-  
-  try {
-    const anniversaryDate = parseISO(hireDate);
-    const today = date;
-    
-    // Compare month and day only
-    return anniversaryDate.getMonth() === today.getMonth() && 
-           anniversaryDate.getDate() === today.getDate();
-  } catch (error) {
-    console.error("Error parsing hire date:", hireDate, error);
-    return false;
-  }
-};
-
-const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
-  if (!hireDate) return 0;
-  
-  try {
-    const hireDateObj = parseISO(hireDate);
-    const today = date;
-    
-    let years = today.getFullYear() - hireDateObj.getFullYear();
-    
-    // Adjust if anniversary hasn't occurred yet this year
-    if (today.getMonth() < hireDateObj.getMonth() || 
-        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
-      years--;
-    }
-    
-    return Math.max(0, years);
-  } catch (error) {
-    console.error("Error calculating years of service:", hireDate, error);
-    return 0;
-  }
-};
-
-// Function to collect special occasions from shift data
-const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
-  const specialOccasions = [];
-  
-  // Helper function to add occasion
-  const addIfSpecialOccasion = (person: any) => {
-    if (!person || !person.name) return;
-    
-    // Check birthday
-    if (person.birthday && hasBirthdayToday(person.birthday, selectedDate)) {
-      specialOccasions.push({
-        name: person.name,
-        type: 'birthday' as const,
-        icon: '🎂',
-        text: 'Birthday',
-        displayName: extractLastName(person.name) // Use last name for display
-      });
-    }
-    
-    // Check anniversary
-    if (person.hire_date && hasAnniversaryToday(person.hire_date, selectedDate)) {
-      const years = calculateYearsOfService(person.hire_date, selectedDate);
-      specialOccasions.push({
-        name: person.name,
-        type: 'anniversary' as const,
-        icon: '🎖️',
-        text: `Year ${years} Anniversary`,
-        displayName: extractLastName(person.name) // Use last name for display
-      });
-    }
-  };
-  
-  // Check all officer categories
-  if (shiftData.supervisors) {
-    shiftData.supervisors.forEach((supervisor: any) => addIfSpecialOccasion(supervisor));
-  }
-  
-  if (shiftData.officers) {
-    shiftData.officers.forEach((officer: any) => addIfSpecialOccasion(officer));
-  }
-  
-  if (shiftData.specialAssignmentOfficers) {
-    shiftData.specialAssignmentOfficers.forEach((officer: any) => addIfSpecialOccasion(officer));
-  }
-  
-  return specialOccasions;
-};
-
 // Helper to extract just the number from positions like "District 1", "Beat 2", "District 1/2"
 // UPDATED: Also abbreviate "City-Wide" to "CW" and for supervisors, extract rank abbreviation
 const extractBeatNumber = (position: string | undefined, rank: string = ""): string => {
@@ -295,6 +193,126 @@ const extractLastName = (fullName: string): string => {
   return lastName.toUpperCase();
 };
 
+// Helper to check if today is an officer's birthday
+const hasBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
+  if (!birthday) return false;
+  
+  try {
+    const birthDate = parseISO(birthday);
+    const today = date;
+    
+    // Compare month and day only
+    return birthDate.getMonth() === today.getMonth() && 
+           birthDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing birthday:", birthday, error);
+    return false;
+  }
+};
+
+// Helper to check if today is an officer's hire date anniversary
+const hasAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
+  if (!hireDate) return false;
+  
+  try {
+    const anniversaryDate = parseISO(hireDate);
+    const today = date;
+    
+    // Compare month and day only
+    return anniversaryDate.getMonth() === today.getMonth() && 
+           anniversaryDate.getDate() === today.getDate();
+  } catch (error) {
+    console.error("Error parsing hire date:", hireDate, error);
+    return false;
+  }
+};
+
+// Helper to calculate years of service for anniversary
+const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+  if (!hireDate) return 0;
+  
+  try {
+    const hireDateObj = parseISO(hireDate);
+    const today = date;
+    
+    let years = today.getFullYear() - hireDateObj.getFullYear();
+    
+    // Adjust if anniversary hasn't occurred yet this year
+    if (today.getMonth() < hireDateObj.getMonth() || 
+        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+      years--;
+    }
+    
+    return Math.max(0, years);
+  } catch (error) {
+    console.error("Error calculating years of service:", hireDate, error);
+    return 0;
+  }
+};
+
+// Function to collect special occasions from shift data
+const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
+  const specialOccasions: Array<{
+    name: string;
+    type: 'birthday' | 'anniversary';
+    icon: string;
+    text: string;
+    displayName: string;
+  }> = [];
+  
+  // Helper function to add occasion
+  const addIfSpecialOccasion = (person: any) => {
+    if (!person || !person.name) return;
+    
+    // Check birthday
+    if (person.birthday && hasBirthdayToday(person.birthday, selectedDate)) {
+      specialOccasions.push({
+        name: person.name,
+        type: 'birthday',
+        icon: '🎂',
+        text: 'Birthday',
+        displayName: extractLastName(person.name) // Use last name for display
+      });
+    }
+    
+    // Check anniversary
+    if (person.hire_date && hasAnniversaryToday(person.hire_date, selectedDate)) {
+      const years = calculateYearsOfService(person.hire_date, selectedDate);
+      specialOccasions.push({
+        name: person.name,
+        type: 'anniversary',
+        icon: '🎖️',
+        text: `Year ${years} Anniversary`,
+        displayName: extractLastName(person.name) // Use last name for display
+      });
+    }
+  };
+  
+  // Check all officer categories
+  if (shiftData.supervisors) {
+    shiftData.supervisors.forEach((supervisor: any) => addIfSpecialOccasion(supervisor));
+  }
+  
+  if (shiftData.officers) {
+    shiftData.officers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  if (shiftData.specialAssignmentOfficers) {
+    shiftData.specialAssignmentOfficers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  // Remove duplicates (in case someone appears in multiple lists)
+  const uniqueOccasions = specialOccasions.filter((occasion, index, self) =>
+    index === self.findIndex((t) => (
+      t.name === occasion.name && t.type === occasion.type
+    ))
+  );
+  
+  return uniqueOccasions;
+};
+
+
+
 
 
 // Your actual base64 logo - paste your complete string here
@@ -303,7 +321,6 @@ const getLogoBase64 = (): string => {
   
   return departmentLogo;
 };
-
 
 
 // Draw actual logo function
@@ -890,13 +907,13 @@ export const usePDFExport = () => {
           const position = supervisor?.position || "";
           const notes = formatPartnershipDetails(supervisor, position);
           
-supervisorsData.push([
-  displayName,
-  extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for beat column
-  supervisor?.badge || "",
-  supervisor?.unitNumber || "", // <-- Remove "Unit " prefix
-  notes
-]);
+          supervisorsData.push([
+            displayName,
+            extractBeatNumber(position, supervisor?.rank || ""), // Use rank abbreviation for beat column
+            supervisor?.badge || "",
+            supervisor?.unitNumber || "",
+            notes
+          ]);
         });
 
         // Only draw the table if there are supervisors after filtering
@@ -1081,16 +1098,84 @@ supervisorsData.push([
 
         const generatedAt = `Generated: ${format(new Date(), "MMM d, h:mm a")}`;
         pdf.text(generatedAt, pageWidth - 15, yPosition, { align: 'right' });
+        
+        yPosition += 8;
       }
 
+      // ================================================
+      // BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
+      // ================================================
+      const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
+      if (specialOccasions.length > 0) {
+        // Separate birthdays and anniversaries
+        const birthdays = specialOccasions.filter(occ => occ.type === 'birthday');
+        const anniversaries = specialOccasions.filter(occ => occ.type === 'anniversary');
+        
+        // Set font for special occasions
+        pdf.setFontSize(safeLayoutSettings.fontSizes.footer);
+        pdf.setFont("helvetica", "bold");
+        
+        // Use accent color for special occasions
+        const accentColorStr = getColorSetting(safeLayoutSettings, 'accentColor') || "155,89,182";
+        const accentColor = parseColor(accentColorStr);
+        pdf.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+        
+        // Add a subtle separator line
+        pdf.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+        pdf.setLineWidth(0.3);
+        pdf.line(15, yPosition, pageWidth - 15, yPosition);
+        yPosition += 6;
+        
+        // Draw birthdays
+        if (birthdays.length > 0) {
+          const birthdayNames = birthdays.map(b => b.displayName).join(', ');
+          const birthdayText = `🎂 BIRTHDAYS: ${birthdayNames}`;
+          
+          // Check if text fits on one line
+          if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+            pdf.text(birthdayText, 15, yPosition);
+            yPosition += 5;
+          } else {
+            // Handle multi-line if needed
+            const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+            pdf.text(lines, 15, yPosition);
+            yPosition += (lines.length * 5);
+          }
+        }
+        
+        // Draw anniversaries
+        if (anniversaries.length > 0) {
+          const anniversaryNames = anniversaries.map(a => a.displayName).join(', ');
+          const anniversaryText = `🎖️ ANNIVERSARIES: ${anniversaryNames}`;
+          
+          // Check if text fits on one line
+          if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+            pdf.text(anniversaryText, 15, yPosition);
+            yPosition += 5;
+          } else {
+            // Handle multi-line if needed
+            const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+            pdf.text(lines, 15, yPosition);
+            yPosition += (lines.length * 5);
+          }
+        }
+        
+        // Reset text color
+        pdf.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        yPosition += 4;
+      }
+
+      // Save the PDF
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const dayOfWeek = format(selectedDate, "EEEE").toUpperCase();
       const filename = `PAPD_Schedule_${shiftName.replace(/\s+/g, "_")}_${dayOfWeek}_${dateStr}.pdf`;
 
       pdf.save(filename);
 
+      console.log(`✅ PDF exported successfully with ${specialOccasions.length} special occasions`);
+
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error("PDF export error details:", {
         error,
         errorMessage: error.message,

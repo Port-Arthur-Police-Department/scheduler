@@ -103,6 +103,15 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/_/],
         cleanupOutdatedCaches: true,
         
+        // ADD THIS TO FIX THE ERROR
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB (default is 2 MB)
+        
+        // OPTIONAL: Exclude large files from precaching
+        globIgnores: [
+          '**/assets/main-*.js', // Exclude the large main bundle
+          '**/assets/*-*.js.map' // Exclude source maps
+        ],
+        
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -125,6 +134,18 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
+          },
+          // ADD THIS: Cache your main bundle at runtime
+          {
+            urlPattern: /\/scheduler\/assets\/main-.*\.js/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'main-bundle-cache',
+              expiration: {
+                maxEntries: 1,
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 1 week
+              }
+            }
           }
         ]
       },
@@ -143,11 +164,27 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
+    
+    // ADD THESE OPTIONS TO REDUCE BUNDLE SIZE
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')
+      },
+      output: {
+        manualChunks: {
+          // Split large dependencies into separate chunks
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+          'vendor-pdf': ['jspdf', 'html2canvas'],
+          'vendor-utils': ['date-fns', 'lodash', 'axios']
+        },
+        // Increase warning limit
+        chunkSizeWarningLimit: 1500
       }
-    }
+    },
+    
+    // Enable chunk size warnings
+    chunkSizeWarningLimit: 1000
   },
   
   server: {

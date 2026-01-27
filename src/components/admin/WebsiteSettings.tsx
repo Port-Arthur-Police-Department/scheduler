@@ -104,6 +104,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   enable_anniversary_alerts: false,
   enable_birthday_alerts: false,
   anniversary_alert_recipients: ["admin", "supervisor"],
+
+
   // NEW: Events Dashboard Settings
   enable_events_dashboard: true,
   events_dashboard_visible_to_officers: true,

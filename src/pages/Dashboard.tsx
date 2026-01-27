@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User as UserIcon, Lock } from "lucide-react";
 import { setupDailyCheck } from '@/utils/scheduledTasks';
+import { UpcomingEventsDashboard } from "@/components/dashboard/UpcomingEventsDashboard";
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";
@@ -965,6 +966,13 @@ useEffect(() => {
         <div className="mb-8">
           <h2 className="text-2xl md:text-3xl font-bold mb-2">Welcome back, {profile?.full_name?.split(" ")[0] || "Officer"}</h2>
           <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
+        </div>
+
+        {/* Upcoming Events Dashboard */}
+        <div className="mb-8">
+          <UpcomingEventsDashboard 
+            userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+          />
         </div>
 
         {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}

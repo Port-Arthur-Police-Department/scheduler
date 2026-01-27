@@ -79,7 +79,8 @@ export const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
     showSpecialAssignments: true,
     showPTO: true,
     showStaffingSummary: false, // Your setting is false
-    showLogoSection: true // Your setting includes this
+    showLogoSection: true,
+    showSpecialOccasions: true
   },
   fontSizes: {
     header: 12, // Your setting

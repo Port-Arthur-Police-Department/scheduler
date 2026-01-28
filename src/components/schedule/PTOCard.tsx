@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Edit2, Save, X, Trash2 } from "lucide-react";
+import { Edit2, Save, X, Trash2, Cake, Award } from "lucide-react"; // ADD Cake and Award icons
 import { useState } from "react";
 
 interface PTOCardProps {
@@ -14,7 +14,7 @@ interface PTOCardProps {
   onRemove: (ptoRecord: any) => void;
   isUpdating: boolean;
   backgroundColor?: string;
-  showSpecialOccasions?: boolean; // ADDED
+  showSpecialOccasions?: boolean;
 }
 
 export const PTOCard = ({
@@ -26,7 +26,7 @@ export const PTOCard = ({
   onRemove,
   isUpdating,
   backgroundColor,
-  showSpecialOccasions = true // ADDED with default
+  showSpecialOccasions = true
 }: PTOCardProps) => {
   const [editingUnitNumber, setEditingUnitNumber] = useState<string | null>(null);
   const [editUnitValue, setEditUnitValue] = useState("");
@@ -69,25 +69,25 @@ export const PTOCard = ({
             <div className="flex items-center gap-2">
               <p className="font-medium truncate text-gray-900">{ptoRecord.name}</p>
               
-              {/* UPDATED BIRTHDAY BADGE - Now shows "Birthday" text */}
+              {/* 🎂 BIRTHDAY BADGE - MATCHING OfficerCard STYLE */}
               {showSpecialOccasions && ptoRecord.isBirthdayToday && (
                 <Badge 
-                  variant="outline" 
-                  className="bg-pink-100 text-pink-800 border-pink-300 text-xs px-2 py-0.5"
-                  title="Birthday Today!"
+                  className="text-xs bg-pink-100 text-pink-800 hover:bg-pink-200 border-pink-200 flex items-center gap-1"
+                  title={`🎂 ${ptoRecord.name}'s Birthday`}
                 >
-                  🎂 Birthday
+                  <Cake className="h-3 w-3" />
+                  Birthday
                 </Badge>
               )}
               
-              {/* UPDATED ANNIVERSARY BADGE - Now shows "Anniversary" text */}
+              {/* 🎖️ ANNIVERSARY BADGE - MATCHING OfficerCard STYLE */}
               {showSpecialOccasions && ptoRecord.isAnniversaryToday && (
                 <Badge 
-                  variant="outline" 
-                  className="bg-amber-100 text-amber-800 border-amber-300 text-xs px-2 py-0.5"
-                  title={`${ptoRecord.yearsOfService || 0} Year Anniversary`}
+                  className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200 flex items-center gap-1"
+                  title={`🎖️ ${ptoRecord.name}'s Year ${ptoRecord.yearsOfService || 0} Anniversary`}
                 >
-                  🎖️ {ptoRecord.yearsOfService || 0} Year{(ptoRecord.yearsOfService || 0) !== 1 ? 's' : ''}
+                  <Award className="h-3 w-3" />
+                  Year {ptoRecord.yearsOfService || 0}
                 </Badge>
               )}
             </div>

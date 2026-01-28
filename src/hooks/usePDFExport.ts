@@ -1,5 +1,3 @@
-
-
 // usePDFExport.ts - WITH BIRTHDAY AND ANNIVERSARY INDICATORS
 import { useCallback } from "react";
 import jsPDF from "jspdf";
@@ -72,70 +70,6 @@ const COLORS = {
   dark: [44, 62, 80],
   gray: [108, 117, 125],
   border: [222, 226, 230]
-};
-
-// Helper to fetch all officers assigned to a shift (including those completely off)
-const fetchAllAssignedOfficers = async (shiftData: any, selectedDate: Date) => {
-  try {
-    // This is an example - adjust based on your database schema
-    // You might need to query schedule_exceptions, recurring_schedules, etc.
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const shiftId = shiftData.shift?.id;
-    
-    if (!shiftId) return [];
-    
-    // Example query - you'll need to adjust this for your schema
-    const { data: allScheduleEntries, error } = await supabase
-      .from("schedule_exceptions")
-      .select(`
-        officer_id,
-        profiles (id, full_name, birthday, hire_date)
-      `)
-      .eq("date", dateStr)
-      .eq("shift_type_id", shiftId)
-      .or("is_off.is.false,is_off.is.true"); // Include both working and off-duty
-    
-    if (error) {
-      console.error("Error fetching assigned officers:", error);
-      return [];
-    }
-    
-    return allScheduleEntries.map(entry => ({
-      officerId: entry.officer_id,
-      name: entry.profiles?.full_name,
-      birthday: entry.profiles?.birthday,
-      hire_date: entry.profiles?.hire_date
-    }));
-    
-  } catch (error) {
-    console.error("Error in fetchAllAssignedOfficers:", error);
-    return [];
-  }
-};
-
-// Helper function to add special occasion indicators to officer names
-const addSpecialOccasionIndicators = (officers: any[], showSpecialOccasions: boolean) => {
-  if (!showSpecialOccasions) return officers;
-  
-  return officers.map(officer => {
-    if (!officer || !officer.name) return officer;
-    
-    let nameDisplay = officer.name;
-    
-    // Add special occasion indicators
-    if (officer.isBirthdayToday) {
-      nameDisplay += " 🎂";
-    }
-    if (officer.isAnniversaryToday) {
-      nameDisplay += ` 🎖️`;
-    }
-    
-    // Return a new object with the updated name
-    return {
-      ...officer,
-      name: nameDisplay
-    };
-  });
 };
 
 // Helper to calculate appropriate row height based on font size
@@ -314,66 +248,110 @@ const calculateYearsOfService = (hireDate: string | null | undefined, date: Date
   }
 };
 
-// Function to collect special occasions from ALL officers in shift data
-const collectSpecialOccasions = async (shiftData: any, selectedDate: Date) => {
+// Function to collect special occasions from shift data
+const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
   const specialOccasions: Array<{
     name: string;
     type: 'birthday' | 'anniversary';
     icon: string;
     text: string;
     displayName: string;
+    // Add these new fields
     age?: number;
     yearsOfService?: number;
   }> = [];
   
-  // [Keep all the helper functions: calculateAge, calculateServiceYears]
+  // Helper function to calculate age from birthday
+  const calculateAge = (birthday: string, currentDate: Date): number => {
+    try {
+      const birthDate = parseISO(birthday);
+      let age = currentDate.getFullYear() - birthDate.getFullYear();
+      const monthDiff = currentDate.getMonth() - birthDate.getMonth();
+      
+      // If birthday hasn't occurred yet this year, subtract 1
+      if (monthDiff < 0 || (monthDiff === 0 && currentDate.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    } catch (error) {
+      console.error("Error calculating age:", birthday, error);
+      return 0;
+    }
+  };
   
-  // Get ALL officers for this shift (async now)
-  const allShiftOfficers = await getAllOfficersForShift(shiftData, selectedDate);
+  // Helper function to calculate years of service
+  const calculateServiceYears = (hireDate: string, currentDate: Date): number => {
+    try {
+      const hireDateObj = parseISO(hireDate);
+      let years = currentDate.getFullYear() - hireDateObj.getFullYear();
+      
+      // Adjust if anniversary hasn't occurred yet this year
+      if (currentDate.getMonth() < hireDateObj.getMonth() || 
+          (currentDate.getMonth() === hireDateObj.getMonth() && currentDate.getDate() < hireDateObj.getDate())) {
+        years--;
+      }
+      
+      return Math.max(0, years);
+    } catch (error) {
+      console.error("Error calculating years of service:", hireDate, error);
+      return 0;
+    }
+  };
   
-  console.log(`📊 Checking ${allShiftOfficers.length} total officers for special occasions`);
-  
-  // Check each officer for special occasions
-  allShiftOfficers.forEach((officer: any) => {
-    if (!officer?.name) return;
-    
-    const lastName = extractLastName(officer.name);
+  // Helper function to add occasion
+  const addIfSpecialOccasion = (person: any) => {
+    if (!person || !person.name) return;
     
     // Check birthday
-    if (officer.birthday && hasBirthdayToday(officer.birthday, selectedDate)) {
-      const age = calculateAge(officer.birthday, selectedDate);
+    if (person.birthday && hasBirthdayToday(person.birthday, selectedDate)) {
+      const age = calculateAge(person.birthday, selectedDate);
       specialOccasions.push({
-        name: officer.name,
+        name: person.name,
         type: 'birthday',
         icon: '🎂',
-        text: `Happy Birthday ${lastName} (${age})`,
-        displayName: lastName,
-        age: age
+        text: `Happy Birthday ${extractLastName(person.name)} (${age})`, // NEW: Custom message
+        displayName: extractLastName(person.name),
+        age: age // Store age for later use
       });
     }
     
     // Check anniversary
-    if (officer.hire_date && hasAnniversaryToday(officer.hire_date, selectedDate)) {
-      const years = officer.yearsOfService || calculateServiceYears(officer.hire_date, selectedDate);
+    if (person.hire_date && hasAnniversaryToday(person.hire_date, selectedDate)) {
+      const years = calculateServiceYears(person.hire_date, selectedDate);
       specialOccasions.push({
-        name: officer.name,
+        name: person.name,
         type: 'anniversary',
         icon: '🎖️',
-        text: `Congrats ${lastName} (${years} year${years !== 1 ? 's' : ''} anniversary)`,
-        displayName: lastName,
-        yearsOfService: years
+        text: `Congrats ${extractLastName(person.name)} (${years} year${years !== 1 ? 's' : ''} anniversary)`, // NEW: Custom message
+        displayName: extractLastName(person.name),
+        yearsOfService: years // Store years for later use
       });
     }
-  });
+  };
   
-  // Remove duplicates
+  // Check all officer categories
+  if (shiftData.supervisors) {
+    shiftData.supervisors.forEach((supervisor: any) => addIfSpecialOccasion(supervisor));
+  }
+  
+  if (shiftData.officers) {
+    shiftData.officers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  if (shiftData.specialAssignmentOfficers) {
+    shiftData.specialAssignmentOfficers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  if (shiftData.ptoRecords) {
+    shiftData.ptoRecords.forEach((ptoRecord: any) => addIfSpecialOccasion(ptoRecord));
+  }
+  
+  // Remove duplicates (in case someone appears in multiple lists)
   const uniqueOccasions = specialOccasions.filter((occasion, index, self) =>
     index === self.findIndex((t) => (
       t.name === occasion.name && t.type === occasion.type
     ))
   );
-  
-  console.log(`🎉 Found ${uniqueOccasions.length} special occasions for shift`);
   
   return uniqueOccasions;
 };
@@ -425,8 +403,7 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
 };
 
 // UPDATED: Function to format supervisor display WITHOUT rank in name column
-// UPDATED: Function to format supervisor display WITHOUT rank in name column
-const formatSupervisorDisplay = (supervisor: any, showSpecialOccasions: boolean = false) => {
+const formatSupervisorDisplay = (supervisor: any) => {
   if (!supervisor?.name) return "UNKNOWN";
   
   const name = extractLastName(supervisor.name);
@@ -434,64 +411,26 @@ const formatSupervisorDisplay = (supervisor: any, showSpecialOccasions: boolean 
   // If supervisor has a partnership, include partner
   if (supervisor.isCombinedPartnership && supervisor.partnerData) {
     const partnerName = extractLastName(supervisor.partnerData.partnerName);
-    let partnershipDisplay = `${name} + ${partnerName}`;
-    
-    // Add special occasion indicators for primary supervisor
-    if (showSpecialOccasions && supervisor.isBirthdayToday) {
-      partnershipDisplay += " 🎂";
-    }
-    if (showSpecialOccasions && supervisor.isAnniversaryToday) {
-      partnershipDisplay += ` 🎖️`;
-    }
-    
-    return partnershipDisplay;
+    return `${name} + ${partnerName}`;
   }
   
   // No partnership, show last name only (NO RANK in name column)
-  if (showSpecialOccasions && supervisor.isBirthdayToday) {
-    return `${name} 🎂`;
-  }
-  if (showSpecialOccasions && supervisor.isAnniversaryToday) {
-    return `${name} 🎖️`;
-  }
-  
   return name;
 };
 
 // UPDATED: Function to format officer display with partnership - LAST NAMES ONLY
-const formatOfficerDisplay = (officer: any, showSpecialOccasions: boolean = false) => {
+const formatOfficerDisplay = (officer: any) => {
   if (!officer?.name) return "UNKNOWN";
   
   // If officer has a partnership, include partner
   if (officer.isCombinedPartnership && officer.partnerData) {
     const name = extractLastName(officer.name);
     const partnerName = extractLastName(officer.partnerData.partnerName);
-    let partnershipDisplay = `${name} + ${partnerName}`;
-    
-    // Add special occasion indicators for PRIMARY officer only
-    // (We don't have partner's special occasion data in partnerData)
-    if (showSpecialOccasions && officer.isBirthdayToday) {
-      partnershipDisplay += " 🎂";
-    }
-    if (showSpecialOccasions && officer.isAnniversaryToday) {
-      partnershipDisplay += ` 🎖️`;
-    }
-    
-    return partnershipDisplay;
+    return `${name} + ${partnerName}`;
   }
   
   // No partnership, show last name only
-  const name = extractLastName(officer.name);
-  
-  // Add special occasion indicators if enabled
-  if (showSpecialOccasions && officer.isBirthdayToday) {
-    return `${name} 🎂`;
-  }
-  if (showSpecialOccasions && officer.isAnniversaryToday) {
-    return `${name} 🎖️`;
-  }
-  
-  return name;
+  return extractLastName(officer.name);
 };
 
 // UPDATED: Function to format partnership details for notes - ONLY PARTNER BADGE IN PARENTHESES
@@ -1006,7 +945,7 @@ export const usePDFExport = () => {
           }
           
           // UPDATED: Use supervisor formatting WITHOUT rank in name column
-          const displayName = formatSupervisorDisplay(supervisor, safeLayoutSettings.sections.showSpecialOccasions);
+          const displayName = formatSupervisorDisplay(supervisor);
           const position = supervisor?.position || "";
           const notes = formatPartnershipDetails(supervisor, position);
           
@@ -1055,7 +994,7 @@ export const usePDFExport = () => {
           }
           
           // UPDATED: Use officer formatting with partnership - LAST NAMES ONLY
-          const displayName = formatOfficerDisplay(officer, safeLayoutSettings.sections.showSpecialOccasions);
+          const displayName = formatOfficerDisplay(officer);
           const position = officer?.position || "";
           const notes = formatPartnershipDetails(officer, position);
           
@@ -1205,25 +1144,81 @@ export const usePDFExport = () => {
         yPosition += 8;
       }
 
-
-// ================================================
-// BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
-// ================================================
-// Only show if enabled in layout settings
-let specialOccasionsCount = 0;
-if (safeLayoutSettings.sections.showSpecialOccasions) {
-  try {
-    // Note: collectSpecialOccasions is now async
-    const specialOccasions = await collectSpecialOccasions(shiftData, selectedDate);
-    specialOccasionsCount = specialOccasions.length;
-    
-    if (specialOccasions.length > 0) {
-      // [Rest of your existing code remains the same]
-    }
-  } catch (specialOccasionsError) {
-    console.warn("⚠️ Error processing special occasions, but continuing PDF export:", specialOccasionsError);
+     // ================================================
+      // BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
+      // ================================================
+      // Only show if enabled in layout settings
+      let specialOccasionsCount = 0;
+      if (safeLayoutSettings.sections.showSpecialOccasions) {
+        try {
+          const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
+          specialOccasionsCount = specialOccasions.length;
+          
+          if (specialOccasions.length > 0) {
+            // Separate birthdays and anniversaries
+            const birthdays = specialOccasions.filter(occ => occ.type === 'birthday');
+            const anniversaries = specialOccasions.filter(occ => occ.type === 'anniversary');
+            
+            // Set font for special occasions
+            pdf.setFontSize(safeLayoutSettings.fontSizes.footer);
+            pdf.setFont("helvetica", "bold");
+            
+            // Use accent color for special occasions
+            const accentColorStr = getColorSetting(safeLayoutSettings, 'accentColor') || "155,89,182";
+            const accentColor = parseColor(accentColorStr);
+            pdf.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+            
+            // Add a subtle separator line
+            pdf.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+            pdf.setLineWidth(0.3);
+            pdf.line(15, yPosition, pageWidth - 15, yPosition);
+            yPosition += 6;
+            
+     // Draw birthdays - Keep headers but with custom messages
+if (birthdays.length > 0) {
+  // Create custom messages for each person
+  const birthdayMessages = birthdays.map(b => b.text).join(', ');
+  const birthdayText = `BIRTHDAYS: ${birthdayMessages}`;
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+    pdf.text(birthdayText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
   }
 }
+
+// Draw anniversaries - Keep headers but with custom messages
+if (anniversaries.length > 0) {
+  // Create custom messages for each person
+  const anniversaryMessages = anniversaries.map(a => a.text).join(', ');
+  const anniversaryText = `ANNIVERSARIES: ${anniversaryMessages}`;
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+    pdf.text(anniversaryText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
+  }
+}
+            
+            // Reset text color
+            pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            yPosition += 4;
+          }
+        } catch (specialOccasionsError) {
+          console.warn("⚠️ Error processing special occasions, but continuing PDF export:", specialOccasionsError);
+          // Continue with PDF export even if special occasions fail
+        }
+      }
 
       // Save the PDF
       const dateStr = format(selectedDate, "yyyy-MM-dd");

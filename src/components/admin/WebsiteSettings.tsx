@@ -745,14 +745,20 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
           />
         </TabsContent>
 
-                {/* EVENTS DASHBOARD TAB */}
-        <TabsContent value="events" className="space-y-6 mt-6">
-          <EventsDashboardSettings 
-            settings={settings}
-            handleToggle={handleToggle}
-            isPending={updateSettingsMutation.isPending}
-          />
-        </TabsContent>
+{/* EVENTS DASHBOARD TAB */}
+<TabsContent value="events" className="space-y-6 mt-6">
+  <EventsDashboardSettings 
+    settings={settings}
+    handleToggle={handleToggle}
+    isPending={updateSettingsMutation.isPending}
+  />
+  
+  <AnniversaryCountdownSettings 
+    settings={settings}
+    handleToggle={handleToggle}
+    isPending={updateSettingsMutation.isPending}
+  />
+</TabsContent>
 
         {/* COLORS TAB */}
         <TabsContent value="colors" className="space-y-6 mt-6">

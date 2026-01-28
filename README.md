@@ -42,7 +42,7 @@ This solution integrates seamlessly with your existing PTO management system whi
 
 ## Start Prompt each new chat
 
-* I have a progressive web application built to manage schedules for a police department with 129+ police officers who work on different shifts. I built it with different level access, officer, supervisor, and admin. Currently officer profiles can only see their own weekly schedule. I have tabs: Riding List, The Book, Officers, Vacancies, Staff, Settings.  
+* I have a progressive web application built to manage schedules for a police department with 129+ police officers who work on different shifts. I built it with different level access, officer, supervisor, and admin. Currently officer profiles can only see their own weekly schedule. I have tabs: Riding List, The Book, Officers, Vacancies, Staff, Settings.
 
 When a user logs into the app, the Dashboard.tsx loads a Riding List tab (DailyScheduleView.tsx).  It currently loads the shift selector as "All Shifts" but I want to change it.  My WebsiteSettings.tsx file has an alert system that allows me to send an alert to a shift specifically.  It reads the profile's recurring_schedule and determines based on their active schedule what shift they are assigned.   I want to apply the same method to load the user's shift on open and set the viewed shift as their current shift as default.  Please give me instructions of where to add each new section of code, I don't have any coding expierence and don't know where "WebsiteSettings component" is, where to add filteredofficers code, etc.  Can you assist me with this? I want to do this for both the desktop and mobile versions.
 

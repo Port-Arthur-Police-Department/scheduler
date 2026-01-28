@@ -37,6 +37,7 @@ import {
 import { User as UserIcon, Lock } from "lucide-react";
 import { setupDailyCheck } from '@/utils/scheduledTasks';
 import { UpcomingEventsDashboard } from "@/components/dashboard/UpcomingEventsDashboard";
+import { AnniversaryCountdownDashboard } from "@/components/dashboard/AnniversaryCountdownDashboard";
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";

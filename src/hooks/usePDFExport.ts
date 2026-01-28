@@ -1171,18 +1171,17 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
     pdf.line(15, yPosition, pageWidth - 15, yPosition);
     yPosition += 6;
     
-    // Draw birthdays - Match EventsDashboard format
-    if (birthdays.length > 0) {
-      const birthdayItems = birthdays.map(b => {
-        // Extract age from text
-        const ageMatch = b.text.match(/Age (\d+)/);
-        const age = ageMatch ? ageMatch[1] : "";
-        // Format like EventsDashboard: "LASTNAME (Age XX)"
-        return `${b.displayName} (Age ${age})`;
-      });
-      
-      // Combine all birthdays
-      let birthdayText = "🎂 BIRTHDAYS: ";
+// Draw birthdays - Include age
+if (birthdays.length > 0) {
+  const birthdayNames = birthdays.map(b => {
+    // Format: "LASTNAME (Age XX)"
+    const ageMatch = b.text.match(/Age (\d+)/);
+    const age = ageMatch ? ageMatch[1] : "";
+    return `${b.displayName}${age ? ` (Age ${age})` : ''}`;
+  }).join(', ');
+  
+  // REMOVE THE EMOJI from the text
+  const birthdayText = `BIRTHDAYS: ${birthdayNames}`;
       for (let i = 0; i < birthdayItems.length; i++) {
         const item = birthdayItems[i];
         const testText = birthdayText + (i > 0 ? ", " : "") + item;
@@ -1213,18 +1212,17 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
       }
     }
     
-    // Draw anniversaries - Match EventsDashboard format
-    if (anniversaries.length > 0) {
-      const anniversaryItems = anniversaries.map(a => {
-        // Extract years from text
-        const yearsMatch = a.text.match(/Year (\d+)/);
-        const years = yearsMatch ? yearsMatch[1] : "0";
-        // Format like EventsDashboard: "LASTNAME (X Years)"
-        return `${a.displayName} (${years} Year${years !== "1" ? 's' : ''})`;
-      });
-      
-      // Combine all anniversaries
-      let anniversaryText = "🎖️ ANNIVERSARIES: ";
+// Draw anniversaries - Include years of service
+if (anniversaries.length > 0) {
+  const anniversaryNames = anniversaries.map(a => {
+    // Format: "LASTNAME (X Years)"
+    const yearsMatch = a.text.match(/Year (\d+)/);
+    const years = yearsMatch ? yearsMatch[1] : "";
+    return `${a.displayName}${years ? ` (${years} Year${years !== "1" ? 's' : ''})` : ''}`;
+  }).join(', ');
+  
+  // REMOVE THE EMOJI from the text
+  const anniversaryText = `ANNIVERSARIES: ${anniversaryNames}`;
       for (let i = 0; i < anniversaryItems.length; i++) {
         const item = anniversaryItems[i];
         const testText = anniversaryText + (i > 0 ? ", " : "") + item;

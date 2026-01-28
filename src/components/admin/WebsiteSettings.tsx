@@ -104,9 +104,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   enable_anniversary_alerts: false,
   enable_birthday_alerts: false,
   anniversary_alert_recipients: ["admin", "supervisor"],
-
-
-  // NEW: Events Dashboard Settings
+  
+  // Events Dashboard Settings
   enable_events_dashboard: true,
   events_dashboard_visible_to_officers: true,
   events_dashboard_visible_to_supervisors: true,
@@ -114,6 +113,17 @@ export const DEFAULT_NOTIFICATION_SETTINGS = {
   events_dashboard_show_birthdays: true,
   events_dashboard_show_anniversaries: true,
   events_dashboard_month_scope: 'current', // 'current' or 'upcoming'
+  
+  // NEW: Anniversary Countdown Settings
+  enable_anniversary_countdown: true,
+  anniversary_countdown_admins: true,
+  anniversary_countdown_supervisors: true,
+  anniversary_countdown_officers: true,
+  anniversary_show_progress_bar: true,
+  anniversary_show_milestone_badges: true,
+  anniversary_enable_notifications: true,
+  anniversary_notify_days_before: 7,
+  anniversary_notify_on_day: true,
 };
 
 interface WebsiteSettingsProps {

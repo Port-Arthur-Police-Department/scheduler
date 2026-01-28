@@ -69,25 +69,25 @@ export const PTOCard = ({
             <div className="flex items-center gap-2">
               <p className="font-medium truncate text-gray-900">{ptoRecord.name}</p>
               
-              {/* BIRTHDAY BADGE - ADDED */}
+              {/* UPDATED BIRTHDAY BADGE - Now shows "Birthday" text */}
               {showSpecialOccasions && ptoRecord.isBirthdayToday && (
                 <Badge 
                   variant="outline" 
-                  className="bg-pink-100 text-pink-800 border-pink-300 text-xs px-1.5"
+                  className="bg-pink-100 text-pink-800 border-pink-300 text-xs px-2 py-0.5"
                   title="Birthday Today!"
                 >
-                  🎂
+                  🎂 Birthday
                 </Badge>
               )}
               
-              {/* ANNIVERSARY BADGE - ADDED */}
+              {/* UPDATED ANNIVERSARY BADGE - Now shows "Anniversary" text */}
               {showSpecialOccasions && ptoRecord.isAnniversaryToday && (
                 <Badge 
                   variant="outline" 
-                  className="bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5"
+                  className="bg-amber-100 text-amber-800 border-amber-300 text-xs px-2 py-0.5"
                   title={`${ptoRecord.yearsOfService || 0} Year Anniversary`}
                 >
-                  🎖️
+                  🎖️ {ptoRecord.yearsOfService || 0} Year{(ptoRecord.yearsOfService || 0) !== 1 ? 's' : ''}
                 </Badge>
               )}
             </div>

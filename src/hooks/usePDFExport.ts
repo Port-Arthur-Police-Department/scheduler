@@ -1180,38 +1180,21 @@ if (birthdays.length > 0) {
     return `${b.displayName}${age ? ` (Age ${age})` : ''}`;
   }).join(', ');
   
-  // REMOVE THE EMOJI from the text
+  // NO EMOJI - Clean text only
   const birthdayText = `BIRTHDAYS: ${birthdayNames}`;
-      for (let i = 0; i < birthdayItems.length; i++) {
-        const item = birthdayItems[i];
-        const testText = birthdayText + (i > 0 ? ", " : "") + item;
-        
-        if (pdf.getTextWidth(testText) > (pageWidth - 30)) {
-          // If adding this item would exceed width, start a new line
-          if (i === 0) {
-            // First item is too long by itself, split it
-            const lines = pdf.splitTextToSize(item, pageWidth - 30);
-            pdf.text(lines, 15, yPosition);
-            yPosition += (lines.length * 5);
-            birthdayText = ""; // Reset for next items
-          } else {
-            // Print current line and start new line with current item
-            pdf.text(birthdayText, 15, yPosition);
-            yPosition += 5;
-            birthdayText = item;
-          }
-        } else {
-          birthdayText = testText;
-        }
-      }
-      
-      // Print any remaining text
-      if (birthdayText !== "🎂 BIRTHDAYS: ") {
-        pdf.text(birthdayText, 15, yPosition);
-        yPosition += 5;
-      }
-    }
-    
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+    pdf.text(birthdayText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
+  }
+}
+
 // Draw anniversaries - Include years of service
 if (anniversaries.length > 0) {
   const anniversaryNames = anniversaries.map(a => {
@@ -1221,37 +1204,20 @@ if (anniversaries.length > 0) {
     return `${a.displayName}${years ? ` (${years} Year${years !== "1" ? 's' : ''})` : ''}`;
   }).join(', ');
   
-  // REMOVE THE EMOJI from the text
+  // NO EMOJI - Clean text only
   const anniversaryText = `ANNIVERSARIES: ${anniversaryNames}`;
-      for (let i = 0; i < anniversaryItems.length; i++) {
-        const item = anniversaryItems[i];
-        const testText = anniversaryText + (i > 0 ? ", " : "") + item;
-        
-        if (pdf.getTextWidth(testText) > (pageWidth - 30)) {
-          // If adding this item would exceed width, start a new line
-          if (i === 0) {
-            // First item is too long by itself, split it
-            const lines = pdf.splitTextToSize(item, pageWidth - 30);
-            pdf.text(lines, 15, yPosition);
-            yPosition += (lines.length * 5);
-            anniversaryText = ""; // Reset for next items
-          } else {
-            // Print current line and start new line with current item
-            pdf.text(anniversaryText, 15, yPosition);
-            yPosition += 5;
-            anniversaryText = item;
-          }
-        } else {
-          anniversaryText = testText;
-        }
-      }
-      
-      // Print any remaining text
-      if (anniversaryText !== "🎖️ ANNIVERSARIES: ") {
-        pdf.text(anniversaryText, 15, yPosition);
-        yPosition += 5;
-      }
-    }
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+    pdf.text(anniversaryText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
+  }
+}
     
     // Reset text color
     const primaryColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');

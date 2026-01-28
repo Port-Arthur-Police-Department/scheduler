@@ -750,40 +750,21 @@ const fetchProfile = async (userId: string) => {
     }
     
     switch (activeTab) {
-      case "daily":
-        return isAdminOrSupervisor ? (
-          // For admin/supervisor on mobile, show mobile management
-          isMobile ? (
-            <DailyScheduleViewMobile
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={isAdminOrSupervisor}
-              userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
-              userCurrentShift={userCurrentShift}
-            />
-          ) : (
-            <DailyScheduleManagement 
-              isAdminOrSupervisor={isAdminOrSupervisor}
-              userCurrentShift={userCurrentShift}
-            />
-          )
-        ) : (
-          // For regular officers
-          isMobile ? (
-            <DailyScheduleViewMobile
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={false}
-              userRole="officer"
-              userCurrentShift={userCurrentShift}
-            />
-          ) : (
-            <DailyScheduleView 
-              selectedDate={new Date()} 
-              filterShiftId={userCurrentShift}
-              isAdminOrSupervisor={false} 
-              userRole="officer" 
-            />
-          )
-        );
+case "daily":
+  // Show DailyScheduleManagement for everyone
+  return isMobile ? (
+    <DailyScheduleViewMobile
+      filterShiftId={userCurrentShift}
+      isAdminOrSupervisor={isAdminOrSupervisor}
+      userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+      userCurrentShift={userCurrentShift}
+    />
+  ) : (
+    <DailyScheduleManagement 
+      isAdminOrSupervisor={isAdminOrSupervisor}
+      userCurrentShift={userCurrentShift}
+    />
+  );
       case "schedule":
         return (
           <div className="space-y-4">

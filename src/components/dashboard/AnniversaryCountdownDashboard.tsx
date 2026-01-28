@@ -73,55 +73,66 @@ export const AnniversaryCountdownDashboard = ({
     },
   });
 
-  // Calculate anniversary countdown
+  // FIXED: Anniversary calculation
   useEffect(() => {
     if (profile?.hire_date) {
       const hireDate = parseISO(profile.hire_date);
       const today = new Date();
       
-      // Calculate years of service (anniversary years completed)
-      let years = today.getFullYear() - hireDate.getFullYear();
+      // Extract month and day from hire date
+      const hireMonth = hireDate.getMonth();
+      const hireDay = hireDate.getDate();
       
-      // Adjust if anniversary hasn't occurred yet this year
-      const currentYearAnniversary = new Date(today.getFullYear(), hireDate.getMonth(), hireDate.getDate());
-      if (today < currentYearAnniversary) {
-        years--; // Haven't reached anniversary this year yet
+      // Calculate years of service
+      let yearsOfService = today.getFullYear() - hireDate.getFullYear();
+      
+      // Check if anniversary has occurred this year
+      const hasAnniversaryOccurredThisYear = 
+        (today.getMonth() > hireMonth) || 
+        (today.getMonth() === hireMonth && today.getDate() >= hireDay);
+      
+      if (!hasAnniversaryOccurredThisYear) {
+        yearsOfService--; // Haven't reached anniversary this year yet
       }
       
-      setYearsOfService(Math.max(years, 0));
+      setYearsOfService(Math.max(yearsOfService, 0));
       
       // Calculate next anniversary
-      let nextAnniv = new Date(today.getFullYear(), hireDate.getMonth(), hireDate.getDate());
+      let nextAnniversaryYear = today.getFullYear();
       
-      // If anniversary already passed this year, move to next year
-      if (today > nextAnniv) {
-        nextAnniv = new Date(today.getFullYear() + 1, hireDate.getMonth(), hireDate.getDate());
-      } 
-      // If anniversary is today
-      else if (
-        today.getDate() === hireDate.getDate() &&
-        today.getMonth() === hireDate.getMonth()
-      ) {
-        setIsAnniversaryToday(true);
-        setDaysUntil(0);
+      // If anniversary already passed this year, use next year
+      if (hasAnniversaryOccurredThisYear) {
+        nextAnniversaryYear = today.getFullYear() + 1;
       }
       
-      // Calculate days until next anniversary (only if not today)
-      if (!isAnniversaryToday) {
+      const nextAnniv = new Date(nextAnniversaryYear, hireMonth, hireDay);
+      setNextAnniversary(nextAnniv);
+      
+      // Check if today is anniversary
+      const isTodayAnniversary = 
+        today.getMonth() === hireMonth && 
+        today.getDate() === hireDay;
+      
+      setIsAnniversaryToday(isTodayAnniversary);
+      
+      // Calculate days until next anniversary
+      if (!isTodayAnniversary) {
         const diffTime = nextAnniv.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         setDaysUntil(diffDays);
+      } else {
+        setDaysUntil(0);
       }
       
-      setNextAnniversary(nextAnniv);
-      
-      console.log('Anniversary Calculation:', {
+      // Debug logging
+      console.log('🎖️ Anniversary Calculation:', {
         hireDate: format(hireDate, 'yyyy-MM-dd'),
         today: format(today, 'yyyy-MM-dd'),
-        yearsOfService: years,
+        yearsOfService,
         nextAnniversary: format(nextAnniv, 'yyyy-MM-dd'),
-        daysUntil: daysUntil,
-        isToday: isAnniversaryToday
+        hasOccurredThisYear: hasAnniversaryOccurredThisYear,
+        isTodayAnniversary,
+        daysUntil: daysUntil
       });
     }
   }, [profile?.hire_date]);

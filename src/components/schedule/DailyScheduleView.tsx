@@ -1238,14 +1238,14 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
     throw exceptionsError;
   }
 
-  // Get officer profiles separately
+  // Get officer profiles separately - UPDATED TO INCLUDE BIRTHDAY AND HIRE_DATE
   const officerIds = [...new Set(exceptionsData?.map(e => e.officer_id).filter(Boolean))];
   let officerProfiles = [];
 
   if (officerIds.length > 0) {
     const { data: profilesData, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, badge_number, rank")
+      .select("id, full_name, badge_number, rank, birthday, hire_date") // ADDED birthday and hire_date
       .in("id", officerIds);
     
     if (profilesError) {
@@ -1254,6 +1254,26 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
       officerProfiles = profilesData || [];
     }
   }
+
+  // Create a map of all officer profiles for easy lookup
+  const allOfficerProfilesMap = new Map();
+
+  // Add profiles from recurring data
+  recurringData?.forEach(r => {
+    if (r.profiles) {
+      allOfficerProfilesMap.set(r.officer_id, r.profiles);
+    }
+  });
+
+  // Add profiles from officerProfiles (exceptions)
+  officerProfiles?.forEach(p => {
+    allOfficerProfilesMap.set(p.id, p);
+  });
+
+  // Function to get profile by officer ID
+  const getOfficerProfile = (officerId: string) => {
+    return allOfficerProfilesMap.get(officerId);
+  };
 
   // Get shift types for exceptions separately
   const shiftTypeIds = [...new Set(exceptionsData?.map(e => e.shift_type_id).filter(Boolean))];
@@ -1685,35 +1705,38 @@ for (const officer of allOfficers) {
   }
 }
 
-// FIRST: Get all officers with full day PTO for the PTO section
+// FIXED: FIRST: Get all officers with full day PTO for the PTO section
 const shiftPTORecords = ptoExceptions?.filter(e => 
   e.shift_type_id === shift.id
-).map(e => ({
-  id: e.id,
-  officerId: e.officer_id,
-  name: e.profiles?.full_name || "Unknown",
-  badge: e.profiles?.badge_number,
-  rank: e.profiles?.rank,
-  ptoType: e.reason || "PTO",
-  startTime: e.custom_start_time || shift.start_time,
-  endTime: e.custom_end_time || shift.end_time,
-  isFullShift: !e.custom_start_time && !e.custom_end_time,
-  shiftTypeId: shift.id,
-  unitNumber: e.unit_number,
-  notes: e.notes,
-  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS FOR PTO RECORDS TOO:
-  birthday: e.profiles?.birthday,
-  hire_date: e.profiles?.hire_date,
-  isBirthdayToday: e.profiles?.birthday 
-    ? isBirthdayToday(e.profiles.birthday, selectedDate)
-    : false,
-  isAnniversaryToday: e.profiles?.hire_date 
-    ? isAnniversaryToday(e.profiles.hire_date, selectedDate)
-    : false,
-  yearsOfService: e.profiles?.hire_date 
-    ? calculateYearsOfService(e.profiles.hire_date, selectedDate)
-    : 0
-})) || [];
+).map(e => {
+  // Get the officer's profile
+  const profile = getOfficerProfile(e.officer_id);
+  
+  return {
+    id: e.id,
+    officerId: e.officer_id,
+    name: profile?.full_name || "Unknown",
+    badge: profile?.badge_number,
+    rank: profile?.rank,
+    ptoType: e.reason || "PTO",
+    startTime: e.custom_start_time || shift.start_time,
+    endTime: e.custom_end_time || shift.end_time,
+    isFullShift: !e.custom_start_time && !e.custom_end_time,
+    shiftTypeId: shift.id,
+    unitNumber: e.unit_number,
+    notes: e.notes,
+    // 🎂🎖️ FIXED: Properly add birthday/anniversary fields for PTO records
+    isBirthdayToday: profile?.birthday 
+      ? isBirthdayToday(profile.birthday, selectedDate)
+      : false,
+    isAnniversaryToday: profile?.hire_date 
+      ? isAnniversaryToday(profile.hire_date, selectedDate)
+      : false,
+    yearsOfService: profile?.hire_date 
+      ? calculateYearsOfService(profile.hire_date, selectedDate)
+      : 0
+  };
+}) || [];
 
 // Function to check if officer is in a partnership
 const isInPartnership = (officer: any) => {

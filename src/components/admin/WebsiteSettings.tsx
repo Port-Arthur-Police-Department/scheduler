@@ -23,6 +23,7 @@ import { PDFPreviewDialog } from "./settings/PDFPreviewDialog";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 import { EventsDashboardSettings } from "./settings/EventsDashboardSettings";
+import { AnniversaryCountdownSettings } from "./settings/AnniversaryCountdownSettings";
 
 // Constants - UPDATED WITH YOUR CURRENT SETTINGS FROM SUPABASE
 export const DEFAULT_COLORS = {

@@ -55,69 +55,118 @@ export const AnniversaryCountdownDashboard = ({
     enabled: !!userId && isEnabledForRole(),
   });
 
-  // Calculate anniversary countdown
-  useEffect(() => {
-    if (profile?.hire_date) {
-      const hireDate = parseISO(profile.hire_date);
-      const today = new Date();
-      
-      // Extract month and day from hire date
-      const hireMonth = hireDate.getMonth();
-      const hireDay = hireDate.getDate();
-      
-      // Calculate years of service
-      let yearsOfService = today.getFullYear() - hireDate.getFullYear();
-      
-      // Check if anniversary has occurred this year
-      const hasAnniversaryOccurredThisYear = 
-        (today.getMonth() > hireMonth) || 
-        (today.getMonth() === hireMonth && today.getDate() >= hireDay);
-      
-      if (!hasAnniversaryOccurredThisYear) {
-        yearsOfService--; // Haven't reached anniversary this year yet
-      }
-      
-      setYearsOfService(Math.max(yearsOfService, 0));
-      
-      // Calculate next anniversary
-      let nextAnniversaryYear = today.getFullYear();
-      
-      // If anniversary already passed this year, use next year
-      if (hasAnniversaryOccurredThisYear) {
-        nextAnniversaryYear = today.getFullYear() + 1;
-      }
-      
-      const nextAnniv = new Date(nextAnniversaryYear, hireMonth, hireDay);
-      setNextAnniversary(nextAnniv);
-      
-      // Check if today is anniversary
-      const isTodayAnniversary = 
-        today.getMonth() === hireMonth && 
-        today.getDate() === hireDay;
-      
-      setIsAnniversaryToday(isTodayAnniversary);
-      
-      // Calculate days until next anniversary
-      if (!isTodayAnniversary) {
-        const diffTime = nextAnniv.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        setDaysUntil(diffDays);
+// Replace the useEffect with this corrected version:
+useEffect(() => {
+  if (profile?.hire_date) {
+    const today = new Date();
+    
+    // Parse hire date safely, accounting for timezone issues
+    const hireDateStr = profile.hire_date;
+    console.log('Raw hire_date string:', hireDateStr);
+    
+    // Method 1: Try parsing with date-fns parseISO first
+    let hireDate: Date;
+    try {
+      hireDate = parseISO(hireDateStr);
+      console.log('Parsed with parseISO:', format(hireDate, 'yyyy-MM-dd'));
+    } catch (error) {
+      // Fallback: Create date from string parts
+      const parts = hireDateStr.split('-');
+      if (parts.length === 3) {
+        hireDate = new Date(
+          parseInt(parts[0]),
+          parseInt(parts[1]) - 1, // Month is 0-indexed
+          parseInt(parts[2])
+        );
+        console.log('Parsed manually:', format(hireDate, 'yyyy-MM-dd'));
       } else {
-        setDaysUntil(0);
+        console.error('Invalid hire_date format:', hireDateStr);
+        return;
       }
-      
-      // Debug logging
-      console.log('🎖️ Anniversary Calculation:', {
-        hireDate: format(hireDate, 'yyyy-MM-dd'),
-        today: format(today, 'yyyy-MM-dd'),
-        yearsOfService,
-        nextAnniversary: format(nextAnniv, 'yyyy-MM-dd'),
-        hasOccurredThisYear: hasAnniversaryOccurredThisYear,
-        isTodayAnniversary,
-        daysUntil: diffDays || 0
-      });
     }
-  }, [profile?.hire_date]);
+    
+    // Normalize dates to avoid timezone issues - set to noon UTC
+    const normalizedToday = new Date(Date.UTC(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      12, 0, 0
+    ));
+    
+    const normalizedHireDate = new Date(Date.UTC(
+      hireDate.getFullYear(),
+      hireDate.getMonth(),
+      hireDate.getDate(),
+      12, 0, 0
+    ));
+    
+    console.log('Normalized today:', format(normalizedToday, 'yyyy-MM-dd'));
+    console.log('Normalized hire date:', format(normalizedHireDate, 'yyyy-MM-dd'));
+    
+    // Extract month and day from hire date
+    const hireMonth = normalizedHireDate.getMonth();
+    const hireDay = normalizedHireDate.getDate();
+    
+    // Calculate years of service
+    let yearsOfService = normalizedToday.getFullYear() - normalizedHireDate.getFullYear();
+    
+    // Check if anniversary has occurred this year
+    const currentYearAnniversary = new Date(
+      normalizedToday.getFullYear(),
+      hireMonth,
+      hireDay
+    );
+    
+    console.log('Current year anniversary date:', format(currentYearAnniversary, 'yyyy-MM-dd'));
+    
+    // Compare dates safely
+    const hasAnniversaryOccurredThisYear = normalizedToday >= currentYearAnniversary;
+    
+    if (!hasAnniversaryOccurredThisYear) {
+      yearsOfService--; // Haven't reached anniversary this year yet
+    }
+    
+    setYearsOfService(Math.max(yearsOfService, 0));
+    
+    // Calculate next anniversary
+    let nextAnniversaryYear = normalizedToday.getFullYear();
+    
+    // If anniversary already passed this year, use next year
+    if (hasAnniversaryOccurredThisYear) {
+      nextAnniversaryYear = normalizedToday.getFullYear() + 1;
+    }
+    
+    const nextAnniv = new Date(nextAnniversaryYear, hireMonth, hireDay);
+    setNextAnniversary(nextAnniv);
+    
+    // Check if today is anniversary
+    const isTodayAnniversary = 
+      normalizedToday.getMonth() === hireMonth && 
+      normalizedToday.getDate() === hireDay;
+    
+    setIsAnniversaryToday(isTodayAnniversary);
+    
+    // Calculate days until next anniversary
+    if (!isTodayAnniversary) {
+      const diffTime = nextAnniv.getTime() - normalizedToday.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDaysUntil(diffDays);
+    } else {
+      setDaysUntil(0);
+    }
+    
+    // Debug logging
+    console.log('🎖️ ANNIVERSARY CALCULATION FOR:', profile.full_name);
+    console.log('  Hire Date (raw):', hireDateStr);
+    console.log('  Hire Date (parsed):', format(hireDate, 'yyyy-MM-dd'));
+    console.log('  Today:', format(today, 'yyyy-MM-dd'));
+    console.log('  Years of Service:', yearsOfService);
+    console.log('  Next Anniversary:', format(nextAnniv, 'yyyy-MM-dd'));
+    console.log('  Has occurred this year:', hasAnniversaryOccurredThisYear);
+    console.log('  Is today anniversary:', isTodayAnniversary);
+    console.log('  Days until:', daysUntil || 0);
+  }
+}, [profile?.hire_date]);
 
   if (isLoading) {
     return (

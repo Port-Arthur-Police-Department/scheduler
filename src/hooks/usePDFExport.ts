@@ -1148,8 +1148,10 @@ export const usePDFExport = () => {
 // BIRTHDAY AND ANNIVERSARY INDICATORS SECTION
 // ================================================
 // Only show if enabled in layout settings
+let specialOccasionsCount = 0;
 if (safeLayoutSettings.sections.showSpecialOccasions) {
   const specialOccasions = collectSpecialOccasions(shiftData, selectedDate);
+  specialOccasionsCount = specialOccasions.length;
   
   if (specialOccasions.length > 0) {
     // Separate birthdays and anniversaries
@@ -1171,69 +1173,63 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
     pdf.line(15, yPosition, pageWidth - 15, yPosition);
     yPosition += 6;
     
-// Draw birthdays - Include age
-if (birthdays.length > 0) {
-  const birthdayNames = birthdays.map(b => {
-    // Format: "LASTNAME (Age XX)"
-    const ageMatch = b.text.match(/Age (\d+)/);
-    const age = ageMatch ? ageMatch[1] : "";
-    return `${b.displayName}${age ? ` (Age ${age})` : ''}`;
-  }).join(', ');
-  
-  // NO EMOJI - Clean text only
-  const birthdayText = `BIRTHDAYS: ${birthdayNames}`;
-  
-  // Check if text fits on one line
-  if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
-    pdf.text(birthdayText, 15, yPosition);
-    yPosition += 5;
-  } else {
-    // Handle multi-line if needed
-    const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
-    pdf.text(lines, 15, yPosition);
-    yPosition += (lines.length * 5);
-  }
-}
-
-// Draw anniversaries - Include years of service
-if (anniversaries.length > 0) {
-  const anniversaryNames = anniversaries.map(a => {
-    // Format: "LASTNAME (X Years)"
-    const yearsMatch = a.text.match(/Year (\d+)/);
-    const years = yearsMatch ? yearsMatch[1] : "";
-    return `${a.displayName}${years ? ` (${years} Year${years !== "1" ? 's' : ''})` : ''}`;
-  }).join(', ');
-  
-  // NO EMOJI - Clean text only
-  const anniversaryText = `ANNIVERSARIES: ${anniversaryNames}`;
-  
-  // Check if text fits on one line
-  if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
-    pdf.text(anniversaryText, 15, yPosition);
-    yPosition += 5;
-  } else {
-    // Handle multi-line if needed
-    const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
-    pdf.text(lines, 15, yPosition);
-    yPosition += (lines.length * 5);
-  }
-}
+    // Draw birthdays - Include age (NO EMOJI)
+    if (birthdays.length > 0) {
+      const birthdayNames = birthdays.map(b => {
+        // Format: "LASTNAME (Age XX)"
+        const ageMatch = b.text.match(/Age (\d+)/);
+        const age = ageMatch ? ageMatch[1] : "";
+        return `${b.displayName}${age ? ` (Age ${age})` : ''}`;
+      }).join(', ');
+      
+      // NO EMOJI - Clean text only
+      const birthdayText = `BIRTHDAYS: ${birthdayNames}`;
+      
+      // Check if text fits on one line
+      if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+        pdf.text(birthdayText, 15, yPosition);
+        yPosition += 5;
+      } else {
+        // Handle multi-line if needed
+        const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+        pdf.text(lines, 15, yPosition);
+        yPosition += (lines.length * 5);
+      }
+    }
+    
+    // Draw anniversaries - Include years of service (NO EMOJI)
+    if (anniversaries.length > 0) {
+      const anniversaryNames = anniversaries.map(a => {
+        // Format: "LASTNAME (X Years)"
+        const yearsMatch = a.text.match(/Year (\d+)/);
+        const years = yearsMatch ? yearsMatch[1] : "";
+        return `${a.displayName}${years ? ` (${years} Year${years !== "1" ? 's' : ''})` : ''}`;
+      }).join(', ');
+      
+      // NO EMOJI - Clean text only
+      const anniversaryText = `ANNIVERSARIES: ${anniversaryNames}`;
+      
+      // Check if text fits on one line
+      if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+        pdf.text(anniversaryText, 15, yPosition);
+        yPosition += 5;
+      } else {
+        // Handle multi-line if needed
+        const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+        pdf.text(lines, 15, yPosition);
+        yPosition += (lines.length * 5);
+      }
+    }
     
     // Reset text color
-    const primaryColorStr = getColorSetting(safeLayoutSettings, 'primaryColor');
-    const primaryColor = parseColor(primaryColorStr);
     pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     yPosition += 4;
   }
-  
-  console.log("✅ PDF exported with special occasions:", {
-    birthdays: specialOccasions.filter(o => o.type === 'birthday').length,
-    anniversaries: specialOccasions.filter(o => o.type === 'anniversary').length,
-    total: specialOccasions.length
-  });
-} else {
-  console.log("Special occasions section is disabled in layout settings");
 }
+
+// Then later, after saving the PDF, you can log:
+console.log(`✅ PDF exported successfully with ${specialOccasionsCount} special occasions`);
+      
       // Save the PDF
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const dayOfWeek = format(selectedDate, "EEEE").toUpperCase();

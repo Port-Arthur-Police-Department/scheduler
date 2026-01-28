@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInDays, parseISO, isBefore, addYears, isToday, isSameDay } from "date-fns";
-import { Calendar, Target, Trophy, PartyPopper, Timer, Clock, CalendarDays } from "lucide-react";
+import { Calendar, Trophy, PartyPopper, Timer, Clock, CalendarDays, Star, Award } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,6 @@ export const AnniversaryCountdownDashboard = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile-anniversary', userId] });
-      toast.success(`Anniversary countdown ${profile?.show_anniversary_countdown ? 'hidden' : 'shown'}`);
     },
   });
 
@@ -80,39 +79,66 @@ export const AnniversaryCountdownDashboard = ({
       const hireDate = parseISO(profile.hire_date);
       const today = new Date();
       
-      // Calculate years of service
-      const years = today.getFullYear() - hireDate.getFullYear();
-      setYearsOfService(years);
+      // Calculate years of service (anniversary years completed)
+      let years = today.getFullYear() - hireDate.getFullYear();
+      
+      // Adjust if anniversary hasn't occurred yet this year
+      const currentYearAnniversary = new Date(today.getFullYear(), hireDate.getMonth(), hireDate.getDate());
+      if (today < currentYearAnniversary) {
+        years--; // Haven't reached anniversary this year yet
+      }
+      
+      setYearsOfService(Math.max(years, 0));
       
       // Calculate next anniversary
       let nextAnniv = new Date(today.getFullYear(), hireDate.getMonth(), hireDate.getDate());
       
       // If anniversary already passed this year, move to next year
-      if (isBefore(today, nextAnniv) || isSameDay(today, nextAnniv)) {
-        // Anniversary is today or in the future this year
-        if (isSameDay(today, nextAnniv)) {
-          setIsAnniversaryToday(true);
-          setDaysUntil(0);
-        } else {
-          setIsAnniversaryToday(false);
-          const days = differenceInDays(nextAnniv, today);
-          setDaysUntil(days);
-        }
-      } else {
-        // Anniversary passed, calculate for next year
-        nextAnniv = addYears(nextAnniv, 1);
-        const days = differenceInDays(nextAnniv, today);
-        setDaysUntil(days);
-        setIsAnniversaryToday(false);
+      if (today > nextAnniv) {
+        nextAnniv = new Date(today.getFullYear() + 1, hireDate.getMonth(), hireDate.getDate());
+      } 
+      // If anniversary is today
+      else if (
+        today.getDate() === hireDate.getDate() &&
+        today.getMonth() === hireDate.getMonth()
+      ) {
+        setIsAnniversaryToday(true);
+        setDaysUntil(0);
+      }
+      
+      // Calculate days until next anniversary (only if not today)
+      if (!isAnniversaryToday) {
+        const diffTime = nextAnniv.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        setDaysUntil(diffDays);
       }
       
       setNextAnniversary(nextAnniv);
+      
+      console.log('Anniversary Calculation:', {
+        hireDate: format(hireDate, 'yyyy-MM-dd'),
+        today: format(today, 'yyyy-MM-dd'),
+        yearsOfService: years,
+        nextAnniversary: format(nextAnniv, 'yyyy-MM-dd'),
+        daysUntil: daysUntil,
+        isToday: isAnniversaryToday
+      });
     }
   }, [profile?.hire_date]);
 
   const handleToggleCountdown = () => {
     if (profile) {
-      toggleCountdownMutation.mutate(!profile.show_anniversary_countdown);
+      const newValue = !profile.show_anniversary_countdown;
+      toggleCountdownMutation.mutate(newValue, {
+        onSuccess: () => {
+          // Immediately update local state for instant feedback
+          queryClient.setQueryData(['profile-anniversary', userId], (oldData: any) => {
+            if (!oldData) return oldData;
+            return { ...oldData, show_anniversary_countdown: newValue };
+          });
+          toast.success(`Anniversary countdown ${newValue ? 'shown' : 'hidden'}`);
+        },
+      });
     }
   };
 
@@ -239,14 +265,39 @@ export const AnniversaryCountdownDashboard = ({
                     10+ Years
                   </Badge>
                 )}
+                {yearsOfService >= 15 && (
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                    15+ Years
+                  </Badge>
+                )}
                 {yearsOfService >= 20 && (
-                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                    20+ Years
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                    <Star className="h-3 w-3 mr-1" />
+                    20+ Years (Retirement Eligible)
                   </Badge>
                 )}
                 {yearsOfService >= 25 && (
-                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                    <Award className="h-3 w-3 mr-1" />
                     25+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 30 && (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                    <Award className="h-3 w-3 mr-1" />
+                    30+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 35 && (
+                  <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">
+                    <Award className="h-3 w-3 mr-1" />
+                    35+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 40 && (
+                  <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">
+                    <Award className="h-3 w-3 mr-1" />
+                    40+ Years
                   </Badge>
                 )}
               </div>

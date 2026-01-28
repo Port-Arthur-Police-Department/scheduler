@@ -258,6 +258,9 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
     icon: string;
     text: string;
     displayName: string;
+    // Add these new fields
+    age?: number;
+    yearsOfService?: number;
   }> = [];
   
   // Helper function to calculate age from birthday
@@ -308,8 +311,9 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
         name: person.name,
         type: 'birthday',
         icon: '🎂',
-        text: `Age ${age} Birthday`,
-        displayName: extractLastName(person.name) // Use last name for display
+        text: `Happy Birthday ${extractLastName(person.name)} (${age})`, // NEW: Custom message
+        displayName: extractLastName(person.name),
+        age: age // Store age for later use
       });
     }
     
@@ -320,8 +324,9 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
         name: person.name,
         type: 'anniversary',
         icon: '🎖️',
-        text: `Year ${years} Anniversary`,
-        displayName: extractLastName(person.name) // Use last name for display
+        text: `Congrats ${extractLastName(person.name)} (${years} year${years !== 1 ? 's' : ''} anniversary)`, // NEW: Custom message
+        displayName: extractLastName(person.name),
+        yearsOfService: years // Store years for later use
       });
     }
   };
@@ -352,9 +357,6 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
   
   return uniqueOccasions;
 };
-
-
-
 
 
 // Your actual base64 logo - paste your complete string here
@@ -1174,53 +1176,41 @@ export const usePDFExport = () => {
             pdf.line(15, yPosition, pageWidth - 15, yPosition);
             yPosition += 6;
             
-            // Draw birthdays - Include age (NO EMOJI)
-            if (birthdays.length > 0) {
-              const birthdayNames = birthdays.map(b => {
-                // Format: "LASTNAME (Age XX)"
-                const ageMatch = b.text.match(/Age (\d+)/);
-                const age = ageMatch ? ageMatch[1] : "";
-                return `${b.displayName}${age ? ` (Age ${age})` : ''}`;
-              }).join(', ');
-              
-              // NO EMOJI - Clean text only
-              const birthdayText = `BIRTHDAYS: ${birthdayNames}`;
-              
-              // Check if text fits on one line
-              if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
-                pdf.text(birthdayText, 15, yPosition);
-                yPosition += 5;
-              } else {
-                // Handle multi-line if needed
-                const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
-                pdf.text(lines, 15, yPosition);
-                yPosition += (lines.length * 5);
-              }
-            }
-            
-            // Draw anniversaries - Include years of service (NO EMOJI)
-            if (anniversaries.length > 0) {
-              const anniversaryNames = anniversaries.map(a => {
-                // Format: "LASTNAME (X Years)"
-                const yearsMatch = a.text.match(/Year (\d+)/);
-                const years = yearsMatch ? yearsMatch[1] : "";
-                return `${a.displayName}${years ? ` (${years} Year${years !== "1" ? 's' : ''})` : ''}`;
-              }).join(', ');
-              
-              // NO EMOJI - Clean text only
-              const anniversaryText = `ANNIVERSARIES: ${anniversaryNames}`;
-              
-              // Check if text fits on one line
-              if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
-                pdf.text(anniversaryText, 15, yPosition);
-                yPosition += 5;
-              } else {
-                // Handle multi-line if needed
-                const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
-                pdf.text(lines, 15, yPosition);
-                yPosition += (lines.length * 5);
-              }
-            }
+     // Draw birthdays - Keep headers but with custom messages
+if (birthdays.length > 0) {
+  // Create custom messages for each person
+  const birthdayMessages = birthdays.map(b => b.text).join(', ');
+  const birthdayText = `BIRTHDAYS: ${birthdayMessages}`;
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+    pdf.text(birthdayText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
+  }
+}
+
+// Draw anniversaries - Keep headers but with custom messages
+if (anniversaries.length > 0) {
+  // Create custom messages for each person
+  const anniversaryMessages = anniversaries.map(a => a.text).join(', ');
+  const anniversaryText = `ANNIVERSARIES: ${anniversaryMessages}`;
+  
+  // Check if text fits on one line
+  if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+    pdf.text(anniversaryText, 15, yPosition);
+    yPosition += 5;
+  } else {
+    // Handle multi-line if needed
+    const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
+    pdf.text(lines, 15, yPosition);
+    yPosition += (lines.length * 5);
+  }
+}
             
             // Reset text color
             pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);

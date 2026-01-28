@@ -1006,7 +1006,7 @@ export const usePDFExport = () => {
           }
           
           // UPDATED: Use supervisor formatting WITHOUT rank in name column
-          const displayName = formatSupervisorDisplay(supervisor);
+          const displayName = formatSupervisorDisplay(supervisor, safeLayoutSettings.sections.showSpecialOccasions);
           const position = supervisor?.position || "";
           const notes = formatPartnershipDetails(supervisor, position);
           

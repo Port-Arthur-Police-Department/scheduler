@@ -74,6 +74,45 @@ const COLORS = {
   border: [222, 226, 230]
 };
 
+// Helper to fetch all officers assigned to a shift (including those completely off)
+const fetchAllAssignedOfficers = async (shiftData: any, selectedDate: Date) => {
+  try {
+    // This is an example - adjust based on your database schema
+    // You might need to query schedule_exceptions, recurring_schedules, etc.
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const shiftId = shiftData.shift?.id;
+    
+    if (!shiftId) return [];
+    
+    // Example query - you'll need to adjust this for your schema
+    const { data: allScheduleEntries, error } = await supabase
+      .from("schedule_exceptions")
+      .select(`
+        officer_id,
+        profiles (id, full_name, birthday, hire_date)
+      `)
+      .eq("date", dateStr)
+      .eq("shift_type_id", shiftId)
+      .or("is_off.is.false,is_off.is.true"); // Include both working and off-duty
+    
+    if (error) {
+      console.error("Error fetching assigned officers:", error);
+      return [];
+    }
+    
+    return allScheduleEntries.map(entry => ({
+      officerId: entry.officer_id,
+      name: entry.profiles?.full_name,
+      birthday: entry.profiles?.birthday,
+      hire_date: entry.profiles?.hire_date
+    }));
+    
+  } catch (error) {
+    console.error("Error in fetchAllAssignedOfficers:", error);
+    return [];
+  }
+};
+
 // Helper to calculate appropriate row height based on font size
 const calculateRowHeight = (fontSize: number): number => {
   // Base row height for 8pt font

@@ -260,24 +260,62 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
     displayName: string;
   }> = [];
   
+  // Helper function to calculate age from birthday
+  const calculateAge = (birthday: string, currentDate: Date): number => {
+    try {
+      const birthDate = parseISO(birthday);
+      let age = currentDate.getFullYear() - birthDate.getFullYear();
+      const monthDiff = currentDate.getMonth() - birthDate.getMonth();
+      
+      // If birthday hasn't occurred yet this year, subtract 1
+      if (monthDiff < 0 || (monthDiff === 0 && currentDate.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    } catch (error) {
+      console.error("Error calculating age:", birthday, error);
+      return 0;
+    }
+  };
+  
+  // Helper function to calculate years of service
+  const calculateServiceYears = (hireDate: string, currentDate: Date): number => {
+    try {
+      const hireDateObj = parseISO(hireDate);
+      let years = currentDate.getFullYear() - hireDateObj.getFullYear();
+      
+      // Adjust if anniversary hasn't occurred yet this year
+      if (currentDate.getMonth() < hireDateObj.getMonth() || 
+          (currentDate.getMonth() === hireDateObj.getMonth() && currentDate.getDate() < hireDateObj.getDate())) {
+        years--;
+      }
+      
+      return Math.max(0, years);
+    } catch (error) {
+      console.error("Error calculating years of service:", hireDate, error);
+      return 0;
+    }
+  };
+  
   // Helper function to add occasion
   const addIfSpecialOccasion = (person: any) => {
     if (!person || !person.name) return;
     
     // Check birthday
     if (person.birthday && hasBirthdayToday(person.birthday, selectedDate)) {
+      const age = calculateAge(person.birthday, selectedDate);
       specialOccasions.push({
         name: person.name,
         type: 'birthday',
         icon: '🎂',
-        text: 'Birthday',
+        text: `Age ${age} Birthday`,
         displayName: extractLastName(person.name) // Use last name for display
       });
     }
     
     // Check anniversary
     if (person.hire_date && hasAnniversaryToday(person.hire_date, selectedDate)) {
-      const years = calculateYearsOfService(person.hire_date, selectedDate);
+      const years = calculateServiceYears(person.hire_date, selectedDate);
       specialOccasions.push({
         name: person.name,
         type: 'anniversary',
@@ -299,6 +337,10 @@ const collectSpecialOccasions = (shiftData: any, selectedDate: Date) => {
   
   if (shiftData.specialAssignmentOfficers) {
     shiftData.specialAssignmentOfficers.forEach((officer: any) => addIfSpecialOccasion(officer));
+  }
+  
+  if (shiftData.ptoRecords) {
+    shiftData.ptoRecords.forEach((ptoRecord: any) => addIfSpecialOccasion(ptoRecord));
   }
   
   // Remove duplicates (in case someone appears in multiple lists)
@@ -1129,61 +1171,87 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
     pdf.line(15, yPosition, pageWidth - 15, yPosition);
     yPosition += 6;
     
-    // Draw birthdays - Include age
+    // Draw birthdays - Match EventsDashboard format
     if (birthdays.length > 0) {
-      const birthdayNames = birthdays.map(b => {
-        // Try to get age from the text field
-        let ageInfo = "";
-        if (b.text && b.text.includes("Age")) {
-          // Extract age from text like "Age 35 Birthday"
-          const ageMatch = b.text.match(/Age (\d+)/);
-          if (ageMatch && ageMatch[1]) {
-            ageInfo = ` (Age ${ageMatch[1]})`;
+      const birthdayItems = birthdays.map(b => {
+        // Extract age from text
+        const ageMatch = b.text.match(/Age (\d+)/);
+        const age = ageMatch ? ageMatch[1] : "";
+        // Format like EventsDashboard: "LASTNAME (Age XX)"
+        return `${b.displayName} (Age ${age})`;
+      });
+      
+      // Combine all birthdays
+      let birthdayText = "🎂 BIRTHDAYS: ";
+      for (let i = 0; i < birthdayItems.length; i++) {
+        const item = birthdayItems[i];
+        const testText = birthdayText + (i > 0 ? ", " : "") + item;
+        
+        if (pdf.getTextWidth(testText) > (pageWidth - 30)) {
+          // If adding this item would exceed width, start a new line
+          if (i === 0) {
+            // First item is too long by itself, split it
+            const lines = pdf.splitTextToSize(item, pageWidth - 30);
+            pdf.text(lines, 15, yPosition);
+            yPosition += (lines.length * 5);
+            birthdayText = ""; // Reset for next items
+          } else {
+            // Print current line and start new line with current item
+            pdf.text(birthdayText, 15, yPosition);
+            yPosition += 5;
+            birthdayText = item;
           }
+        } else {
+          birthdayText = testText;
         }
-        return `${b.displayName}${ageInfo}`;
-      }).join(', ');
+      }
       
-      const birthdayText = `🎂 BIRTHDAYS: ${birthdayNames}`;
-      
-      // Check if text fits on one line
-      if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
+      // Print any remaining text
+      if (birthdayText !== "🎂 BIRTHDAYS: ") {
         pdf.text(birthdayText, 15, yPosition);
         yPosition += 5;
-      } else {
-        // Handle multi-line if needed
-        const lines = pdf.splitTextToSize(birthdayText, pageWidth - 30);
-        pdf.text(lines, 15, yPosition);
-        yPosition += (lines.length * 5);
       }
     }
     
-    // Draw anniversaries - Include years of service
+    // Draw anniversaries - Match EventsDashboard format
     if (anniversaries.length > 0) {
-      const anniversaryNames = anniversaries.map(a => {
-        // Get years of service from the text field
-        let yearsInfo = "";
-        if (a.text && a.text.includes("Year")) {
-          // Extract years from text like "Year 5 Anniversary"
-          const yearsMatch = a.text.match(/Year (\d+)/);
-          if (yearsMatch && yearsMatch[1]) {
-            yearsInfo = ` (${yearsMatch[1]} Years)`;
+      const anniversaryItems = anniversaries.map(a => {
+        // Extract years from text
+        const yearsMatch = a.text.match(/Year (\d+)/);
+        const years = yearsMatch ? yearsMatch[1] : "0";
+        // Format like EventsDashboard: "LASTNAME (X Years)"
+        return `${a.displayName} (${years} Year${years !== "1" ? 's' : ''})`;
+      });
+      
+      // Combine all anniversaries
+      let anniversaryText = "🎖️ ANNIVERSARIES: ";
+      for (let i = 0; i < anniversaryItems.length; i++) {
+        const item = anniversaryItems[i];
+        const testText = anniversaryText + (i > 0 ? ", " : "") + item;
+        
+        if (pdf.getTextWidth(testText) > (pageWidth - 30)) {
+          // If adding this item would exceed width, start a new line
+          if (i === 0) {
+            // First item is too long by itself, split it
+            const lines = pdf.splitTextToSize(item, pageWidth - 30);
+            pdf.text(lines, 15, yPosition);
+            yPosition += (lines.length * 5);
+            anniversaryText = ""; // Reset for next items
+          } else {
+            // Print current line and start new line with current item
+            pdf.text(anniversaryText, 15, yPosition);
+            yPosition += 5;
+            anniversaryText = item;
           }
+        } else {
+          anniversaryText = testText;
         }
-        return `${a.displayName}${yearsInfo}`;
-      }).join(', ');
+      }
       
-      const anniversaryText = `🎖️ ANNIVERSARIES: ${anniversaryNames}`;
-      
-      // Check if text fits on one line
-      if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
+      // Print any remaining text
+      if (anniversaryText !== "🎖️ ANNIVERSARIES: ") {
         pdf.text(anniversaryText, 15, yPosition);
         yPosition += 5;
-      } else {
-        // Handle multi-line if needed
-        const lines = pdf.splitTextToSize(anniversaryText, pageWidth - 30);
-        pdf.text(lines, 15, yPosition);
-        yPosition += (lines.length * 5);
       }
     }
     
@@ -1194,8 +1262,11 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
     yPosition += 4;
   }
   
-  // Log the success with special occasions count
-  console.log("✅ PDF exported successfully with special occasions:", specialOccasions);
+  console.log("✅ PDF exported with special occasions:", {
+    birthdays: specialOccasions.filter(o => o.type === 'birthday').length,
+    anniversaries: specialOccasions.filter(o => o.type === 'anniversary').length,
+    total: specialOccasions.length
+  });
 } else {
   console.log("Special occasions section is disabled in layout settings");
 }

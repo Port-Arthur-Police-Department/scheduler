@@ -1129,30 +1129,22 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
     pdf.line(15, yPosition, pageWidth - 15, yPosition);
     yPosition += 6;
     
-    // Draw birthdays - Use ASCII symbols instead of emojis
+    // Draw birthdays - Include age
     if (birthdays.length > 0) {
-      // Use ASCII symbols: (*) for birthday
       const birthdayNames = birthdays.map(b => {
-        // Calculate age for birthday
+        // Try to get age from the text field
         let ageInfo = "";
-        if (b.birthday) {
-          try {
-            const birthDate = parseISO(b.birthday);
-            const age = selectedDate.getFullYear() - birthDate.getFullYear();
-            // Adjust if birthday hasn't occurred yet this year
-            const hasHadBirthday = 
-              (selectedDate.getMonth() > birthDate.getMonth()) ||
-              (selectedDate.getMonth() === birthDate.getMonth() && selectedDate.getDate() >= birthDate.getDate());
-            const finalAge = hasHadBirthday ? age : age - 1;
-            ageInfo = ` (Age ${finalAge})`;
-          } catch (error) {
-            console.error("Error calculating age:", error);
+        if (b.text && b.text.includes("Age")) {
+          // Extract age from text like "Age 35 Birthday"
+          const ageMatch = b.text.match(/Age (\d+)/);
+          if (ageMatch && ageMatch[1]) {
+            ageInfo = ` (Age ${ageMatch[1]})`;
           }
         }
         return `${b.displayName}${ageInfo}`;
       }).join(', ');
       
-      const birthdayText = `(*) BIRTHDAYS: ${birthdayNames}`;
+      const birthdayText = `🎂 BIRTHDAYS: ${birthdayNames}`;
       
       // Check if text fits on one line
       if (pdf.getTextWidth(birthdayText) < (pageWidth - 30)) {
@@ -1166,11 +1158,10 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
       }
     }
     
-    // Draw anniversaries - Use ASCII symbols instead of emojis
+    // Draw anniversaries - Include years of service
     if (anniversaries.length > 0) {
-      // Use ASCII symbols: (★) for anniversary
       const anniversaryNames = anniversaries.map(a => {
-        // Get years of service from the occasion data if available
+        // Get years of service from the text field
         let yearsInfo = "";
         if (a.text && a.text.includes("Year")) {
           // Extract years from text like "Year 5 Anniversary"
@@ -1182,7 +1173,7 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
         return `${a.displayName}${yearsInfo}`;
       }).join(', ');
       
-      const anniversaryText = `(★) ANNIVERSARIES: ${anniversaryNames}`;
+      const anniversaryText = `🎖️ ANNIVERSARIES: ${anniversaryNames}`;
       
       // Check if text fits on one line
       if (pdf.getTextWidth(anniversaryText) < (pageWidth - 30)) {
@@ -1204,7 +1195,7 @@ if (safeLayoutSettings.sections.showSpecialOccasions) {
   }
   
   // Log the success with special occasions count
-  console.log(`✅ PDF exported successfully with ${specialOccasions.length} special occasions`);
+  console.log("✅ PDF exported successfully with special occasions:", specialOccasions);
 } else {
   console.log("Special occasions section is disabled in layout settings");
 }

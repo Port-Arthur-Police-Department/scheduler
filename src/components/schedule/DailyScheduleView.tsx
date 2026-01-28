@@ -782,6 +782,8 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
   const [customStartTime, setCustomStartTime] = useState("");
   const [customEndTime, setCustomEndTime] = useState("");
 
+  const predefinedPositions = PREDEFINED_POSITIONS;
+
   // Set default times when shift is selected
   useEffect(() => {
     if (shift) {

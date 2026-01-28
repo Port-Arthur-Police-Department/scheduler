@@ -919,6 +919,36 @@ useEffect(() => {
                     </DropdownMenuItem>
                   </ChangePassword>
                 )}
+
+               {/* Add this inside the DropdownMenuContent, after Change Password and before the separator */}
+<DropdownMenuItem 
+  className="cursor-pointer"
+  onClick={async (e) => {
+    e.preventDefault();
+    // Toggle anniversary countdown
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('show_anniversary_countdown')
+      .eq('id', user.id)
+      .single();
+    
+    const newValue = !currentProfile?.show_anniversary_countdown;
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ show_anniversary_countdown: newValue })
+      .eq('id', user.id);
+    
+    if (!error) {
+      toast.success(`Anniversary countdown ${newValue ? 'enabled' : 'disabled'}`);
+      // Refresh profile data
+      fetchProfile(user.id);
+    }
+  }}
+>
+  <Calendar className="h-4 w-4 mr-2" />
+  {profile?.show_anniversary_countdown ? 'Hide' : 'Show'} Anniversary Countdown
+</DropdownMenuItem>
                 
                 {/* PWA Re-enable Option - Only show if PWA is not installed */}
                 {!pwaStatus.isInstalled && user && (
@@ -968,12 +998,19 @@ useEffect(() => {
           <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
         </div>
 
-        {/* Upcoming Events Dashboard */}
-        <div className="mb-8">
-          <UpcomingEventsDashboard 
-            userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
-          />
-        </div>
+{/* Upcoming Events Dashboard */}
+<div className="mb-8">
+  <UpcomingEventsDashboard 
+    userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+  />
+</div>
+
+{/* Anniversary Countdown Dashboard - Add this */}
+{user && profile?.hire_date && (
+  <div className="mb-8">
+    <AnniversaryCountdownDashboard userId={user.id} />
+  </div>
+)}
 
         {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
         {isAdminOrSupervisor && !isMobile && getSetting('show_staffing_overview', true) && (

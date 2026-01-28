@@ -1,9 +1,10 @@
+// src/components/admin/settings/AnniversaryCountdownSettings.tsx
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Timer, UserCheck, Bell, Progress, Award, Info } from "lucide-react";
+import { Timer, UserCheck, Bell, BarChart3, Award, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AnniversaryCountdownSettingsProps {
@@ -128,7 +129,7 @@ export const AnniversaryCountdownSettings: React.FC<AnniversaryCountdownSettings
             {/* Display Options */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="font-medium flex items-center gap-2">
-                <Progress className="h-4 w-4" />
+                <BarChart3 className="h-4 w-4" />
                 Display Options
               </Label>
               
@@ -136,7 +137,7 @@ export const AnniversaryCountdownSettings: React.FC<AnniversaryCountdownSettings
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="anniversary_show_progress_bar" className="text-sm font-medium flex items-center gap-2">
-                      <Progress className="h-3 w-3" />
+                      <BarChart3 className="h-3 w-3" />
                       Show Year Progress Bar
                     </Label>
                     <p className="text-xs text-muted-foreground">

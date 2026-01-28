@@ -11,14 +11,36 @@ import { Progress } from "@/components/ui/progress";
 
 interface AnniversaryCountdownDashboardProps {
   userId: string;
+  userRole: 'officer' | 'supervisor' | 'admin';
+  websiteSettings: any;
 }
 
-export const AnniversaryCountdownDashboard = ({ userId }: AnniversaryCountdownDashboardProps) => {
+export const AnniversaryCountdownDashboard = ({ 
+  userId, 
+  userRole,
+  websiteSettings 
+}: AnniversaryCountdownDashboardProps) => {
   const [daysUntil, setDaysUntil] = useState<number | null>(null);
   const [yearsOfService, setYearsOfService] = useState<number>(0);
   const [nextAnniversary, setNextAnniversary] = useState<Date | null>(null);
   const [isAnniversaryToday, setIsAnniversaryToday] = useState(false);
   const queryClient = useQueryClient();
+
+  // Check if countdown is enabled for this user's role
+  const isEnabledForRole = () => {
+    if (!websiteSettings?.enable_anniversary_countdown) return false;
+    
+    switch (userRole) {
+      case 'admin':
+        return websiteSettings?.anniversary_countdown_admins !== false;
+      case 'supervisor':
+        return websiteSettings?.anniversary_countdown_supervisors !== false;
+      case 'officer':
+        return websiteSettings?.anniversary_countdown_officers !== false;
+      default:
+        return false;
+    }
+  };
 
   // Fetch user profile including hire_date and preference
   const { data: profile, isLoading } = useQuery({
@@ -33,7 +55,7 @@ export const AnniversaryCountdownDashboard = ({ userId }: AnniversaryCountdownDa
       if (error) throw error;
       return data;
     },
-    enabled: !!userId,
+    enabled: !!userId && isEnabledForRole(),
   });
 
   // Mutation to toggle countdown visibility
@@ -107,8 +129,12 @@ export const AnniversaryCountdownDashboard = ({ userId }: AnniversaryCountdownDa
     );
   }
 
-  // Don't show if user has disabled it or has no hire date
-  if (!profile?.show_anniversary_countdown || !profile?.hire_date) {
+  // Don't show if:
+  // 1. Feature is disabled globally
+  // 2. Feature is disabled for user's role
+  // 3. User has disabled it personally
+  // 4. User has no hire date
+  if (!isEnabledForRole() || !profile?.show_anniversary_countdown || !profile?.hire_date) {
     return null;
   }
 
@@ -187,40 +213,44 @@ export const AnniversaryCountdownDashboard = ({ userId }: AnniversaryCountdownDa
                 </span>
               </div>
               
-              {/* Progress Bar */}
-              <div className="space-y-1">
-                <Progress value={yearProgress} className="h-2" />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Year {yearsOfService}</span>
-                  <span>{Math.round(yearProgress)}%</span>
-                  <span>Year {yearsOfService + 1}</span>
+              {/* Progress Bar - only show if enabled */}
+              {websiteSettings?.anniversary_show_progress_bar !== false && (
+                <div className="space-y-1">
+                  <Progress value={yearProgress} className="h-2" />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Year {yearsOfService}</span>
+                    <span>{Math.round(yearProgress)}%</span>
+                    <span>Year {yearsOfService + 1}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             
-            {/* Milestone Badges */}
-            <div className="flex flex-wrap gap-2 pt-2">
-              {yearsOfService >= 5 && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                  5+ Years
-                </Badge>
-              )}
-              {yearsOfService >= 10 && (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  10+ Years
-                </Badge>
-              )}
-              {yearsOfService >= 20 && (
-                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                  20+ Years
-                </Badge>
-              )}
-              {yearsOfService >= 25 && (
-                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                  25+ Years
-                </Badge>
-              )}
-            </div>
+            {/* Milestone Badges - only show if enabled */}
+            {websiteSettings?.anniversary_show_milestone_badges !== false && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {yearsOfService >= 5 && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    5+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 10 && (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    10+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 20 && (
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                    20+ Years
+                  </Badge>
+                )}
+                {yearsOfService >= 25 && (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                    25+ Years
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

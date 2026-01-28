@@ -1055,7 +1055,7 @@ export const usePDFExport = () => {
           }
           
           // UPDATED: Use officer formatting with partnership - LAST NAMES ONLY
-          const displayName = formatOfficerDisplay(officer);
+          const displayName = formatOfficerDisplay(officer, safeLayoutSettings.sections.showSpecialOccasions);
           const position = officer?.position || "";
           const notes = formatPartnershipDetails(officer, position);
           

@@ -638,16 +638,16 @@ useEffect(() => {
   registerBackgroundSync();
 }, [pwaStatus.isInstalled, user?.id]);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
+const fetchProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*, show_anniversary_countdown") // Add this field
+      .eq("id", userId)
+      .single();
 
-      if (error) throw error;
-      setProfile(data);
+    if (error) throw error;
+    setProfile(data);
       
       // Determine user's current shift based on their schedule
       setDeterminingShift(true);

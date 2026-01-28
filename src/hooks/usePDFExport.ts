@@ -113,6 +113,31 @@ const fetchAllAssignedOfficers = async (shiftData: any, selectedDate: Date) => {
   }
 };
 
+// Helper function to add special occasion indicators to officer names
+const addSpecialOccasionIndicators = (officers: any[], showSpecialOccasions: boolean) => {
+  if (!showSpecialOccasions) return officers;
+  
+  return officers.map(officer => {
+    if (!officer || !officer.name) return officer;
+    
+    let nameDisplay = officer.name;
+    
+    // Add special occasion indicators
+    if (officer.isBirthdayToday) {
+      nameDisplay += " 🎂";
+    }
+    if (officer.isAnniversaryToday) {
+      nameDisplay += ` 🎖️`;
+    }
+    
+    // Return a new object with the updated name
+    return {
+      ...officer,
+      name: nameDisplay
+    };
+  });
+};
+
 // Helper to calculate appropriate row height based on font size
 const calculateRowHeight = (fontSize: number): number => {
   // Base row height for 8pt font
@@ -400,7 +425,8 @@ const drawActualLogo = (pdf: jsPDF, x: number, y: number) => {
 };
 
 // UPDATED: Function to format supervisor display WITHOUT rank in name column
-const formatSupervisorDisplay = (supervisor: any) => {
+// UPDATED: Function to format supervisor display WITHOUT rank in name column
+const formatSupervisorDisplay = (supervisor: any, showSpecialOccasions: boolean = false) => {
   if (!supervisor?.name) return "UNKNOWN";
   
   const name = extractLastName(supervisor.name);
@@ -408,26 +434,64 @@ const formatSupervisorDisplay = (supervisor: any) => {
   // If supervisor has a partnership, include partner
   if (supervisor.isCombinedPartnership && supervisor.partnerData) {
     const partnerName = extractLastName(supervisor.partnerData.partnerName);
-    return `${name} + ${partnerName}`;
+    let partnershipDisplay = `${name} + ${partnerName}`;
+    
+    // Add special occasion indicators for primary supervisor
+    if (showSpecialOccasions && supervisor.isBirthdayToday) {
+      partnershipDisplay += " 🎂";
+    }
+    if (showSpecialOccasions && supervisor.isAnniversaryToday) {
+      partnershipDisplay += ` 🎖️`;
+    }
+    
+    return partnershipDisplay;
   }
   
   // No partnership, show last name only (NO RANK in name column)
+  if (showSpecialOccasions && supervisor.isBirthdayToday) {
+    return `${name} 🎂`;
+  }
+  if (showSpecialOccasions && supervisor.isAnniversaryToday) {
+    return `${name} 🎖️`;
+  }
+  
   return name;
 };
 
 // UPDATED: Function to format officer display with partnership - LAST NAMES ONLY
-const formatOfficerDisplay = (officer: any) => {
+const formatOfficerDisplay = (officer: any, showSpecialOccasions: boolean = false) => {
   if (!officer?.name) return "UNKNOWN";
   
   // If officer has a partnership, include partner
   if (officer.isCombinedPartnership && officer.partnerData) {
     const name = extractLastName(officer.name);
     const partnerName = extractLastName(officer.partnerData.partnerName);
-    return `${name} + ${partnerName}`;
+    let partnershipDisplay = `${name} + ${partnerName}`;
+    
+    // Add special occasion indicators for PRIMARY officer only
+    // (We don't have partner's special occasion data in partnerData)
+    if (showSpecialOccasions && officer.isBirthdayToday) {
+      partnershipDisplay += " 🎂";
+    }
+    if (showSpecialOccasions && officer.isAnniversaryToday) {
+      partnershipDisplay += ` 🎖️`;
+    }
+    
+    return partnershipDisplay;
   }
   
   // No partnership, show last name only
-  return extractLastName(officer.name);
+  const name = extractLastName(officer.name);
+  
+  // Add special occasion indicators if enabled
+  if (showSpecialOccasions && officer.isBirthdayToday) {
+    return `${name} 🎂`;
+  }
+  if (showSpecialOccasions && officer.isAnniversaryToday) {
+    return `${name} 🎖️`;
+  }
+  
+  return name;
 };
 
 // UPDATED: Function to format partnership details for notes - ONLY PARTNER BADGE IN PARENTHESES

@@ -27,8 +27,6 @@ const rgbToHex = (rgbString: string): string => {
   const parts = rgbString.split(',').map(num => parseInt(num.trim(), 10));
   if (parts.length !== 3 || parts.some(num => isNaN(num))) {
     return "#000000";
-
-
   }
 
   const [r, g, b] = parts;
@@ -44,7 +42,6 @@ const hexToRgb = (hex: string): string => {
 
   if (hex.length === 3) {
     hex = hex.split('').map(char => char + char).join('');
-
   }
 
   if (hex.length !== 6) {
@@ -54,7 +51,6 @@ const hexToRgb = (hex: string): string => {
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
   return `${r},${g},${b}`;
-
 };
 
 export const PDFLayoutSettings = ({ 
@@ -79,7 +75,7 @@ export const PDFLayoutSettings = ({
         showPTO: true,
         showStaffingSummary: true,
         showLogoSection: true,
-        showSpecialOccasions: true,
+        showSpecialOccasions: true, // FIXED: Include in defaults
         ...defaultSettings.sections
       },
       tableSettings: {
@@ -117,8 +113,9 @@ export const PDFLayoutSettings = ({
         supervisors: "name-badge-position-unit",
         officers: "name-badge-beat-unit",
         ...defaultSettings.columnOrder
-      }
-
+      },
+      // Include other settings that might be missing
+      ...defaultSettings
     };
   });
 
@@ -193,7 +190,6 @@ export const PDFLayoutSettings = ({
 
   const handlePreview = () => {
     onPreview();
-
   };
 
   // Color settings configuration with labels
@@ -278,18 +274,18 @@ export const PDFLayoutSettings = ({
               />
               <Label htmlFor="showPTO">PTO Section</Label>
             </div>
-             {/* Add this NEW switch for Special Occasions */}
-    <div className="flex items-center space-x-2">
-      <Switch
-        id="showSpecialOccasions"
-        checked={layoutSettings.sections.showSpecialOccasions || true}
-        onCheckedChange={(checked) => handleSectionToggle('showSpecialOccasions', checked)}
-      />
-      <Label htmlFor="showSpecialOccasions" className="flex items-center gap-1">
-        <span>Special Occasions</span>
-        <span className="text-xs text-muted-foreground">(🎂🎖️)</span>
-      </Label>
-    </div>
+            {/* Fixed Special Occasions switch */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="showSpecialOccasions"
+                checked={layoutSettings.sections.showSpecialOccasions}
+                onCheckedChange={(checked) => handleSectionToggle('showSpecialOccasions', checked)}
+              />
+              <Label htmlFor="showSpecialOccasions" className="flex items-center gap-1">
+                <span>Special Occasions</span>
+                <span className="text-xs text-muted-foreground">(🎂🎖️)</span>
+              </Label>
+            </div>
             <div className="flex items-center space-x-2">
               <Switch
                 id="showStaffingSummary"
@@ -330,7 +326,6 @@ export const PDFLayoutSettings = ({
                 <div className="text-sm text-gray-500 mt-1">
                   Current: {layoutSettings.tableSettings.rowHeight}px
                 </div>
-
               </div>
 
               <div>
@@ -346,8 +341,6 @@ export const PDFLayoutSettings = ({
                 />
                 <div className="text-sm text-gray-500 mt-1">
                   Current: {layoutSettings.tableSettings.cellPadding}px
-
-
                 </div>
               </div>
 
@@ -375,10 +368,8 @@ export const PDFLayoutSettings = ({
                 />
                 <div className="text-sm text-gray-500 mt-1">
                   Current: {layoutSettings.tableSettings.borderWidth}px
-
                 </div>
               </div>
-
 
               <div>
                 <Label htmlFor="columnSpacing">Column Spacing (px)</Label>
@@ -393,10 +384,8 @@ export const PDFLayoutSettings = ({
                 />
                 <div className="text-sm text-gray-500 mt-1">
                   Current: {layoutSettings.tableSettings.columnSpacing}px
-
                 </div>
               </div>
-
 
               <div className="flex items-center space-x-2">
                 <Switch
@@ -579,7 +568,6 @@ export const PDFLayoutSettings = ({
                         >
                           Close
                         </Button>
-
                       </div>
                     </div>
                   )}
@@ -646,7 +634,6 @@ export const PDFLayoutSettings = ({
               />
               <Label htmlFor="compressPDF">Compress PDF File</Label>
             </div>
-
           </div>
         </div>
 

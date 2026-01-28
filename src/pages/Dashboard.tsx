@@ -1005,10 +1005,14 @@ const fetchProfile = async (userId: string) => {
   />
 </div>
 
-{/* Anniversary Countdown Dashboard - Add this */}
-{user && profile?.hire_date && (
+{/* Anniversary Countdown Dashboard */}
+{user && profile?.hire_date && websiteSettings?.enable_anniversary_countdown && (
   <div className="mb-8">
-    <AnniversaryCountdownDashboard userId={user.id} />
+    <AnniversaryCountdownDashboard 
+      userId={user.id} 
+      userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+      websiteSettings={websiteSettings}
+    />
   </div>
 )}
 

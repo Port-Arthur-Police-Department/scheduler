@@ -13,7 +13,8 @@ interface PTOCardProps {
   onEdit: (ptoRecord: any) => void;
   onRemove: (ptoRecord: any) => void;
   isUpdating: boolean;
-  backgroundColor?: string; // ADD THIS LINE
+  backgroundColor?: string;
+  showSpecialOccasions?: boolean; // ADDED
 }
 
 export const PTOCard = ({
@@ -24,7 +25,8 @@ export const PTOCard = ({
   onEdit,
   onRemove,
   isUpdating,
-  backgroundColor // ADD THIS LINE
+  backgroundColor,
+  showSpecialOccasions = true // ADDED with default
 }: PTOCardProps) => {
   const [editingUnitNumber, setEditingUnitNumber] = useState<string | null>(null);
   const [editUnitValue, setEditUnitValue] = useState("");
@@ -55,16 +57,41 @@ export const PTOCard = ({
     setEditNotesValue("");
   };
 
-return (
-  <div 
-    className="flex items-center justify-between p-3"
-    style={backgroundColor ? { backgroundColor } : {}}
-  >
+  return (
+    <div 
+      className="flex items-center justify-between p-3"
+      style={backgroundColor ? { backgroundColor } : {}}
+    >
       {/* Officer Info - Left Side */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1">
           <div>
-            <p className="font-medium truncate text-gray-900">{ptoRecord.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-medium truncate text-gray-900">{ptoRecord.name}</p>
+              
+              {/* BIRTHDAY BADGE - ADDED */}
+              {showSpecialOccasions && ptoRecord.isBirthdayToday && (
+                <Badge 
+                  variant="outline" 
+                  className="bg-pink-100 text-pink-800 border-pink-300 text-xs px-1.5"
+                  title="Birthday Today!"
+                >
+                  🎂
+                </Badge>
+              )}
+              
+              {/* ANNIVERSARY BADGE - ADDED */}
+              {showSpecialOccasions && ptoRecord.isAnniversaryToday && (
+                <Badge 
+                  variant="outline" 
+                  className="bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5"
+                  title={`${ptoRecord.yearsOfService || 0} Year Anniversary`}
+                >
+                  🎖️
+                </Badge>
+              )}
+            </div>
+            
             <p className="text-xs text-muted-foreground">
               {ptoRecord.rank || 'Officer'} • Badge #{ptoRecord.badge}
             </p>

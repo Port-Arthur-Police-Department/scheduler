@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { format, differenceInDays, parseISO, isBefore, addYears, isToday, isSameDay } from "date-fns";
-import { Calendar, Trophy, PartyPopper, Timer, Clock, CalendarDays, Star, Award } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, differenceInDays, parseISO } from "date-fns";
+import { Trophy, PartyPopper, Timer, CalendarDays, Star, Award } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 
 interface AnniversaryCountdownDashboardProps {
@@ -24,7 +22,6 @@ export const AnniversaryCountdownDashboard = ({
   const [yearsOfService, setYearsOfService] = useState<number>(0);
   const [nextAnniversary, setNextAnniversary] = useState<Date | null>(null);
   const [isAnniversaryToday, setIsAnniversaryToday] = useState(false);
-  const queryClient = useQueryClient();
 
   // Check if countdown is enabled for this user's role
   const isEnabledForRole = () => {
@@ -58,22 +55,7 @@ export const AnniversaryCountdownDashboard = ({
     enabled: !!userId && isEnabledForRole(),
   });
 
-  // Mutation to toggle countdown visibility
-  const toggleCountdownMutation = useMutation({
-    mutationFn: async (showCountdown: boolean) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ show_anniversary_countdown: showCountdown })
-        .eq('id', userId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile-anniversary', userId] });
-    },
-  });
-
-  // FIXED: Anniversary calculation
+  // Calculate anniversary countdown
   useEffect(() => {
     if (profile?.hire_date) {
       const hireDate = parseISO(profile.hire_date);
@@ -132,26 +114,10 @@ export const AnniversaryCountdownDashboard = ({
         nextAnniversary: format(nextAnniv, 'yyyy-MM-dd'),
         hasOccurredThisYear: hasAnniversaryOccurredThisYear,
         isTodayAnniversary,
-        daysUntil: daysUntil
+        daysUntil: diffDays || 0
       });
     }
   }, [profile?.hire_date]);
-
-  const handleToggleCountdown = () => {
-    if (profile) {
-      const newValue = !profile.show_anniversary_countdown;
-      toggleCountdownMutation.mutate(newValue, {
-        onSuccess: () => {
-          // Immediately update local state for instant feedback
-          queryClient.setQueryData(['profile-anniversary', userId], (oldData: any) => {
-            if (!oldData) return oldData;
-            return { ...oldData, show_anniversary_countdown: newValue };
-          });
-          toast.success(`Anniversary countdown ${newValue ? 'shown' : 'hidden'}`);
-        },
-      });
-    }
-  };
 
   if (isLoading) {
     return (
@@ -180,7 +146,12 @@ export const AnniversaryCountdownDashboard = ({
     if (!profile?.hire_date || !nextAnniversary) return 0;
     
     const hireDate = parseISO(profile.hire_date);
-    const lastAnniversary = addYears(nextAnniversary, -1);
+    const lastAnniversary = new Date(
+      nextAnniversary.getFullYear() - 1,
+      nextAnniversary.getMonth(),
+      nextAnniversary.getDate()
+    );
+    
     const totalDaysInYear = 365;
     const daysSinceLastAnniversary = differenceInDays(new Date(), lastAnniversary);
     
@@ -197,15 +168,7 @@ export const AnniversaryCountdownDashboard = ({
             <CalendarDays className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg">Service Anniversary</CardTitle>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleCountdown}
-            className="h-8 w-8 p-0"
-            title="Hide countdown"
-          >
-            <Clock className="h-4 w-4" />
-          </Button>
+          {/* REMOVED: The clock button that was causing issues */}
         </div>
       </CardHeader>
       <CardContent>

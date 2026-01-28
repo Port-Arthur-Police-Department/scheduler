@@ -689,21 +689,22 @@ export const DailyScheduleView = ({
   />
 )}
 
-              {/* PTO Section */}
-              {shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
-                <OfficerSection
-                  title="Time Off"
-                  ptoRecords={shiftData.ptoRecords}
-                  canEdit={canEdit}
-                  onSaveUnitNumber={handleSavePTOUnitNumber}
-                  onSaveNotes={handleSavePTONotes}
-                  onEditPTO={handleEditPTO}
-                  onRemovePTO={removePTOMutation.mutate}
-                  isUpdating={updatePTODetailsMutation.isPending}
-                  sectionType="pto"
-                  colorSettings={websiteSettings?.color_settings}
-                />
-              )}
+{/* PTO Section */}
+{shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
+  <OfficerSection
+    title="Time Off"
+    ptoRecords={shiftData.ptoRecords}
+    canEdit={canEdit}
+    onSaveUnitNumber={handleSavePTOUnitNumber}
+    onSaveNotes={handleSavePTONotes}
+    onEditPTO={handleEditPTO}
+    onRemovePTO={removePTOMutation.mutate}
+    isUpdating={updatePTODetailsMutation.isPending}
+    sectionType="pto"
+    colorSettings={websiteSettings?.color_settings}
+    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS LINE
+  />
+)}
             </div>
           );
         })}

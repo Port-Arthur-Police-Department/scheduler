@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with OVERTIME ROW and extra shift handling - FIXED HOOK ORDER
+// Updated WeeklyView.tsx with OVERTIME ROW - ONLY showing schedule_exceptions with is_extra_shift = true
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, isSameDay, startOfWeek, addWeeks } from "date-fns";
@@ -49,58 +49,43 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   
   const queryClient = useQueryClient();
 
-  // NEW: Fetch primary shifts for all officers
-  const { data: primaryShiftsData, isLoading: isLoadingPrimaryShifts } = useQuery({
-    queryKey: ['primary-shifts-weekly', currentWeekStart.toISOString()],
+  // Fetch schedule exceptions with is_extra_shift = true for the current week
+  const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
+    queryKey: ['overtime-exceptions', currentWeekStart.toISOString(), selectedShiftId],
     queryFn: async () => {
-      console.log('Fetching primary shifts for officers...');
+      console.log('Fetching overtime exceptions for week...');
       
-      const { data: recurringSchedules, error } = await supabase
-        .from('recurring_schedules')
-        .select('officer_id, shift_type_id, day_of_week')
-        .order('officer_id');
+      const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
+      
+      const { data, error } = await supabase
+        .from('schedule_exceptions')
+        .select(`
+          *,
+          profiles!inner (
+            id,
+            full_name,
+            badge_number,
+            rank,
+            hire_date,
+            promotion_date_sergeant,
+            promotion_date_lieutenant,
+            service_credit_override
+          )
+        `)
+        .eq('is_extra_shift', true)
+        .eq('shift_id', selectedShiftId)
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .order('date');
       
       if (error) {
-        console.error('Error fetching recurring schedules:', error);
-        return new Map();
+        console.error('Error fetching overtime exceptions:', error);
+        return [];
       }
       
-      // Determine primary shift by frequency (most common shift for each officer)
-      const shiftCountsByOfficer = new Map();
-      
-      recurringSchedules?.forEach(schedule => {
-        const officerId = schedule.officer_id;
-        const shiftId = schedule.shift_type_id;
-        
-        if (!shiftCountsByOfficer.has(officerId)) {
-          shiftCountsByOfficer.set(officerId, new Map());
-        }
-        
-        const officerShifts = shiftCountsByOfficer.get(officerId);
-        officerShifts.set(shiftId, (officerShifts.get(shiftId) || 0) + 1);
-      });
-      
-      // Determine primary shift for each officer (most frequent)
-      const primaryShifts = new Map();
-      
-      shiftCountsByOfficer.forEach((shiftCounts, officerId) => {
-        let maxCount = 0;
-        let primaryShiftId = null;
-        
-        shiftCounts.forEach((count, shiftId) => {
-          if (count > maxCount) {
-            maxCount = count;
-            primaryShiftId = shiftId;
-          }
-        });
-        
-        if (primaryShiftId) {
-          primaryShifts.set(officerId, primaryShiftId);
-        }
-      });
-      
-      console.log(`Determined primary shifts for ${primaryShifts.size} officers`);
-      return primaryShifts;
+      console.log(`Found ${data?.length || 0} overtime exceptions for this week`);
+      return data || [];
     },
     enabled: !!selectedShiftId,
   });
@@ -291,7 +276,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
-  if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingPrimaryShifts) {
+  if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingOvertime) {
     return <div className="text-center py-8">Loading officer data...</div>;
   }
 
@@ -325,16 +310,14 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ FIXED: SIMPLIFIED DATA PROCESSING ============
-  // Process officers without nested useMemo hooks
+  // ============ PROCESS REGULAR OFFICERS (NO OVERTIME LOGIC) ============
   const processedOfficersData = useMemo(() => {
-    console.log('Processing officers data...');
+    console.log('Processing regular officers data...');
     
     if (!localSchedules || !localSchedules.dailySchedules) {
       return {
         allOfficers: new Map(),
-        regularOfficers: [],
-        overtimeOfficers: []
+        regularOfficers: []
       };
     }
 
@@ -351,7 +334,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       });
     }
 
-    // Process daily schedules with overtime detection
+    // Process daily schedules (excluding overtime logic)
     localSchedules.dailySchedules.forEach(day => {
       if (!day.officers || !Array.isArray(day.officers)) {
         return;
@@ -386,10 +369,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               service_credit_override: officer.service_credit_override || 0
             };
           }
-
-          // Determine if this officer is working overtime on this shift
-          const primaryShiftId = primaryShiftsData?.get(officer.officerId);
-          const isExtraShift = primaryShiftId && primaryShiftId !== selectedShiftId;
           
           allOfficers.set(officer.officerId, {
             officerId: officer.officerId,
@@ -402,9 +381,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             service_credit_override: profileData?.service_credit_override || 0,
             recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
             weeklySchedule: {} as Record<string, any>,
-            service_credit: 0,
-            primaryShiftId: primaryShiftId,
-            isExtraShift: isExtraShift || false
+            service_credit: 0
           });
         }
         
@@ -414,10 +391,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                            officer.shiftInfo?.scheduleType === 'exception';
         
         const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, day);
-        
-        // Check if this is an extra shift (overtime)
-        const primaryShiftId = primaryShiftsData?.get(officer.officerId);
-        const isExtraShift = primaryShiftId && primaryShiftId !== selectedShiftId;
         
         const daySchedule = {
           officerId: officer.officerId,
@@ -430,7 +403,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
           scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
           scheduleType: isException ? 'exception' : 'recurring',
           isRegularRecurringDay: isRecurringDay && !hasPTO,
-          isExtraShift: isExtraShift,
           shiftInfo: {
             scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
             scheduleType: isException ? 'exception' : 'recurring',
@@ -446,7 +418,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               endTime: officer.shiftInfo?.custom_end_time
             }) : undefined,
             reason: officer.shiftInfo?.reason || ptoType,
-            isExtraShift: isExtraShift,
             custom_start_time: officer.shiftInfo?.custom_start_time,
             custom_end_time: officer.shiftInfo?.custom_end_time
           }
@@ -462,16 +433,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       });
     });
 
-    // Separate regular officers from overtime officers
+    // Get regular officers with service credits
     const regularOfficers = Array.from(allOfficers.values())
-      .filter(officer => !officer.isExtraShift)
-      .map(officer => ({
-        ...officer,
-        service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
-      }));
-    
-    const overtimeOfficers = Array.from(allOfficers.values())
-      .filter(officer => officer.isExtraShift)
       .map(officer => ({
         ...officer,
         service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
@@ -479,25 +442,116 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
     return {
       allOfficers,
-      regularOfficers,
+      regularOfficers
+    };
+  }, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap]);
+
+  // Process overtime exceptions into a format for display
+  const processedOvertimeData = useMemo(() => {
+    if (!overtimeExceptions || overtimeExceptions.length === 0) {
+      return {
+        overtimeByDate: {},
+        overtimeOfficers: []
+      };
+    }
+
+    // Group overtime exceptions by date
+    const overtimeByDate: Record<string, any[]> = {};
+    
+    // Initialize with empty arrays for each day
+    weekDays.forEach(day => {
+      overtimeByDate[day.dateStr] = [];
+    });
+    
+    // Process each overtime exception
+    const overtimeOfficersMap = new Map();
+    
+    overtimeExceptions.forEach((exception: any) => {
+      const officerId = exception.officer_id;
+      const dateStr = exception.date;
+      
+      // Create officer entry if not exists
+      if (!overtimeOfficersMap.has(officerId)) {
+        const profile = exception.profiles;
+        overtimeOfficersMap.set(officerId, {
+          officerId: officerId,
+          officerName: profile?.full_name || "Unknown",
+          badgeNumber: profile?.badge_number || "9999",
+          rank: profile?.rank || "Officer",
+          weeklySchedule: {}
+        });
+      }
+      
+      // Create schedule entry for this date
+      const officer = overtimeOfficersMap.get(officerId);
+      const schedule = {
+        officerId: officerId,
+        officerName: officer.officerName,
+        badgeNumber: officer.badgeNumber,
+        rank: officer.rank,
+        date: dateStr,
+        scheduleId: exception.id,
+        scheduleType: 'exception' as const,
+        isExtraShift: true,
+        shiftInfo: {
+          scheduleId: exception.id,
+          scheduleType: 'exception' as const,
+          position: exception.position || "Extra Duty",
+          unitNumber: exception.unit_number,
+          notes: exception.notes,
+          isOff: false,
+          hasPTO: false,
+          isExtraShift: true,
+          custom_start_time: exception.custom_start_time,
+          custom_end_time: exception.custom_end_time,
+          is_extra_shift: true
+        }
+      };
+      
+      // Add to officer's weekly schedule
+      if (!officer.weeklySchedule) {
+        officer.weeklySchedule = {};
+      }
+      officer.weeklySchedule[dateStr] = schedule;
+      
+      // Add to date grouping
+      if (overtimeByDate[dateStr]) {
+        overtimeByDate[dateStr].push(schedule);
+      }
+    });
+    
+    const overtimeOfficers = Array.from(overtimeOfficersMap.values()).map(officer => ({
+      ...officer,
+      service_credit: serviceCreditsMap.get(officer.officerId) || 0
+    }));
+    
+    return {
+      overtimeByDate,
       overtimeOfficers
     };
-  }, [localSchedules, effectiveOfficerProfiles, primaryShiftsData, selectedShiftId, serviceCreditsMap]);
+  }, [overtimeExceptions, weekDays, serviceCreditsMap]);
 
-  // Fetch service credits for all officers
+  // Fetch service credits for all officers (regular + overtime)
   useEffect(() => {
     const fetchServiceCredits = async () => {
       const { allOfficers } = processedOfficersData;
-      if (allOfficers.size === 0) return;
+      const overtimeOfficersIds = processedOvertimeData.overtimeOfficers.map(o => o.officerId);
+      
+      const allOfficerIds = [
+        ...Array.from(allOfficers.keys()),
+        ...overtimeOfficersIds
+      ];
+      
+      const uniqueOfficerIds = [...new Set(allOfficerIds)];
+      
+      if (uniqueOfficerIds.length === 0) return;
       
       setIsLoadingServiceCredits(true);
-      const officerIds = Array.from(allOfficers.keys());
-      
       const credits = new Map();
       
-      if (officerIds.length > 0) {
-        console.log(`Fetching service credits for ${officerIds.length} officers via RPC...`);
-        for (const officerId of officerIds) {
+      if (uniqueOfficerIds.length > 0) {
+        console.log(`Fetching service credits for ${uniqueOfficerIds.length} officers via RPC...`);
+        for (const officerId of uniqueOfficerIds) {
           try {
             const { data, error } = await supabase
               .rpc('get_service_credit', { profile_id: officerId });
@@ -520,7 +574,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     };
     
     fetchServiceCredits();
-  }, [processedOfficersData.allOfficers]);
+  }, [processedOfficersData.allOfficers, processedOvertimeData.overtimeOfficers]);
 
   // Sort regular officers consistently
   const officersForSorting = processedOfficersData.regularOfficers.map(officer => ({
@@ -562,25 +616,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const ppos = sortedOriginalOfficers.filter(officer => 
     officer.rank?.toLowerCase() === 'probationary'
   );
-
-  // Group overtime officers by date for the Overtime row
-  const overtimeByDate = useMemo(() => {
-    const result: Record<string, any[]> = {};
-    
-    weekDays.forEach(day => {
-      result[day.dateStr] = [];
-    });
-    
-    processedOfficersData.overtimeOfficers.forEach(officer => {
-      Object.entries(officer.weeklySchedule || {}).forEach(([dateStr, schedule]: [string, any]) => {
-        if (result[dateStr]) {
-          result[dateStr].push(schedule);
-        }
-      });
-    });
-    
-    return result;
-  }, [processedOfficersData.overtimeOfficers, weekDays]);
 
   const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
     if (!officer || !officer.weeklySchedule) {
@@ -976,8 +1011,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
             </div>
           )}
 
-          {/* OVERTIME SECTION - NEW */}
-          {processedOfficersData.overtimeOfficers.length > 0 && (
+          {/* OVERTIME SECTION - NOW ONLY SHOWS schedule_exceptions with is_extra_shift = true */}
+          {processedOvertimeData.overtimeOfficers.length > 0 && (
             <div className="border-t-2 border-orange-300">
               {/* OVERTIME COUNT ROW */}
               <div className="grid grid-cols-9 border-b"
@@ -985,7 +1020,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 <div className="p-2 border-r"></div>
                 <div className="p-2 border-r text-sm font-medium">OVERTIME</div>
                 {weekDays.map(({ dateStr }) => {
-                  const overtimeCount = overtimeByDate[dateStr]?.length || 0;
+                  const overtimeCount = processedOvertimeData.overtimeByDate[dateStr]?.length || 0;
                   return (
                     <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
                       {overtimeCount}
@@ -1000,9 +1035,12 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 <div className="p-2 border-r text-sm font-mono">OT</div>
                 <div className="p-2 border-r font-medium flex items-center gap-2">
                   Overtime Assignments
+                  <Badge variant="outline" className="text-xs">
+                    Extra Shift
+                  </Badge>
                 </div>
                 {weekDays.map(({ dateStr }) => {
-                  const overtimeOfficers = overtimeByDate[dateStr] || [];
+                  const overtimeOfficers = processedOvertimeData.overtimeByDate[dateStr] || [];
                   
                   return (
                     <div key={dateStr} className="p-2 border-r">

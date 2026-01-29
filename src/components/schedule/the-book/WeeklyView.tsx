@@ -666,7 +666,6 @@ const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
 if (dayStaffing && typeof dayStaffing === 'object') {
   const shiftStaffing = dayStaffing[selectedShiftId];
   return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
-}
     }
     
     return { minimumOfficers: 0, minimumSupervisors: 1 };

@@ -296,14 +296,6 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
     return { hasPTO, ptoType, ptoData };
   };
 
-  if (!localSchedules) {
-    return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
-  }
-
-  if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingOvertime) {
-    return <div className="text-center py-8">Loading officer data...</div>;
-  }
-
 const weekDays = useMemo(() => {
   return Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentWeekStart, i);
@@ -319,12 +311,22 @@ const weekDays = useMemo(() => {
   });
 }, [currentWeekStart]);
 
-  const isSpecialAssignment = (position: string) => {
-    return position && (
-      position.toLowerCase().includes('other') ||
-      (position && !PREDEFINED_POSITIONS.includes(position))
-    );
-  };
+// ============ Early returns AFTER weekDays ============
+if (!localSchedules) {
+  return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
+}
+
+if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingOvertime) {
+  return <div className="text-center py-8">Loading officer data...</div>;
+}
+
+// ============ REST OF YOUR CODE STAYS THE SAME ============
+const isSpecialAssignment = (position: string) => {
+  return position && (
+    position.toLowerCase().includes('other') ||
+    (position && !PREDEFINED_POSITIONS.includes(position))
+  );
+};
 
   const handleJumpToWeek = (date: Date) => {
     const weekStart = startOfWeek(date, { weekStartsOn: 0 });
@@ -558,8 +560,8 @@ const processedOvertimeData = useMemo(() => {
     overtimeByDate,
     overtimeOfficers
   };
-}, [overtimeExceptions, weekDays, serviceCreditsMap]); // Make sure these dependencies are correct
-
+}, [overtimeExceptions, weekDays, serviceCreditsMap]); 
+  
   // Fetch service credits for all officers (regular + overtime)
   useEffect(() => {
     const fetchServiceCredits = async () => {

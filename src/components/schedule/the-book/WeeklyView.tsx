@@ -947,64 +947,50 @@ return (
           })}
         </div>
 
-        {/* SUPERVISORS */}
-        {supervisors.map((officer: any) => {
-          // CRITICAL: Check if this officer has ANY overtime days in their schedule
-          const hasOvertimeInSchedule = weekDays.some(({ dateStr }) => {
-            const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-            return dayOfficer?.shiftInfo?.is_extra_shift === true;
-          });
-          
-          // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
-          if (hasOvertimeInSchedule) {
-            console.log('Skipping officer with overtime shifts from regular rows:', officer.officerName);
-            return null;
-          }
-          
-          return (
-            <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
-              style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
-              <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-              <div className="p-2 border-r font-medium">
-                {getLastName(officer.officerName || '')}
-                <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
-                <div className="text-xs text-muted-foreground">
-                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                </div>
-              </div>
-              {weekDays.map(({ dateStr }) => {
-                const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-                return (
-                  <ScheduleCell
-                    key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
-                    officer={dayOfficer}
-                    dateStr={dateStr}
-                    officerId={officer.officerId}
-                    officerName={officer.officerName}
-                    isAdminOrSupervisor={isAdminOrSupervisor}
-                    onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
-                    onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
-                    onEditAssignment={() => {
-                      if (onEventHandlers.onEditAssignment) {
-                        onEventHandlers.onEditAssignment(officer, dateStr);
-                      }
-                    }}
-                    onRemoveOfficer={() => {
-                      if (onEventHandlers.onRemoveOfficer) {
-                        onEventHandlers.onRemoveOfficer(
-                          dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
-                          (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
-                          officer
-                        );
-                      }
-                    }}
-                    isUpdating={mutations.removeOfficerMutation.isPending}
-                  />
-                );
-              })}
-            </div>
-          );
-        })}
+{/* SUPERVISORS */}
+{supervisors.map((officer: any) => (
+  <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
+    style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
+    <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+    <div className="p-2 border-r font-medium">
+      {getLastName(officer.officerName || '')}
+      <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
+      <div className="text-xs text-muted-foreground">
+        SC: {officer.service_credit?.toFixed(1) || '0.0'}
+      </div>
+    </div>
+    {weekDays.map(({ dateStr }) => {
+      const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+      return (
+        <ScheduleCell
+          key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
+          officer={dayOfficer}
+          dateStr={dateStr}
+          officerId={officer.officerId}
+          officerName={officer.officerName}
+          isAdminOrSupervisor={isAdminOrSupervisor}
+          onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+          onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+          onEditAssignment={() => {
+            if (onEventHandlers.onEditAssignment) {
+              onEventHandlers.onEditAssignment(officer, dateStr);
+            }
+          }}
+          onRemoveOfficer={() => {
+            if (onEventHandlers.onRemoveOfficer) {
+              onEventHandlers.onRemoveOfficer(
+                dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
+                officer
+              );
+            }
+          }}
+          isUpdating={mutations.removeOfficerMutation.isPending}
+        />
+      );
+    })}
+  </div>
+))}
 
         {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
         <div className="grid grid-cols-9 border-b bg-muted/30">

@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with FIXED overtime query and hook order
+// Updated WeeklyView.tsx with FIXED hooks order
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, isSameDay, startOfWeek, addWeeks } from "date-fns";
@@ -49,70 +49,70 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   
   const queryClient = useQueryClient();
 
-// Fetch schedule exceptions with is_extra_shift = true for the current week
-const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
-  queryKey: ['overtime-exceptions', currentWeekStart.toISOString(), selectedShiftId],
-  queryFn: async () => {
-    console.log('Fetching overtime exceptions for week...');
-    
-    const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
-    const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
-    
-    // First fetch the schedule exceptions
-    const { data: exceptions, error: exceptionsError } = await supabase
-      .from('schedule_exceptions')
-      .select('*')
-      .eq('is_extra_shift', true)
-      .eq('shift_type_id', selectedShiftId) // Changed from shift_id to shift_type_id
-      .gte('date', weekStart)
-      .lte('date', weekEnd)
-      .order('date');
-    
-    if (exceptionsError) {
-      console.error('Error fetching overtime exceptions:', exceptionsError);
-      return [];
-    }
-    
-    if (!exceptions || exceptions.length === 0) {
-      return [];
-    }
-    
-    // Then fetch the profiles for these officers
-    const officerIds = [...new Set(exceptions.map(e => e.officer_id))];
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, full_name, badge_number, rank, hire_date, promotion_date_sergeant, promotion_date_lieutenant, service_credit_override')
-      .in('id', officerIds);
-    
-    if (profilesError) {
-      console.error('Error fetching officer profiles for overtime:', profilesError);
-      // Return exceptions without profile data
-      return exceptions.map(exception => ({
-        ...exception,
-        profiles: null
-      }));
-    }
-    
-    // Create a map of profiles by id
-    const profilesMap = new Map();
-    profiles?.forEach(profile => {
-      profilesMap.set(profile.id, {
-        ...profile,
-        service_credit_override: profile.service_credit_override || 0
+  // Fetch schedule exceptions with is_extra_shift = true for the current week
+  const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
+    queryKey: ['overtime-exceptions', currentWeekStart.toISOString(), selectedShiftId],
+    queryFn: async () => {
+      console.log('Fetching overtime exceptions for week...');
+      
+      const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
+      
+      // First fetch the schedule exceptions
+      const { data: exceptions, error: exceptionsError } = await supabase
+        .from('schedule_exceptions')
+        .select('*')
+        .eq('is_extra_shift', true)
+        .eq('shift_type_id', selectedShiftId)
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .order('date');
+      
+      if (exceptionsError) {
+        console.error('Error fetching overtime exceptions:', exceptionsError);
+        return [];
+      }
+      
+      if (!exceptions || exceptions.length === 0) {
+        return [];
+      }
+      
+      // Then fetch the profiles for these officers
+      const officerIds = [...new Set(exceptions.map(e => e.officer_id))];
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, badge_number, rank, hire_date, promotion_date_sergeant, promotion_date_lieutenant, service_credit_override')
+        .in('id', officerIds);
+      
+      if (profilesError) {
+        console.error('Error fetching officer profiles for overtime:', profilesError);
+        // Return exceptions without profile data
+        return exceptions.map(exception => ({
+          ...exception,
+          profiles: null
+        }));
+      }
+      
+      // Create a map of profiles by id
+      const profilesMap = new Map();
+      profiles?.forEach(profile => {
+        profilesMap.set(profile.id, {
+          ...profile,
+          service_credit_override: profile.service_credit_override || 0
+        });
       });
-    });
-    
-    // Combine exceptions with their profiles
-    const result = exceptions.map(exception => ({
-      ...exception,
-      profiles: profilesMap.get(exception.officer_id) || null
-    }));
-    
-    console.log(`Found ${result.length} overtime exceptions for this week`);
-    return result;
-  },
-  enabled: !!selectedShiftId,
-});
+      
+      // Combine exceptions with their profiles
+      const result = exceptions.map(exception => ({
+        ...exception,
+        profiles: profilesMap.get(exception.officer_id) || null
+      }));
+      
+      console.log(`Found ${result.length} overtime exceptions for this week`);
+      return result;
+    },
+    enabled: !!selectedShiftId,
+  });
 
   useEffect(() => {
     if (schedules) {
@@ -167,6 +167,26 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
       setSelectedWeekDate(currentWeekStart);
     }
   }, [weekPickerOpen, currentWeekStart]);
+
+  const weekDays = useMemo(() => {
+    try {
+      return Array.from({ length: 7 }, (_, i) => {
+        const date = addDays(currentWeekStart, i);
+        const dayOfWeek = date.getDay();
+        return {
+          date,
+          dateStr: format(date, "yyyy-MM-dd"),
+          dayName: format(date, "EEE").toUpperCase(),
+          formattedDate: format(date, "MMM d"),
+          isToday: isSameDay(date, new Date()),
+          dayOfWeek
+        };
+      });
+    } catch (error) {
+      console.error('Error creating weekDays:', error);
+      return []; // Always return an array, never undefined
+    }
+  }, [currentWeekStart]);
 
   const invalidateScheduleQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['weekly-schedule', selectedShiftId] });
@@ -296,42 +316,13 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
     return { hasPTO, ptoType, ptoData };
   };
 
-const weekDays = useMemo(() => {
-  try {
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(currentWeekStart, i);
-      const dayOfWeek = date.getDay();
-      return {
-        date,
-        dateStr: format(date, "yyyy-MM-dd"),
-        dayName: format(date, "EEE").toUpperCase(),
-        formattedDate: format(date, "MMM d"),
-        isToday: isSameDay(date, new Date()),
-        dayOfWeek
-      };
-    });
-  } catch (error) {
-    console.error('Error creating weekDays:', error);
-    return []; // Always return an array, never undefined
-  }
-}, [currentWeekStart]);
-
-// ============ Early returns AFTER weekDays ============
-if (!localSchedules) {
-  return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
-}
-
-if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingOvertime) {
-  return <div className="text-center py-8">Loading officer data...</div>;
-}
-
-// ============ REST OF YOUR CODE STAYS THE SAME ============
-const isSpecialAssignment = (position: string) => {
-  return position && (
-    position.toLowerCase().includes('other') ||
-    (position && !PREDEFINED_POSITIONS.includes(position))
-  );
-};
+  // Helper functions must be declared before early returns
+  const isSpecialAssignment = (position: string) => {
+    return position && (
+      position.toLowerCase().includes('other') ||
+      (position && !PREDEFINED_POSITIONS.includes(position))
+    );
+  };
 
   const handleJumpToWeek = (date: Date) => {
     const weekStart = startOfWeek(date, { weekStartsOn: 0 });
@@ -479,99 +470,99 @@ const isSpecialAssignment = (position: string) => {
     };
   }, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap]);
 
-// Process overtime exceptions into a format for display
-const processedOvertimeData = useMemo(() => {
-  console.log('Processing overtime data...');
-  
-  // Create a stable weekDays reference for this useMemo
-  const stableWeekDays = weekDays || [];
-  
-  if (!overtimeExceptions || overtimeExceptions.length === 0) {
-    return {
-      overtimeByDate: {},
-      overtimeOfficers: []
-    };
-  }
+  // Process overtime exceptions into a format for display
+  const processedOvertimeData = useMemo(() => {
+    console.log('Processing overtime data...');
+    
+    // Create a stable weekDays reference for this useMemo
+    const stableWeekDays = weekDays || [];
+    
+    if (!overtimeExceptions || overtimeExceptions.length === 0) {
+      return {
+        overtimeByDate: {},
+        overtimeOfficers: []
+      };
+    }
 
-  // Group overtime exceptions by date
-  const overtimeByDate: Record<string, any[]> = {};
-  
-  // Initialize with empty arrays for each day
-  stableWeekDays.forEach(day => {
-    if (day && day.dateStr) {
-      overtimeByDate[day.dateStr] = [];
-    }
-  });
-  
-  // Process each overtime exception
-  const overtimeOfficersMap = new Map();
-  
-  overtimeExceptions.forEach((exception: any) => {
-    const officerId = exception.officer_id;
-    const dateStr = exception.date;
+    // Group overtime exceptions by date
+    const overtimeByDate: Record<string, any[]> = {};
     
-    // Create officer entry if not exists
-    if (!overtimeOfficersMap.has(officerId)) {
-      const profile = exception.profiles;
-      overtimeOfficersMap.set(officerId, {
+    // Initialize with empty arrays for each day
+    stableWeekDays.forEach(day => {
+      if (day && day.dateStr) {
+        overtimeByDate[day.dateStr] = [];
+      }
+    });
+    
+    // Process each overtime exception
+    const overtimeOfficersMap = new Map();
+    
+    overtimeExceptions.forEach((exception: any) => {
+      const officerId = exception.officer_id;
+      const dateStr = exception.date;
+      
+      // Create officer entry if not exists
+      if (!overtimeOfficersMap.has(officerId)) {
+        const profile = exception.profiles;
+        overtimeOfficersMap.set(officerId, {
+          officerId: officerId,
+          officerName: profile?.full_name || "Unknown",
+          badgeNumber: profile?.badge_number || "9999",
+          rank: profile?.rank || "Officer",
+          weeklySchedule: {}
+        });
+      }
+      
+      // Create schedule entry for this date
+      const officer = overtimeOfficersMap.get(officerId);
+      const schedule = {
         officerId: officerId,
-        officerName: profile?.full_name || "Unknown",
-        badgeNumber: profile?.badge_number || "9999",
-        rank: profile?.rank || "Officer",
-        weeklySchedule: {}
-      });
-    }
-    
-    // Create schedule entry for this date
-    const officer = overtimeOfficersMap.get(officerId);
-    const schedule = {
-      officerId: officerId,
-      officerName: officer.officerName,
-      badgeNumber: officer.badgeNumber,
-      rank: officer.rank,
-      date: dateStr,
-      scheduleId: exception.id,
-      scheduleType: 'exception' as const,
-      isExtraShift: true,
-      shiftInfo: {
+        officerName: officer.officerName,
+        badgeNumber: officer.badgeNumber,
+        rank: officer.rank,
+        date: dateStr,
         scheduleId: exception.id,
         scheduleType: 'exception' as const,
-        position: exception.position_name || exception.position || "Extra Duty",
-        unitNumber: exception.unit_number,
-        notes: exception.notes,
-        isOff: false,
-        hasPTO: false,
         isExtraShift: true,
-        custom_start_time: exception.custom_start_time,
-        custom_end_time: exception.custom_end_time,
-        is_extra_shift: true,
-        reason: exception.reason
+        shiftInfo: {
+          scheduleId: exception.id,
+          scheduleType: 'exception' as const,
+          position: exception.position_name || exception.position || "Extra Duty",
+          unitNumber: exception.unit_number,
+          notes: exception.notes,
+          isOff: false,
+          hasPTO: false,
+          isExtraShift: true,
+          custom_start_time: exception.custom_start_time,
+          custom_end_time: exception.custom_end_time,
+          is_extra_shift: true,
+          reason: exception.reason
+        }
+      };
+      
+      // Add to officer's weekly schedule
+      if (!officer.weeklySchedule) {
+        officer.weeklySchedule = {};
       }
+      officer.weeklySchedule[dateStr] = schedule;
+      
+      // Add to date grouping
+      if (overtimeByDate[dateStr]) {
+        overtimeByDate[dateStr].push(schedule);
+      }
+    });
+    
+    const overtimeOfficers = Array.from(overtimeOfficersMap.values()).map(officer => ({
+      ...officer,
+      service_credit: serviceCreditsMap.get(officer.officerId) || 0
+    }));
+    
+    return {
+      overtimeByDate,
+      overtimeOfficers
     };
+  }, [overtimeExceptions, weekDays, serviceCreditsMap]); // Keep these dependencies
     
-    // Add to officer's weekly schedule
-    if (!officer.weeklySchedule) {
-      officer.weeklySchedule = {};
-    }
-    officer.weeklySchedule[dateStr] = schedule;
-    
-    // Add to date grouping
-    if (overtimeByDate[dateStr]) {
-      overtimeByDate[dateStr].push(schedule);
-    }
-  });
-  
-  const overtimeOfficers = Array.from(overtimeOfficersMap.values()).map(officer => ({
-    ...officer,
-    service_credit: serviceCreditsMap.get(officer.officerId) || 0
-  }));
-  
-  return {
-    overtimeByDate,
-    overtimeOfficers
-  };
-}, [overtimeExceptions, weekDays, serviceCreditsMap]); // Keep these dependencies
-  
   // Fetch service credits for all officers (regular + overtime)
   useEffect(() => {
     const fetchServiceCredits = async () => {
@@ -658,6 +649,7 @@ const processedOvertimeData = useMemo(() => {
     officer.rank?.toLowerCase() === 'probationary'
   );
 
+  // Helper functions that use hooks
   const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
     if (!officer || !officer.weeklySchedule) {
       return null;
@@ -678,15 +670,25 @@ const processedOvertimeData = useMemo(() => {
       }
     }
     
-const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
-if (dayStaffing && typeof dayStaffing === 'object') {
-  const shiftStaffing = dayStaffing[selectedShiftId];
-  return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
+    const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
+    if (dayStaffing && typeof dayStaffing === 'object') {
+      const shiftStaffing = dayStaffing[selectedShiftId];
+      return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
     }
     
     return { minimumOfficers: 0, minimumSupervisors: 1 };
   };
 
+  // ============ NOW EARLY RETURNS ARE SAFE ============
+  if (!localSchedules) {
+    return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
+  }
+
+  if ((isLoadingProfiles && !officerProfiles && !effectiveOfficerProfiles) || isLoadingOvertime) {
+    return <div className="text-center py-8">Loading officer data...</div>;
+  }
+
+  // ============ RENDER LOGIC ============
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">

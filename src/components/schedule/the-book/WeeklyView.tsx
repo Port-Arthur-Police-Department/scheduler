@@ -795,20 +795,20 @@ return (
                   </Button>
                 </div>
               </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onDateNavigation.goToCurrent}
-        >
-          Today
-        </Button>
+            </PopoverContent>
+          </Popover>
+          
+          <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDateNavigation.goToCurrent}
+          >
+            Today
+          </Button>
+        </div>
       </div>
     </div>
 
@@ -827,13 +827,13 @@ return (
             // Get overtime officers for this day
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
             
-            // Count regular supervisors (EXCLUDING OVERTIME)
+            // CRITICAL: Count ONLY non-overtime officers from daySchedule
             const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
               const isSupervisor = isSupervisorByRank(officer);
               const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
               const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
               const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = isOfficerOvertime(officer);
+              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
               return isSupervisor && isScheduled && !isOvertime;
             }).length || 0;
             
@@ -845,14 +845,14 @@ return (
             
             const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
             
-            // Count regular officers (EXCLUDING OVERTIME)
+            // CRITICAL: Count ONLY non-overtime officers from daySchedule
             const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
               const isOfficer = !isSupervisorByRank(officer);
               const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
               const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
               const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
               const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = isOfficerOvertime(officer);
+              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
               return isOfficer && isNotPPO && isScheduled && !isOvertime;
             }).length || 0;
             
@@ -895,13 +895,13 @@ return (
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumSupervisors = minStaffing.minimumSupervisors || 1;
             
-            // Count regular supervisors, excluding full-day PTO AND special assignments AND OVERTIME
+            // CRITICAL: Count ONLY non-overtime supervisors from daySchedule
             const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
               const isSupervisor = isSupervisorByRank(officer);
               const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
               const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
               const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = isOfficerOvertime(officer);
+              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
               return isSupervisor && isScheduled && !isOvertime;
             }).length || 0;
             
@@ -921,8 +921,21 @@ return (
           })}
         </div>
 
-          {/* SUPERVISORS */}
-          {supervisors.map((officer: any) => (
+        {/* SUPERVISORS */}
+        {supervisors.map((officer: any) => {
+          // CRITICAL: Check if this officer has ANY overtime days in their schedule
+          const hasOvertimeInSchedule = weekDays.some(({ dateStr }) => {
+            const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+            return dayOfficer?.shiftInfo?.is_extra_shift === true;
+          });
+          
+          // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
+          if (hasOvertimeInSchedule) {
+            console.log('Skipping officer with overtime shifts from regular rows:', officer.officerName);
+            return null;
+          }
+          
+          return (
             <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
               style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
               <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -964,50 +977,64 @@ return (
                 );
               })}
             </div>
-          ))}
+          );
+        })}
 
-          {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
-          <div className="grid grid-cols-9 border-b bg-muted/30">
-            <div className="p-2 border-r"></div>
-            <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
-            {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
-              const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-              
-              // Get minimum staffing using safe function
-              const minStaffing = getMinimumStaffing(dayOfWeek);
-              const minimumOfficers = minStaffing.minimumOfficers || 0;
-              
-// Count only non-PPO regular officers, excluding full-day PTO AND special assignments AND OVERTIME
-const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-  const isOfficer = !isSupervisorByRank(officer);
-  const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-  const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-  const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-  const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-  const isOvertime = isOfficerOvertime(officer); // ADD THIS CHECK
-  return isOfficer && isNotPPO && isScheduled && !isOvertime; // ADD !isOvertime
-}).length || 0;
-              
-              // Count overtime officers (those NOT assigned as supervisors or special assignments)
-              const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-              }).length || 0;
-              
-              const officerCount = regularOfficerCount + overtimeOfficerCount;
-              
-              return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
-                  {officerCount} / {minimumOfficers}
-                </div>
-              );
-            })}
-          </div>
+        {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
+        <div className="grid grid-cols-9 border-b bg-muted/30">
+          <div className="p-2 border-r"></div>
+          <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
+          {weekDays.map(({ dateStr, dayOfWeek }) => {
+            const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
+            const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
+            
+            // Get minimum staffing using safe function
+            const minStaffing = getMinimumStaffing(dayOfWeek);
+            const minimumOfficers = minStaffing.minimumOfficers || 0;
+            
+            // CRITICAL: Count ONLY non-overtime officers from daySchedule
+            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank(officer);
+              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
+              return isOfficer && isNotPPO && isScheduled && !isOvertime;
+            }).length || 0;
+            
+            // Count overtime officers (those NOT assigned as supervisors or special assignments)
+            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
+              const position = officer.shiftInfo?.position || "";
+              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
+            }).length || 0;
+            
+            const officerCount = regularOfficerCount + overtimeOfficerCount;
+            
+            return (
+              <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                {officerCount} / {minimumOfficers}
+              </div>
+            );
+          })}
+        </div>
 
-          {/* REGULAR OFFICERS SECTION */}
-          <div>
-            {regularOfficers.map((officer: any) => (
+        {/* REGULAR OFFICERS SECTION */}
+        <div>
+          {regularOfficers.map((officer: any) => {
+            // CRITICAL: Check if this officer has ANY overtime days in their schedule
+            const hasOvertimeInSchedule = weekDays.some(({ dateStr }) => {
+              const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+              return dayOfficer?.shiftInfo?.is_extra_shift === true;
+            });
+            
+            // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
+            if (hasOvertimeInSchedule) {
+              console.log('Skipping officer with overtime shifts from regular rows:', officer.officerName);
+              return null;
+            }
+            
+            return (
               <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
                 style={{ backgroundColor: weeklyColors.officer?.bg, color: weeklyColors.officer?.text }}>
                 <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -1048,169 +1075,153 @@ const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
                   );
                 })}
               </div>
-            ))}
-          </div>
-
-          {/* PPO SECTION */}
-          {ppos.length > 0 && (
-            <div className="border-t-2 border-blue-200">
-              {/* PPO COUNT ROW */}
-              <div className="grid grid-cols-9 border-b"
-                style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
-                <div className="p-2 border-r"></div>
-                <div className="p-2 border-r text-sm font-medium">PPO</div>
-                {weekDays.map(({ dateStr }) => {
-                  const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
-                  
-                  // Count PPOs, excluding only full-day PTO
-                  const ppoCount = daySchedule?.officers?.filter((officer: any) => {
-                    const isOfficer = !isSupervisorByRank(officer);
-                    const isPPO = officer.rank?.toLowerCase() === 'probationary';
-                    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO;
-                    return isOfficer && isPPO && isScheduled;
-                  }).length || 0;
-                  
-                  return (
-                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
-                      {ppoCount}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* PPO OFFICERS */}
-              {ppos.map((officer: any) => (
-                <div key={officer.officerId} className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
-                  style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
-                  <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-                  <div className="p-2 border-r font-medium flex items-center gap-2">
-                    {getLastName(officer.officerName || '')}
-                    <Badge 
-                      variant="outline" 
-                      className="text-xs border-blue-300"
-                      style={{
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        color: weeklyColors.ppo?.text
-                      }}
-                    >
-                      PPO
-                    </Badge>
-                    <div className="text-xs text-muted-foreground">
-                      SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                    </div>
-                  </div>
-                  {weekDays.map(({ dateStr }) => {
-                    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-                    
-                    let partnerInfo = null;
-                    if (dayOfficer?.shiftInfo?.position) {
-                      const partnerMatch = dayOfficer.shiftInfo.position.match(/Partner with\s+(.+)/i);
-                      if (partnerMatch) {
-                        partnerInfo = partnerMatch[1];
-                      }
-                    }
-                    
-                    return (
-                      <ScheduleCell
-                        key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
-                        officer={dayOfficer}
-                        dateStr={dateStr}
-                        officerId={officer.officerId}
-                        officerName={officer.officerName}
-                        isAdminOrSupervisor={isAdminOrSupervisor}
-                        onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
-                        onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
-                        onEditAssignment={() => {
-                          if (onEventHandlers.onEditAssignment) {
-                            onEventHandlers.onEditAssignment(officer, dateStr);
-                          }
-                        }}
-                        onRemoveOfficer={() => {
-                          if (onEventHandlers.onRemoveOfficer) {
-                            onEventHandlers.onRemoveOfficer(
-                              dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
-                              (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
-                              officer
-                            );
-                          }
-                        }}
-                        isUpdating={mutations.removeOfficerMutation.isPending}
-                        isPPO={true}
-                        partnerInfo={partnerInfo}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* OVERTIME SECTION - NOW ONLY SHOWS schedule_exceptions with is_extra_shift = true */}
-          {processedOvertimeData.overtimeOfficers.length > 0 && (
-            <div className="border-t-2 border-orange-300">
-              {/* OVERTIME COUNT ROW */}
-              <div className="grid grid-cols-9 border-b"
-                style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
-                <div className="p-2 border-r"></div>
-                <div className="p-2 border-r text-sm font-medium">OVERTIME</div>
-                {weekDays.map(({ dateStr }) => {
-                  const overtimeCount = processedOvertimeData.overtimeByDate[dateStr]?.length || 0;
-                  return (
-                    <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
-                      {overtimeCount}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* OVERTIME ROW - Single row showing all overtime assignments */}
-              <div className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
-                <div className="p-2 border-r text-sm font-mono">OT</div>
-                <div className="p-2 border-r font-medium">
-                  Overtime Assignments
-                </div>
-                {weekDays.map(({ dateStr }) => {
-                  const overtimeOfficers = processedOvertimeData.overtimeByDate[dateStr] || [];
-                  
-                  return (
-                    <div key={dateStr} className="p-2 border-r">
-                      {overtimeOfficers.length > 0 ? (
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {overtimeOfficers.map((officer: any) => (
-                            <div key={`${officer.officerId}-${dateStr}`} 
-                              className="text-xs p-1 bg-orange-100 rounded border border-orange-200">
-                              <div className="font-medium truncate">
-                                {getLastName(officer.officerName || '')}
-                              </div>
-                              <div className="text-xs text-orange-700 truncate">
-                                {officer.shiftInfo?.position || 'Extra Duty'}
-                              </div>
-                              {officer.shiftInfo?.custom_start_time && (
-                                <div className="text-xs text-orange-600">
-                                  {officer.shiftInfo.custom_start_time}-{officer.shiftInfo.custom_end_time}
-                                </div>
-                              )}
-                              {officer.shiftInfo?.reason && (
-                                <div className="text-xs text-orange-500 italic">
-                                  {officer.shiftInfo.reason}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground text-center">-</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
+
+        {/* PPO SECTION */}
+        {ppos.map((officer: any) => {
+          // CRITICAL: Check if this officer has ANY overtime days in their schedule
+          const hasOvertimeInSchedule = weekDays.some(({ dateStr }) => {
+            const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+            return dayOfficer?.shiftInfo?.is_extra_shift === true;
+          });
+          
+          // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
+          if (hasOvertimeInSchedule) {
+            console.log('Skipping PPO officer with overtime shifts from regular rows:', officer.officerName);
+            return null;
+          }
+          
+          return (
+            <div key={officer.officerId} className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
+              <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+              <div className="p-2 border-r font-medium flex items-center gap-2">
+                {getLastName(officer.officerName || '')}
+                <Badge 
+                  variant="outline" 
+                  className="text-xs border-blue-300"
+                  style={{
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    color: weeklyColors.ppo?.text
+                  }}
+                >
+                  PPO
+                </Badge>
+                <div className="text-xs text-muted-foreground">
+                  SC: {officer.service_credit?.toFixed(1) || '0.0'}
+                </div>
+              </div>
+              {weekDays.map(({ dateStr }) => {
+                const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+                
+                let partnerInfo = null;
+                if (dayOfficer?.shiftInfo?.position) {
+                  const partnerMatch = dayOfficer.shiftInfo.position.match(/Partner with\s+(.+)/i);
+                  if (partnerMatch) {
+                    partnerInfo = partnerMatch[1];
+                  }
+                }
+                
+                return (
+                  <ScheduleCell
+                    key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
+                    officer={dayOfficer}
+                    dateStr={dateStr}
+                    officerId={officer.officerId}
+                    officerName={officer.officerName}
+                    isAdminOrSupervisor={isAdminOrSupervisor}
+                    onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+                    onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+                    onEditAssignment={() => {
+                      if (onEventHandlers.onEditAssignment) {
+                        onEventHandlers.onEditAssignment(officer, dateStr);
+                      }
+                    }}
+                    onRemoveOfficer={() => {
+                      if (onEventHandlers.onRemoveOfficer) {
+                        onEventHandlers.onRemoveOfficer(
+                          dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                          (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
+                          officer
+                        );
+                      }
+                    }}
+                    isUpdating={mutations.removeOfficerMutation.isPending}
+                    isPPO={true}
+                    partnerInfo={partnerInfo}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* OVERTIME SECTION - NOW ONLY SHOWS schedule_exceptions with is_extra_shift = true */}
+        {processedOvertimeData.overtimeOfficers.length > 0 && (
+          <div className="border-t-2 border-orange-300">
+            {/* OVERTIME COUNT ROW */}
+            <div className="grid grid-cols-9 border-b"
+              style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
+              <div className="p-2 border-r"></div>
+              <div className="p-2 border-r text-sm font-medium">OVERTIME</div>
+              {weekDays.map(({ dateStr }) => {
+                const overtimeCount = processedOvertimeData.overtimeByDate[dateStr]?.length || 0;
+                return (
+                  <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                    {overtimeCount}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* OVERTIME ROW - Single row showing all overtime assignments */}
+            <div className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
+              <div className="p-2 border-r text-sm font-mono">OT</div>
+              <div className="p-2 border-r font-medium">
+                Overtime Assignments
+              </div>
+              {weekDays.map(({ dateStr }) => {
+                const overtimeOfficers = processedOvertimeData.overtimeByDate[dateStr] || [];
+                
+                return (
+                  <div key={dateStr} className="p-2 border-r">
+                    {overtimeOfficers.length > 0 ? (
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {overtimeOfficers.map((officer: any) => (
+                          <div key={`${officer.officerId}-${dateStr}`} 
+                            className="text-xs p-1 bg-orange-100 rounded border border-orange-200">
+                            <div className="font-medium truncate">
+                              {getLastName(officer.officerName || '')}
+                            </div>
+                            <div className="text-xs text-orange-700 truncate">
+                              {officer.shiftInfo?.position || 'Extra Duty'}
+                            </div>
+                            {officer.shiftInfo?.custom_start_time && (
+                              <div className="text-xs text-orange-600">
+                                {officer.shiftInfo.custom_start_time}-{officer.shiftInfo.custom_end_time}
+                              </div>
+                            )}
+                            {officer.shiftInfo?.reason && (
+                              <div className="text-xs text-orange-500 italic">
+                                {officer.shiftInfo.reason}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground text-center">-</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
-  );
-};
+  </div>
+);

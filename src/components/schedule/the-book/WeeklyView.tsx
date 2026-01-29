@@ -739,184 +739,187 @@ const processedOfficersData = useMemo(() => {
     return <div className="text-center py-8">Loading officer data...</div>;
   }
 
-  // ============ RENDER LOGIC ============
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="text-lg font-bold">
-          {format(currentWeekStart, "MMM d")} - {format(addDays(currentWeekStart, 6), "MMM d, yyyy")}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onDateNavigation.goToPrevious}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Jump to Week
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-3">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Select a week</div>
-                  <Calendar
-                    mode="single"
-                    selected={selectedWeekDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        handleJumpToWeek(date);
-                      }
+// ============ RENDER LOGIC ============
+return (
+  <div className="space-y-4">
+    <div className="flex justify-between items-center">
+      <div className="text-lg font-bold">
+        {format(currentWeekStart, "MMM d")} - {format(addDays(currentWeekStart, 6), "MMM d, yyyy")}
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={onDateNavigation.goToPrevious}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        
+        <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Jump to Week
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <div className="p-3">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Select a week</div>
+                <Calendar
+                  mode="single"
+                  selected={selectedWeekDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      handleJumpToWeek(date);
+                    }
+                  }}
+                  className="rounded-md border"
+                />
+                <div className="flex items-center justify-between pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
+                      handleJumpToWeek(weekStart);
                     }}
-                    className="rounded-md border"
-                  />
-                  <div className="flex items-center justify-between pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
-                        handleJumpToWeek(weekStart);
-                      }}
-                    >
-                      This Week
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const nextWeek = addWeeks(currentWeekStart, 1);
-                        handleJumpToWeek(nextWeek);
-                      }}
-                    >
-                      Next Week
-                    </Button>
-                  </div>
+                  >
+                    This Week
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const nextWeek = addWeeks(currentWeekStart, 1);
+                      handleJumpToWeek(nextWeek);
+                    }}
+                  >
+                    Next Week
+                  </Button>
                 </div>
               </div>
-            </PopoverContent>
-          </Popover>
-          
-          <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onDateNavigation.goToCurrent}
-          >
-            Today
-          </Button>
-        </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+        
+        <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDateNavigation.goToCurrent}
+        >
+          Today
+        </Button>
       </div>
+    </div>
 
-      <div className="mobile-scroll overflow-x-auto">
-        <div className="border rounded-lg overflow-hidden min-w-[900px]">
-          <div className="grid grid-cols-9 bg-muted/50 border-b">
-            <div className="p-2 font-semibold border-r">Empl#</div>
-            <div className="p-2 font-semibold border-r">NAME</div>
-            {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
-              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
-              
-              const minStaffing = getMinimumStaffing(dayOfWeek);
-              const minimumOfficers = minStaffing.minimumOfficers || 0;
-              const minimumSupervisors = minStaffing.minimumSupervisors || 1;
-              
-              // Get overtime officers for this day
-              const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-              
-              // Count regular supervisors
-              const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-                const isSupervisor = isSupervisorByRank(officer);
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                return isSupervisor && isScheduled;
-              }).length || 0;
-              
-              // Count overtime supervisors (those assigned as "Supervisor" or similar)
-              const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return isSupervisorPosition(position);
-              }).length || 0;
-              
-              const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-              
-              // Count regular officers
-              const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-                const isOfficer = !isSupervisorByRank(officer);
-                const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                return isOfficer && isNotPPO && isScheduled;
-              }).length || 0;
-              
-              // Count overtime officers (those NOT assigned as supervisors)
-              const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-              }).length || 0;
-              
-              const officerCount = regularOfficerCount + overtimeOfficerCount;
-              
-              const isOfficersUnderstaffed = officerCount < minimumOfficers;
-              const isSupervisorsUnderstaffed = supervisorCount < minimumSupervisors;
+    <div className="mobile-scroll overflow-x-auto">
+      <div className="border rounded-lg overflow-hidden min-w-[900px]">
+        <div className="grid grid-cols-9 bg-muted/50 border-b">
+          <div className="p-2 font-semibold border-r">Empl#</div>
+          <div className="p-2 font-semibold border-r">NAME</div>
+          {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
+            const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
+            
+            const minStaffing = getMinimumStaffing(dayOfWeek);
+            const minimumOfficers = minStaffing.minimumOfficers || 0;
+            const minimumSupervisors = minStaffing.minimumSupervisors || 1;
+            
+            // Get overtime officers for this day
+            const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
+            
+            // Count regular supervisors (EXCLUDING OVERTIME)
+            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
+              const isSupervisor = isSupervisorByRank(officer);
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              const isOvertime = isOfficerOvertime(officer);
+              return isSupervisor && isScheduled && !isOvertime;
+            }).length || 0;
+            
+            // Count overtime supervisors (those assigned as "Supervisor" or similar)
+            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
+              const position = officer.shiftInfo?.position || "";
+              return isSupervisorPosition(position);
+            }).length || 0;
+            
+            const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
+            
+            // Count regular officers (EXCLUDING OVERTIME)
+            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
+              const isOfficer = !isSupervisorByRank(officer);
+              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              const isOvertime = isOfficerOvertime(officer);
+              return isOfficer && isNotPPO && isScheduled && !isOvertime;
+            }).length || 0;
+            
+            // Count overtime officers (those NOT assigned as supervisors)
+            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
+              const position = officer.shiftInfo?.position || "";
+              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
+            }).length || 0;
+            
+            const officerCount = regularOfficerCount + overtimeOfficerCount;
+            
+            const isOfficersUnderstaffed = officerCount < minimumOfficers;
+            const isSupervisorsUnderstaffed = supervisorCount < minimumSupervisors;
 
-              return (
-                <div key={dateStr} className={`p-2 text-center font-semibold border-r ${isToday ? 'bg-primary/10' : ''}`}>
-                  <Button variant="ghost" size="sm" className="h-auto p-0 font-semibold hover:bg-transparent hover:underline" onClick={() => navigateToDailySchedule(dateStr)}>
-                    <div>{dayName}</div>
-                    <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
-                  </Button>
-                  <Badge variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} className="text-xs mb-1">
-                    {supervisorCount} / {minimumSupervisors} Sup
-                  </Badge>
-                  <Badge variant={isOfficersUnderstaffed ? "destructive" : "outline"} className="text-xs">
-                    {officerCount} / {minimumOfficers} Ofc
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
+            return (
+              <div key={dateStr} className={`p-2 text-center font-semibold border-r ${isToday ? 'bg-primary/10' : ''}`}>
+                <Button variant="ghost" size="sm" className="h-auto p-0 font-semibold hover:bg-transparent hover:underline" onClick={() => navigateToDailySchedule(dateStr)}>
+                  <div>{dayName}</div>
+                  <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
+                </Button>
+                <Badge variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} className="text-xs mb-1">
+                  {supervisorCount} / {minimumSupervisors} Sup
+                </Badge>
+                <Badge variant={isOfficersUnderstaffed ? "destructive" : "outline"} className="text-xs">
+                  {officerCount} / {minimumOfficers} Ofc
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
 
-          {/* SUPERVISOR COUNT ROW */}
-          <div className="grid grid-cols-9 border-b">
-            <div className="p-2 border-r"></div>
-            <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
-            {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
-              const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-              
-              const minStaffing = getMinimumStaffing(dayOfWeek);
-              const minimumSupervisors = minStaffing.minimumSupervisors || 1;
-              
-              // Count regular supervisors, excluding full-day PTO AND special assignments
-              const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-                const isSupervisor = isSupervisorByRank(officer);
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                return isSupervisor && isScheduled;
-              }).length || 0;
-              
-              // Count overtime supervisors
-              const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return isSupervisorPosition(position);
-              }).length || 0;
-              
-              const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-              
-              return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm">
-                  {supervisorCount} / {minimumSupervisors}
-                </div>
-              );
-            })}
-          </div>
+        {/* SUPERVISOR COUNT ROW */}
+        <div className="grid grid-cols-9 border-b">
+          <div className="p-2 border-r"></div>
+          <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
+          {weekDays.map(({ dateStr, dayOfWeek }) => {
+            const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
+            const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
+            
+            const minStaffing = getMinimumStaffing(dayOfWeek);
+            const minimumSupervisors = minStaffing.minimumSupervisors || 1;
+            
+            // Count regular supervisors, excluding full-day PTO AND special assignments AND OVERTIME
+            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
+              const isSupervisor = isSupervisorByRank(officer);
+              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+              const isOvertime = isOfficerOvertime(officer);
+              return isSupervisor && isScheduled && !isOvertime;
+            }).length || 0;
+            
+            // Count overtime supervisors
+            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
+              const position = officer.shiftInfo?.position || "";
+              return isSupervisorPosition(position);
+            }).length || 0;
+            
+            const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
+            
+            return (
+              <div key={dateStr} className="p-2 text-center border-r text-sm">
+                {supervisorCount} / {minimumSupervisors}
+              </div>
+            );
+          })}
+        </div>
 
           {/* SUPERVISORS */}
           {supervisors.map((officer: any) => (
@@ -975,15 +978,16 @@ const processedOfficersData = useMemo(() => {
               const minStaffing = getMinimumStaffing(dayOfWeek);
               const minimumOfficers = minStaffing.minimumOfficers || 0;
               
-              // Count only non-PPO regular officers, excluding full-day PTO AND special assignments
-              const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-                const isOfficer = !isSupervisorByRank(officer);
-                const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                return isOfficer && isNotPPO && isScheduled;
-              }).length || 0;
+// Count only non-PPO regular officers, excluding full-day PTO AND special assignments AND OVERTIME
+const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
+  const isOfficer = !isSupervisorByRank(officer);
+  const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+  const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+  const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+  const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+  const isOvertime = isOfficerOvertime(officer); // ADD THIS CHECK
+  return isOfficer && isNotPPO && isScheduled && !isOvertime; // ADD !isOvertime
+}).length || 0;
               
               // Count overtime officers (those NOT assigned as supervisors or special assignments)
               const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {

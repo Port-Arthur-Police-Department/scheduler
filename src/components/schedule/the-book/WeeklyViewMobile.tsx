@@ -10,6 +10,7 @@ import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   sortOfficersConsistently, 
   type OfficerForSorting 

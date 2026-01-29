@@ -294,27 +294,31 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  const detectPTOForOfficer = (officer: any, day: any) => {
-    const isException = officer?.scheduleType === 'exception' || 
-                       officer?.shiftInfo?.scheduleType === 'exception';
-    
-    const hasPTO = officer?.shiftInfo?.hasPTO === true ||
-                   (officer?.shiftInfo?.isOff === true && officer?.shiftInfo?.reason) ||
-                   (isException && officer?.shiftInfo?.isOff === true && officer?.shiftInfo?.reason);
-    
-    const ptoType = officer?.shiftInfo?.reason || 
-                    officer?.shiftInfo?.ptoData?.ptoType;
-    
-    const ptoData = officer?.shiftInfo?.ptoData || 
-                    (hasPTO ? {
-                      ptoType: ptoType,
-                      isFullShift: true,
-                      startTime: officer?.shiftInfo?.custom_start_time,
-                      endTime: officer?.shiftInfo?.custom_end_time
-                    } : undefined);
-    
-    return { hasPTO, ptoType, ptoData };
-  };
+const detectPTOForOfficer = (officer: any, day: any) => {
+  const isException = officer?.scheduleType === 'exception' || 
+                     officer?.shiftInfo?.scheduleType === 'exception';
+  
+  const hasPTO = officer?.shiftInfo?.hasPTO === true ||
+                 (officer?.shiftInfo?.isOff === true && officer?.shiftInfo?.reason) ||
+                 (isException && officer?.shiftInfo?.isOff === true && officer?.shiftInfo?.reason);
+  
+  // Check for overtime flag from schedule_exceptions
+  const isOvertime = officer?.shiftInfo?.is_extra_shift === true ||
+                    officer?.shiftInfo?.isExtraShift === true;
+  
+  const ptoType = officer?.shiftInfo?.reason || 
+                  officer?.shiftInfo?.ptoData?.ptoType;
+  
+  const ptoData = officer?.shiftInfo?.ptoData || 
+                  (hasPTO ? {
+                    ptoType: ptoType,
+                    isFullShift: true,
+                    startTime: officer?.shiftInfo?.custom_start_time,
+                    endTime: officer?.shiftInfo?.custom_end_time
+                  } : undefined);
+  
+  return { hasPTO, ptoType, ptoData, isOvertime };
+};
 
   // Helper functions must be declared before early returns
   const isSpecialAssignment = (position: string) => {
@@ -334,234 +338,251 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ PROCESS REGULAR OFFICERS ============
-  const processedOfficersData = useMemo(() => {
-    console.log('Processing regular officers data...');
+// ============ PROCESS REGULAR OFFICERS ============
+const processedOfficersData = useMemo(() => {
+  console.log('Processing regular officers data...');
+  
+  if (!localSchedules || !localSchedules.dailySchedules) {
+    return {
+      allOfficers: new Map(),
+      regularOfficers: []
+    };
+  }
+
+  const allOfficers = new Map();
+  const recurringSchedulesByOfficer = new Map();
+
+  // Safely extract recurring schedule patterns
+  if (localSchedules.recurring) {
+    localSchedules.recurring.forEach((recurring: any) => {
+      if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
+        recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
+      }
+      recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
+    });
+  }
+
+  // Process daily schedules
+  localSchedules.dailySchedules.forEach(day => {
+    if (!day.officers || !Array.isArray(day.officers)) {
+      return;
+    }
     
-    if (!localSchedules || !localSchedules.dailySchedules) {
-      return {
-        allOfficers: new Map(),
-        regularOfficers: []
-      };
-    }
-
-    const allOfficers = new Map();
-    const recurringSchedulesByOfficer = new Map();
-
-    // Safely extract recurring schedule patterns
-    if (localSchedules.recurring) {
-      localSchedules.recurring.forEach((recurring: any) => {
-        if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
-          recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
-        }
-        recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
-      });
-    }
-
-    // Process daily schedules
-    localSchedules.dailySchedules.forEach(day => {
-      if (!day.officers || !Array.isArray(day.officers)) {
+    day.officers.forEach((officer: any) => {
+      if (!officer || !officer.officerId) {
         return;
       }
       
-      day.officers.forEach((officer: any) => {
-        if (!officer || !officer.officerId) {
-          return;
+      // Check if this is an overtime assignment using the detectPTOForOfficer function
+      const { isOvertime } = detectPTOForOfficer(officer, day);
+      
+      // CRITICAL FIX: Also check direct properties from schedule_exceptions
+      const directOvertimeFlag = officer.shiftInfo?.is_extra_shift === true ||
+                                officer.is_extra_shift === true;
+      
+      const finalIsOvertime = isOvertime || directOvertimeFlag;
+      
+      // If it's overtime, skip adding to regular officers
+      if (finalIsOvertime) {
+        console.log('Skipping overtime officer for regular list:', officer.officerName, 'on', day.date);
+        return;
+      }
+      
+      if (!allOfficers.has(officer.officerId)) {
+        let profileData: any = null;
+        
+        if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
+          profileData = {
+            hire_date: officer.hire_date,
+            promotion_date_sergeant: officer.promotion_date_sergeant,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant,
+            service_credit_override: officer.service_credit_override || 0
+          };
+        }
+        else if (effectiveOfficerProfiles && 
+                 effectiveOfficerProfiles instanceof Map && 
+                 effectiveOfficerProfiles.has(officer.officerId)) {
+          profileData = effectiveOfficerProfiles.get(officer.officerId);
+        }
+        else {
+          profileData = {
+            hire_date: officer.hire_date || null,
+            promotion_date_sergeant: officer.promotion_date_sergeant || null,
+            promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
+            service_credit_override: officer.service_credit_override || 0
+          };
         }
         
-        if (!allOfficers.has(officer.officerId)) {
-          let profileData: any = null;
-          
-          if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
-            profileData = {
-              hire_date: officer.hire_date,
-              promotion_date_sergeant: officer.promotion_date_sergeant,
-              promotion_date_lieutenant: officer.promotion_date_lieutenant,
-              service_credit_override: officer.service_credit_override || 0
-            };
-          }
-          else if (effectiveOfficerProfiles && 
-                   effectiveOfficerProfiles instanceof Map && 
-                   effectiveOfficerProfiles.has(officer.officerId)) {
-            profileData = effectiveOfficerProfiles.get(officer.officerId);
-          }
-          else {
-            profileData = {
-              hire_date: officer.hire_date || null,
-              promotion_date_sergeant: officer.promotion_date_sergeant || null,
-              promotion_date_lieutenant: officer.promotion_date_lieutenant || null,
-              service_credit_override: officer.service_credit_override || 0
-            };
-          }
-          
-          allOfficers.set(officer.officerId, {
-            officerId: officer.officerId,
-            officerName: officer.officerName || officer.full_name || "Unknown",
-            badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
-            rank: officer.rank || "Officer",
-            hire_date: profileData?.hire_date || null,
-            promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
-            promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
-            service_credit_override: profileData?.service_credit_override || 0,
-            recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
-            weeklySchedule: {} as Record<string, any>,
-            service_credit: 0
-          });
-        }
-        
-        const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
-        const isException = !isRecurringDay || 
-                           officer.scheduleType === 'exception' || 
-                           officer.shiftInfo?.scheduleType === 'exception';
-        
-        const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, day);
-        
-        const daySchedule = {
+        allOfficers.set(officer.officerId, {
           officerId: officer.officerId,
           officerName: officer.officerName || officer.full_name || "Unknown",
           badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
           rank: officer.rank || "Officer",
-          service_credit: 0,
-          date: day.date,
-          dayOfWeek: day.dayOfWeek,
-          scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
-          scheduleType: isException ? 'exception' : 'recurring',
-          isRegularRecurringDay: isRecurringDay && !hasPTO,
-          shiftInfo: {
-            scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
-            scheduleType: isException ? 'exception' : 'recurring',
-            position: officer.shiftInfo?.position || officer.position || "",
-            unitNumber: officer.shiftInfo?.unitNumber,
-            notes: officer.shiftInfo?.notes,
-            isOff: hasPTO || officer.shiftInfo?.isOff || false,
-            hasPTO: hasPTO,
-            ptoData: hasPTO ? (ptoData || {
-              ptoType: ptoType || 'PTO',
-              isFullShift: true,
-              startTime: officer.shiftInfo?.custom_start_time,
-              endTime: officer.shiftInfo?.custom_end_time
-            }) : undefined,
-            reason: officer.shiftInfo?.reason || ptoType,
-            custom_start_time: officer.shiftInfo?.custom_start_time,
-            custom_end_time: officer.shiftInfo?.custom_end_time
-          }
-        };
-        
-        const currentOfficer = allOfficers.get(officer.officerId);
-        if (currentOfficer) {
-          if (!currentOfficer.weeklySchedule) {
-            currentOfficer.weeklySchedule = {};
-          }
-          currentOfficer.weeklySchedule[day.date] = daySchedule;
-        }
-      });
-    });
-
-    // Get regular officers with service credits
-    const regularOfficers = Array.from(allOfficers.values())
-      .map(officer => ({
-        ...officer,
-        service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
-      }));
-
-    return {
-      allOfficers,
-      regularOfficers
-    };
-  }, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap]);
-
-  // Process overtime exceptions into a format for display
-  const processedOvertimeData = useMemo(() => {
-    console.log('Processing overtime data...');
-    
-    // Create a stable weekDays reference for this useMemo
-    const stableWeekDays = weekDays || [];
-    
-    if (!overtimeExceptions || overtimeExceptions.length === 0) {
-      return {
-        overtimeByDate: {},
-        overtimeOfficers: []
-      };
-    }
-
-    // Group overtime exceptions by date
-    const overtimeByDate: Record<string, any[]> = {};
-    
-    // Initialize with empty arrays for each day
-    stableWeekDays.forEach(day => {
-      if (day && day.dateStr) {
-        overtimeByDate[day.dateStr] = [];
-      }
-    });
-    
-    // Process each overtime exception
-    const overtimeOfficersMap = new Map();
-    
-    overtimeExceptions.forEach((exception: any) => {
-      const officerId = exception.officer_id;
-      const dateStr = exception.date;
-      
-      // Create officer entry if not exists
-      if (!overtimeOfficersMap.has(officerId)) {
-        const profile = exception.profiles;
-        overtimeOfficersMap.set(officerId, {
-          officerId: officerId,
-          officerName: profile?.full_name || "Unknown",
-          badgeNumber: profile?.badge_number || "9999",
-          rank: profile?.rank || "Officer",
-          weeklySchedule: {}
+          hire_date: profileData?.hire_date || null,
+          promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
+          promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
+          service_credit_override: profileData?.service_credit_override || 0,
+          recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+          weeklySchedule: {} as Record<string, any>,
+          service_credit: 0
         });
       }
       
-      // Create schedule entry for this date
-      const officer = overtimeOfficersMap.get(officerId);
-      const schedule = {
-        officerId: officerId,
-        officerName: officer.officerName,
-        badgeNumber: officer.badgeNumber,
-        rank: officer.rank,
-        date: dateStr,
-        scheduleId: exception.id,
-        scheduleType: 'exception' as const,
-        isExtraShift: true,
+      const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
+      const isException = !isRecurringDay || 
+                         officer.scheduleType === 'exception' || 
+                         officer.shiftInfo?.scheduleType === 'exception';
+      
+      const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, day);
+      
+      const daySchedule = {
+        officerId: officer.officerId,
+        officerName: officer.officerName || officer.full_name || "Unknown",
+        badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
+        rank: officer.rank || "Officer",
+        service_credit: 0,
+        date: day.date,
+        dayOfWeek: day.dayOfWeek,
+        scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
+        scheduleType: isException ? 'exception' : 'recurring',
+        isRegularRecurringDay: isRecurringDay && !hasPTO,
         shiftInfo: {
-          scheduleId: exception.id,
-          scheduleType: 'exception' as const,
-          position: exception.position_name || exception.position || "Extra Duty",
-          unitNumber: exception.unit_number,
-          notes: exception.notes,
-          isOff: false,
-          hasPTO: false,
-          isExtraShift: true,
-          custom_start_time: exception.custom_start_time,
-          custom_end_time: exception.custom_end_time,
-          is_extra_shift: true,
-          reason: exception.reason
+          scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
+          scheduleType: isException ? 'exception' : 'recurring',
+          position: officer.shiftInfo?.position || officer.position || "",
+          unitNumber: officer.shiftInfo?.unitNumber,
+          notes: officer.shiftInfo?.notes,
+          isOff: hasPTO || officer.shiftInfo?.isOff || false,
+          hasPTO: hasPTO,
+          ptoData: hasPTO ? (ptoData || {
+            ptoType: ptoType || 'PTO',
+            isFullShift: true,
+            startTime: officer.shiftInfo?.custom_start_time,
+            endTime: officer.shiftInfo?.custom_end_time
+          }) : undefined,
+          reason: officer.shiftInfo?.reason || ptoType,
+          custom_start_time: officer.shiftInfo?.custom_start_time,
+          custom_end_time: officer.shiftInfo?.custom_end_time,
+          // Ensure the overtime flag is preserved
+          is_extra_shift: officer.shiftInfo?.is_extra_shift || false
         }
       };
       
-      // Add to officer's weekly schedule
-      if (!officer.weeklySchedule) {
-        officer.weeklySchedule = {};
-      }
-      officer.weeklySchedule[dateStr] = schedule;
-      
-      // Add to date grouping
-      if (overtimeByDate[dateStr]) {
-        overtimeByDate[dateStr].push(schedule);
+      const currentOfficer = allOfficers.get(officer.officerId);
+      if (currentOfficer) {
+        if (!currentOfficer.weeklySchedule) {
+          currentOfficer.weeklySchedule = {};
+        }
+        currentOfficer.weeklySchedule[day.date] = daySchedule;
       }
     });
-    
-    const overtimeOfficers = Array.from(overtimeOfficersMap.values()).map(officer => ({
+  });
+
+  // Get regular officers with service credits
+  const regularOfficers = Array.from(allOfficers.values())
+    .map(officer => ({
       ...officer,
-      service_credit: serviceCreditsMap.get(officer.officerId) || 0
+      service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
     }));
-    
+
+  return {
+    allOfficers,
+    regularOfficers
+  };
+}, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap]);
+
+// Process overtime exceptions into a format for display
+const processedOvertimeData = useMemo(() => {
+  console.log('Processing overtime data...');
+  
+  // Create a stable weekDays reference for this useMemo
+  const stableWeekDays = weekDays || [];
+  
+  if (!overtimeExceptions || overtimeExceptions.length === 0) {
     return {
-      overtimeByDate,
-      overtimeOfficers
+      overtimeByDate: {},
+      overtimeOfficers: []
     };
-  }, [overtimeExceptions, weekDays, serviceCreditsMap]); // Keep these dependencies
+  }
+
+  // Group overtime exceptions by date
+  const overtimeByDate: Record<string, any[]> = {};
+  
+  // Initialize with empty arrays for each day
+  stableWeekDays.forEach(day => {
+    if (day && day.dateStr) {
+      overtimeByDate[day.dateStr] = [];
+    }
+  });
+  
+  // Process each overtime exception
+  const overtimeOfficersMap = new Map();
+  
+  overtimeExceptions.forEach((exception: any) => {
+    const officerId = exception.officer_id;
+    const dateStr = exception.date;
+    
+    // Create officer entry if not exists
+    if (!overtimeOfficersMap.has(officerId)) {
+      const profile = exception.profiles;
+      overtimeOfficersMap.set(officerId, {
+        officerId: officerId,
+        officerName: profile?.full_name || "Unknown",
+        badgeNumber: profile?.badge_number || "9999",
+        rank: profile?.rank || "Officer",
+        weeklySchedule: {}
+      });
+    }
+    
+    // Create schedule entry for this date
+    const officer = overtimeOfficersMap.get(officerId);
+    const schedule = {
+      officerId: officerId,
+      officerName: officer.officerName,
+      badgeNumber: officer.badgeNumber,
+      rank: officer.rank,
+      date: dateStr,
+      scheduleId: exception.id,
+      scheduleType: 'exception' as const,
+      isExtraShift: true,
+      shiftInfo: {
+        scheduleId: exception.id,
+        scheduleType: 'exception' as const,
+        position: exception.position_name || exception.position || "Extra Duty",
+        unitNumber: exception.unit_number,
+        notes: exception.notes,
+        isOff: false,
+        hasPTO: false,
+        isExtraShift: true,
+        is_extra_shift: true, // Make sure this flag is set
+        custom_start_time: exception.custom_start_time,
+        custom_end_time: exception.custom_end_time,
+        reason: exception.reason
+      }
+    };
+    
+    // Add to officer's weekly schedule
+    if (!officer.weeklySchedule) {
+      officer.weeklySchedule = {};
+    }
+    officer.weeklySchedule[dateStr] = schedule;
+    
+    // Add to date grouping
+    if (overtimeByDate[dateStr]) {
+      overtimeByDate[dateStr].push(schedule);
+    }
+  });
+  
+  const overtimeOfficers = Array.from(overtimeOfficersMap.values()).map(officer => ({
+    ...officer,
+    service_credit: serviceCreditsMap.get(officer.officerId) || 0
+  }));
+  
+  return {
+    overtimeByDate,
+    overtimeOfficers
+  };
+}, [overtimeExceptions, weekDays, serviceCreditsMap]);
     
   // Fetch service credits for all officers (regular + overtime)
   useEffect(() => {

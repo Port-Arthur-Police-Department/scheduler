@@ -444,11 +444,13 @@ const { data: exceptionsData, error: exceptionsError } = await supabase
         });
       });
 
-      // Process working exceptions
-      combinedExceptions?.filter(e => !e.is_off).forEach(exception => {
-        if (!scheduleByDateAndOfficer[exception.date]) {
-          scheduleByDateAndOfficer[exception.date] = {};
-        }
+// Process working exceptions
+combinedExceptions?.filter(e => !e.is_off).forEach(exception => {
+  // SKIP OVERTIME EXCEPTIONS - they should only appear in overtime section
+  if (exception.is_extra_shift === true) {
+    console.log('Skipping overtime exception for regular schedule:', exception.officer_id, exception.date);
+    return; // Skip this exception
+  }
 
         const profile = officerProfilesMap.get(exception.officer_id);
         const ptoException = combinedExceptions?.find(e => 

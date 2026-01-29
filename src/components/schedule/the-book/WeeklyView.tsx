@@ -1075,7 +1075,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
   <div className="p-2 border-r text-sm font-mono">OT</div>
   <div className="p-2 border-r font-medium">
-    Overtime Assignments
+    Assignments
   </div>
                 {weekDays.map(({ dateStr }) => {
                   const overtimeOfficers = processedOvertimeData.overtimeByDate[dateStr] || [];

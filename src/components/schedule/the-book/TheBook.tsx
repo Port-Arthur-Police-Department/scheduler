@@ -452,6 +452,10 @@ combinedExceptions?.filter(e => !e.is_off).forEach(exception => {
     return; // Skip this exception
   }
 
+      console.log('Total exceptions fetched:', exceptionsData?.length);
+console.log('Overtime exceptions count:', exceptionsData?.filter(e => e.is_extra_shift === true)?.length);
+console.log('Regular exceptions count:', exceptionsData?.filter(e => e.is_extra_shift === false)?.length);
+
         const profile = officerProfilesMap.get(exception.officer_id);
         const ptoException = combinedExceptions?.find(e => 
           e.officer_id === exception.officer_id && e.date === exception.date && e.is_off

@@ -923,6 +923,73 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
                 </div>
               ))}
             </div>
+      {/* OVERTIME SECTION - Add this after the PPO section */}
+{allOfficers.some(officer => officer.isExtraShift) && (
+  <div className="border-t-2 border-orange-300">
+    {/* OVERTIME COUNT ROW */}
+    <div className="grid grid-cols-9 border-b"
+      style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
+      <div className="p-2 border-r"></div>
+      <div className="p-2 border-r text-sm font-medium">OVERTIME</div>
+      {weekDays.map(({ dateStr }) => {
+        const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
+        
+        // Count officers working overtime on this shift
+        const overtimeCount = daySchedule?.officers?.filter((officer: any) => {
+          return officer.isExtraShift || officer.shiftInfo?.isExtraShift;
+        }).length || 0;
+        
+        return (
+          <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+            {overtimeCount}
+          </div>
+        );
+      })}
+    </div>
+
+    {/* OVERTIME ROW - Single row showing all overtime assignments */}
+    <div className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+      style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
+      <div className="p-2 border-r text-sm font-mono">OT</div>
+      <div className="p-2 border-r font-medium flex items-center gap-2">
+        Overtime Assignments
+      </div>
+      {weekDays.map(({ dateStr }) => {
+        const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
+        const overtimeOfficers = daySchedule?.officers?.filter((officer: any) => {
+          return officer.isExtraShift || officer.shiftInfo?.isExtraShift;
+        }) || [];
+        
+        return (
+          <div key={dateStr} className="p-2 border-r">
+            {overtimeOfficers.length > 0 ? (
+              <div className="space-y-1">
+                {overtimeOfficers.map((officer: any) => (
+                  <div key={`${officer.officerId}-${dateStr}`} 
+                    className="text-xs p-1 bg-orange-100 rounded border border-orange-200">
+                    <div className="font-medium truncate">
+                      {getLastName(officer.officerName || '')}
+                    </div>
+                    <div className="text-xs text-orange-700 truncate">
+                      {officer.shiftInfo?.position || 'Extra Duty'}
+                    </div>
+                    {officer.shiftInfo?.custom_start_time && (
+                      <div className="text-xs text-orange-600">
+                        {officer.shiftInfo.custom_start_time}-{officer.shiftInfo.custom_end_time}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground text-center">-</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
           )}
         </div>
       </div>

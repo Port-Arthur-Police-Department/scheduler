@@ -538,4 +538,3 @@ export const PTOSectionMobile = ({
   );
 };
 
-export default DailyScheduleViewMobile;

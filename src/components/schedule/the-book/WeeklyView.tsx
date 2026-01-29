@@ -297,18 +297,23 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
   };
 
 const weekDays = useMemo(() => {
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(currentWeekStart, i);
-    const dayOfWeek = date.getDay();
-    return {
-      date,
-      dateStr: format(date, "yyyy-MM-dd"),
-      dayName: format(date, "EEE").toUpperCase(),
-      formattedDate: format(date, "MMM d"),
-      isToday: isSameDay(date, new Date()),
-      dayOfWeek
-    };
-  });
+  try {
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(currentWeekStart, i);
+      const dayOfWeek = date.getDay();
+      return {
+        date,
+        dateStr: format(date, "yyyy-MM-dd"),
+        dayName: format(date, "EEE").toUpperCase(),
+        formattedDate: format(date, "MMM d"),
+        isToday: isSameDay(date, new Date()),
+        dayOfWeek
+      };
+    });
+  } catch (error) {
+    console.error('Error creating weekDays:', error);
+    return []; // Always return an array, never undefined
+  }
 }, [currentWeekStart]);
 
 // ============ Early returns AFTER weekDays ============

@@ -795,23 +795,23 @@ return (
                   </Button>
                 </div>
               </div>
-            </PopoverContent>
-          </Popover>
-          
-          <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onDateNavigation.goToCurrent}
-          >
-            Today
-          </Button>
-        </div>
-      </div>
-    </div>
-
+            </div>
+          </PopoverContent>
+        </Popover> {/* Moved Popover closing tag here */}
+        
+        <Button variant="outline" size="sm" onClick={onDateNavigation.goToNext}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDateNavigation.goToCurrent}
+        >
+          Today
+        </Button>
+      </div> 
+    </div> 
+    
     <div className="mobile-scroll overflow-x-auto">
       <div className="border rounded-lg overflow-hidden min-w-[900px]">
         <div className="grid grid-cols-9 bg-muted/50 border-b">

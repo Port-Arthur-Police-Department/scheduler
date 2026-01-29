@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with OVERTIME ROW and extra shift handling
+// Updated WeeklyView.tsx with OVERTIME ROW and extra shift handling - FIXED HOOK ORDER
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, isSameDay, startOfWeek, addWeeks } from "date-fns";
@@ -325,8 +325,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ ENHANCED DATA PROCESSING WITH OVERTIME DETECTION ============
-  const { allOfficers, regularOfficersArray, overtimeOfficersArray } = useMemo(() => {
+  // ============ ENHANCED DATA PROCESSING WITH OVERTIME DETECTION - FIXED HOOK ORDER ============
+  const { allOfficers, updatedRegularOfficersArray, updatedOvertimeOfficersArray } = useMemo(() => {
     const allOfficers = new Map();
     const recurringSchedulesByOfficer = new Map();
 
@@ -466,24 +466,37 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       officer.isExtraShift
     );
 
-    return { allOfficers, regularOfficersArray, overtimeOfficersArray };
-  }, [localSchedules, effectiveOfficerProfiles, primaryShiftsData, selectedShiftId]);
+    // Update with service credits (if available)
+    const updatedRegularOfficersArray = regularOfficersArray.map(officer => ({
+      ...officer,
+      service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
+    }));
 
-  // NEW: Fetch service credits for all officers
+    const updatedOvertimeOfficersArray = overtimeOfficersArray.map(officer => ({
+      ...officer,
+      service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
+    }));
+
+    return { 
+      allOfficers, 
+      updatedRegularOfficersArray,
+      updatedOvertimeOfficersArray
+    };
+  }, [localSchedules, effectiveOfficerProfiles, primaryShiftsData, selectedShiftId, serviceCreditsMap]);
+
+  // Fetch service credits for all officers
   useEffect(() => {
     const fetchServiceCredits = async () => {
-      const allOfficersArray = [...regularOfficersArray, ...overtimeOfficersArray];
-      if (allOfficersArray.length === 0) return;
+      if (!allOfficers || allOfficers.size === 0) return;
       
       setIsLoadingServiceCredits(true);
-      const officerIds = allOfficersArray.map(o => o.officerId);
-      const uniqueOfficerIds = [...new Set(officerIds)];
+      const officerIds = Array.from(allOfficers.keys());
       
       const credits = new Map();
       
-      if (uniqueOfficerIds.length > 0) {
-        console.log(`Fetching service credits for ${uniqueOfficerIds.length} officers via RPC...`);
-        for (const officerId of uniqueOfficerIds) {
+      if (officerIds.length > 0) {
+        console.log(`Fetching service credits for ${officerIds.length} officers via RPC...`);
+        for (const officerId of officerIds) {
           try {
             const { data, error } = await supabase
               .rpc('get_service_credit', { profile_id: officerId });
@@ -506,22 +519,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     };
     
     fetchServiceCredits();
-  }, [regularOfficersArray, overtimeOfficersArray]); // FIXED: Use arrays instead of allOfficers.size
-
-  // Update officers with fetched service credits
-  const updatedRegularOfficersArray = useMemo(() => {
-    return regularOfficersArray.map(officer => ({
-      ...officer,
-      service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
-    }));
-  }, [regularOfficersArray, serviceCreditsMap]);
-
-  const updatedOvertimeOfficersArray = useMemo(() => {
-    return overtimeOfficersArray.map(officer => ({
-      ...officer,
-      service_credit: serviceCreditsMap.get(officer.officerId) || officer.service_credit || 0
-    }));
-  }, [overtimeOfficersArray, serviceCreditsMap]);
+  }, [allOfficers]);
 
   // Sort regular officers consistently
   const officersForSorting = updatedRegularOfficersArray.map(officer => ({

@@ -1071,15 +1071,12 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               </div>
 
               {/* OVERTIME ROW - Single row showing all overtime assignments */}
-              <div className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
-                <div className="p-2 border-r text-sm font-mono">OT</div>
-                <div className="p-2 border-r font-medium flex items-center gap-2">
-                  Overtime Assignments
-                  <Badge variant="outline" className="text-xs">
-                    Extra Shift
-                  </Badge>
-                </div>
+             <div className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
+  style={{ backgroundColor: '#fff3cd', color: '#856404' }}>
+  <div className="p-2 border-r text-sm font-mono">OT</div>
+  <div className="p-2 border-r font-medium">
+    Overtime Assignments
+  </div>
                 {weekDays.map(({ dateStr }) => {
                   const overtimeOfficers = processedOvertimeData.overtimeByDate[dateStr] || [];
                   

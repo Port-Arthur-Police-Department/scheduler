@@ -304,7 +304,8 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
     return <div className="text-center py-8">Loading officer data...</div>;
   }
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
+const weekDays = useMemo(() => {
+  return Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentWeekStart, i);
     const dayOfWeek = date.getDay();
     return {
@@ -316,6 +317,7 @@ const { data: overtimeExceptions, isLoading: isLoadingOvertime } = useQuery({
       dayOfWeek
     };
   });
+}, [currentWeekStart]);
 
   const isSpecialAssignment = (position: string) => {
     return position && (

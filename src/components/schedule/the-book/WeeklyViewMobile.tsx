@@ -44,17 +44,21 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   onRemoveOfficer,
   isUpdating = false,
 }) => {
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
+
+const weekDays = useMemo(() => {
+  return Array.from({ length: 7 }, (_, i) => {
     const date = addDays(currentWeekStart, i);
+    const dayOfWeek = date.getDay();
     return {
       date,
       dateStr: format(date, "yyyy-MM-dd"),
       dayName: format(date, "EEE").toUpperCase(),
       formattedDate: format(date, "MMM d"),
       isToday: isSameDay(date, new Date()),
-      dayOfWeek: date.getDay()
+      dayOfWeek
     };
   });
+}, [currentWeekStart]);
 
   const { data: scheduleData, isLoading, error } = useQuery({
     queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],

@@ -293,13 +293,14 @@ const TheBook = ({
 
       if (recurringError) throw recurringError;
 
-      // Get schedule exceptions
-      const { data: exceptionsData, error: exceptionsError } = await supabase
-        .from("schedule_exceptions")
-        .select("*")
-        .gte("date", startDate.toISOString().split('T')[0])
-        .lte("date", endDate.toISOString().split('T')[0])
-        .eq("shift_type_id", selectedShiftId);
+// Get schedule exceptions (EXCLUDING OVERTIME)
+const { data: exceptionsData, error: exceptionsError } = await supabase
+  .from("schedule_exceptions")
+  .select("*")
+  .gte("date", startDate.toISOString().split('T')[0])
+  .lte("date", endDate.toISOString().split('T')[0])
+  .eq("shift_type_id", selectedShiftId)
+  .eq("is_extra_shift", false); // ← EXCLUDE OVERTIME EXCEPTIONS
 
       if (exceptionsError) throw exceptionsError;
 

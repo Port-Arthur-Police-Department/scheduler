@@ -657,6 +657,38 @@ export const DailyScheduleView = ({
   showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
 />
 
+{/* Suspended Partnerships Section */}
+{shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
+  <OfficerSection
+    title="Partnerships (Suspended)"
+    officers={shiftData.suspendedPartnershipOfficers}
+    minCount={0}
+    currentCount={shiftData.suspendedPartnershipOfficers.length}
+    isUnderstaffed={false}
+    canEdit={canEdit}
+    onSavePosition={handleSavePosition}
+    onSaveUnitNumber={handleSaveUnitNumber}
+    onSaveNotes={handleSaveNotes}
+    onAssignPTO={(officer) => {
+      setSelectedOfficer({
+        officerId: officer.officerId,
+        name: officer.name,
+        scheduleId: officer.scheduleId,
+        type: officer.type,
+      });
+      setSelectedShift(officer.shift);
+      setPtoDialogOpen(true);
+    }}
+    onRemoveOfficer={removeOfficerMutation.mutate}
+    onPartnershipChange={handlePartnershipChange}
+    onEmergencyPartner={handleEmergencyPartner}
+    isUpdating={updateScheduleMutation.isPending}
+    sectionType="suspendedPartnership"
+    colorSettings={websiteSettings?.color_settings}
+    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+  />
+)}
+
 {/* Special Assignment Section */}
 {shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
   <OfficerSection
@@ -685,7 +717,7 @@ export const DailyScheduleView = ({
     isUpdating={updateScheduleMutation.isPending}
     sectionType="special"
     colorSettings={websiteSettings?.color_settings}
-    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
+    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
   />
 )}
 
@@ -1750,14 +1782,26 @@ const isActivePartnership = (officer: any) => {
   return officer.isPartnership && !officer.partnershipSuspended;
 };
 
+// Function to check if position is "Riding with partner" or similar
+const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
+  if (!position) return false;
+  const positionLower = position.toLowerCase();
+  return (
+    positionLower.includes('riding with') ||
+    positionLower.includes('riding partner') ||
+    positionLower.includes('emergency partner') ||
+    positionLower === 'other'
+  );
+};
+
 // SECOND: Identify special assignment officers (EXCLUDE those in partnerships)
 const specialAssignmentOfficers = processedOfficers.filter(o => {
   // Skip officers in ANY partnership
   if (isInPartnership(o)) return false;
   
   const position = o.position?.toLowerCase() || '';
-  const isSpecialAssignment = position.includes('other') || 
-        (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+  const isSpecialAssignment = (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
+        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
   
   return isSpecialAssignment;
 }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -1787,10 +1831,10 @@ const regularOfficers = processedOfficers.filter(o => {
   // Skip officers with full day PTO
   if (o.hasPTO && o.ptoData?.isFullShift) return false;
   
-  // Skip special assignment officers
+  // Skip special assignment officers (EXCEPT "Riding with partner" positions)
   const position = o.position?.toLowerCase() || '';
-  const isSpecialAssignment = position.includes('other') || 
-        (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+  const isSpecialAssignment = (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
+        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
   if (isSpecialAssignment) return false;
   
   // Skip supervisors
@@ -1798,7 +1842,7 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
   
-  // CRITICAL: Skip officers in suspended partnerships
+  // IMPORTANT: Skip officers in suspended partnerships - they belong in their own section
   if (o.isPartnership && o.partnershipSuspended) return false;
   
   return true;
@@ -1811,6 +1855,21 @@ const regularOfficers = processedOfficers.filter(o => {
   }
   
   return (a.position || '').localeCompare(b.position || '');
+});
+
+// SIXTH: "Riding with partner" officers (these should be in regular officers section)
+const ridingWithPartnerOfficers = processedOfficers.filter(o => {
+  if (o.isPartnership && o.partnershipSuspended) return false; // Already in suspended partnerships
+  if (o.hasPTO && o.ptoData?.isFullShift) return false; // Skip PTO officers
+  
+  return isRidingWithPartnerPosition(o.position);
+});
+
+// Add "Riding with partner" officers to regular officers if they're not already there
+ridingWithPartnerOfficers.forEach(officer => {
+  if (!regularOfficers.some(ro => ro.officerId === officer.officerId)) {
+    regularOfficers.push(officer);
+  }
 });
 
 // FIFTH: Suspended partnerships ONLY

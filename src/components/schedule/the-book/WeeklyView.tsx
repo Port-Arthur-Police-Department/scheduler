@@ -662,12 +662,11 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       }
     }
     
-    if (typeof localSchedules.minimumStaffing === 'object') {
-      const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
-      if (dayStaffing && typeof dayStaffing === 'object') {
-        const shiftStaffing = dayStaffing[selectedShiftId);
-        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
-      }
+const dayStaffing = localSchedules.minimumStaffing[dayOfWeek];
+if (dayStaffing && typeof dayStaffing === 'object') {
+  const shiftStaffing = dayStaffing[selectedShiftId];
+  return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 1 };
+}
     }
     
     return { minimumOfficers: 0, minimumSupervisors: 1 };

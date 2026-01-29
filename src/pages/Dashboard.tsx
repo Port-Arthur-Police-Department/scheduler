@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 import { DailyScheduleManagement } from "@/components/schedule/DailyScheduleManagement";
 import { DailyScheduleView } from "@/components/schedule/DailyScheduleView";
-import DailyScheduleViewMobile from "@/components/schedule/DailyScheduleViewMobile";
+import { DailyScheduleViewMobile } from "@/components/schedule/DailyScheduleViewMobile";
 import { TimeOffRequests } from "@/components/time-off/TimeOffRequests";
 import { VacancyManagement } from "@/components/admin/VacancyManagement";
 import { StaffManagement } from "@/components/admin/StaffManagement";

@@ -385,28 +385,29 @@ const processedOfficersData = useMemo(() => {
   }
 
   // Process daily schedules - COMPLETELY EXCLUDE OVERTIME OFFICERS
-  localSchedules.dailySchedules.forEach(day => {
-    if (!day.officers || !Array.isArray(day.officers)) {
-      return;
+localSchedules.dailySchedules.forEach(day => {
+  if (!day.officers || !Array.isArray(day.officers)) {
+    return;
+  }
+  
+  // DEBUG: Check what officers we're processing
+  console.log(`Day ${day.date} - Total officers: ${day.officers.length}`);
+  
+  // Filter out ALL officers with is_extra_shift = true
+  const regularOfficersForDay = day.officers.filter((officer: any) => {
+    // Strict check for overtime flag
+    const isOvertime = officer?.shiftInfo?.is_extra_shift === true;
+    
+    if (isOvertime) {
+      console.log(`Filtering out overtime officer: ${officer.officerName} on ${day.date}`);
     }
     
-    // DEBUG: Check what officers we're processing
-    console.log(`Day ${day.date} - Total officers: ${day.officers.length}`);
-    day.officers.forEach((officer: any, index: number) => {
-      const isOvertime = isOfficerOvertime(officer);
-      if (isOvertime) {
-        console.log(`Found overtime officer on ${day.date}:`, officer.officerName);
-      }
-    });
-    
-    // Filter out ALL overtime officers
-    const regularOfficersForDay = day.officers.filter((officer: any) => {
-      return !isOfficerOvertime(officer);
-    });
-    
-    console.log(`Day ${day.date} - Regular officers after filtering: ${regularOfficersForDay.length}`);
-    
-    regularOfficersForDay.forEach((officer: any) => {
+    return !isOvertime;
+  });
+  
+  console.log(`Day ${day.date} - Regular officers after filtering: ${regularOfficersForDay.length}`);
+  
+  regularOfficersForDay.forEach((officer: any) => {
       if (!officer || !officer.officerId) {
         return;
       }
@@ -686,27 +687,44 @@ const processedOfficersData = useMemo(() => {
     };
   }).filter(Boolean);
 
-  // Categorize regular officers
-  const supervisors = sortedOriginalOfficers.filter(officer => 
-    isSupervisorByRank(officer)
-  );
+// Categorize regular officers - EXCLUDE OVERTIME OFFICERS COMPLETELY
+const supervisors = sortedOriginalOfficers.filter(officer => {
+  const isSupervisor = isSupervisorByRank(officer);
+  
+  // Check if this officer has any overtime shifts in their weekly schedule
+  const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
+    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+    return dayOfficer?.shiftInfo?.is_extra_shift === true;
+  });
+  
+  return isSupervisor && !hasOvertimeShifts;
+});
 
-  const regularOfficers = sortedOriginalOfficers.filter(officer => 
-    !isSupervisorByRank(officer) && 
-    officer.rank?.toLowerCase() !== 'probationary'
-  );
+const regularOfficers = sortedOriginalOfficers.filter(officer => {
+  const isNotSupervisor = !isSupervisorByRank(officer);
+  const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+  
+  // Check if this officer has any overtime shifts in their weekly schedule
+  const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
+    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+    return dayOfficer?.shiftInfo?.is_extra_shift === true;
+  });
+  
+  return isNotSupervisor && isNotPPO && !hasOvertimeShifts;
+});
 
-  const ppos = sortedOriginalOfficers.filter(officer => 
-    officer.rank?.toLowerCase() === 'probationary'
-  );
-
-  // Helper functions that use hooks
-  const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
-    if (!officer || !officer.weeklySchedule) {
-      return null;
-    }
-    return officer.weeklySchedule[dateStr];
-  };
+const ppos = sortedOriginalOfficers.filter(officer => {
+  const isNotSupervisor = !isSupervisorByRank(officer);
+  const isPPO = officer.rank?.toLowerCase() === 'probationary';
+  
+  // Check if this officer has any overtime shifts in their weekly schedule
+  const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
+    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+    return dayOfficer?.shiftInfo?.is_extra_shift === true;
+  });
+  
+  return isNotSupervisor && isPPO && !hasOvertimeShifts;
+});
 
   const getMinimumStaffing = (dayOfWeek: number) => {
     if (!localSchedules.minimumStaffing) {

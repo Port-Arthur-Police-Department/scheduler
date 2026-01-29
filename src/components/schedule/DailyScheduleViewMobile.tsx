@@ -537,3 +537,5 @@ export const PTOSectionMobile = ({
     </div>
   );
 };
+
+export default DailyScheduleViewMobile;

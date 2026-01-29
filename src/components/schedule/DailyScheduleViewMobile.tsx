@@ -10,6 +10,7 @@ import { format, isToday, isTomorrow, isYesterday, addDays, subDays, parseISO } 
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { OfficerSection } from "./OfficerSection";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   DropdownMenu, 

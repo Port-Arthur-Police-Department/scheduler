@@ -478,6 +478,9 @@ const isSpecialAssignment = (position: string) => {
 const processedOvertimeData = useMemo(() => {
   console.log('Processing overtime data...');
   
+  // Create a stable weekDays reference for this useMemo
+  const stableWeekDays = weekDays || [];
+  
   if (!overtimeExceptions || overtimeExceptions.length === 0) {
     return {
       overtimeByDate: {},
@@ -489,8 +492,10 @@ const processedOvertimeData = useMemo(() => {
   const overtimeByDate: Record<string, any[]> = {};
   
   // Initialize with empty arrays for each day
-  weekDays.forEach(day => {
-    overtimeByDate[day.dateStr] = [];
+  stableWeekDays.forEach(day => {
+    if (day && day.dateStr) {
+      overtimeByDate[day.dateStr] = [];
+    }
   });
   
   // Process each overtime exception
@@ -560,7 +565,7 @@ const processedOvertimeData = useMemo(() => {
     overtimeByDate,
     overtimeOfficers
   };
-}, [overtimeExceptions, weekDays, serviceCreditsMap]); 
+}, [overtimeExceptions, weekDays, serviceCreditsMap]); // Keep these dependencies
   
   // Fetch service credits for all officers (regular + overtime)
   useEffect(() => {

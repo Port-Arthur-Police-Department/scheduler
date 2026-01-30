@@ -1409,6 +1409,7 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
           customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
         }
 
+// REPLACE this block starting at line 641:
 const finalData = workingException ? {
   scheduleId: workingException.id,
   officerId: r.officer_id,
@@ -1548,7 +1549,8 @@ const finalData = workingException ? {
           customTime = `${e.custom_start_time} - ${e.custom_end_time}`;
         }
 
-   const officerData = {
+// REPLACE this block starting at line 751:
+const officerData = {
   scheduleId: e.id,
   officerId: e.officer_id,
   name: e.profiles?.full_name || "Unknown",
@@ -1740,6 +1742,7 @@ for (const officer of allOfficers) {
 }
 
 // FIXED: FIRST: Get all officers with full day PTO for the PTO section
+// REPLACE this block starting at line 810:
 const shiftPTORecords = ptoExceptions?.filter(e => 
   e.shift_type_id === shift.id
 ).map(e => {
@@ -1759,7 +1762,9 @@ const shiftPTORecords = ptoExceptions?.filter(e =>
     shiftTypeId: shift.id,
     unitNumber: e.unit_number,
     notes: e.notes,
-    // 🎂🎖️ FIXED: Properly add birthday/anniversary fields for PTO records
+    // 🎂🎖️ FIXED: Properly add birthday/anniversary fields for PTO records - ADD RAW DATE FIELDS
+    birthday: profile?.birthday,  // ADD THIS LINE - CRITICAL FOR PDF EXPORT
+    hire_date: profile?.hire_date, // ADD THIS LINE - CRITICAL FOR PDF EXPORT
     isBirthdayToday: profile?.birthday 
       ? isBirthdayToday(profile.birthday, selectedDate)
       : false,

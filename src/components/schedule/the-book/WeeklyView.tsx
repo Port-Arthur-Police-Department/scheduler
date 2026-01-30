@@ -380,6 +380,19 @@ const processedOfficersData = useMemo(() => {
     };
   }
 
+  // Add this in your processedOfficersData useMemo where you filter officers
+console.log('DESKTOP OVERTIME CHECK:', {
+  totalOfficersForDay: day.officers?.length,
+  officersWithIsExtraShift: day.officers?.filter((o: any) => 
+    o.shiftInfo?.is_extra_shift === true
+  ).map((o: any) => ({
+    name: o.officerName,
+    isExtraShift: o.shiftInfo?.is_extra_shift,
+    scheduleId: o.shiftInfo?.scheduleId
+  })),
+  filteredCount: regularOfficersForDay.length
+});
+
   // Add a safety filter to remove any corrupted data
   const sanitizedSchedules = {
     ...localSchedules,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // ✅ Single import with all hooks
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
-import React, { useState, useEffect, useMemo } from 'react';
 import { 
   sortOfficersConsistently, 
   type OfficerForSorting 
@@ -45,21 +44,20 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   onRemoveOfficer,
   isUpdating = false,
 }) => {
-
-const weekDays = useMemo(() => {
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(currentWeekStart, i);
-    const dayOfWeek = date.getDay();
-    return {
-      date,
-      dateStr: format(date, "yyyy-MM-dd"),
-      dayName: format(date, "EEE").toUpperCase(),
-      formattedDate: format(date, "MMM d"),
-      isToday: isSameDay(date, new Date()),
-      dayOfWeek
-    };
-  });
-}, [currentWeekStart]);
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(currentWeekStart, i);
+      const dayOfWeek = date.getDay();
+      return {
+        date,
+        dateStr: format(date, "yyyy-MM-dd"),
+        dayName: format(date, "EEE").toUpperCase(),
+        formattedDate: format(date, "MMM d"),
+        isToday: isSameDay(date, new Date()),
+        dayOfWeek
+      };
+    });
+  }, [currentWeekStart]);
 
   const { data: scheduleData, isLoading, error } = useQuery({
     queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],

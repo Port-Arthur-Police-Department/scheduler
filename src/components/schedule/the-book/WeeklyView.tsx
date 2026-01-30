@@ -380,6 +380,27 @@ const processedOfficersData = useMemo(() => {
     };
   }
 
+  // Add a safety filter to remove any corrupted data
+  const sanitizedSchedules = {
+    ...localSchedules,
+    dailySchedules: localSchedules.dailySchedules.map(day => ({
+      ...day,
+      officers: day.officers?.filter((officer: any) => {
+        // CRITICAL: Filter out officers with invalid officerId
+        if (!officer?.officerId || officer.officerId === officer?.shiftInfo?.scheduleId) {
+          console.warn(`⚠️ Filtering invalid officer data:`, {
+            officerId: officer?.officerId,
+            scheduleId: officer?.shiftInfo?.scheduleId,
+            officerName: officer?.officerName
+          });
+          return false;
+        }
+        return true;
+      }) || []
+    }))
+  };
+
+  // Use sanitizedSchedules instead of localSchedules
   const allOfficers = new Map();
   const recurringSchedulesByOfficer = new Map();
 

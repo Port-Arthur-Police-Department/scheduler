@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, ChevronDown, ChevronUp, Clock, Edit, FileText, MapPin, MoreVertical, Trash2, Users } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { toast } from "sonner";
 
 interface OfficerSectionMobileProps {
   title: string;
@@ -387,6 +388,8 @@ interface PTOSectionMobileProps {
   canEdit: boolean;
   showSpecialOccasions?: boolean;
   colorSettings?: any;
+  onEditPTO?: (ptoRecord: any) => void;
+  onRemovePTO?: (ptoRecord: any) => void;
 }
 
 export const PTOSectionMobile = ({ 
@@ -394,7 +397,9 @@ export const PTOSectionMobile = ({
   ptoRecords, 
   canEdit, 
   showSpecialOccasions = false,
-  colorSettings 
+  colorSettings,
+  onEditPTO,
+  onRemovePTO
 }: PTOSectionMobileProps) => {
   const colors = colorSettings || {};
   const currentDate = new Date();
@@ -435,6 +440,22 @@ export const PTOSectionMobile = ({
       return Math.max(0, years);
     } catch (error) {
       return 0;
+    }
+  };
+
+  const handleEditPTO = (ptoRecord: any) => {
+    if (onEditPTO) {
+      onEditPTO(ptoRecord);
+    } else {
+      toast.info("Edit PTO functionality coming soon");
+    }
+  };
+
+  const handleRemovePTO = (ptoRecord: any) => {
+    if (onRemovePTO) {
+      onRemovePTO(ptoRecord);
+    } else {
+      toast.info("Remove PTO functionality coming soon");
     }
   };
 
@@ -529,9 +550,26 @@ export const PTOSectionMobile = ({
                 )}
               </div>
               {canEdit && (
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => handleEditPTO(ptoRecord)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit PTO
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleRemovePTO(ptoRecord)}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove PTO
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
           </div>

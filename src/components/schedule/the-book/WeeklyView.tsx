@@ -513,7 +513,7 @@ localSchedules.dailySchedules.forEach(day => {
       allOfficers.set(officerId, currentOfficer);
     }
     
-    const isRecurringDay = recurringSchedulesByOfficer.get(officerId)?.has(day.dayOfWeek) || false;
+    const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
     const isException = !isRecurringDay || 
                        officer.scheduleType === 'exception' || 
                        officer.shiftInfo?.scheduleType === 'exception';

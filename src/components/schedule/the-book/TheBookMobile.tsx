@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from "date-fns";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useUser } from "@/contexts/UserContext";
 import { auditLogger } from "@/lib/auditLogger";
@@ -94,13 +94,41 @@ useEffect(() => {
   }
 }, [shiftTypes, userCurrentShift, selectedShiftId]);
 
-  // Setup mutations
-  const mutationsResult = useWeeklyScheduleMutations(
-    currentWeekStart,
-    currentMonth,
-    activeView,
-    selectedShiftId
-  );
+// Setup mutations
+const mutationsResult = useWeeklyScheduleMutations(
+  currentWeekStart,
+  currentMonth,
+  activeView,
+  selectedShiftId
+);
+
+// Add a separate query for overtime data in TheBookMobile
+const { data: overtimeExceptions } = useQuery({
+  queryKey: ['overtime-exceptions-mobile', selectedShiftId, currentWeekStart.toISOString()],
+  queryFn: async () => {
+    if (!selectedShiftId) return [];
+    
+    const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+    const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
+    
+    const { data: exceptions, error } = await supabase
+      .from('schedule_exceptions')
+      .select('*')
+      .eq('is_extra_shift', true)
+      .eq('shift_type_id', selectedShiftId)
+      .gte('date', weekStart)
+      .lte('date', weekEnd)
+      .order('date');
+    
+    if (error) {
+      console.error('Error fetching overtime exceptions:', error);
+      return [];
+    }
+    
+    return exceptions || [];
+  },
+  enabled: !!selectedShiftId && activeView === "weekly",
+});
 
   // Get query client
   const queryClient = useQueryClient();
@@ -462,6 +490,26 @@ useEffect(() => {
     setAssignmentDialogOpen(true);
   };
 
+  const onRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
+    console.log('📱 Removing officer on mobile:', { scheduleId, type, officerData });
+    
+    removeOfficerMutation.mutate({
+      scheduleId,
+      type,
+      officerData
+    }, {
+      onSuccess: () => {
+        toast.success("Officer removed from schedule");
+        // Force refresh the weekly schedule query
+        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+      },
+      onError: (error) => {
+        console.error('❌ Error removing officer:', error);
+        toast.error("Failed to remove officer");
+      }
+    });
+  };
+
   const handleSaveAssignment = (assignmentData: any) => {
     console.log('💾 Saving assignment:', assignmentData);
     
@@ -510,10 +558,12 @@ useEffect(() => {
             onAssignPTO={handleAssignPTO}
             onRemovePTO={handleRemovePTO}
             onEditAssignment={handleEditAssignment}
+            onRemoveOfficer={onRemoveOfficer}
             isUpdating={
               assignPTOMutation.isPending || 
               updatePositionMutation.isPending
             }
+            overtimeExceptions={overtimeExceptions || []} // Pass overtime data
           />
         );
       

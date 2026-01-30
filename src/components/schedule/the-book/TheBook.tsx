@@ -399,18 +399,56 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
     const scheduleByDateAndOfficer: Record<string, Record<string, any>> = {};
     dates.forEach(date => { scheduleByDateAndOfficer[date] = {}; });
 
-    // Get recurring schedule patterns
+    // Get recurring schedule patterns WITH DEBUG LOGGING
     const recurringSchedulesByOfficer = new Map();
     recurringData?.forEach(recurring => {
+      console.log(`📅 Processing recurring pattern for officer ${recurring.officer_id}:`, {
+        recurringId: recurring.id,
+        officerId: recurring.officer_id,
+        dayOfWeek: recurring.day_of_week,
+        startDate: recurring.start_date,
+        endDate: recurring.end_date
+      });
+      
+      if (!recurring.officer_id) {
+        console.error(`❌ Recurring schedule ${recurring.id} has no officer_id`);
+        return; // Skip invalid entry
+      }
+      
       if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
         recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
       }
       recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
     });
 
-    // Process recurring schedules
+    // Process recurring schedules WITH PROPER VALIDATION
     recurringData?.forEach(recurring => {
+      // CRITICAL: Log and validate the recurring schedule
+      console.log(`🔍 Processing recurring schedule ${recurring.id} for officer:`, {
+        recurringId: recurring.id,
+        recurringOfficerId: recurring.officer_id,
+        officerIdLength: recurring.officer_id?.length,
+        profileFound: officerProfilesMap.has(recurring.officer_id),
+        hasProfile: !!recurring.profiles,
+        profilesFullName: recurring.profiles?.full_name
+      });
+      
+      // Check if recurring.officer_id is valid
+      if (!recurring.officer_id || recurring.officer_id.length !== 36) {
+        console.error(`❌ Invalid officer_id in recurring schedule ${recurring.id}:`, recurring.officer_id);
+        return; // Skip this corrupted recurring schedule
+      }
+      
       const profile = officerProfilesMap.get(recurring.officer_id);
+      
+      if (!profile) {
+        console.error(`❌ No profile found for officer_id ${recurring.officer_id} in recurring schedule ${recurring.id}`);
+        console.error(`   Available profiles:`, Array.from(officerProfilesMap.keys()).slice(0, 5));
+        return; // Skip if no profile exists
+      }
+      
+      console.log(`✅ Found profile for officer ${recurring.officer_id}: ${profile.full_name}`);
+      
       dates.forEach(date => {
         const currentDate = parseISO(date);
         const dayOfWeek = currentDate.getDay();
@@ -434,20 +472,21 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
 
             // Skip if there's an overtime exception (overtime overrides regular)
             if (overtimeException) {
-              console.log(`Skipping recurring schedule for ${profile?.full_name} on ${date} due to overtime`);
+              console.log(`🟡 Skipping recurring schedule for ${profile.full_name} on ${date} due to overtime`);
               return;
             }
 
             if (!scheduleByDateAndOfficer[date][recurring.officer_id]) {
-              scheduleByDateAndOfficer[date][recurring.officer_id] = {
-                officerId: recurring.officer_id,
-                officerName: profile?.full_name || recurring.profiles?.full_name || "Unknown",
-                badgeNumber: profile?.badge_number || recurring.profiles?.badge_number,
-                rank: profile?.rank || recurring.profiles?.rank,
-                hire_date: profile?.hire_date || null,
-                promotion_date_sergeant: profile?.promotion_date_sergeant || null,
-                promotion_date_lieutenant: profile?.promotion_date_lieutenant || null,
-                service_credit_override: profile?.service_credit_override || 0,
+              // CRITICAL: Ensure officerId is the correct officer ID, not the schedule ID
+              const scheduleEntry = {
+                officerId: recurring.officer_id, // This MUST be the officer's ID from profiles
+                officerName: profile.full_name || "Unknown Officer",
+                badgeNumber: profile.badge_number || "9999",
+                rank: profile.rank || "Officer",
+                hire_date: profile.hire_date || null,
+                promotion_date_sergeant: profile.promotion_date_sergeant || null,
+                promotion_date_lieutenant: profile.promotion_date_lieutenant || null,
+                service_credit_override: profile.service_credit_override || 0,
                 service_credit: serviceCredits.get(recurring.officer_id) || 0,
                 date,
                 dayOfWeek,
@@ -458,7 +497,7 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
                   time: `${recurring.shift_types?.start_time} - ${recurring.shift_types?.end_time}`,
                   position: recurring.position_name || defaultAssignment?.position_name,
                   unitNumber: recurring.unit_number || defaultAssignment?.unit_number,
-                  scheduleId: recurring.id,
+                  scheduleId: recurring.id, // ← This is the recurring schedule ID (different from officerId!)
                   scheduleType: "recurring" as const,
                   shift: recurring.shift_types,
                   isOff: false,
@@ -474,12 +513,34 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
                   } : undefined
                 }
               };
+              
+              // Validate the schedule entry before adding
+              if (scheduleEntry.officerId === scheduleEntry.shiftInfo.scheduleId) {
+                console.error(`🚨 CRITICAL ERROR: officerId matches scheduleId!`, scheduleEntry);
+                return; // Don't add corrupted data
+              }
+              
+              scheduleByDateAndOfficer[date][recurring.officer_id] = scheduleEntry;
+              
+              console.log(`✅ Created recurring schedule for ${profile.full_name} on ${date}:`, {
+                officerId: recurring.officer_id,
+                scheduleId: recurring.id,
+                officerName: profile.full_name,
+                date: date
+              });
             }
           }
         }
       });
     });
-
+    
+    console.log('📊 Recurring schedules processed:', {
+      totalRecurring: recurringData?.length || 0,
+      uniqueOfficersWithPatterns: recurringSchedulesByOfficer.size,
+      scheduleEntriesCreated: Object.values(scheduleByDateAndOfficer).reduce(
+        (count, day) => count + Object.keys(day).length, 0
+      )
+    });
 // Process REGULAR working exceptions (excluding overtime)
 combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
   // CRITICAL FIX: Log and validate the officer ID

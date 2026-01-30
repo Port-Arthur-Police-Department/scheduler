@@ -360,6 +360,7 @@ const isOfficerOvertime = (officer: any): boolean => {
   };
 
 // ============ PROCESS REGULAR OFFICERS (EXCLUDING OVERTIME) ============
+// In the processedOfficersData useMemo, update the section where you process recurring schedules:
 const processedOfficersData = useMemo(() => {
   console.log('Processing regular officers data (excluding overtime)...');
   
@@ -378,6 +379,8 @@ const processedOfficersData = useMemo(() => {
     // Safely extract recurring schedule patterns
     if (localSchedules.recurring) {
       localSchedules.recurring.forEach((recurring: any) => {
+        if (!recurring.officer_id) return; // Skip if no officer_id
+        
         if (!recurringSchedulesByOfficer.has(recurring.officer_id)) {
           recurringSchedulesByOfficer.set(recurring.officer_id, new Set());
         }
@@ -405,14 +408,24 @@ const processedOfficersData = useMemo(() => {
       }))
     };
 
+    // Initialize scheduleByDateAndOfficer structure
+    const scheduleByDateAndOfficer: Record<string, Record<string, any>> = {};
+    weekDays.forEach(day => {
+      if (day.dateStr) {
+        scheduleByDateAndOfficer[day.dateStr] = {};
+      }
+    });
+
     // Process daily schedules - COMPLETELY EXCLUDE OVERTIME OFFICERS
     sanitizedSchedules.dailySchedules.forEach((scheduleDay: any) => {
       if (!scheduleDay.officers || !Array.isArray(scheduleDay.officers)) {
         return;
       }
       
-      // DEBUG: Check what officers we're processing
-      console.log(`Day ${scheduleDay.date} - Total officers: ${scheduleDay.officers.length}`);
+      // Ensure the date entry exists
+      if (!scheduleByDateAndOfficer[scheduleDay.date]) {
+        scheduleByDateAndOfficer[scheduleDay.date] = {};
+      }
       
       // Filter out ALL officers with is_extra_shift = true
       const regularOfficersForDay = scheduleDay.officers.filter((officer: any) => {
@@ -425,8 +438,6 @@ const processedOfficersData = useMemo(() => {
         
         return !isOvertime;
       });
-      
-      console.log(`Day ${scheduleDay.date} - Regular officers after filtering: ${regularOfficersForDay.length}`);
       
       regularOfficersForDay.forEach((officer: any) => {
         if (!officer || !officer.officerId) {
@@ -446,8 +457,8 @@ const processedOfficersData = useMemo(() => {
           console.error('Officer ID is undefined or null:', officer);
           return;
         }
-            
-        if (!allOfficers.has(officer.officerId)) {
+        
+        if (!allOfficers.has(officerId)) {
           let profileData: any = null;
           
           if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
@@ -460,8 +471,8 @@ const processedOfficersData = useMemo(() => {
           }
           else if (effectiveOfficerProfiles && 
                    effectiveOfficerProfiles instanceof Map && 
-                   effectiveOfficerProfiles.has(officer.officerId)) {
-            profileData = effectiveOfficerProfiles.get(officer.officerId);
+                   effectiveOfficerProfiles.has(officerId)) {
+            profileData = effectiveOfficerProfiles.get(officerId);
           }
           else {
             profileData = {
@@ -472,8 +483,8 @@ const processedOfficersData = useMemo(() => {
             };
           }
           
-          allOfficers.set(officer.officerId, {
-            officerId: officer.officerId,
+          allOfficers.set(officerId, {
+            officerId: officerId,
             officerName: officer.officerName || officer.full_name || "Unknown",
             badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
             rank: officer.rank || "Officer",
@@ -481,13 +492,13 @@ const processedOfficersData = useMemo(() => {
             promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
             promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
             service_credit_override: profileData?.service_credit_override || 0,
-            recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
+            recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
             weeklySchedule: {} as Record<string, any>,
             service_credit: 0
           });
         }
         
-        const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(scheduleDay.dayOfWeek) || false;
+        const isRecurringDay = recurringSchedulesByOfficer.get(officerId)?.has(scheduleDay.dayOfWeek) || false;
         const isException = !isRecurringDay || 
                            officer.scheduleType === 'exception' || 
                            officer.shiftInfo?.scheduleType === 'exception';
@@ -495,7 +506,7 @@ const processedOfficersData = useMemo(() => {
         const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, scheduleDay);
         
         const daySchedule = {
-          officerId: officer.officerId,
+          officerId: officerId,
           officerName: officer.officerName || officer.full_name || "Unknown",
           badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
           rank: officer.rank || "Officer",
@@ -525,12 +536,17 @@ const processedOfficersData = useMemo(() => {
           }
         };
         
-        const currentOfficer = allOfficers.get(officer.officerId);
+        const currentOfficer = allOfficers.get(officerId);
         if (currentOfficer) {
           if (!currentOfficer.weeklySchedule) {
             currentOfficer.weeklySchedule = {};
           }
           currentOfficer.weeklySchedule[scheduleDay.date] = daySchedule;
+        }
+        
+        // Also add to scheduleByDateAndOfficer
+        if (!scheduleByDateAndOfficer[scheduleDay.date][officerId]) {
+          scheduleByDateAndOfficer[scheduleDay.date][officerId] = daySchedule;
         }
       });
     });
@@ -547,7 +563,8 @@ const processedOfficersData = useMemo(() => {
 
     return {
       allOfficers,
-      regularOfficers
+      regularOfficers,
+      scheduleByDateAndOfficer // Return this for debugging
     };
     
   } catch (error) {
@@ -555,10 +572,11 @@ const processedOfficersData = useMemo(() => {
     console.trace();
     return {
       allOfficers: new Map(),
-      regularOfficers: []
+      regularOfficers: [],
+      scheduleByDateAndOfficer: {}
     };
   }
-}, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap]);
+}, [localSchedules, effectiveOfficerProfiles, serviceCreditsMap, weekDays]); // Add weekDays dependency
 
   // Process overtime exceptions into a format for display
   const processedOvertimeData = useMemo(() => {

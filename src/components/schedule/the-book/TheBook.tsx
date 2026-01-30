@@ -624,7 +624,7 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
 
     // Convert to array format
     const dailySchedules = dates.map(date => {
-      const officers = Object.values(scheduleByDateAndOfficer[date] || {]);
+      const officers = Object.values(scheduleByDateAndOfficer[date] || {});
       
       // Use the imported categorizeAndSortOfficers function
       const categorized = categorizeAndSortOfficers(officers);

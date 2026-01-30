@@ -4,11 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const isStackblitz = process.env.STACKBLITZ === 'true' || 
+                     process.env.CODESANDBOX_HOST !== undefined;
 
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
+    // Only enable PWA in production, not in StackBlitz/bolt.diy
+    isProduction && !isStackblitz && VitePWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
@@ -78,17 +81,7 @@ export default defineConfig({
           }
         ],
         
-        screenshots: [
-          {
-            src: "screenshots/desktop.png",
-            sizes: "1280x720",
-            type: "image/png",
-            form_factor: "wide",
-            label: "Desktop View"
-          }
-        ],
-        
-        shortcuts: [
+       shortcuts: [
           {
             name: "Daily Schedule",
             short_name: "Schedule",
@@ -111,7 +104,7 @@ export default defineConfig({
         enabled: false,
       }
     })
-  ],
+  ].filter(Boolean), // Filter out false values
   
   base: './',
   
@@ -127,14 +120,14 @@ export default defineConfig({
   },
   
   server: {
-    port: process.env.PORT || 3000,
-    open: false,
-    host: true
-  }, 
+    port: process.env.PORT || 5173, // ← CHANGED: Use 5173 as default for bolt.diy
+    open: false, // Don't auto-open in bolt.diy
+    host: true,
+  },
   
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
     }
   }
-}); 
+});

@@ -256,10 +256,6 @@ const TheBook = ({
   // Build the main schedule query key
   const scheduleQueryKey = ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()];
 
-// In TheBook.tsx, update the schedule query to fetch overtime separately
-
-// In TheBook.tsx, update the schedule query to fetch overtime separately
-
 // Main schedule query - UPDATED to INCLUDE overtime exceptions
 const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
   queryKey: scheduleQueryKey,
@@ -272,6 +268,13 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
     const dates = eachDayOfInterval({ start: startDate, end: endDate }).map(date => 
       format(date, "yyyy-MM-dd")
     );
+
+    console.log('📅 Schedule query for dates:', {
+      startDate: format(startDate, 'yyyy-MM-dd'),
+      endDate: format(endDate, 'yyyy-MM-dd'),
+      numDates: dates.length,
+      dates: dates.slice(0, 5) // Show first 5 dates for debugging
+    });
 
     // Fetch minimum staffing for all days of the week (0-6)
     const minimumStaffing = new Map();
@@ -385,20 +388,22 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
       };
     }) || [];
 
-// In the exception processing, make sure overtime exceptions are marked correctly
-const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
-  const profile = officerProfilesMap.get(exception.officer_id);
-  return {
-    ...exception,
-    profiles: profile || null,
-    shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id),
-    is_extra_shift: true // CRITICAL: Make sure this is set
-  };
-}) || [];
+    // In the exception processing, make sure overtime exceptions are marked correctly
+    const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
+      const profile = officerProfilesMap.get(exception.officer_id);
+      return {
+        ...exception,
+        profiles: profile || null,
+        shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id),
+        is_extra_shift: true // CRITICAL: Make sure this is set
+      };
+    }) || [];
 
-    // Build schedule structure
+    // ============ CRITICAL FIX: Initialize scheduleByDateAndOfficer properly ============
     const scheduleByDateAndOfficer: Record<string, Record<string, any>> = {};
-    dates.forEach(date => { scheduleByDateAndOfficer[date] = {}; });
+    dates.forEach(date => { 
+      scheduleByDateAndOfficer[date] = {};
+    });
 
     // Get recurring schedule patterns WITH DEBUG LOGGING
     const recurringSchedulesByOfficer = new Map();
@@ -422,7 +427,7 @@ const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
       recurringSchedulesByOfficer.get(recurring.officer_id).add(recurring.day_of_week);
     });
 
-    // Process recurring schedules WITH PROPER VALIDATION
+    // Process recurring schedules WITH PROPER VALIDATION AND ERROR HANDLING
     recurringData?.forEach(recurring => {
       // CRITICAL: Log and validate the recurring schedule
       console.log(`🔍 Processing recurring schedule ${recurring.id} for officer:`, {
@@ -477,6 +482,14 @@ const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
               return;
             }
 
+            // CRITICAL FIX: Check if scheduleByDateAndOfficer[date] exists
+            if (!scheduleByDateAndOfficer[date]) {
+              console.error(`❌ scheduleByDateAndOfficer[date] is undefined for date: ${date}`);
+              scheduleByDateAndOfficer[date] = {};
+              console.log(`✅ Created scheduleByDateAndOfficer[date] for date: ${date}`);
+            }
+
+            // Only create if it doesn't already exist
             if (!scheduleByDateAndOfficer[date][recurring.officer_id]) {
               // CRITICAL: Ensure officerId is the correct officer ID, not the schedule ID
               const scheduleEntry = {
@@ -542,90 +555,105 @@ const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
         (count, day) => count + Object.keys(day).length, 0
       )
     });
-// Process REGULAR working exceptions (excluding overtime)
-combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
-  // CRITICAL FIX: Log and validate the officer ID
-  console.log(`🔍 Processing exception ${exception.id} for officer:`, {
-    exceptionId: exception.id,
-    exceptionOfficerId: exception.officer_id,
-    exceptionOfficerIdLength: exception.officer_id?.length,
-    profileFound: officerProfilesMap.has(exception.officer_id),
-    date: exception.date
-  });
-  
-  // Check if exception.officer_id is actually a schedule ID (UUID)
-  if (!exception.officer_id || exception.officer_id.length !== 36) {
-    console.error(`❌ Invalid officer_id in exception ${exception.id}:`, exception.officer_id);
-    return; // Skip this corrupted exception
-  }
-  
-  const profile = officerProfilesMap.get(exception.officer_id);
-  
-  if (!profile) {
-    console.error(`❌ No profile found for officer_id ${exception.officer_id} in exception ${exception.id}`);
-    return; // Skip if no profile exists
-  }
-  
-  const ptoException = combinedRegularExceptions?.find(e => 
-    e.officer_id === exception.officer_id && 
-    e.date === exception.date && 
-    e.is_off
-  );
-  
-  const defaultAssignment = getDefaultAssignment(exception.officer_id, exception.date);
-  const isRegularDay = recurringSchedulesByOfficer.get(exception.officer_id)?.has(parseISO(exception.date).getDay()) || false;
 
-  scheduleByDateAndOfficer[exception.date][exception.officer_id] = {
-    officerId: exception.officer_id, // This should be the correct officer ID
-    officerName: profile.full_name || "Unknown Officer",
-    badgeNumber: profile.badge_number || "9999",
-    rank: profile.rank || "Officer",
-    hire_date: profile.hire_date || null,
-    promotion_date_sergeant: profile.promotion_date_sergeant || null,
-    promotion_date_lieutenant: profile.promotion_date_lieutenant || null,
-    service_credit_override: profile.service_credit_override || 0,
-    service_credit: serviceCredits.get(exception.officer_id) || 0,
-    date: exception.date,
-    dayOfWeek: parseISO(exception.date).getDay(),
-    isRegularRecurringDay: isRegularDay,
-    isOvertime: false,
-    shiftInfo: {
-      type: exception.shift_types?.name || "Custom",
-      time: exception.custom_start_time && exception.custom_end_time
-        ? `${exception.custom_start_time} - ${exception.custom_end_time}`
-        : `${exception.shift_types?.start_time} - ${exception.shift_types?.end_time}`,
-      position: exception.position_name || defaultAssignment?.position_name,
-      unitNumber: exception.unit_number || defaultAssignment?.unit_number,
-      scheduleId: exception.id, // ← This is the schedule exception ID (different from officerId!)
-      scheduleType: "exception" as const,
-      shift: exception.shift_types,
-      isOff: false,
-      is_extra_shift: false,
-      hasPTO: !!ptoException,
-      ptoData: ptoException ? {
-        id: ptoException.id,
-        ptoType: ptoException.reason,
-        startTime: ptoException.custom_start_time || exception.shift_types?.start_time,
-        endTime: ptoException.custom_end_time || exception.shift_types?.end_time,
-        isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time,
-        shiftTypeId: ptoException.shift_type_id
-      } : undefined
-    }
-  };
-  
-  console.log(`✅ Created exception schedule for ${profile.full_name}:`, {
-    officerId: exception.officer_id,
-    scheduleId: exception.id,
-    officerName: profile.full_name
-  });
-});
+    // Process REGULAR working exceptions (excluding overtime)
+    combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
+      // CRITICAL FIX: Log and validate the officer ID
+      console.log(`🔍 Processing exception ${exception.id} for officer:`, {
+        exceptionId: exception.id,
+        exceptionOfficerId: exception.officer_id,
+        exceptionOfficerIdLength: exception.officer_id?.length,
+        profileFound: officerProfilesMap.has(exception.officer_id),
+        date: exception.date
+      });
+      
+      // Check if exception.officer_id is actually a schedule ID (UUID)
+      if (!exception.officer_id || exception.officer_id.length !== 36) {
+        console.error(`❌ Invalid officer_id in exception ${exception.id}:`, exception.officer_id);
+        return; // Skip this corrupted exception
+      }
+      
+      const profile = officerProfilesMap.get(exception.officer_id);
+      
+      if (!profile) {
+        console.error(`❌ No profile found for officer_id ${exception.officer_id} in exception ${exception.id}`);
+        return; // Skip if no profile exists
+      }
+      
+      // CRITICAL FIX: Ensure scheduleByDateAndOfficer[date] exists
+      if (!scheduleByDateAndOfficer[exception.date]) {
+        console.log(`⚠️ Initializing scheduleByDateAndOfficer for date: ${exception.date}`);
+        scheduleByDateAndOfficer[exception.date] = {};
+        console.log(`✅ Created scheduleByDateAndOfficer[${exception.date}]`);
+      }
+      
+      const ptoException = combinedRegularExceptions?.find(e => 
+        e.officer_id === exception.officer_id && 
+        e.date === exception.date && 
+        e.is_off
+      );
+      
+      const defaultAssignment = getDefaultAssignment(exception.officer_id, exception.date);
+      const isRegularDay = recurringSchedulesByOfficer.get(exception.officer_id)?.has(parseISO(exception.date).getDay()) || false;
+
+      // Only create if it doesn't already exist
+      if (!scheduleByDateAndOfficer[exception.date][exception.officer_id]) {
+        scheduleByDateAndOfficer[exception.date][exception.officer_id] = {
+          officerId: exception.officer_id, // This should be the correct officer ID
+          officerName: profile.full_name || "Unknown Officer",
+          badgeNumber: profile.badge_number || "9999",
+          rank: profile.rank || "Officer",
+          hire_date: profile.hire_date || null,
+          promotion_date_sergeant: profile.promotion_date_sergeant || null,
+          promotion_date_lieutenant: profile.promotion_date_lieutenant || null,
+          service_credit_override: profile.service_credit_override || 0,
+          service_credit: serviceCredits.get(exception.officer_id) || 0,
+          date: exception.date,
+          dayOfWeek: parseISO(exception.date).getDay(),
+          isRegularRecurringDay: isRegularDay,
+          isOvertime: false,
+          shiftInfo: {
+            type: exception.shift_types?.name || "Custom",
+            time: exception.custom_start_time && exception.custom_end_time
+              ? `${exception.custom_start_time} - ${exception.custom_end_time}`
+              : `${exception.shift_types?.start_time} - ${exception.shift_types?.end_time}`,
+            position: exception.position_name || defaultAssignment?.position_name,
+            unitNumber: exception.unit_number || defaultAssignment?.unit_number,
+            scheduleId: exception.id, // ← This is the schedule exception ID (different from officerId!)
+            scheduleType: "exception" as const,
+            shift: exception.shift_types,
+            isOff: false,
+            is_extra_shift: false,
+            hasPTO: !!ptoException,
+            ptoData: ptoException ? {
+              id: ptoException.id,
+              ptoType: ptoException.reason,
+              startTime: ptoException.custom_start_time || exception.shift_types?.start_time,
+              endTime: ptoException.custom_end_time || exception.shift_types?.end_time,
+              isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time,
+              shiftTypeId: ptoException.shift_type_id
+            } : undefined
+          }
+        };
+        
+        console.log(`✅ Created exception schedule for ${profile.full_name}:`, {
+          officerId: exception.officer_id,
+          scheduleId: exception.id,
+          officerName: profile.full_name
+        });
+      }
+    });
 
     // Process PTO-only exceptions
     combinedRegularExceptions?.filter(e => e.is_off).forEach(ptoException => {
+      // CRITICAL FIX: Ensure scheduleByDateAndOfficer[date] exists
       if (!scheduleByDateAndOfficer[ptoException.date]) {
+        console.log(`⚠️ Initializing scheduleByDateAndOfficer for PTO date: ${ptoException.date}`);
         scheduleByDateAndOfficer[ptoException.date] = {};
+        console.log(`✅ Created scheduleByDateAndOfficer[${ptoException.date}] for PTO`);
       }
 
+      // Only create if it doesn't already exist
       if (!scheduleByDateAndOfficer[ptoException.date][ptoException.officer_id]) {
         const profile = officerProfilesMap.get(ptoException.officer_id);
         scheduleByDateAndOfficer[ptoException.date][ptoException.officer_id] = {
@@ -673,6 +701,11 @@ combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
       const profile = officerProfilesMap.get(overtimeException.officer_id);
       const date = overtimeException.date;
       
+      // CRITICAL FIX: Ensure overtimeByDate[date] exists
+      if (!overtimeByDate[date]) {
+        overtimeByDate[date] = [];
+      }
+      
       const overtimeEntry = {
         officerId: overtimeException.officer_id,
         officerName: profile?.full_name || overtimeException.profiles?.full_name || "Unknown",
@@ -714,7 +747,7 @@ combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
       // It will be handled separately in the view
     });
 
-    // Convert to array format
+    // Convert scheduleByDateAndOfficer to array format
     const dailySchedules = dates.map(date => {
       const officers = Object.values(scheduleByDateAndOfficer[date] || {});
       
@@ -740,7 +773,8 @@ combinedRegularExceptions?.filter(e => !e.is_off).forEach(exception => {
       dailySchedulesCount: dailySchedules.length,
       totalRegularOfficers: dailySchedules.reduce((sum, day) => sum + day.officers.length, 0),
       totalOvertimeEntries: Object.values(overtimeByDate).reduce((sum, arr) => sum + arr.length, 0),
-      officerProfilesCount: officerProfilesMap.size
+      officerProfilesCount: officerProfilesMap.size,
+      scheduleByDateAndOfficerDates: Object.keys(scheduleByDateAndOfficer).length
     });
 
     return { 
@@ -1301,6 +1335,13 @@ const handleSaveAssignment = (assignmentData: any) => {
         </CardHeader>
         <CardContent>
           <p className="text-red-500">Error loading schedule: {(error as Error).message}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => queryClient.invalidateQueries({ queryKey: scheduleQueryKey })}
+          >
+            Retry Loading
+          </Button>
         </CardContent>
       </Card>
     );

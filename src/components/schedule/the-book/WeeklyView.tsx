@@ -360,6 +360,15 @@ const isOfficerOvertime = (officer: any): boolean => {
     }
   };
 
+  // Add this check before the useMemo
+if (!localSchedules || !localSchedules.dailySchedules || !Array.isArray(localSchedules.dailySchedules)) {
+  console.error('Invalid schedule data structure:', localSchedules);
+  return {
+    allOfficers: new Map(),
+    regularOfficers: []
+  };
+}
+
 // ============ PROCESS REGULAR OFFICERS (EXCLUDING OVERTIME) ============
 const processedOfficersData = useMemo(() => {
   console.log('Processing regular officers data (excluding overtime)...');

@@ -258,6 +258,8 @@ const TheBook = ({
 
 // In TheBook.tsx, update the schedule query to fetch overtime separately
 
+// In TheBook.tsx, update the schedule query to fetch overtime separately
+
 // Main schedule query - UPDATED to INCLUDE overtime exceptions
 const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
   queryKey: scheduleQueryKey,

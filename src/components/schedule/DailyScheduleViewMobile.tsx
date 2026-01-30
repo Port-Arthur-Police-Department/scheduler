@@ -41,10 +41,7 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
-// REMOVED: Duplicate React import if it was here
-// REMOVED: import React from 'react'; // This causes the duplicate error
-
-// In DailyScheduleViewMobile.tsx - Update the props interface
+// In DailyScheduleViewMobile.tsx - Update the props interface (MOVE THIS OUTSIDE COMPONENT)
 interface DailyScheduleViewMobileProps {
   filterShiftId?: string;
   isAdminOrSupervisor?: boolean;
@@ -58,18 +55,7 @@ export const DailyScheduleViewMobile = ({
   userRole = 'officer',
   userCurrentShift = "all"
 }: DailyScheduleViewMobileProps) => {
-  filterShiftId?: string;
-  isAdminOrSupervisor?: boolean;
-  userRole?: 'officer' | 'supervisor' | 'admin';
-  userCurrentShift?: string;
-}
-
-export const DailyScheduleViewMobile = ({ 
-  filterShiftId = "all", 
-  isAdminOrSupervisor = false,
-  userRole = 'officer',
-  userCurrentShift = "all"
-}: DailyScheduleViewMobileProps) => {
+  // ✅ CORRECT: No interface definitions inside function body
   // Initialize with current date - LOCAL STATE
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [expandedShifts, setExpandedShifts] = useState<Set<string>>(new Set());

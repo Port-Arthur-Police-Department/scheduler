@@ -385,15 +385,16 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
       };
     }) || [];
 
-    // Combine OVERTIME exception data with profiles
-    const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
-      const profile = officerProfilesMap.get(exception.officer_id);
-      return {
-        ...exception,
-        profiles: profile || null,
-        shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id)
-      };
-    }) || [];
+// In the exception processing, make sure overtime exceptions are marked correctly
+const combinedOvertimeExceptions = overtimeExceptions.map(exception => {
+  const profile = officerProfilesMap.get(exception.officer_id);
+  return {
+    ...exception,
+    profiles: profile || null,
+    shift_types: exceptionShiftTypes.find(s => s.id === exception.shift_type_id),
+    is_extra_shift: true // CRITICAL: Make sure this is set
+  };
+}) || [];
 
     // Build schedule structure
     const scheduleByDateAndOfficer: Record<string, Record<string, any>> = {};

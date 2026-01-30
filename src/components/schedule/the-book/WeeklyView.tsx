@@ -324,16 +324,15 @@ const detectPTOForOfficer = (officer: any, day: any) => {
     );
   };
 
-  // Helper to check if an officer is working overtime on this shift
+// Helper to check if an officer is working overtime on this shift
 const isOfficerOvertime = (officer: any): boolean => {
   if (!officer) return false;
   
-  // Check multiple ways to identify overtime
+  // STRICT CHECK: Only use is_extra_shift flag
+  // This matches what's stored in the database
   const isOvertime = 
-    officer.isOvertimeShift === true ||
-    officer.shiftInfo?.is_extra_shift === true ||
-    officer.shiftInfo?.isExtraShift === true ||
-    officer.is_extra_shift === true;
+    officer.shiftInfo?.is_extra_shift === true || // For processed data
+    officer.is_extra_shift === true; // For raw data
   
   return isOvertime;
 };

@@ -28,6 +28,7 @@ interface WeeklyViewMobileProps {
   onEditAssignment?: (officer: any, dateStr: string) => void;
   onRemoveOfficer?: (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => void;
   isUpdating?: boolean;
+  overtimeExceptions?: any[];
 }
 
 export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
@@ -43,6 +44,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   onEditAssignment,
   onRemoveOfficer,
   isUpdating = false,
+  overtimeExceptions = [],
 }) => {
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {

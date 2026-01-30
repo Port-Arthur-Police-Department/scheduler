@@ -467,11 +467,8 @@ localSchedules.dailySchedules.forEach(day => {
       console.error('Officer ID is undefined or null:', officer);
       return;
     }
-    
-    // FIXED: Check if allOfficers has the officer BEFORE trying to set properties
-    let currentOfficer = allOfficers.get(officerId);
-    
-    if (!currentOfficer) {
+        
+    if (!allOfficers.has(officer.officerId)) {
       let profileData: any = null;
       
       if (officer.hire_date || officer.promotion_date_sergeant || officer.promotion_date_lieutenant) {
@@ -484,8 +481,8 @@ localSchedules.dailySchedules.forEach(day => {
       }
       else if (effectiveOfficerProfiles && 
                effectiveOfficerProfiles instanceof Map && 
-               effectiveOfficerProfiles.has(officerId)) {
-        profileData = effectiveOfficerProfiles.get(officerId);
+               effectiveOfficerProfiles.has(officer.officerId)) {
+        profileData = effectiveOfficerProfiles.get(officer.officerId);
       }
       else {
         profileData = {
@@ -496,8 +493,8 @@ localSchedules.dailySchedules.forEach(day => {
         };
       }
       
-      currentOfficer = {
-        officerId: officerId,
+      allOfficers.set(officer.officerId, {
+        officerId: officer.officerId,
         officerName: officer.officerName || officer.full_name || "Unknown",
         badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
         rank: officer.rank || "Officer",
@@ -505,15 +502,13 @@ localSchedules.dailySchedules.forEach(day => {
         promotion_date_sergeant: profileData?.promotion_date_sergeant || null,
         promotion_date_lieutenant: profileData?.promotion_date_lieutenant || null,
         service_credit_override: profileData?.service_credit_override || 0,
-        recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
+        recurringDays: recurringSchedulesByOfficer.get(officer.officerId) || new Set(),
         weeklySchedule: {} as Record<string, any>,
         service_credit: 0
-      };
-      
-      allOfficers.set(officerId, currentOfficer);
+      });
     }
     
-    const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false;
+    const isRecurringDay = recurringSchedulesByOfficer.get(officer.officerId)?.has(day.dayOfWeek) || false; // ← ERROR IS HERE: day is not defined
     const isException = !isRecurringDay || 
                        officer.scheduleType === 'exception' || 
                        officer.shiftInfo?.scheduleType === 'exception';
@@ -521,13 +516,13 @@ localSchedules.dailySchedules.forEach(day => {
     const { hasPTO, ptoType, ptoData } = detectPTOForOfficer(officer, day);
     
     const daySchedule = {
-      officerId: officerId,
+      officerId: officer.officerId,
       officerName: officer.officerName || officer.full_name || "Unknown",
       badgeNumber: officer.badgeNumber || officer.badge_number || "9999",
       rank: officer.rank || "Officer",
       service_credit: 0,
-      date: day.date,
-      dayOfWeek: day.dayOfWeek,
+      date: day.date, // ← Also here
+      dayOfWeek: day.dayOfWeek, // ← And here
       scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
       scheduleType: isException ? 'exception' : 'recurring',
       isRegularRecurringDay: isRecurringDay && !hasPTO,
@@ -551,11 +546,13 @@ localSchedules.dailySchedules.forEach(day => {
       }
     };
     
-    // FIXED: Now currentOfficer is guaranteed to exist
-    if (!currentOfficer.weeklySchedule) {
-      currentOfficer.weeklySchedule = {};
+    const currentOfficer = allOfficers.get(officer.officerId);
+    if (currentOfficer) {
+      if (!currentOfficer.weeklySchedule) {
+        currentOfficer.weeklySchedule = {};
+      }
+      currentOfficer.weeklySchedule[day.date] = daySchedule; // ← And here
     }
-    currentOfficer.weeklySchedule[day.date] = daySchedule;
   });
 });
 

@@ -119,11 +119,11 @@ export default defineConfig({
     }
   },
   
-  server: {
-    port: process.env.PORT || 5173, // ← CHANGED: Use 5173 as default for bolt.diy
-    open: false, // Don't auto-open in bolt.diy
-    host: true,
-  },
+server: {
+  port: isStackblitz ? 5173 : (process.env.PORT || 3000),
+  open: !isStackblitz, // Only auto-open locally
+  host: true,
+},
   
   resolve: {
     alias: {

@@ -294,7 +294,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-const detectPTOForOfficer = (officer: any, day: any) => {
+const detectPTOForOfficer = (officer: any, scheduleDay: any) => {
   const isException = officer?.scheduleType === 'exception' || 
                      officer?.shiftInfo?.scheduleType === 'exception';
   

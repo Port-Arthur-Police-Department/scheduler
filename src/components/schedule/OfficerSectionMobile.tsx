@@ -17,7 +17,7 @@ interface OfficerSectionMobileProps {
   colorSettings?: any;
 }
 
-// Helper functions
+// Helper functions - UPDATED to accept currentDate parameter and use raw dates
 const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
   if (!birthday) return false;
   try {
@@ -121,87 +121,89 @@ export const OfficerSectionMobile = ({
       >
         {title}
       </h4>
-      {officers.map((officer) => {
-        const key = `${officer.officerId}-${officer.scheduleId}`;
-        const isExpanded = expandedOfficers.has(key);
-        const isProbationary = officer.rank === 'Probationary';
-        const isBirthday = showSpecialOccasions && isBirthdayToday(officer.birthday, currentDate);
-        const isAnniversary = showSpecialOccasions && isAnniversaryToday(officer.hire_date, currentDate);
-        const yearsOfService = showSpecialOccasions ? calculateYearsOfService(officer.hire_date, currentDate) : 0;
+{officers.map((officer) => {
+  const key = `${officer.officerId}-${officer.scheduleId}`;
+  const isExpanded = expandedOfficers.has(key);
+  const isProbationary = officer.rank === 'Probationary';
+  
+  // FIXED: Check birthdays using raw date field with currentDate parameter
+  const isBirthday = showSpecialOccasions && isBirthdayToday(officer.birthday, currentDate);
+  const isAnniversary = showSpecialOccasions && isAnniversaryToday(officer.hire_date, currentDate);
+  const yearsOfService = showSpecialOccasions ? calculateYearsOfService(officer.hire_date, currentDate) : 0;
 
-        return (
-          <div 
-            key={key} 
-            className="border rounded-lg overflow-hidden"
-            style={{
-              backgroundColor: `rgb(${sectionStyle.cardBg.replace('bg-[rgb(', '').replace('/50', '').replace(')]', '').trim()})`,
-              borderColor: `rgb(${sectionStyle.cardBorder.replace('border-[rgb(', '').replace(')]', '')})`
-            }}
-          >
-            {/* Officer Header */}
-            <div 
-              className={`p-3 flex items-center justify-between transition-colors ${isExpanded ? sectionStyle.headerBg : 'active:bg-muted/50'}`}
-              onClick={() => onToggleOfficer(officer.officerId, officer.scheduleId)}
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{officer.name}</p>
-                  
-                  {/* Special Occasion Indicators */}
-                  {showSpecialOccasions && (
-                    <>
-                      {isBirthday && (
-                        <Badge 
-                          variant="outline" 
-                          className="bg-pink-100 text-pink-800 border-pink-300 text-xs"
-                          title="Birthday Today!"
-                        >
-                          🎂
-                        </Badge>
-                      )}
-                      {isAnniversary && (
-                        <Badge 
-                          variant="outline" 
-                          className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
-                          title={`${yearsOfService} Year Anniversary`}
-                        >
-                          🎖️
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                  
-                  {isProbationary && (
-                    <Badge 
-                      variant="outline" 
-                      className="bg-yellow-100 text-yellow-800 border-yellow-800/50 text-xs"
-                    >
-                      PPO
-                    </Badge>
-                  )}
-                  {officer.partnershipSuspended && officer.isPartnership && (
-                    <Badge 
-                      variant="outline" 
-                      className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
-                    >
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                    </Badge>
-                  )}
-                  {officer.isPartnership && !officer.partnershipSuspended && (
-                    <Badge 
-                      variant="outline" 
-                      className="bg-blue-100 text-blue-800 border-blue-800/50 text-xs"
-                    >
-                      <Users className="h-3 w-3 mr-1" />
-                    </Badge>
-                  )}
-                  {officer.hasPTO && !officer.ptoData?.isFullShift && (
-                    <Badge 
-                      variant="outline" 
-                      className="bg-green-100 text-green-800 border-green-800/50 text-xs"
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                    </Badge>
+  return (
+    <div 
+      key={key} 
+      className="border rounded-lg overflow-hidden"
+      style={{
+        backgroundColor: `rgb(${sectionStyle.cardBg.replace('bg-[rgb(', '').replace('/50', '').replace(')]', '').trim()})`,
+        borderColor: `rgb(${sectionStyle.cardBorder.replace('border-[rgb(', '').replace(')]', '')})`
+      }}
+    >
+      {/* Officer Header */}
+      <div 
+        className={`p-3 flex items-center justify-between transition-colors ${isExpanded ? sectionStyle.headerBg : 'active:bg-muted/50'}`}
+        onClick={() => onToggleOfficer(officer.officerId, officer.scheduleId)}
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{officer.name}</p>
+            
+            {/* Special Occasion Indicators - FIXED: Now using correctly calculated values */}
+            {showSpecialOccasions && (
+              <>
+                {isBirthday && (
+                  <Badge 
+                    variant="outline" 
+                    className="bg-pink-100 text-pink-800 border-pink-300 text-xs"
+                    title="Birthday Today!"
+                  >
+                    🎂
+                  </Badge>
+                )}
+                {isAnniversary && (
+                  <Badge 
+                    variant="outline" 
+                    className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
+                    title={`${yearsOfService} Year Anniversary`}
+                  >
+                    🎖️
+                  </Badge>
+                )}
+              </>
+            )}
+            
+            {isProbationary && (
+              <Badge 
+                variant="outline" 
+                className="bg-yellow-100 text-yellow-800 border-yellow-800/50 text-xs"
+              >
+                PPO
+              </Badge>
+            )}
+            {officer.partnershipSuspended && officer.isPartnership && (
+              <Badge 
+                variant="outline" 
+                className="bg-amber-100 text-amber-800 border-amber-300 text-xs"
+              >
+                <AlertTriangle className="h-3 w-3 mr-1" />
+              </Badge>
+            )}
+            {officer.isPartnership && !officer.partnershipSuspended && (
+              <Badge 
+                variant="outline" 
+                className="bg-blue-100 text-blue-800 border-blue-800/50 text-xs"
+              >
+                <Users className="h-3 w-3 mr-1" />
+              </Badge>
+            )}
+            {officer.hasPTO && !officer.ptoData?.isFullShift && (
+              <Badge 
+                variant="outline" 
+                className="bg-green-100 text-green-800 border-green-800/50 text-xs"
+              >
+                <Clock className="h-3 w-3 mr-1" />
+              </Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">

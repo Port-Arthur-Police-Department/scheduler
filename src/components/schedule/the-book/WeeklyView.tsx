@@ -699,12 +699,18 @@ localSchedules.dailySchedules.forEach(day => {
   }).filter(Boolean);
 
     // Helper functions that use hooks
-  const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
-    if (!officer || !officer.weeklySchedule) {
-      return null;
-    }
-    return officer.weeklySchedule[dateStr];
-  };
+const safeGetWeeklySchedule = (officer: any, dateStr: string) => {
+  if (!officer || typeof officer !== 'object') {
+    console.warn('Invalid officer object in safeGetWeeklySchedule:', officer);
+    return null;
+  }
+  
+  if (!officer.weeklySchedule || typeof officer.weeklySchedule !== 'object') {
+    return null;
+  }
+  
+  return officer.weeklySchedule[dateStr];
+};
 
 // Categorize regular officers - EXCLUDE OVERTIME OFFICERS COMPLETELY
 const supervisors = sortedOriginalOfficers.filter(officer => {

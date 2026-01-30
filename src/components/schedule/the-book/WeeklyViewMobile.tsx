@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; // ✅ Single import with all hooks
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -232,11 +232,15 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             const officerId = item.officer_id;
             processedOfficers.add(officerId);
             
-            const hireDate = item.profiles?.hire_date;
-            const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
-            const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
-            const overrideCredit = item.profiles?.service_credit_override || 0;
-            const badgeNumber = item.profiles?.badge_number || '9999';
+            // ✅ FIXED: Add null checks for profiles
+            const profile = item.profiles || {};
+            const hireDate = profile.hire_date;
+            const promotionDateSergeant = profile.promotion_date_sergeant;
+            const promotionDateLieutenant = profile.promotion_date_lieutenant;
+            const overrideCredit = profile.service_credit_override || 0;
+            const badgeNumber = profile.badge_number || '9999';
+            const officerName = profile.full_name || "Unknown";
+            const rank = profile.rank || "Officer";
             
             // Check if this is an extra shift (overtime)
             const primaryShiftId = primaryShifts.get(officerId);
@@ -244,16 +248,16 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             
             if (!allOfficers.has(officerId)) {
               const relevantPromotionDate = getRelevantPromotionDate(
-                item.profiles?.rank,
+                rank,
                 promotionDateSergeant,
                 promotionDateLieutenant
               );
               
               allOfficers.set(officerId, {
                 officerId: officerId,
-                officerName: item.profiles?.full_name || "Unknown",
+                officerName: officerName,
                 badgeNumber: badgeNumber,
-                rank: item.profiles?.rank || "Officer",
+                rank: rank,
                 service_credit: 0,
                 hire_date: hireDate,
                 promotion_date_sergeant: promotionDateSergeant,
@@ -271,9 +275,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             const hasPTO = item.is_off === true && !!item.reason;
             const daySchedule = {
               officerId: officerId,
-              officerName: item.profiles?.full_name || "Unknown",
+              officerName: officerName,
               badgeNumber: badgeNumber,
-              rank: item.profiles?.rank || "Officer",
+              rank: rank,
               service_credit: 0,
               date: day.dateStr,
               dayOfWeek: day.dayOfWeek,
@@ -297,12 +301,19 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             };
             
             if (hasPTO) {
-              console.log('🎯 PTO Found for', item.profiles?.full_name, 'on', day.dateStr, ':', {
+              console.log('🎯 PTO Found for', officerName, 'on', day.dateStr, ':', {
                 ptoType: item.reason
               });
             }
             
-            allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+            // ✅ FIXED: Add null check before setting property
+            const officerData = allOfficers.get(officerId);
+            if (officerData) {
+              officerData.weeklySchedule[day.dateStr] = daySchedule;
+            } else {
+              console.error(`❌ Officer data is undefined for ID: ${officerId}`);
+              console.error(`❌ Item causing error:`, item);
+            }
           });
           
           // Then, process recurring ONLY if no exception exists
@@ -314,11 +325,15 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               return;
             }
             
-            const hireDate = item.profiles?.hire_date;
-            const promotionDateSergeant = item.profiles?.promotion_date_sergeant;
-            const promotionDateLieutenant = item.profiles?.promotion_date_lieutenant;
-            const overrideCredit = item.profiles?.service_credit_override || 0;
-            const badgeNumber = item.profiles?.badge_number || '9999';
+            // ✅ FIXED: Add null checks for profiles
+            const profile = item.profiles || {};
+            const hireDate = profile.hire_date;
+            const promotionDateSergeant = profile.promotion_date_sergeant;
+            const promotionDateLieutenant = profile.promotion_date_lieutenant;
+            const overrideCredit = profile.service_credit_override || 0;
+            const badgeNumber = profile.badge_number || '9999';
+            const officerName = profile.full_name || "Unknown";
+            const rank = profile.rank || "Officer";
             
             // Check if this is an extra shift (overtime)
             const primaryShiftId = primaryShifts.get(officerId);
@@ -326,16 +341,16 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             
             if (!allOfficers.has(officerId)) {
               const relevantPromotionDate = getRelevantPromotionDate(
-                item.profiles?.rank,
+                rank,
                 promotionDateSergeant,
                 promotionDateLieutenant
               );
               
               allOfficers.set(officerId, {
                 officerId: officerId,
-                officerName: item.profiles?.full_name || "Unknown",
+                officerName: officerName,
                 badgeNumber: badgeNumber,
-                rank: item.profiles?.rank || "Officer",
+                rank: rank,
                 service_credit: 0,
                 hire_date: hireDate,
                 promotion_date_sergeant: promotionDateSergeant,
@@ -351,9 +366,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             
             const daySchedule = {
               officerId: officerId,
-              officerName: item.profiles?.full_name || "Unknown",
+              officerName: officerName,
               badgeNumber: badgeNumber,
-              rank: item.profiles?.rank || "Officer",
+              rank: rank,
               service_credit: 0,
               date: day.dateStr,
               dayOfWeek: day.dayOfWeek,
@@ -371,7 +386,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               }
             };
             
-            allOfficers.get(officerId).weeklySchedule[day.dateStr] = daySchedule;
+            // ✅ FIXED: Add null check before setting property
+            const officerData = allOfficers.get(officerId);
+            if (officerData) {
+              officerData.weeklySchedule[day.dateStr] = daySchedule;
+            } else {
+              console.error(`❌ Officer data is undefined for ID: ${officerId}`);
+              console.error(`❌ Item causing error:`, item);
+            }
           });
         });
 

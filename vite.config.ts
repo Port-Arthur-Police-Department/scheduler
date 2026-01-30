@@ -153,11 +153,11 @@ export default defineConfig({
     }
   },
   
-  server: {
-    port: 3000,
-    open: true,
-    host: true
-  },
+    server: {
+      port: isProduction ? 5173 : 3000, // Use 5173 for production
+      open: !isProduction, // Don't auto-open in production
+      host: true
+    }
   
   resolve: {
     alias: {

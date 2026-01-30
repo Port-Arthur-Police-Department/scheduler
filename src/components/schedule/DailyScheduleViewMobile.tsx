@@ -127,7 +127,7 @@ export const DailyScheduleViewMobile = ({
     enabled: !!selectedShiftId,
   });
 
-  const { updateScheduleMutation, removeOfficerMutation } = useScheduleMutations(dateStr);
+  const { updateScheduleMutation, removeOfficerMutation, removePTOMutation } = useScheduleMutations(dateStr);
 
   // NEW: Date navigation functions
   const goToPreviousDay = () => {
@@ -214,6 +214,41 @@ export const DailyScheduleViewMobile = ({
           });
         }
         break;
+    }
+  };
+
+  // Handle PTO edit
+  const handleEditPTO = (ptoRecord: any) => {
+    setSelectedOfficer({
+      officerId: ptoRecord.officerId,
+      name: ptoRecord.name,
+      scheduleId: ptoRecord.id,
+      type: "exception",
+      existingPTO: {
+        id: ptoRecord.id,
+        ptoType: ptoRecord.ptoType,
+        startTime: ptoRecord.startTime,
+        endTime: ptoRecord.endTime,
+        isFullShift: ptoRecord.isFullShift
+      }
+    });
+    setSelectedShift({
+      id: ptoRecord.shiftTypeId,
+      name: "Unknown Shift",
+      start_time: ptoRecord.startTime,
+      end_time: ptoRecord.endTime
+    });
+    setPtoDialogOpen(true);
+  };
+
+  // Handle PTO removal
+  const handleRemovePTO = (ptoRecord: any) => {
+    if (confirm(`Remove PTO for ${ptoRecord.name}?`)) {
+      removePTOMutation.mutate(ptoRecord, {
+        onSuccess: () => {
+          refetchSchedule();
+        }
+      });
     }
   };
 
@@ -570,6 +605,8 @@ export const DailyScheduleViewMobile = ({
                         canEdit={canEdit}
                         showSpecialOccasions={showSpecialOccasions}
                         colorSettings={websiteSettings?.color_settings}
+                        onEditPTO={handleEditPTO}
+                        onRemovePTO={handleRemovePTO}
                       />
                     )}
                   </div>

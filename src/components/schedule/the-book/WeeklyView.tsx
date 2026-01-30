@@ -407,16 +407,24 @@ localSchedules.dailySchedules.forEach(day => {
   
   console.log(`Day ${day.date} - Regular officers after filtering: ${regularOfficersForDay.length}`);
   
-  regularOfficersForDay.forEach((officer: any) => {
-      if (!officer || !officer.officerId) {
-        return;
-      }
-      
-      // Double-check this isn't overtime
-      if (isOfficerOvertime(officer)) {
-        console.log('ERROR: Overtime officer still in regular list:', officer.officerName);
-        return;
-      }
+regularOfficersForDay.forEach((officer: any) => {
+  if (!officer || !officer.officerId) {
+    console.warn('Skipping officer with missing officerId:', officer);
+    return;
+  }
+  
+  // CRITICAL: Skip ALL overtime officers completely
+  if (isOfficerOvertime(officer)) {
+    console.log('Skipping overtime officer from regular processing:', officer.officerName);
+    return; // Don't process this officer at all
+  }
+  
+  // CRITICAL FIX: Check if officerId exists before proceeding
+  const officerId = officer.officerId;
+  if (!officerId) {
+    console.error('Officer ID is undefined or null:', officer);
+    return;
+  }
       
       if (!allOfficers.has(officer.officerId)) {
         let profileData: any = null;

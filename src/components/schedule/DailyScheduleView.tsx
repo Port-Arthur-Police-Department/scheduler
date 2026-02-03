@@ -1868,8 +1868,19 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
   
-  // IMPORTANT: Skip officers in suspended partnerships - they belong in their own section
-  if (o.isPartnership && o.partnershipSuspended) return false;
+  // IMPORTANT: Skip officers in suspended partnerships - but ONLY if partner is PPO
+  if (o.isPartnership && o.partnershipSuspended) {
+    // Check if partner is PPO
+    const partnerIsPPO = o.partnerData?.partnerIsPPO || false;
+    if (partnerIsPPO) {
+      console.log(`🔍 Keeping ${o.name} in suspended partnerships (partner is PPO)`);
+      return false;
+    } else {
+      // Partner is regular officer on PTO - this officer should be in regular list
+      console.log(`🔍 Moving ${o.name} to regular list (regular partner on PTO)`);
+      return true;
+    }
+  }
   
   return true;
 }).sort((a, b) => {
@@ -1883,24 +1894,9 @@ const regularOfficers = processedOfficers.filter(o => {
   return (a.position || '').localeCompare(b.position || '');
 });
 
-// SIXTH: "Riding with partner" officers (these should be in regular officers section)
-const ridingWithPartnerOfficers = processedOfficers.filter(o => {
-  if (o.isPartnership && o.partnershipSuspended) return false; // Already in suspended partnerships
-  if (o.hasPTO && o.ptoData?.isFullShift) return false; // Skip PTO officers
-  
-  return isRidingWithPartnerPosition(o.position);
-});
-
-// Add "Riding with partner" officers to regular officers if they're not already there
-ridingWithPartnerOfficers.forEach(officer => {
-  if (!regularOfficers.some(ro => ro.officerId === officer.officerId)) {
-    regularOfficers.push(officer);
-  }
-});
-
-// FIFTH: Suspended partnerships ONLY
+// FIFTH: Suspended partnerships ONLY - but filter out regular officers whose partners are on PTO
 const suspendedPartnershipOfficers = processedOfficers.filter(o => 
-  o.isPartnership && o.partnershipSuspended
+  o.isPartnership && o.partnershipSuspended && o.partnerData?.partnerIsPPO
 );
 
 // Debug to verify

@@ -1,3 +1,4 @@
+// src/components/schedule/PTOAssignmentDialog.tsx
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,6 +62,25 @@ const isPPO = (rank: string | undefined | null): boolean => {
   return rankLower.includes('probationary') || rankLower.includes('ppo');
 };
 
+// ADD THIS HELPER FUNCTION - IT WAS MISSING
+const calculateHours = (start: string, end: string) => {
+  if (!start || !end) return 0;
+  
+  const [startHour, startMin] = start.split(":").map(Number);
+  const [endHour, endMin] = end.split(":").map(Number);
+  
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+  
+  // Handle overnight shifts (end time less than start time)
+  let diffMinutes = endMinutes - startMinutes;
+  if (diffMinutes < 0) {
+    diffMinutes += 24 * 60; // Add 24 hours in minutes
+  }
+  
+  return diffMinutes / 60;
+};
+
 export const PTOAssignmentDialog = ({
   open,
   onOpenChange,
@@ -80,7 +100,6 @@ export const PTOAssignmentDialog = ({
   const [partnerInfo, setPartnerInfo] = useState<any>(null);
   const [isPartnerPPO, setIsPartnerPPO] = useState(false);
   const [isOfficerPPO, setIsOfficerPPO] = useState(false);
-  // ADD THIS STATE FOR PARTNER SELECTION
   const [ptoAssignedTo, setPtoAssignedTo] = useState<"clickedOfficer" | "partner">("clickedOfficer");
 
   // Check for partnerships and PPO status when dialog opens
@@ -283,6 +302,41 @@ export const PTOAssignmentDialog = ({
     }
   };
 
+  // Only restore credit if PTO balances are enabled
+  const restorePTOCredit = async (existingPTO: any) => {
+    if (!ptoBalancesEnabled) {
+      console.log("PTO balances disabled, skipping balance restoration");
+      return;
+    }
+
+    const ptoType = existingPTO.ptoType;
+    const startTime = existingPTO.startTime;
+    const endTime = existingPTO.endTime;
+    const hoursUsed = calculateHours(startTime, endTime);
+
+    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoType)?.column;
+    if (ptoColumn) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", officer!.officerId)
+        .single();
+
+      if (profileError) throw profileError;
+
+      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+      
+      const { error: restoreError } = await supabase
+        .from("profiles")
+        .update({
+          [ptoColumn]: currentBalance + hoursUsed,
+        })
+        .eq("id", officer!.officerId);
+
+      if (restoreError) throw restoreError;
+    }
+  };
+
   const assignPTOMutation = useMutation({
     mutationFn: async () => {
       if (!officer || !shift) throw new Error("Officer or shift not available");
@@ -306,7 +360,7 @@ export const PTOAssignmentDialog = ({
         await suspendPartnershipForPTO(officerGettingPTO, partnerId);
       }
 
-      // 2. If editing existing PTO, first restore the previous PTO balance (if balances enabled)
+      // 1. If editing existing PTO, first restore the previous PTO balance (if balances enabled)
       // and delete ALL related schedule exceptions for this officer on this date/shift
       if (officer.existingPTO) {
         if (ptoBalancesEnabled) {
@@ -326,13 +380,13 @@ export const PTOAssignmentDialog = ({
         console.log(`✅ Deleted all existing schedule exceptions for officer ${officer.officerId}`);
       }
 
-      // 3. ONLY CHECK BALANCES IF PTO BALANCES ARE ENABLED
+      // 2. ONLY CHECK BALANCES IF PTO BALANCES ARE ENABLED
       if (ptoBalancesEnabled) {
         // Get current PTO balance for the new PTO type
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("*")
-          .eq("id", officer.officerId)
+          .eq("id", officerGettingPTO)
           .single();
 
         if (profileError) throw profileError;
@@ -351,14 +405,14 @@ export const PTOAssignmentDialog = ({
           .update({
             [ptoColumn]: currentBalance - hoursUsed,
           })
-          .eq("id", officer.officerId);
+          .eq("id", officerGettingPTO);
 
         if (updateError) throw updateError;
       }
 
-      // 4. Create PTO exception - ONLY ONE RECORD
+      // 3. Create PTO exception - ONLY ONE RECORD
       const ptoRecordData = {
-        officer_id: officer.officerId,
+        officer_id: officerGettingPTO,
         date: date,
         shift_type_id: shift.id,
         is_off: true,
@@ -367,12 +421,12 @@ export const PTOAssignmentDialog = ({
         custom_end_time: isFullShift ? null : ptoEndTime,
         partnership_suspended: officerHasPartnership,
         partnership_suspension_reason: officerHasPartnership ? `${ptoType} - Partner unavailable` : null,
-        partner_officer_id: officerHasPartnership ? partnerInfo?.id : null,
+        partner_officer_id: officerHasPartnership ? partnerId : null,
         schedule_type: "pto",
         hours_worked: hoursUsed,
         is_partial_shift: !isFullShift,
-        notes: officerHasPartnership && isOfficerPPO ? 
-               `PPO on PTO - Partner ${partnerInfo?.full_name} available for emergency assignment` : 
+        notes: officerHasPartnership && ((ptoAssignedTo === "clickedOfficer" && isPartnerPPO) || (ptoAssignedTo === "partner" && isOfficerPPO)) ? 
+               `PPO on PTO - Partner ${ptoAssignedTo === "clickedOfficer" ? partnerInfo?.full_name : officer.name} available for emergency assignment` : 
                null
       };
 
@@ -381,9 +435,9 @@ export const PTOAssignmentDialog = ({
         .insert(ptoRecordData);
 
       if (ptoError) throw ptoError;
-      console.log(`✅ Created PTO record for officer ${officer.officerId}`);
+      console.log(`✅ Created PTO record for officer ${officerGettingPTO}`);
 
-      // 5. Return data for audit logging
+      // 4. Return data for audit logging
       return {
         officerId: officerGettingPTO,
         officerName: ptoAssignedTo === "partner" ? partnerInfo.full_name : officer.name,
@@ -405,9 +459,9 @@ export const PTOAssignmentDialog = ({
       let successMessage = officer?.existingPTO ? "PTO updated successfully" : "PTO assigned successfully";
       
       if (ptoData.hadPartnership) {
-        if (ptoData.partnerIsPPO) {
+        if (ptoData.partnerName && isPPO(officer.rank)) {
           successMessage += `. PPO ${ptoData.partnerName}'s partnership is suspended and they can be assigned an emergency partner for today.`;
-        } else if (ptoData.officerIsPPO) {
+        } else if (ptoData.officerName && isPPO(partnerInfo?.rank)) {
           successMessage += `. ${ptoData.partnerName} is available for reassignment while PPO ${officer?.name} is on PTO.`;
         } else {
           successMessage += `. Partnership with ${ptoData.partnerName} has been suspended.`;
@@ -429,7 +483,7 @@ export const PTOAssignmentDialog = ({
         userEmail,
         `${officer?.existingPTO ? 'Updated' : 'Assigned'} ${ptoData.ptoType} PTO to ${ptoData.officerName} on ${ptoData.date} (${ptoData.hoursUsed} hours)` +
         (ptoData.hadPartnership ? ` - Partnership with ${ptoData.partnerName} suspended` : '') +
-        (ptoData.partnerIsPPO ? ' - PPO partner available for emergency assignment' : '') +
+        (ptoData.partnerName && isPPO(officer.rank) ? ' - PPO partner available for emergency assignment' : '') +
         (!ptoData.balancesEnabled ? ' - Unlimited PTO mode' : '')
       );
 
@@ -603,15 +657,35 @@ export const PTOAssignmentDialog = ({
         <DialogHeader>
           <DialogTitle>
             {officer.existingPTO ? "Edit PTO" : "Assign PTO"}
+            {!ptoBalancesEnabled && (
+              <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200">
+                Unlimited PTO
+              </Badge>
+            )}
           </DialogTitle>
+          <DialogDescription>
+            {officer.existingPTO 
+              ? `Edit PTO for ${officer.name} on ${shift.name}`
+              : `Assign PTO for ${officer.name} on ${shift.name}`
+            }
+            {!ptoBalancesEnabled && " - Unlimited PTO mode"}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Partnership Selection - ADD THIS SECTION */}
+          {/* Partnership Selection */}
           {officerHasPartnership && partnerInfo && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <h4 className="font-medium text-blue-800 mb-2">Select Officer for PTO</h4>
+              <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Partnership Detected
+              </h4>
+              <p className="text-sm text-blue-700 mb-3">
+                This officer is partnered with <span className="font-semibold">{partnerInfo.full_name}</span>.
+              </p>
+              
               <div className="space-y-2">
+                <h5 className="text-sm font-medium text-blue-800">Select Officer for PTO:</h5>
                 <div className="flex items-center space-x-2">
                   <input
                     type="radio"
@@ -622,7 +696,11 @@ export const PTOAssignmentDialog = ({
                     onChange={(e) => setPtoAssignedTo(e.target.value as any)}
                   />
                   <Label htmlFor="ptoClickedOfficer" className="cursor-pointer">
-                    {officer.name} {isOfficerPPO && "(PPO)"}
+                    {officer.name} {isOfficerPPO && (
+                      <Badge className="ml-2 bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+                        PPO
+                      </Badge>
+                    )}
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -635,16 +713,32 @@ export const PTOAssignmentDialog = ({
                     onChange={(e) => setPtoAssignedTo(e.target.value as any)}
                   />
                   <Label htmlFor="ptoPartner" className="cursor-pointer">
-                    {partnerInfo.full_name} {isPartnerPPO && "(PPO)"}
+                    {partnerInfo.full_name} {isPartnerPPO && (
+                      <Badge className="ml-2 bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+                        PPO
+                      </Badge>
+                    )}
                   </Label>
                 </div>
               </div>
-              <p className="text-sm text-blue-700 mt-2">
-                {isPartnerPPO && ptoAssignedTo === "clickedOfficer" && 
-                 `Note: Assigning PTO to ${officer.name} will suspend partnership. PPO ${partnerInfo.full_name} will need an emergency partner.`}
-                {isOfficerPPO && ptoAssignedTo === "partner" && 
-                 `Note: Assigning PTO to ${partnerInfo.full_name} will suspend partnership. PPO ${officer.name} will need an emergency partner.`}
-              </p>
+              
+              {isPartnerPPO && ptoAssignedTo === "clickedOfficer" && (
+                <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-800 font-medium">⚠️ PPO Partner Notice:</p>
+                  <p className="text-sm text-yellow-700">
+                    Assigning PTO to {officer.name} will suspend partnership. PPO {partnerInfo.full_name} will need an emergency partner.
+                  </p>
+                </div>
+              )}
+              
+              {isOfficerPPO && ptoAssignedTo === "partner" && (
+                <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-800 font-medium">⚠️ PPO Officer Notice:</p>
+                  <p className="text-sm text-yellow-700">
+                    Assigning PTO to {partnerInfo.full_name} will suspend partnership. PPO {officer.name} will need an emergency partner.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -718,7 +812,7 @@ export const PTOAssignmentDialog = ({
           )}
 
           {ptoType && (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground p-2 bg-gray-50 rounded">
               Hours: {calculateHours(
                 isFullShift ? shift.start_time : startTime,
                 isFullShift ? shift.end_time : endTime
@@ -748,7 +842,7 @@ export const PTOAssignmentDialog = ({
             <Button
               onClick={() => assignPTOMutation.mutate()}
               disabled={!ptoType || assignPTOMutation.isPending}
-              className={officerHasPartnership ? "bg-amber-600 hover:bg-amber-700" : ""}
+              className={officerHasPartnership ? "bg-blue-600 hover:bg-blue-700" : ""}
             >
               {assignPTOMutation.isPending 
                 ? (officer.existingPTO ? "Updating..." : "Assigning...")

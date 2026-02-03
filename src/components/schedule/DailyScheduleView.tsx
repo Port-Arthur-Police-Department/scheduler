@@ -1660,57 +1660,65 @@ for (const officer of allOfficers) {
           ptoIsPPO: isPtoOfficerPPO
         });
         
-        // CRITICAL FIX: Always add working officer to suspended partnerships if they need emergency partner
-        // PPOs ALWAYS need suspended partnership record when their partner is on PTO
-        // Regular officers only need it if their partner is a PPO
+// CRITICAL FIX: Always add working officer to suspended partnerships if they need emergency partner
+// PPOs ALWAYS need suspended partnership record when their partner is on PTO
+// Regular officers only need it if their partner is a PPO
         
-        if (isWorkingOfficerPPO) {
-          // Working officer is a PPO - needs emergency partner button
-          console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${ptoOfficer.name} on PTO)`);
-          const suspendedOfficer = {
-            ...workingOfficer,
-            isPartnership: true,
-            partnerOfficerId: ptoOfficer.officerId,
-            partnershipSuspended: true,
-            partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
-            partnerData: {
-              partnerOfficerId: ptoOfficer.officerId,
-              partnerName: ptoOfficer.name,
-              partnerBadge: ptoOfficer.badge,
-              partnerRank: ptoOfficer.rank,
-              partnerIsPPO: isPtoOfficerPPO
-            },
-            // Clear PTO flags if this officer is working
-            hasPTO: false,
-            ptoData: undefined,
-            // Ensure they're marked as processed
-            _processed: true
-          };
-          
-          processedOfficers.push(suspendedOfficer);
-        } else if (isPtoOfficerPPO) {
-          // Working officer is regular, PPO is on PTO
-          // Regular officer should return to regular schedule
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${ptoOfficer.name} on PTO)`);
-          processedOfficers.push({
-            ...workingOfficer,
-            isPartnership: false, // Clear partnership flag
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            // Ensure they're marked as processed
-            _processed: true
-          });
-        } else {
-          // Both are regular officers, one on PTO
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on PTO)`);
-          processedOfficers.push({
-            ...workingOfficer,
-            isPartnership: false, // Clear partnership flag
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            // Ensure they're marked as processed
-            _processed: true
-          });
+if (isWorkingOfficerPPO) {
+  // Working officer is a PPO - needs emergency partner button
+  console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${ptoOfficer.name} on PTO)`);
+  const suspendedOfficer = {
+    ...workingOfficer,
+    isPartnership: true,  // MUST be true for partnership manager
+    partnerOfficerId: ptoOfficer.officerId,
+    partnershipSuspended: true,
+    partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
+    partnerData: {
+      partnerOfficerId: ptoOfficer.officerId,
+      partnerName: ptoOfficer.name,
+      partnerBadge: ptoOfficer.badge,
+      partnerRank: ptoOfficer.rank,
+      partnerIsPPO: isPtoOfficerPPO
+    },
+    // Clear PTO flags if this officer is working
+    hasPTO: false,
+    ptoData: undefined,
+    // Ensure they're NOT in regular officers list
+    _suspendedPartnership: true,  // Flag to identify suspended partnerships
+    // Ensure they're marked as processed
+    _processed: true
+  };
+  
+  processedOfficers.push(suspendedOfficer);
+} else if (isPtoOfficerPPO) {
+  // Working officer is regular, PPO is on PTO
+  // Regular officer should return to regular schedule (NO partnership flags)
+  console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${ptoOfficer.name} on PTO)`);
+  processedOfficers.push({
+    ...workingOfficer,
+    isPartnership: false,  // MUST be false - no active partnership
+    partnerOfficerId: null,
+    partnershipSuspended: false,
+    partnerData: undefined,  // Clear partner data
+    // Ensure they're NOT in suspended partnerships
+    _suspendedPartnership: false,
+    // Ensure they're marked as processed
+    _processed: true
+  });
+} else {
+  // Both are regular officers, one on PTO
+  console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on PTO)`);
+  processedOfficers.push({
+    ...workingOfficer,
+    isPartnership: false,  // MUST be false
+    partnerOfficerId: null,
+    partnershipSuspended: false,
+    partnerData: undefined,  // Clear partner data
+    // Ensure they're NOT in suspended partnerships
+    _suspendedPartnership: false,
+    // Ensure they're marked as processed
+    _processed: true
+  });
         }
         // Officer on PTO will appear in PTO section only
       } else {
@@ -1893,18 +1901,16 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
   
-  // IMPORTANT: Skip officers in suspended partnerships - but ONLY if partner is PPO
+  // CRITICAL: Skip officers in suspended partnerships (they belong in suspended section)
   if (o.isPartnership && o.partnershipSuspended) {
-    // Check if partner is PPO
-    const partnerIsPPO = o.partnerData?.partnerIsPPO || false;
-    if (partnerIsPPO) {
-      console.log(`🔍 Keeping ${o.name} in suspended partnerships (partner is PPO)`);
-      return false;
-    } else {
-      // Partner is regular officer on PTO - this officer should be in regular list
-      console.log(`🔍 Moving ${o.name} to regular list (regular partner on PTO)`);
-      return true;
-    }
+    console.log(`❌ Excluding from regular officers (suspended partnership): ${o.name}`);
+    return false;
+  }
+  
+  // Skip officers with active partnerships (they're already shown as combined)
+  if (o.isPartnership && !o.partnershipSuspended) {
+    console.log(`❌ Excluding from regular officers (active partnership): ${o.name}`);
+    return false;
   }
   
   return true;
@@ -1921,10 +1927,10 @@ const regularOfficers = processedOfficers.filter(o => {
 
 // FIFTH: Suspended partnerships ONLY - PPOs whose partners are on PTO
 const suspendedPartnershipOfficers = processedOfficers.filter(o => {
-  const shouldBeSuspended = o.isPartnership && o.partnershipSuspended && isPPOByRank(o.rank);
+  const shouldBeSuspended = o.isPartnership && o.partnershipSuspended;
   
   if (shouldBeSuspended) {
-    console.log(`✅ Adding to suspended partnerships: ${o.name} (PPO with partner on PTO)`);
+    console.log(`✅ Adding to suspended partnerships: ${o.name} (partner on PTO)`);
   }
   
   return shouldBeSuspended;

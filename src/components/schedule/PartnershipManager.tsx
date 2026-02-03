@@ -705,28 +705,16 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
                         <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                           Select a regular officer (non-PPO) for temporary assignment
                         </div>
-                        {emergencyPartners.map((partner) => (
-                          <SelectItem key={partner.id} value={partner.id}>
-                            <div className="flex flex-col py-2">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">{partner.name}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {partner.source}
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                                <div className="flex items-center gap-2">
-                                  <span>Badge: {partner.badge || 'N/A'}</span>
-                                  <span>•</span>
-                                  <span>{partner.rank || 'Officer'}</span>
-                                </div>
-                                {partner.isPPO && (
-                                  <span className="text-red-600">⚠️ Cannot select PPO</span>
-                                )}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
+{emergencyPartners.map((partner) => (
+  <SelectItem key={partner.id} value={partner.id}>
+    <div className="flex flex-col py-1">
+      <span className="font-medium">{partner.name}</span>
+      <span className="text-xs text-muted-foreground">
+        Badge: {partner.badge || 'N/A'} • {partner.rank || 'Officer'}
+      </span>
+    </div>
+  </SelectItem>
+))}
                       </div>
                     )}
                   </SelectContent>
@@ -835,25 +823,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
                   <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                     Select a Probationary Officer (PPO) to partner with
                   </div>
-                  {availablePartners.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id}>
-                      <div className="flex flex-col py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{partner.full_name}</span>
-                          <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
-                            PPO
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                          <div className="flex items-center gap-2">
-                            <span>Badge: {partner.badge_number || 'N/A'}</span>
-                            <span>•</span>
-                            <span>{partner.rank}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))}
+availablePartners.map
                 </div>
               )}
             </SelectContent>

@@ -130,31 +130,30 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
         partnerOfficerId: o.partner_officer_id
       })));
 
-      // Step 2: Get schedule exceptions for this date/shift
-      const { data: exceptions, error: exceptionsError } = await supabase
-        .from("schedule_exceptions")
-        .select(`
-          id,
-          officer_id,
-          is_partnership,
-          partner_officer_id,
-          is_off,
-          is_emergency_partnership,
-          profiles:officer_id (
-            id,
-            full_name,
-            badge_number,
-            rank
-          )
-        `)
-        .eq("date", dateToUse)
-        .eq("shift_type_id", officer.shift.id)
-        .neq("officer_id", officer.officerId);
+// Step 2: Get schedule exceptions for this date/shift
+const { data: exceptions, error: exceptionsError } = await supabase
+  .from("schedule_exceptions")
+  .select(`
+    id,
+    officer_id,
+    is_partnership,
+    partner_officer_id,
+    is_off,
+    profiles:officer_id (
+      id,
+      full_name,
+      badge_number,
+      rank
+    )
+  `)
+  .eq("date", dateToUse)
+  .eq("shift_type_id", officer.shift.id)
+  .neq("officer_id", officer.officerId);
 
-      if (exceptionsError) {
-        console.error("Error fetching exceptions:", exceptionsError);
-        throw exceptionsError;
-      }
+if (exceptionsError) {
+  console.error("Error fetching exceptions:", exceptionsError);
+  throw exceptionsError;
+}
 
       console.log("📅 All exceptions for emergency check:", exceptions?.map(e => ({
         name: e.profiles?.full_name,
@@ -188,11 +187,11 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
             continue;
           }
 
-          // Skip if already in an emergency partnership
-          if (exception.is_emergency_partnership) {
-            console.log(`   ❌ Skipping - already in emergency partnership: ${exception.profiles.full_name}`);
-            continue;
-          }
+// Skip if already in an emergency partnership
+if (exception.is_emergency_partnership) {
+  console.log(`   ❌ Skipping - already in emergency partnership: ${exception.profiles.full_name}`);
+  continue;
+}
 
           // Check if officer is a PPO
           const isPPO = isPPOByRank(exception.profiles.rank);

@@ -1719,49 +1719,63 @@ if (isWorkingOfficerPPO) {
     // Ensure they're marked as processed
     _processed: true
   });
-        }
-        // Officer on PTO will appear in PTO section only
-      } else {
-        // Normal active partnership - combine them
-        let primaryOfficer = officer;
-        let secondaryOfficer = partnerOfficer;
-        
-        if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
-          primaryOfficer = partnerOfficer;
-          secondaryOfficer = officer;
-        } else if (isPPOByRank(partnerOfficer.rank) && !isPPOByRank(officer.rank)) {
-          // Already correct
-        } else {
-          primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
-          secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
-        }
+}
+// Officer on PTO will appear in PTO section only
+} else {
+  // Normal active partnership - combine them
+  console.log(`🤝 Active partnership: ${officer.name} + ${partnerOfficer.name}`);
+  
+  // Determine primary officer (regular officers should be primary)
+  let primaryOfficer = officer;
+  let secondaryOfficer = partnerOfficer;
+  
+  if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
+    // Officer is PPO, partner is regular - make regular officer primary
+    primaryOfficer = partnerOfficer;
+    secondaryOfficer = officer;
+  } else if (isPPOByRank(partnerOfficer.rank) && !isPPOByRank(officer.rank)) {
+    // Partner is PPO, officer is regular - already correct
+  } else {
+    // Both same type, sort by name for consistency
+    primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
+    secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
+  }
 
-        const combinedOfficer = {
-          ...primaryOfficer,
-          isCombinedPartnership: true,
-          partnerData: {
-            partnerOfficerId: secondaryOfficer.officerId,
-            partnerName: secondaryOfficer.name,
-            partnerBadge: secondaryOfficer.badge,
-            partnerRank: secondaryOfficer.rank,
-            partnerIsPPO: isPPOByRank(secondaryOfficer.rank),
-            partnerPosition: secondaryOfficer.position,
-            partnerUnitNumber: secondaryOfficer.unitNumber,
-            partnerScheduleId: secondaryOfficer.scheduleId,
-            partnerType: secondaryOfficer.type
-          },
-          partnerOfficerId: secondaryOfficer.officerId,
-          originalPartnerOfficerId: secondaryOfficer.officerId,
-          position: primaryOfficer.position || secondaryOfficer.position,
-          unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
-          notes: primaryOfficer.notes || secondaryOfficer.notes ? 
-            `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
-            : null,
-          isPartnership: true,
-          partnershipSuspended: false,
-          // Ensure they're marked as processed
-          _processed: true
-        };
+  const combinedOfficer = {
+    ...primaryOfficer,
+    isCombinedPartnership: true,
+    partnerData: {
+      partnerOfficerId: secondaryOfficer.officerId,
+      partnerName: secondaryOfficer.name,
+      partnerBadge: secondaryOfficer.badge,
+      partnerRank: secondaryOfficer.rank,
+      partnerIsPPO: isPPOByRank(secondaryOfficer.rank),
+      partnerPosition: secondaryOfficer.position,
+      partnerUnitNumber: secondaryOfficer.unitNumber,
+      partnerScheduleId: secondaryOfficer.scheduleId,
+      partnerType: secondaryOfficer.type
+    },
+    partnerOfficerId: secondaryOfficer.officerId,
+    originalPartnerOfficerId: secondaryOfficer.officerId,
+    position: primaryOfficer.position || secondaryOfficer.position,
+    unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
+    notes: primaryOfficer.notes || secondaryOfficer.notes ? 
+      `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
+      : null,
+    isPartnership: true,
+    partnershipSuspended: false,
+    // Clear any PTO flags for active partnership
+    hasPTO: false,
+    ptoData: undefined,
+    // Ensure they're NOT in suspended partnerships
+    _suspendedPartnership: false,
+    // Ensure they're marked as processed
+    _processed: true
+  };
+
+  console.log(`✅ Combined partnership created: ${combinedOfficer.name} + ${combinedOfficer.partnerData.partnerName}`);
+  processedOfficers.push(combinedOfficer);
+}
 
         processedOfficers.push(combinedOfficer);
       }
@@ -1901,20 +1915,23 @@ const regularOfficers = processedOfficers.filter(o => {
   const hasSupervisorRank = isSupervisorByRank(o.rank);
   if (hasSupervisorPosition || hasSupervisorRank) return false;
   
-  // CRITICAL: Skip officers in suspended partnerships (they belong in suspended section)
-  if (o.isPartnership && o.partnershipSuspended) {
+  // CRITICAL FIX: Include active partnerships in regular officers
+  // Only exclude suspended partnerships
+  if (o.partnershipSuspended) {
     console.log(`❌ Excluding from regular officers (suspended partnership): ${o.name}`);
-    return false;
-  }
-  
-  // Skip officers with active partnerships (they're already shown as combined)
-  if (o.isPartnership && !o.partnershipSuspended) {
-    console.log(`❌ Excluding from regular officers (active partnership): ${o.name}`);
     return false;
   }
   
   return true;
 }).sort((a, b) => {
+  // Sort combined partnerships first, then by position
+  const aIsCombined = a.isCombinedPartnership ? 0 : 1;
+  const bIsCombined = b.isCombinedPartnership ? 0 : 1;
+  
+  if (aIsCombined !== bIsCombined) {
+    return aIsCombined - bIsCombined;
+  }
+  
   const aMatch = a.position?.match(/district\s*(\d+)/i);
   const bMatch = b.position?.match(/district\s*(\d+)/i);
   

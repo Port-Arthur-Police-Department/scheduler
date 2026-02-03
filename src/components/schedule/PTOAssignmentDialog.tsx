@@ -225,15 +225,6 @@ export const PTOAssignmentDialog = ({
       .eq("id", workingOfficerId)
       .single();
 
-    // Check if working officer already has an exception
-    const { data: workingOfficerException } = await supabase
-      .from("schedule_exceptions")
-      .select("id, position_name, unit_number, notes, is_off")
-      .eq("officer_id", workingOfficerId)
-      .eq("date", date)
-      .eq("shift_type_id", shift!.id)
-      .single();
-
     const isWorkingOfficerPPO = isPPO(workingOfficerData?.rank);
     const isPtoOfficerPPO = isPPO(ptoOfficerData?.rank);
 
@@ -244,11 +235,22 @@ export const PTOAssignmentDialog = ({
       workingOfficerIsPPO: isWorkingOfficerPPO
     });
 
-    // Only create suspended partnership records for PPOs
+    // CRITICAL FIX: Check if working officer is a PPO
     if (isWorkingOfficerPPO) {
-      // Working officer is a PPO - they need a suspended partnership record
-      if (workingOfficerException && !workingOfficerException.is_off) {
-        // Update existing exception for PPO partner
+      // Working officer is a PPO (their partner is on PTO) - they need a suspended partnership record
+      console.log(`🔄 Creating suspended partnership for PPO: ${workingOfficerData?.full_name}`);
+      
+      // Check if PPO already has an exception
+      const { data: ppoException } = await supabase
+        .from("schedule_exceptions")
+        .select("id, position_name, unit_number, notes, is_off")
+        .eq("officer_id", workingOfficerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift!.id)
+        .single();
+
+      if (ppoException && !ppoException.is_off) {
+        // Update existing exception for PPO
         await supabase
           .from("schedule_exceptions")
           .update({
@@ -256,12 +258,13 @@ export const PTOAssignmentDialog = ({
             partnership_suspension_reason: `${ptoOfficerData?.full_name || 'Partner'} on ${ptoType}`,
             partner_officer_id: ptoOfficerId,
             schedule_type: "working_partner_suspended",
-            notes: workingOfficerException.notes || null,
+            notes: ppoException.notes || null,
+            is_partnership: false, // Important: not in active partnership
           })
-          .eq("id", workingOfficerException.id);
+          .eq("id", ppoException.id);
         
-        console.log(`✅ Updated PPO partner's existing record for partnership suspension`);
-      } else if (!workingOfficerException) {
+        console.log(`✅ Updated PPO's existing record for partnership suspension`);
+      } else if (!ppoException) {
         // Get recurring schedule details for PPO
         const dayOfWeek = new Date(date).getDay();
         const { data: recurringSchedule } = await supabase
@@ -273,39 +276,51 @@ export const PTOAssignmentDialog = ({
           .single();
 
         // Create suspended partnership exception for PPO
+        const ppoExceptionData = {
+          officer_id: workingOfficerId,
+          date: date,
+          shift_type_id: shift!.id,
+          is_off: false,
+          is_partnership: false, // Important: not in active partnership
+          partnership_suspended: true,
+          partnership_suspension_reason: `${ptoOfficerData?.full_name || 'Partner'} on ${ptoType}`,
+          partner_officer_id: ptoOfficerId,
+          position_name: recurringSchedule?.position_name || "",
+          unit_number: recurringSchedule?.unit_number || "",
+          notes: recurringSchedule?.notes || `Partnership suspended - partner ${ptoOfficerData?.full_name} on PTO`,
+          schedule_type: "working_partner_suspended",
+          // Mark as eligible for emergency partner
+          is_emergency_eligible: true
+        };
+
         await supabase
           .from("schedule_exceptions")
-          .insert({
-            officer_id: workingOfficerId,
-            date: date,
-            shift_type_id: shift!.id,
-            is_off: false,
-            is_partnership: false,
-            partnership_suspended: true,
-            partnership_suspension_reason: `${ptoOfficerData?.full_name || 'Partner'} on ${ptoType}`,
-            partner_officer_id: ptoOfficerId,
-            position_name: recurringSchedule?.position_name || "",
-            unit_number: recurringSchedule?.unit_number || "",
-            notes: recurringSchedule?.notes || `Partnership suspended - partner ${ptoOfficerData?.full_name} on PTO`,
-            schedule_type: "working_partner_suspended"
-          });
+          .insert(ppoExceptionData);
         
-        console.log(`✅ Created suspended partnership record for PPO partner`);
+        console.log(`✅ Created suspended partnership record for PPO ${workingOfficerData?.full_name}`);
       } else {
-        console.log(`⚠️ PPO partner already has a PTO record, skipping partnership suspension update`);
+        console.log(`⚠️ PPO already has a PTO record, skipping partnership suspension update`);
       }
-    } else {
-      // Working officer is regular officer - NO suspended partnership record needed
-      // They will return to regular schedule automatically
-      console.log(`✅ Regular officer partner ${workingOfficerData?.full_name} will return to regular schedule (no suspended partnership record needed)`);
+    } else if (isPtoOfficerPPO) {
+      // PPO is on PTO, regular officer is working - regular officer should return to normal schedule
+      console.log(`✅ PPO ${ptoOfficerData?.full_name} on PTO - regular officer ${workingOfficerData?.full_name} returns to regular schedule`);
       
-      // If there's an existing suspended partnership record, delete it
-      if (workingOfficerException && workingOfficerException.partnership_suspended) {
+      // Check if regular officer has a suspended partnership record and remove it
+      const { data: regularOfficerException } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", workingOfficerId)
+        .eq("date", date)
+        .eq("shift_type_id", shift!.id)
+        .eq("partnership_suspended", true)
+        .single();
+
+      if (regularOfficerException) {
         await supabase
           .from("schedule_exceptions")
           .delete()
-          .eq("id", workingOfficerException.id);
-        console.log(`🗑️ Removed unnecessary suspended partnership record for regular officer`);
+          .eq("id", regularOfficerException.id);
+        console.log(`🗑️ Removed suspended partnership record for regular officer`);
       }
     }
 
@@ -321,15 +336,15 @@ export const PTOAssignmentDialog = ({
         exception_type: 'pto_suspension',
         created_at: new Date().toISOString(),
         is_ppo_partnership: isPtoOfficerPPO || isWorkingOfficerPPO,
-        can_emergency_reassign: isWorkingOfficerPPO,
+        can_emergency_reassign: isWorkingOfficerPPO, // True if working officer is PPO
         pto_assigned_to: ptoOfficerId
       });
 
     // Show appropriate message
     if (isWorkingOfficerPPO) {
-      toast.info(`Partnership suspended. PPO ${workingOfficerData?.full_name} can now be assigned an emergency partner for today.`);
+      toast.info(`Partnership suspended. PPO ${workingOfficerData?.full_name} needs an emergency partner and will appear in "Partnerships (Suspended)" section.`);
     } else if (isPtoOfficerPPO) {
-      toast.info(`Partnership suspended. PPO ${ptoOfficerData?.full_name} is on PTO. ${workingOfficerData?.full_name} is available for reassignment.`);
+      toast.info(`Partnership suspended. PPO ${ptoOfficerData?.full_name} is on PTO. ${workingOfficerData?.full_name} will return to regular schedule.`);
     } else {
       toast.info(`Partnership suspended. ${ptoOfficerData?.full_name} is on PTO. ${workingOfficerData?.full_name} will return to regular schedule.`);
     }

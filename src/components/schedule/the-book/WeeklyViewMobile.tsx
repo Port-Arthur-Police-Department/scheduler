@@ -90,145 +90,180 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     );
   };
 
-  // Extract officer data from weeklyData
-  const { supervisors, regularOfficers, ppoOfficers, overtimeOfficers, dailyStats } = React.useMemo(() => {
-    const supervisors: any[] = [];
-    const regularOfficers: any[] = [];
-    const ppoOfficers: any[] = [];
-    const overtimeOfficers: any[] = [];
-    const dailyStats: Record<string, {
-      supervisorCount: number;
-      officerCount: number;
-      ppoCount: number;
-      overtimeCount: number;
-      minSupervisors: number;
-      minOfficers: number;
-    }> = {};
+ // Extract officer data from weeklyData - SIMPLIFIED VERSION
+const { supervisors, regularOfficers, ppoOfficers, overtimeOfficers, dailyStats } = React.useMemo(() => {
+  console.log('🔄 Processing weekly data in mobile view...');
+  
+  const supervisors: any[] = [];
+  const regularOfficers: any[] = [];
+  const ppoOfficers: any[] = [];
+  const overtimeOfficers: any[] = [];
+  const dailyStats: Record<string, any> = {};
+  const seenOfficers = new Set();
 
-    // Initialize daily stats
-    weekDays.forEach(day => {
-      dailyStats[day.dateStr] = {
-        supervisorCount: 0,
-        officerCount: 0,
-        ppoCount: 0,
-        overtimeCount: 0,
-        minSupervisors: 0,
-        minOfficers: 0
-      };
+  // Initialize daily stats
+  weekDays.forEach(day => {
+    dailyStats[day.dateStr] = {
+      supervisorCount: 0,
+      officerCount: 0,
+      ppoCount: 0,
+      overtimeCount: 0,
+      minSupervisors: 0,
+      minOfficers: 0
+    };
+  });
+
+  if (!weeklyData || weeklyData.length === 0) {
+    console.log('⚠️ No weekly data to process');
+    return { supervisors, regularOfficers, ppoOfficers, overtimeOfficers, dailyStats };
+  }
+
+  // Process each day's data
+  weeklyData.forEach(dayData => {
+    const { date, data } = dayData;
+    
+    if (!data) {
+      console.log(`⚠️ No data for date ${date}`);
+      return;
+    }
+
+    console.log(`📅 Processing date ${date}:`, {
+      supervisorsCount: data.supervisors?.length || 0,
+      officersCount: data.officers?.length || 0,
+      hasOvertime: !!data.overtimeByDate?.[date]
     });
 
-    // Process each day's data
-    weeklyData.forEach(dayData => {
-      const { date, data } = dayData;
-      
-      if (!data) return;
+    // Get staffing minimums
+    dailyStats[date].minSupervisors = data.minSupervisors || 0;
+    dailyStats[date].minOfficers = data.minOfficers || 0;
 
-      // Get staffing minimums from the data
-      dailyStats[date].minSupervisors = data.minSupervisors || 0;
-      dailyStats[date].minOfficers = data.minOfficers || 0;
+    // Process supervisors
+    if (data.supervisors && Array.isArray(data.supervisors)) {
+      data.supervisors.forEach((officer: any) => {
+        const officerId = officer.officerId || officer.id;
+        
+        if (!officerId) {
+          console.log('⚠️ Officer has no ID:', officer);
+          return;
+        }
 
-      // Process supervisors
-      if (data.supervisors) {
-        data.supervisors.forEach((officer: any) => {
-          if (!supervisors.find(s => s.officerId === officer.officerId)) {
-            supervisors.push(officer);
-          }
+        if (!seenOfficers.has(officerId)) {
+          seenOfficers.add(officerId);
+          supervisors.push(officer);
+        }
+        
+        // Check if officer is scheduled on this day
+        const daySchedule = officer.weeklySchedule?.[date];
+        if (daySchedule) {
+          const hasPTO = daySchedule.shiftInfo?.hasPTO || 
+                        daySchedule.shiftInfo?.isOff ||
+                        daySchedule.ptoData;
+          const isOvertime = daySchedule.is_extra_shift === true || 
+                           daySchedule.shiftInfo?.is_extra_shift === true;
           
-          // Check if officer is scheduled on this day
-          const isScheduled = officer.weeklySchedule?.[date]?.shiftInfo && 
-                            !officer.weeklySchedule?.[date]?.shiftInfo.isOff;
-          const isOvertime = officer.weeklySchedule?.[date]?.shiftInfo?.is_extra_shift === true;
-          
-          if (isScheduled && !isOvertime && !officer.shiftInfo?.hasPTO) {
+          if (!hasPTO && !isOvertime) {
             dailyStats[date].supervisorCount++;
           }
-        });
-      }
+        }
+      });
+    }
 
-      // Process regular officers
-      if (data.officers) {
-        data.officers.forEach((officer: any) => {
-          const isPPO = officer.rank?.toLowerCase() === 'probationary';
+    // Process officers (regular and PPO)
+    if (data.officers && Array.isArray(data.officers)) {
+      data.officers.forEach((officer: any) => {
+        const officerId = officer.officerId || officer.id;
+        
+        if (!officerId) {
+          console.log('⚠️ Officer has no ID:', officer);
+          return;
+        }
+
+        const isPPO = officer.rank?.toLowerCase() === 'probationary';
+        const targetArray = isPPO ? ppoOfficers : regularOfficers;
+        
+        if (!seenOfficers.has(officerId)) {
+          seenOfficers.add(officerId);
+          targetArray.push(officer);
+        }
+        
+        // Check if officer is scheduled on this day
+        const daySchedule = officer.weeklySchedule?.[date];
+        if (daySchedule) {
+          const hasPTO = daySchedule.shiftInfo?.hasPTO || 
+                        daySchedule.shiftInfo?.isOff ||
+                        daySchedule.ptoData;
+          const isOvertime = daySchedule.is_extra_shift === true || 
+                           daySchedule.shiftInfo?.is_extra_shift === true;
           
-          if (isPPO) {
-            if (!ppoOfficers.find(p => p.officerId === officer.officerId)) {
-              ppoOfficers.push(officer);
-            }
-            
-            const isScheduled = officer.weeklySchedule?.[date]?.shiftInfo && 
-                              !officer.weeklySchedule?.[date]?.shiftInfo.isOff;
-            const isOvertime = officer.weeklySchedule?.[date]?.shiftInfo?.is_extra_shift === true;
-            
-            if (isScheduled && !isOvertime && !officer.shiftInfo?.hasPTO) {
+          if (!hasPTO && !isOvertime) {
+            if (isPPO) {
               dailyStats[date].ppoCount++;
-            }
-          } else {
-            if (!regularOfficers.find(r => r.officerId === officer.officerId)) {
-              regularOfficers.push(officer);
-            }
-            
-            const isScheduled = officer.weeklySchedule?.[date]?.shiftInfo && 
-                              !officer.weeklySchedule?.[date]?.shiftInfo.isOff;
-            const isOvertime = officer.weeklySchedule?.[date]?.shiftInfo?.is_extra_shift === true;
-            
-            if (isScheduled && !isOvertime && !officer.shiftInfo?.hasPTO) {
+            } else {
               dailyStats[date].officerCount++;
             }
           }
-        });
-      }
-
-      // Process overtime officers
-      if (data.overtimeByDate?.[date]) {
-        data.overtimeByDate[date].forEach((officer: any) => {
-          if (!overtimeOfficers.find(o => o.officerId === officer.officerId)) {
-            overtimeOfficers.push(officer);
-          }
-          
-          dailyStats[date].overtimeCount++;
-        });
-      }
-    });
-
-    // Sort officers by service credit
-    const sortOfficers = (officers: any[]) => {
-      return officers.sort((a, b) => {
-        const aCredit = a.service_credit || 0;
-        const bCredit = b.service_credit || 0;
-        return bCredit - aCredit;
+        }
       });
-    };
+    }
 
-    return {
-      supervisors: sortOfficers(supervisors),
-      regularOfficers: sortOfficers(regularOfficers),
-      ppoOfficers: sortOfficers(ppoOfficers),
-      overtimeOfficers: sortOfficers(overtimeOfficers),
-      dailyStats
-    };
-  }, [weeklyData, weekDays]);
+    // Process overtime officers
+    if (data.overtimeByDate?.[date]) {
+      data.overtimeByDate[date].forEach((officer: any) => {
+        const officerId = officer.officerId || officer.id;
+        
+        if (officerId && !seenOfficers.has(officerId)) {
+          seenOfficers.add(officerId);
+          overtimeOfficers.push(officer);
+        }
+        
+        dailyStats[date].overtimeCount++;
+      });
+    }
+  });
 
-  // Check if we have data
-  const hasData = weeklyData.length > 0 && weeklyData.some(day => day.data);
-  const isLoading = !weeklyData; // Data is passed from parent
+  console.log('✅ Processed data summary:', {
+    supervisors: supervisors.length,
+    regularOfficers: regularOfficers.length,
+    ppoOfficers: ppoOfficers.length,
+    overtimeOfficers: overtimeOfficers.length
+  });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-3/4 mx-auto" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
+  return {
+    supervisors,
+    regularOfficers,
+    ppoOfficers,
+    overtimeOfficers,
+    dailyStats
+  };
+}, [weeklyData, weekDays]);
 
-  if (!selectedShiftId) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
-        <p>Please select a shift to view schedule</p>
-      </div>
-    );
-  }
+// Check if we have data
+const hasData = weeklyData && weeklyData.length > 0 && weeklyData.some(day => day.data);
+const isLoading = false; // Data is passed from parent, loading handled there
+
+if (!hasData && selectedShiftId) {
+  console.log('📱 No data but shift selected:', {
+    weeklyDataLength: weeklyData?.length,
+    shiftId: selectedShiftId
+  });
+  
+  return (
+    <div className="text-center py-8 text-muted-foreground">
+      <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
+      <p>Loading schedule data...</p>
+      <p className="text-xs mt-2">Shift: {selectedShiftId}</p>
+    </div>
+  );
+}
+
+if (!selectedShiftId) {
+  return (
+    <div className="text-center py-8 text-muted-foreground">
+      <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
+      <p>Please select a shift to view schedule</p>
+    </div>
+  );
+}
 
   if (!hasData) {
     return (

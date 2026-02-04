@@ -969,7 +969,6 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                   <div>{dayName}</div>
                   <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
                 </Button>
-// In the Table Header badges section (around line 790-810):
 <Badge 
   variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
   className="text-xs mb-1"

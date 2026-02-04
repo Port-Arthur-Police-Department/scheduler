@@ -3,35 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";
-
-// Helper function to check if a shift is understaffed
-const isUnderstaffed = (currentCount: number, minimumRequired: number): boolean => {
-  // If minimum is 0, never understaffed (0 means no minimum requirement)
-  if (minimumRequired === 0) return false;
-  
-  // Otherwise, check if current count is less than minimum
-  return currentCount < minimumRequired;
-};
-
-// Helper function to get position type for understaffing
-const getPositionType = (
-  currentSupervisors: number,
-  minSupervisors: number,
-  currentOfficers: number,
-  minOfficers: number
-): string => {
-  const supervisorsNeeded = Math.max(0, minSupervisors - currentSupervisors);
-  const officersNeeded = Math.max(0, minOfficers - currentOfficers);
-
-  if (supervisorsNeeded > 0 && officersNeeded > 0) {
-    return `${supervisorsNeeded} Supervisor(s), ${officersNeeded} Officer(s)`;
-  } else if (supervisorsNeeded > 0) {
-    return `${supervisorsNeeded} Supervisor(s)`;
-  } else if (officersNeeded > 0) {
-    return `${officersNeeded} Officer(s)`;
-  }
-  return "";
-};
+import { 
+  isShiftUnderstaffed, 
+  getStaffingDescription,
+  getRequirementsSummary 
+} from "@/utils/staffingUtils";
 
 export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
   return useQuery({
@@ -99,19 +75,15 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
             console.log(`📋 Min requirements: ${minSupervisors} supervisors, ${minOfficers} officers`);
             console.log(`👥 Current staffing: ${shiftData.currentSupervisors} supervisors, ${shiftData.currentOfficers} officers`);
 
-            // Check if understaffed using the helper function
-            const supervisorsUnderstaffed = isUnderstaffed(shiftData.currentSupervisors, minSupervisors);
-            const officersUnderstaffed = isUnderstaffed(shiftData.currentOfficers, minOfficers);
-            const isUnderstaffedShift = supervisorsUnderstaffed || officersUnderstaffed;
+            // Check if understaffed using the utility function
+            const isUnderstaffedShift = isShiftUnderstaffed(
+              shiftData.currentSupervisors,
+              minSupervisors,
+              shiftData.currentOfficers,
+              minOfficers
+            );
 
             if (isUnderstaffedShift) {
-              const positionType = getPositionType(
-                shiftData.currentSupervisors,
-                minSupervisors,
-                shiftData.currentOfficers,
-                minOfficers
-              );
-
               // Fix the assigned officers mapping
               const assignedOfficers = Array.isArray(shiftData.officers) ? shiftData.officers.map((officer: any) => {
                 // Handle different possible data structures
@@ -126,6 +98,14 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
                   badge: badgeNumber
                 };
               }) : [];
+
+              // Get staffing description using utility function
+              const staffingDescription = getStaffingDescription(
+                shiftData.currentSupervisors,
+                minSupervisors,
+                shiftData.currentOfficers,
+                minOfficers
+              );
 
               const shiftAlertData = {
                 date: dateStr,
@@ -143,16 +123,15 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
                 min_supervisors: minSupervisors,
                 min_officers: minOfficers,
                 day_of_week: dayOfWeek,
-                isSupervisorsUnderstaffed: supervisorsUnderstaffed,
-                isOfficersUnderstaffed: officersUnderstaffed,
-                position_type: positionType,
+                isSupervisorsUnderstaffed: minSupervisors > 0 && shiftData.currentSupervisors < minSupervisors,
+                isOfficersUnderstaffed: minOfficers > 0 && shiftData.currentOfficers < minOfficers,
+                position_type: staffingDescription,
                 assigned_officers: assignedOfficers,
                 // Add metadata about the check
                 hasMinimumRule: true,
                 isZeroMinimum: minSupervisors === 0 && minOfficers === 0,
-                requirements_summary: minSupervisors === 0 && minOfficers === 0 
-                  ? "No minimum requirements" 
-                  : `Min: ${minSupervisors} supervisors, ${minOfficers} officers`
+                requirements_summary: getRequirementsSummary(minSupervisors, minOfficers),
+                staffing_status: isUnderstaffedShift ? "understaffed" : "adequate"
               };
 
               console.log("📊 Storing understaffed shift data:", shiftAlertData);

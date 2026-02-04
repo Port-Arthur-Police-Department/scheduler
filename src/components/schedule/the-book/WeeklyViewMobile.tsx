@@ -15,6 +15,11 @@ import {
   sortOfficersConsistently, 
   type OfficerForSorting 
 } from "@/utils/sortingUtils";
+import { 
+  isShiftUnderstaffed,
+  hasMinimumRequirements,
+  formatStaffingCount 
+} from "@/utils/staffingUtils";
 
 interface WeeklyViewMobileProps {
   currentWeekStart: Date;
@@ -188,26 +193,44 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         }
 
         // Fetch minimum staffing
-        const { data: minStaffingData, error: minStaffingError } = await supabase
-          .from("minimum_staffing")
-          .select("*")
-          .eq("shift_type_id", selectedShiftId);
+const { data: minStaffingData, error: minStaffingError } = await supabase
+  .from("minimum_staffing")
+  .select("*")
+  .eq("shift_type_id", selectedShiftId);
 
-        if (minStaffingError) {
-          console.error("Error fetching minimum staffing:", minStaffingError);
-        }
+if (minStaffingError) {
+  console.error("Error fetching minimum staffing:", minStaffingError);
+  // Use empty array instead of falling back to defaults
+  minStaffingData = [];
+}
 
-        // Create minimum staffing map
-        const minimumStaffing = new Map();
-        minStaffingData?.forEach(staffing => {
-          if (!minimumStaffing.has(staffing.day_of_week)) {
-            minimumStaffing.set(staffing.day_of_week, new Map());
-          }
-          minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
-            minimumOfficers: staffing.minimum_officers,
-            minimumSupervisors: staffing.minimum_supervisors
-          });
-        });
+// Create minimum staffing map - update the mapping logic:
+const minimumStaffing = new Map();
+minStaffingData?.forEach(staffing => {
+  if (!minimumStaffing.has(staffing.day_of_week)) {
+    minimumStaffing.set(staffing.day_of_week, new Map());
+  }
+  minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
+    minimumOfficers: staffing.minimum_officers || 0,  // Default to 0 instead of undefined
+    minimumSupervisors: staffing.minimum_supervisors || 0  // Default to 0 instead of undefined
+  });
+});
+
+        // Add this function inside the component, before the return statement:
+const getMinimumStaffing = (dayOfWeek: number) => {
+  if (!scheduleData?.minimumStaffing) {
+    return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
+  }
+  
+  const dayStaffing = scheduleData.minimumStaffing.get(dayOfWeek);
+  if (dayStaffing instanceof Map) {
+    const shiftStaffing = dayStaffing.get(selectedShiftId);
+    // Use 0 as default instead of 1
+    return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
+  }
+  
+  return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
+};
 
         // Organize data
         const allOfficers = new Map();
@@ -717,122 +740,64 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             <div className="p-2 border-r text-sm"></div>
             <div className="p-2 border-r text-sm font-medium">SUPERVISORS</div>
             {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
-              const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-              const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
-              
-              // Get overtime supervisors for this day
-              const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
-              const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return isSupervisorPosition(position);
-              }).length || 0;
-              
-              // Count regular supervisors (excluding overtime and special assignments)
-              const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-                const isSupervisor = isSupervisorByRank(officer);
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
-                return isSupervisor && isScheduled && !isOvertime;
-              }).length || 0;
-              
-              const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-              
-              return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm bg-gray-100">
-                  {supervisorCount} / {minimumSupervisors}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Supervisors - REGULAR ONLY (no overtime) */}
-          {scheduleData.supervisors.map((officer: any) => {
-            // Check if this officer has ANY overtime days in their schedule
-            const hasOvertimeInSchedule = weekDays.some(({ dateStr }) => {
-              const dayOfficer = officer.weeklySchedule[dateStr];
-              return dayOfficer?.is_extra_shift === true || dayOfficer?.shiftInfo?.is_extra_shift === true;
-            });
-            
-            // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
-            if (hasOvertimeInSchedule) {
-              console.log('Skipping supervisor officer with overtime shifts from regular rows:', officer.officerName);
-              return null;
-            }
-            
-            return (
-              <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30">
-                <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-                <div className="p-2 border-r font-medium text-sm">
-                  {getLastName(officer.officerName)}
-                  <div className="text-xs opacity-80">{getRankAbbreviation(officer.rank)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    SC: {officer.service_credit?.toFixed(1) || '0.0'}
-                  </div>
-                </div>
-                {weekDays.map(({ dateStr }) => {
-                  const dayOfficer = officer.weeklySchedule[dateStr];
-                  return (
-                    <div key={dateStr} className="p-2 border-r">
-                      <ScheduleCellMobile
-                        officer={dayOfficer}
-                        dateStr={dateStr}
-                        officerId={officer.officerId}
-                        officerName={officer.officerName}
-                        isAdminOrSupervisor={isAdminOrSupervisor}
-                        isSupervisor={true}
-                        isRegularRecurringDay={dayOfficer?.isRegularRecurringDay || false}
-                        isSpecialAssignment={isSpecialAssignment}
-                        onAssignPTO={onAssignPTO}
-                        onRemovePTO={onRemovePTO}
-                        onEditAssignment={onEditAssignment}
-                        onRemoveOfficer={onRemoveOfficer}
-                        isUpdating={isUpdating}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          {/* Officer Count Row - EXCLUDES OVERTIME OFFICERS */}
-          <div className="grid grid-cols-9 border-b bg-gray-200">
-            <div className="p-2 border-r text-sm"></div>
-            <div className="p-2 border-r text-sm font-medium">OFFICERS</div>
-            {weekDays.map(({ dateStr, dayOfWeek }) => {
-              const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
-              const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-              const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
-              
-              // Get overtime officers for this day
-              const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
-              const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-                const position = officer.shiftInfo?.position || "";
-                return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-              }).length || 0;
-              
-              // Count regular officers (excluding overtime, supervisors, PPOs, and special assignments)
-              const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-                const isOfficer = !isSupervisorByRank(officer);
-                const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-                const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-                const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-                const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-                const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
-                return isOfficer && isNotPPO && isScheduled && !isOvertime;
-              }).length || 0;
-              
-              const officerCount = regularOfficerCount + overtimeOfficerCount;
-              
-              return (
-                <div key={dateStr} className="p-2 text-center border-r text-sm font-medium bg-gray-200">
-                  {officerCount} / {minimumOfficers}
-                </div>
-              );
-            })}
+  const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
+  const minStaffingForDay = scheduleData.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
+  const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+  
+  // Get overtime supervisors for this day
+  const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
+  const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
+    const position = officer.shiftInfo?.position || "";
+    return isSupervisorPosition(position);
+  }).length || 0;
+  
+  // Count regular supervisors (excluding overtime and special assignments)
+  const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
+    const isSupervisor = isSupervisorByRank(officer);
+    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+    const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
+    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+    const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
+    return isSupervisor && isScheduled && !isOvertime;
+  }).length || 0;
+  
+  const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
+  
+  // NEW: Add understaffing check using utility function
+const isSupervisorsUnderstaffed = minStaffing.minimumSupervisors > 0 && supervisorCount < minStaffing.minimumSupervisors;
+  const isOfficersUnderstaffed = minStaffing.minimumOfficers > 0 && officerCount < minStaffing.minimumOfficers;
+  
+  // Check if there are any requirements at all
+  const hasRequirements = hasMinimumRequirements(minStaffing.minimumSupervisors, minStaffing.minimumOfficers);
+  
+  return (
+    <div key={dateStr} className={`p-2 text-center font-semibold border-r text-sm ${isToday ? 'bg-primary/10' : ''}`}>
+      <div>{dayName}</div>
+      <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
+      
+      {hasRequirements ? (
+        <>
+          <Badge 
+            variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
+            className="text-xs mb-1"
+          >
+            {supervisorCount} / {minStaffing.minimumSupervisors} Sup
+          </Badge>
+          <Badge 
+            variant={isOfficersUnderstaffed ? "destructive" : "outline"} 
+            className="text-xs"
+          >
+            {officerCount} / {minStaffing.minimumOfficers} Ofc
+          </Badge>
+        </>
+      ) : (
+        <Badge variant="outline" className="text-xs">
+          No minimums
+        </Badge>
+      )}
+    </div>
+  );
+})}
           </div>
 
           {/* Regular Officers - REGULAR ONLY (no overtime) */}

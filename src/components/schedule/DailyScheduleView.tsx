@@ -1917,30 +1917,45 @@ const regularOfficers = processedOfficers.filter(o => {
   
   return true;
 }).sort((a, b) => {
-  // FIXED: Extract district numbers from positions
-  const extractDistrictNumber = (position: string) => {
-    if (!position) return Infinity; // Put non-district positions at the end
+  // Function to normalize position for sorting
+  const normalizePosition = (position: string) => {
+    if (!position) return { sortKey: '9999', display: position };
     
-    const match = position.match(/district\s*(\d+)/i);
-    if (match) return parseInt(match[1]);
+    const positionLower = position.toLowerCase();
     
-    // For positions without district numbers, use alphabetical sorting
-    return Infinity;
+    // City-Wide should be first
+    if (positionLower.includes('city-wide') || positionLower.includes('citywide')) {
+      return { sortKey: '0000', display: position };
+    }
+    
+    // Extract numbers from position
+    const numbers = position.match(/\d+/g) || [];
+    
+    if (numbers.length === 0) {
+      // No numbers found - use position string for sorting
+      return { sortKey: '9999' + positionLower, display: position };
+    }
+    
+    // Create a sortable key from numbers
+    // For single districts: pad to 4 digits (e.g., 1 -> 0001)
+    // For combined districts: pad each and separate (e.g., 1/2 -> 0001.0002)
+    const paddedNumbers = numbers.map(num => 
+      num.padStart(4, '0')
+    ).join('.');
+    
+    return { sortKey: paddedNumbers, display: position };
   };
   
-  const aDistrict = extractDistrictNumber(a.position);
-  const bDistrict = extractDistrictNumber(b.position);
+  const aNorm = normalizePosition(a.position);
+  const bNorm = normalizePosition(b.position);
   
-  // Both have district numbers - sort numerically
-  if (aDistrict !== Infinity && bDistrict !== Infinity) {
-    return aDistrict - bDistrict;
+  // Compare the sort keys
+  const keyComparison = aNorm.sortKey.localeCompare(bNorm.sortKey);
+  if (keyComparison !== 0) {
+    return keyComparison;
   }
   
-  // Only one has a district number
-  if (aDistrict !== Infinity && bDistrict === Infinity) return -1;
-  if (aDistrict === Infinity && bDistrict !== Infinity) return 1;
-  
-  // Neither has district number - sort alphabetically by position
+  // If sort keys are the same, fall back to alphabetical by position
   return (a.position || '').localeCompare(b.position || '');
 });
 

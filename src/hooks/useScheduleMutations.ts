@@ -561,9 +561,9 @@ export const useScheduleMutations = (dateStr: string) => {
     return { created, errors };
   };
 
-  const updateScheduleMutation = useMutation({
-    mutationFn: async (params: UpdateScheduleParams) => {
-      console.log("📝 Updating schedule with params:", params);
+const updateScheduleMutation = useMutation({
+  mutationFn: async (params: UpdateScheduleParams) => {
+    console.log("📝 Updating schedule with params:", params);
 
       if (params.type === "recurring") {
         // For recurring officers, update via exceptions table
@@ -690,15 +690,26 @@ export const useScheduleMutations = (dateStr: string) => {
         }
       }
     },
-    onSuccess: () => {
-      toast.success("Schedule updated");
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update schedule");
-    },
-  });
+  onSuccess: () => {
+    toast.success("Schedule updated");
+    
+    // CRITICAL FIX: Invalidate ALL schedule queries including WeeklyView
+    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule-mobile"] });
+    queryClient.invalidateQueries({ queryKey: ["schedule-data", "weekly"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    
+    // Also invalidate by date if available
+    if (dateStr) {
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["schedule-data", "weekly", dateStr] });
+    }
+  },
+  onError: (error: any) => {
+    toast.error(error.message || "Failed to update schedule");
+  },
+});
 
   // Enhanced partnership mutation with PTO handling, verification, and better error handling
   const updatePartnershipMutation = useMutation({
@@ -1132,23 +1143,23 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-  const addOfficerMutation = useMutation({
-    mutationFn: async ({ 
-      officerId, 
-      shiftId, 
-      position, 
-      unitNumber, 
-      notes,
-      partnerOfficerId,
-      isPartnership
-    }: { 
-      officerId: string; 
-      shiftId: string; 
-      position: string; 
-      unitNumber?: string; 
-      notes?: string;
-      partnerOfficerId?: string;
-      isPartnership?: boolean;
+const addOfficerMutation = useMutation({
+  mutationFn: async ({ 
+    officerId, 
+    shiftId, 
+    position, 
+    unitNumber, 
+    notes,
+    partnerOfficerId,
+    isPartnership
+  }: { 
+    officerId: string; 
+    shiftId: string; 
+    position: string; 
+    unitNumber?: string; 
+    notes?: string;
+    partnerOfficerId?: string;
+    isPartnership?: boolean;
     }) => {
       const { data: existingExceptions, error: checkError } = await supabase
         .from("schedule_exceptions")
@@ -1228,24 +1239,33 @@ export const useScheduleMutations = (dateStr: string) => {
         }
       }
     },
-    onSuccess: () => {
-      toast.success("Officer added to schedule");
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to add officer");
-    },
-  });
+  onSuccess: () => {
+    toast.success("Officer added to schedule");
+    
+    // CRITICAL FIX: Invalidate WeeklyView queries too
+    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule-mobile"] });
+    queryClient.invalidateQueries({ queryKey: ["schedule-data", "weekly"] });
+    
+    if (dateStr) {
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule", dateStr] });
+    }
+  },
+  onError: (error: any) => {
+    toast.error(error.message || "Failed to add officer");
+  },
+});
 
-  const updatePTODetailsMutation = useMutation({
-    mutationFn: async ({ 
-      ptoId, 
-      unitNumber, 
-      notes 
-    }: { 
-      ptoId: string; 
-      unitNumber?: string; 
-      notes?: string; 
+const updatePTODetailsMutation = useMutation({
+  mutationFn: async ({ 
+    ptoId, 
+    unitNumber, 
+    notes 
+  }: { 
+    ptoId: string; 
+    unitNumber?: string; 
+    notes?: string; 
     }) => {
       const { error } = await supabase
         .from("schedule_exceptions")
@@ -1266,9 +1286,9 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-  const removeOfficerMutation = useMutation({
-    mutationFn: async (officer: any) => {
-      console.log("🗑️ Removing officer from schedule:", officer);
+const removeOfficerMutation = useMutation({
+  mutationFn: async (officer: any) => {
+    console.log("🗑️ Removing officer from schedule:", officer);
       
       if (officer.type === "exception") {
         // Check if officer is in a partnership
@@ -1317,14 +1337,24 @@ export const useScheduleMutations = (dateStr: string) => {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
-      toast.success("Officer removed from daily schedule");
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to remove officer");
-    },
-  });
+  onSuccess: () => {
+    toast.success("Officer removed from daily schedule");
+    
+    // CRITICAL FIX: Invalidate WeeklyView queries too
+    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly-schedule-mobile"] });
+    queryClient.invalidateQueries({ queryKey: ["schedule-data", "weekly"] });
+    
+    if (dateStr) {
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule", dateStr] });
+    }
+  },
+  onError: (error: any) => {
+    toast.error(error.message || "Failed to remove officer");
+  },
+});
+
 
   const removePTOMutation = useMutation({
     mutationFn: async (ptoRecord: any) => {

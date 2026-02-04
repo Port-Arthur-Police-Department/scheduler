@@ -1,27 +1,36 @@
+// src/components/schedule/the-book/MonthlyViewMobile.tsx - REFACTORED
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isSupervisorByRank } from "./utils";
 
 interface MonthlyViewMobileProps {
   currentMonth: Date;
   selectedShiftId: string;
   shiftTypes: any[];
+  monthlyData: Array<{
+    date: string;
+    data: any;
+    dayOfWeek: number;
+    formattedDate: string;
+    isCurrentMonth: boolean;
+  }>;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  onAssignPTO?: (schedule: any, dateStr: string, officerId: string, officerName: string) => void;
+  onRemovePTO?: (schedule: any, dateStr: string, officerId: string) => void;
+  onEditAssignment?: (officer: any, dateStr: string) => void;
 }
 
 export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
   currentMonth,
   selectedShiftId,
   shiftTypes,
+  monthlyData,
   onPreviousMonth,
   onNextMonth,
   onToday,
@@ -34,103 +43,56 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Fetch schedule data for the month
-  const { data: scheduleData, isLoading } = useQuery({
-    queryKey: ['mobile-monthly-schedule', selectedShiftId, currentMonth.toISOString()],
-    queryFn: async () => {
-      if (!selectedShiftId) return null;
+  // Calculate monthly totals from monthlyData
+  const monthlyTotals = React.useMemo(() => {
+    let totalOfficers = 0;
+    let totalSupervisors = 0;
+    let totalPTO = 0;
 
-      const startStr = format(monthStart, "yyyy-MM-dd");
-      const endStr = format(monthEnd, "yyyy-MM-dd");
-
-      // Fetch schedule exceptions for the date range
-      const { data: exceptions, error: exceptionsError } = await supabase
-        .from("schedule_exceptions")
-        .select(`
-          *,
-          profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .gte("date", startStr)
-        .lte("date", endStr)
-        .order("date", { ascending: true });
-
-      if (exceptionsError) throw exceptionsError;
-
-      // Fetch recurring schedules for the selected shift
-      const { data: recurringSchedules, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          *,
-          profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .or(`end_date.is.null,end_date.gte.${startStr}`);
-
-      if (recurringError) throw recurringError;
-
-      // Organize data by date
-      const scheduleByDate: Record<string, { officerCount: number; supervisorCount: number; ptoCount: number }> = {};
-
-      // Initialize each day
-      days.forEach(day => {
-        const dateStr = format(day, "yyyy-MM-dd");
-        scheduleByDate[dateStr] = {
-          officerCount: 0,
-          supervisorCount: 0,
-          ptoCount: 0
-        };
-      });
-
-      // Add recurring schedules
-      recurringSchedules?.forEach(schedule => {
-        days.forEach(day => {
-          if (day.getDay() === schedule.day_of_week) {
-            const dateStr = format(day, "yyyy-MM-dd");
-            if (scheduleByDate[dateStr]) {
-              const isSupervisor = isSupervisorByRank({ rank: schedule.profiles?.rank });
-              scheduleByDate[dateStr].officerCount += 1;
-              if (isSupervisor) {
-                scheduleByDate[dateStr].supervisorCount += 1;
-              }
-              if (schedule.pto_type) {
-                scheduleByDate[dateStr].ptoCount += 1;
-              }
-            }
-          }
-        });
-      });
-
-      // Add exceptions (override recurring)
-      exceptions?.forEach(exception => {
-        const dateStr = exception.date;
-        if (scheduleByDate[dateStr]) {
-          const isSupervisor = isSupervisorByRank({ rank: exception.profiles?.rank });
-          scheduleByDate[dateStr].officerCount += 1;
-          if (isSupervisor) {
-            scheduleByDate[dateStr].supervisorCount += 1;
-          }
-          if (exception.pto_type) {
-            scheduleByDate[dateStr].ptoCount += 1;
-          }
+    monthlyData.forEach(day => {
+      if (day.data) {
+        // Count supervisors
+        if (day.data.supervisors) {
+          totalSupervisors += day.data.supervisors.length;
         }
-      });
+        
+        // Count officers
+        if (day.data.officers) {
+          totalOfficers += day.data.officers.length;
+        }
+        
+        // Count PTO records
+        if (day.data.ptoRecords) {
+          totalPTO += day.data.ptoRecords.length;
+        }
+      }
+    });
 
-      return scheduleByDate;
-    },
-    enabled: !!selectedShiftId,
-  });
+    return {
+      totalOfficers,
+      totalSupervisors,
+      totalPTO
+    };
+  }, [monthlyData]);
 
-  // Calculate monthly totals
-  const monthlyTotals = scheduleData ? {
-    totalOfficers: Object.values(scheduleData).reduce((sum, day) => sum + day.officerCount, 0),
-    totalSupervisors: Object.values(scheduleData).reduce((sum, day) => sum + day.supervisorCount, 0),
-    totalPTO: Object.values(scheduleData).reduce((sum, day) => sum + day.ptoCount, 0)
-  } : null;
+  // Map monthly data by date for easy lookup
+  const scheduleByDate = React.useMemo(() => {
+    const result: Record<string, { officerCount: number; supervisorCount: number; ptoCount: number }> = {};
+    
+    monthlyData.forEach(day => {
+      result[day.date] = {
+        officerCount: (day.data?.officers?.length || 0) + (day.data?.supervisors?.length || 0),
+        supervisorCount: day.data?.supervisors?.length || 0,
+        ptoCount: day.data?.ptoRecords?.length || 0
+      };
+    });
+    
+    return result;
+  }, [monthlyData]);
+
+  // Check if we have data
+  const hasData = monthlyData.length > 0;
+  const isLoading = !monthlyData; // Data is passed from parent
 
   if (isLoading) {
     return (
@@ -146,6 +108,14 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
       <div className="text-center py-8 text-muted-foreground">
         <CalendarDays className="h-12 w-12 mx-auto mb-4 opacity-50" />
         <p>Please select a shift to view schedule</p>
+      </div>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No schedule data available for this month
       </div>
     );
   }
@@ -197,7 +167,7 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
             
             {days.map((day) => {
               const dateStr = format(day, "yyyy-MM-dd");
-              const dayData = scheduleData?.[dateStr];
+              const dayData = scheduleByDate[dateStr];
               const isCurrentDay = isToday(day);
               const isCurrentMonthDay = isSameMonth(day, currentMonth);
               const totalCount = dayData ? dayData.officerCount : 0;

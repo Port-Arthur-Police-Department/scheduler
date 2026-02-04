@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getScheduleData } from "../DailyScheduleView";
 
 interface MonthlyViewMobileProps {
   currentMonth: Date;

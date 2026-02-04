@@ -9,6 +9,7 @@ import { getLastName, getRankAbbreviation } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { getScheduleData } from "../DailyScheduleView";
 import { 
   isShiftUnderstaffed,
   hasMinimumRequirements,

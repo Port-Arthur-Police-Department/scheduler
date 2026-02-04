@@ -1,19 +1,21 @@
-// TheBookMobile.tsx - Mobile version of JUST The Book tab
+// TheBookMobile.tsx - REFACTORED to use shared getScheduleData
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin, Download } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+import { CalendarIcon, ChevronLeft, ChevronRight, CalendarDays, Users, Plane, MapPin } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays, parseISO } from "date-fns";
 import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useUser } from "@/contexts/UserContext";
 import { auditLogger } from "@/lib/auditLogger";
+
+// Import shared data fetching
+import { getScheduleData } from "../DailyScheduleView";
 
 // Import mobile view components
 import { WeeklyViewMobile } from "./WeeklyViewMobile";
@@ -21,9 +23,8 @@ import { MonthlyViewMobile } from "./MonthlyViewMobile";
 import { ForceListViewMobile } from "./ForceListViewMobile";
 import { VacationListViewMobile } from "./VacationListViewMobile";
 import { BeatPreferencesViewMobile } from "./BeatPreferencesViewMobile";
-// Import PTO Dialog
+// Import dialogs
 import { PTODialogMobile } from "./PTODialogMobile";
-// Import Assignment Edit Dialog
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 
 interface TheBookMobileProps {
@@ -40,13 +41,10 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, user
 
   // Dialog states
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
-  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
-  
   const [selectedOfficer, setSelectedOfficer] = useState<{
     id: string;
     name: string;
     date: string;
-    schedule: any;
     shiftStartTime?: string;
     shiftEndTime?: string;
   } | null>(null);
@@ -61,6 +59,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, user
 
   // Get user context for audit logging
   const { userEmail } = useUser();
+  const queryClient = useQueryClient();
 
   // Get shift types
   const { data: shiftTypes, isLoading: shiftsLoading } = useQuery({
@@ -75,71 +74,104 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, user
     },
   });
 
-// Auto-select user's assigned shift if they have one
-useEffect(() => {
-  if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
-    // Only auto-select if user has a specific assigned shift (not "all")
-    if (userCurrentShift && userCurrentShift !== "all") {
-      // Check if userCurrentShift exists in available shifts
-      const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
-      if (userShiftExists) {
-        console.log("📱 Mobile: Setting user's assigned shift:", userCurrentShift);
-        setSelectedShiftId(userCurrentShift);
-      } else {
-        console.log("⚠️ Mobile: User's assigned shift not found. No auto-selection.");
-        // Don't auto-select anything - user must choose
+  // Auto-select user's assigned shift if they have one
+  useEffect(() => {
+    if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
+      if (userCurrentShift && userCurrentShift !== "all") {
+        const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
+        if (userShiftExists) {
+          console.log("📱 Mobile: Setting user's assigned shift:", userCurrentShift);
+          setSelectedShiftId(userCurrentShift);
+        } else {
+          console.log("⚠️ Mobile: User's assigned shift not found. No auto-selection.");
+        }
       }
     }
-    // If userCurrentShift is "all" or undefined, don't auto-select
-  }
-}, [shiftTypes, userCurrentShift, selectedShiftId]);
+  }, [shiftTypes, userCurrentShift, selectedShiftId]);
 
-// Setup mutations
-const mutationsResult = useWeeklyScheduleMutations(
-  currentWeekStart,
-  currentMonth,
-  activeView,
-  selectedShiftId
-);
+  // SIMPLIFIED: Use shared getScheduleData for weekly view
+  const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
+    queryKey: ["thebook-weekly-mobile", currentWeekStart.toISOString(), selectedShiftId],
+    queryFn: async () => {
+      if (!selectedShiftId) return [];
 
-// Add a separate query for overtime data in TheBookMobile
-const { data: overtimeExceptions } = useQuery({
-  queryKey: ['overtime-exceptions-mobile', selectedShiftId, currentWeekStart.toISOString()],
-  queryFn: async () => {
-    if (!selectedShiftId) return [];
-    
-    const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
-    const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
-    
-    const { data: exceptions, error } = await supabase
-      .from('schedule_exceptions')
-      .select('*')
-      .eq('is_extra_shift', true)
-      .eq('shift_type_id', selectedShiftId)
-      .gte('date', weekStart)
-      .lte('date', weekEnd)
-      .order('date');
-    
-    if (error) {
-      console.error('Error fetching overtime exceptions:', error);
-      return [];
-    }
-    
-    return exceptions || [];
-  },
-  enabled: !!selectedShiftId && activeView === "weekly",
-});
+      const weekData = [];
+      for (let i = 0; i < 7; i++) {
+        const date = addDays(currentWeekStart, i);
+        const dailySchedule = await getScheduleData(date, selectedShiftId);
+        
+        // getScheduleData returns array, take the first (only) shift for this shiftId
+        const shiftData = dailySchedule[0] || null;
+        
+        weekData.push({
+          date: format(date, "yyyy-MM-dd"),
+          data: shiftData,
+          dayOfWeek: date.getDay(),
+          formattedDate: format(date, "EEE, MMM d")
+        });
+      }
+      
+      return weekData;
+    },
+    enabled: !!selectedShiftId && activeView === "weekly",
+  });
 
-  // Get query client
-  const queryClient = useQueryClient();
+  // SIMPLIFIED: Use shared getScheduleData for monthly view
+  const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
+    queryKey: ["thebook-monthly-mobile", currentMonth.toISOString(), selectedShiftId],
+    queryFn: async () => {
+      if (!selectedShiftId) return [];
 
-  // Destructure mutations
+      const monthStart = startOfMonth(currentMonth);
+      const monthEnd = endOfMonth(currentMonth);
+      const daysInMonth = monthEnd.getDate() - monthStart.getDate() + 1;
+      
+      const monthData = [];
+      for (let i = 0; i < daysInMonth; i++) {
+        const date = new Date(monthStart);
+        date.setDate(date.getDate() + i);
+        
+        const dailySchedule = await getScheduleData(date, selectedShiftId);
+        const shiftData = dailySchedule[0] || null;
+        
+        monthData.push({
+          date: format(date, "yyyy-MM-dd"),
+          data: shiftData,
+          dayOfWeek: date.getDay(),
+          formattedDate: format(date, "MMM d"),
+          isCurrentMonth: true
+        });
+      }
+      
+      return monthData;
+    },
+    enabled: !!selectedShiftId && activeView === "monthly",
+  });
+
+  // Setup mutations
+  const mutationsResult = useWeeklyScheduleMutations(
+    currentWeekStart,
+    currentMonth,
+    activeView,
+    selectedShiftId
+  );
+
   const {
     updatePositionMutation,
     removeOfficerMutation,
     removePTOMutation,
-    queryKey
+    queryKey: mutationQueryKey
   } = mutationsResult;
+
+  // Navigation functions
+  const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
+  const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
+  const goToPreviousMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
+  const goToNextMonth = () => setCurrentMonth(prev => addMonths(prev, 1));
+  const goToToday = () => {
+    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
+    setCurrentMonth(new Date());
+  };
 
   // Helper function to get PTO column name
   const getPTOColumn = (ptoType: string): string | null => {
@@ -163,7 +195,7 @@ const { data: overtimeExceptions } = useQuery({
       return (endMinutes - startMinutes) / 60;
     } catch (error) {
       console.error('Error calculating hours:', error);
-      return 8; // Default to 8 hours
+      return 8;
     }
   };
 
@@ -172,7 +204,6 @@ const { data: overtimeExceptions } = useQuery({
     mutationFn: async (ptoData: any) => {
       console.log('🎯 Assigning PTO on mobile:', ptoData);
 
-      // For full day PTO, we should use the shift times or 00:00-23:59
       const startTime = ptoData.isFullShift 
         ? (ptoData.startTime || "00:00") 
         : ptoData.startTime;
@@ -181,7 +212,6 @@ const { data: overtimeExceptions } = useQuery({
         ? (ptoData.endTime || "23:59") 
         : ptoData.endTime;
 
-      // Check if there's already a schedule exception for this officer on this date
       const { data: existingExceptions, error: checkError } = await supabase
         .from("schedule_exceptions")
         .select("id")
@@ -194,7 +224,6 @@ const { data: overtimeExceptions } = useQuery({
       let exceptionId;
 
       if (existingExceptions && existingExceptions.length > 0) {
-        // Update existing exception
         const { error: updateError } = await supabase
           .from("schedule_exceptions")
           .update({
@@ -211,7 +240,6 @@ const { data: overtimeExceptions } = useQuery({
         if (updateError) throw updateError;
         exceptionId = existingExceptions[0].id;
       } else {
-        // Create new exception
         const { data: newException, error: insertError } = await supabase
           .from("schedule_exceptions")
           .insert({
@@ -233,7 +261,6 @@ const { data: overtimeExceptions } = useQuery({
         exceptionId = newException.id;
       }
 
-      // Deduct from PTO balance (matching desktop logic)
       const ptoColumn = getPTOColumn(ptoData.ptoType);
       if (ptoColumn) {
         const { data: profile, error: profileError } = await supabase
@@ -242,18 +269,14 @@ const { data: overtimeExceptions } = useQuery({
           .eq("id", ptoData.officerId)
           .single();
 
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        } else if (profile) {
-          // For full day PTO, calculate hours based on shift times or 8 hours
+        if (!profileError && profile) {
           let hoursUsed;
           if (ptoData.isFullShift) {
-            // Try to calculate based on actual shift times if available
             const currentShift = shiftTypes?.find(shift => shift.id === ptoData.shiftTypeId);
             if (currentShift?.start_time && currentShift?.end_time) {
               hoursUsed = calculateHoursUsed(currentShift.start_time, currentShift.end_time);
             } else {
-              hoursUsed = 8; // Default to 8 hours for full day
+              hoursUsed = 8;
             }
           } else {
             hoursUsed = calculateHoursUsed(startTime, endTime);
@@ -261,16 +284,12 @@ const { data: overtimeExceptions } = useQuery({
           
           const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
           
-          const { error: updateBalanceError } = await supabase
+          await supabase
             .from("profiles")
             .update({
               [ptoColumn]: Math.max(0, (currentBalance || 0) - hoursUsed),
             })
             .eq("id", ptoData.officerId);
-
-          if (updateBalanceError) {
-            console.error('Error updating PTO balance:', updateBalanceError);
-          }
         }
       }
 
@@ -278,8 +297,8 @@ const { data: overtimeExceptions } = useQuery({
     },
     onSuccess: () => {
       toast.success("PTO assigned successfully");
-      // Force refresh the weekly schedule query
-      queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+      queryClient.invalidateQueries({ queryKey: ['thebook-weekly-mobile'] });
+      queryClient.invalidateQueries({ queryKey: ['thebook-monthly-mobile'] });
     },
     onError: (error: any) => {
       console.error('❌ Error assigning PTO:', error);
@@ -287,21 +306,10 @@ const { data: overtimeExceptions } = useQuery({
     },
   });
 
-  // Navigation functions
-  const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
-  const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
-  const goToPreviousMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
-  const goToNextMonth = () => setCurrentMonth(prev => addMonths(prev, 1));
-  const goToToday = () => {
-    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
-    setCurrentMonth(new Date());
-  };
-
   // Event handlers for mobile
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
     console.log('📱 Opening PTO dialog for:', officerName, date);
     
-    // Get the current shift times
     const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
     const shiftStartTime = currentShift?.start_time || "08:00";
     const shiftEndTime = currentShift?.end_time || "17:00";
@@ -310,7 +318,6 @@ const { data: overtimeExceptions } = useQuery({
       id: officerId,
       name: officerName,
       date: date,
-      schedule: schedule,
       shiftStartTime: shiftStartTime,
       shiftEndTime: shiftEndTime
     });
@@ -325,7 +332,6 @@ const { data: overtimeExceptions } = useQuery({
 
     console.log('💾 Saving PTO:', ptoData);
 
-    // Call the mutation to assign PTO
     assignPTOMutation.mutate({
       ...ptoData,
       officerId: selectedOfficer.id,
@@ -333,7 +339,6 @@ const { data: overtimeExceptions } = useQuery({
       shiftTypeId: selectedShiftId
     }, {
       onSuccess: () => {
-        // Log audit trail
         try {
           auditLogger.logPTOAssignment(
             selectedOfficer.id,
@@ -346,7 +351,6 @@ const { data: overtimeExceptions } = useQuery({
           console.error('Failed to log PTO audit:', logError);
         }
         
-        // Close dialog
         setPtoDialogOpen(false);
         setSelectedOfficer(null);
       }
@@ -357,20 +361,12 @@ const { data: overtimeExceptions } = useQuery({
     console.log('🔍 Checking PTO schedule data for removal:', {
       schedule,
       date,
-      officerId,
-      hasPTO: schedule?.hasPTO,
-      ptoData: schedule?.ptoData,
-      isOff: schedule?.isOff,
-      reason: schedule?.reason,
-      id: schedule?.id,
-      scheduleType: schedule?.scheduleType
+      officerId
     });
 
-    // Try multiple ways to find PTO data
     let ptoId = schedule?.id || schedule?.ptoData?.id;
     let ptoType = schedule?.reason || schedule?.ptoData?.ptoType || "PTO";
     
-    // If we don't have an ID but have PTO, we need to find it in the database
     if (!ptoId && (schedule?.hasPTO || schedule?.reason)) {
       console.log('🔄 Searching for PTO record in database...');
       try {
@@ -398,11 +394,9 @@ const { data: overtimeExceptions } = useQuery({
       }
     }
 
-    // If still no ID, check if this is actually a recurring schedule that needs to be handled differently
     if (!ptoId && schedule?.scheduleType === "recurring") {
-      console.log('⚠️ This appears to be a recurring schedule with PTO, checking database...');
+      console.log('⚠️ This appears to be a recurring schedule with PTO...');
       try {
-        // Check if there's an exception overriding this recurring day
         const { data: exceptionData, error } = await supabase
           .from("schedule_exceptions")
           .select("id, reason")
@@ -427,19 +421,12 @@ const { data: overtimeExceptions } = useQuery({
       }
     }
 
-    // If we still don't have an ID, we can't proceed
     if (!ptoId) {
-      console.error('❌ Missing PTO ID after all attempts:', {
-        scheduleId: schedule?.id,
-        ptoDataId: schedule?.ptoData?.id,
-        hasPTO: schedule?.hasPTO,
-        reason: schedule?.reason
-      });
+      console.error('❌ Missing PTO ID after all attempts');
       toast.error("Cannot remove PTO: Missing PTO data");
       return;
     }
 
-    // Prepare mutation data
     const ptoMutationData = {
       id: ptoId,
       officerId: officerId,
@@ -467,8 +454,8 @@ const { data: overtimeExceptions } = useQuery({
         }
         
         toast.success(`PTO removed successfully`);
-        // Force refresh the weekly schedule query
-        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-weekly-mobile'] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-monthly-mobile'] });
       },
       onError: (error) => {
         console.error('❌ Error removing PTO:', error);
@@ -487,7 +474,6 @@ const { data: overtimeExceptions } = useQuery({
       officerId: officer.officerId,
       officerName: officer.officerName
     });
-    setAssignmentDialogOpen(true);
   };
 
   const onRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
@@ -500,8 +486,8 @@ const { data: overtimeExceptions } = useQuery({
     }, {
       onSuccess: () => {
         toast.success("Officer removed from schedule");
-        // Force refresh the weekly schedule query
-        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-weekly-mobile'] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-monthly-mobile'] });
       },
       onError: (error) => {
         console.error('❌ Error removing officer:', error);
@@ -515,7 +501,6 @@ const { data: overtimeExceptions } = useQuery({
     
     updatePositionMutation.mutate(assignmentData, {
       onSuccess: () => {
-        // Log audit trail
         try {
           auditLogger.logAssignmentUpdate(
             assignmentData.officerId || editingAssignment?.officerId,
@@ -530,10 +515,9 @@ const { data: overtimeExceptions } = useQuery({
         }
         
         toast.success("Assignment updated successfully");
-        setAssignmentDialogOpen(false);
         setEditingAssignment(null);
-        // Force refresh the weekly schedule query
-        queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-weekly-mobile'] });
+        queryClient.invalidateQueries({ queryKey: ['thebook-monthly-mobile'] });
       },
       onError: (error) => {
         console.error('❌ Error updating assignment:', error);
@@ -543,6 +527,19 @@ const { data: overtimeExceptions } = useQuery({
   };
 
   const renderView = () => {
+    const isLoading = (activeView === "weekly" && weeklyLoading) || 
+                     (activeView === "monthly" && monthlyLoading);
+
+    if (isLoading) {
+      return (
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      );
+    }
+
     switch (activeView) {
       case "weekly":
         return (
@@ -550,20 +547,16 @@ const { data: overtimeExceptions } = useQuery({
             currentWeekStart={currentWeekStart}
             selectedShiftId={selectedShiftId}
             shiftTypes={shiftTypes || []}
+            weeklyData={weeklyData || []}
             isAdminOrSupervisor={isAdminOrSupervisor}
             onPreviousWeek={goToPreviousWeek}
             onNextWeek={goToNextWeek}
             onToday={goToToday}
-            // Pass the action handlers
             onAssignPTO={handleAssignPTO}
             onRemovePTO={handleRemovePTO}
             onEditAssignment={handleEditAssignment}
             onRemoveOfficer={onRemoveOfficer}
-            isUpdating={
-              assignPTOMutation.isPending || 
-              updatePositionMutation.isPending
-            }
-            overtimeExceptions={overtimeExceptions || []} // Pass overtime data
+            isUpdating={assignPTOMutation.isPending || updatePositionMutation.isPending}
           />
         );
       
@@ -573,9 +566,13 @@ const { data: overtimeExceptions } = useQuery({
             currentMonth={currentMonth}
             selectedShiftId={selectedShiftId}
             shiftTypes={shiftTypes || []}
+            monthlyData={monthlyData || []}
             onPreviousMonth={goToPreviousMonth}
             onNextMonth={goToNextMonth}
             onToday={goToToday}
+            onAssignPTO={handleAssignPTO}
+            onRemovePTO={handleRemovePTO}
+            onEditAssignment={handleEditAssignment}
           />
         );
       
@@ -609,7 +606,7 @@ const { data: overtimeExceptions } = useQuery({
         );
       
       default:
-        return <div>Select a view</div>;
+        return <div className="text-center py-8 text-muted-foreground">Select a view</div>;
     }
   };
 
@@ -634,12 +631,6 @@ const { data: overtimeExceptions } = useQuery({
               <CalendarDays className="h-5 w-5" />
               <h3 className="font-semibold">The Book</h3>
             </div>
-            {isAdminOrSupervisor && (
-              <Button size="sm" variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            )}
           </div>
           
           <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
@@ -718,7 +709,6 @@ const { data: overtimeExceptions } = useQuery({
       <AssignmentEditDialogMobile
         editingAssignment={editingAssignment}
         onClose={() => {
-          setAssignmentDialogOpen(false);
           setEditingAssignment(null);
         }}
         onSave={handleSaveAssignment}

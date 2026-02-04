@@ -61,7 +61,7 @@ interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
   officerProfiles?: Map<string, any>;
   queryKey?: any[];
-  refetchScheduleData?: () => Promise<void>;
+  refetchScheduleData?: () => Promise<void>; // ADD THIS
 }
 
 export const WeeklyView: React.FC<ExtendedViewProps> = ({

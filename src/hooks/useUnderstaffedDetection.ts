@@ -4,6 +4,35 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { getScheduleData } from "@/components/schedule/DailyScheduleView";
 
+// Helper function to check if a shift is understaffed
+const isUnderstaffed = (currentCount: number, minimumRequired: number): boolean => {
+  // If minimum is 0, never understaffed (0 means no minimum requirement)
+  if (minimumRequired === 0) return false;
+  
+  // Otherwise, check if current count is less than minimum
+  return currentCount < minimumRequired;
+};
+
+// Helper function to get position type for understaffing
+const getPositionType = (
+  currentSupervisors: number,
+  minSupervisors: number,
+  currentOfficers: number,
+  minOfficers: number
+): string => {
+  const supervisorsNeeded = Math.max(0, minSupervisors - currentSupervisors);
+  const officersNeeded = Math.max(0, minOfficers - currentOfficers);
+
+  if (supervisorsNeeded > 0 && officersNeeded > 0) {
+    return `${supervisorsNeeded} Supervisor(s), ${officersNeeded} Officer(s)`;
+  } else if (supervisorsNeeded > 0) {
+    return `${supervisorsNeeded} Supervisor(s)`;
+  } else if (officersNeeded > 0) {
+    return `${officersNeeded} Officer(s)`;
+  }
+  return "";
+};
+
 export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
   return useQuery({
     queryKey: ["understaffed-shifts-detection", selectedShiftId],
@@ -55,28 +84,33 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
 
             // Get minimum staffing for this specific shift from the database
             const minStaff = minimumStaffing?.find(m => m.shift_type_id === shift.id);
-            const minSupervisors = minStaff?.minimum_supervisors || 1;
-            const minOfficers = minStaff?.minimum_officers || 8;
+            
+            // If no minimum staffing rule exists, skip understaffing check
+            if (!minStaff) {
+              console.log(`⚠️ No minimum staffing rule found for shift: ${shift.name} (ID: ${shift.id})`);
+              continue;
+            }
+
+            // Use the values from the database (could be 0 or more)
+            const minSupervisors = minStaff.minimum_supervisors;
+            const minOfficers = minStaff.minimum_officers;
 
             console.log(`\n🔍 Checking shift: ${shift.name} (${shift.start_time} - ${shift.end_time})`);
             console.log(`📋 Min requirements: ${minSupervisors} supervisors, ${minOfficers} officers`);
             console.log(`👥 Current staffing: ${shiftData.currentSupervisors} supervisors, ${shiftData.currentOfficers} officers`);
-            console.log(`👤 Assigned officers data:`, shiftData.officers);
 
-            // Check if understaffed
-            const supervisorsUnderstaffed = shiftData.currentSupervisors < minSupervisors;
-            const officersUnderstaffed = shiftData.currentOfficers < minOfficers;
-            const isUnderstaffed = supervisorsUnderstaffed || officersUnderstaffed;
+            // Check if understaffed using the helper function
+            const supervisorsUnderstaffed = isUnderstaffed(shiftData.currentSupervisors, minSupervisors);
+            const officersUnderstaffed = isUnderstaffed(shiftData.currentOfficers, minOfficers);
+            const isUnderstaffedShift = supervisorsUnderstaffed || officersUnderstaffed;
 
-            if (isUnderstaffed) {
-              let positionType = "";
-              if (supervisorsUnderstaffed && officersUnderstaffed) {
-                positionType = `${minSupervisors - shiftData.currentSupervisors} Supervisor(s), ${minOfficers - shiftData.currentOfficers} Officer(s)`;
-              } else if (supervisorsUnderstaffed) {
-                positionType = `${minSupervisors - shiftData.currentSupervisors} Supervisor(s)`;
-              } else {
-                positionType = `${minOfficers - shiftData.currentOfficers} Officer(s)`;
-              }
+            if (isUnderstaffedShift) {
+              const positionType = getPositionType(
+                shiftData.currentSupervisors,
+                minSupervisors,
+                shiftData.currentOfficers,
+                minOfficers
+              );
 
               // Fix the assigned officers mapping
               const assignedOfficers = Array.isArray(shiftData.officers) ? shiftData.officers.map((officer: any) => {
@@ -112,13 +146,23 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
                 isSupervisorsUnderstaffed: supervisorsUnderstaffed,
                 isOfficersUnderstaffed: officersUnderstaffed,
                 position_type: positionType,
-                assigned_officers: assignedOfficers
+                assigned_officers: assignedOfficers,
+                // Add metadata about the check
+                hasMinimumRule: true,
+                isZeroMinimum: minSupervisors === 0 && minOfficers === 0,
+                requirements_summary: minSupervisors === 0 && minOfficers === 0 
+                  ? "No minimum requirements" 
+                  : `Min: ${minSupervisors} supervisors, ${minOfficers} officers`
               };
 
               console.log("📊 Storing understaffed shift data:", shiftAlertData);
               allUnderstaffedShifts.push(shiftAlertData);
             } else {
               console.log("✅ Shift is properly staffed");
+              // Log if it's a zero-minimum shift
+              if (minSupervisors === 0 && minOfficers === 0) {
+                console.log(`📝 Shift has no minimum requirements (0/0)`);
+              }
             }
           }
         } catch (dayError) {
@@ -128,6 +172,15 @@ export const useUnderstaffedDetection = (selectedShiftId: string = "all") => {
       }
 
       console.log("🎯 Total understaffed shifts found:", allUnderstaffedShifts.length);
+      
+      // Log summary of understaffed shifts
+      if (allUnderstaffedShifts.length > 0) {
+        console.log("📋 Understaffed Shifts Summary:");
+        allUnderstaffedShifts.forEach((shift, index) => {
+          console.log(`${index + 1}. ${shift.date} - ${shift.shift_types.name}: ${shift.position_type}`);
+        });
+      }
+
       return allUnderstaffedShifts;
     },
     staleTime: 5 * 60 * 1000,

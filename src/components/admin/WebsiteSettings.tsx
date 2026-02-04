@@ -24,6 +24,7 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 import { EventsDashboardSettings } from "./settings/EventsDashboardSettings";
 import { AnniversaryCountdownSettings } from "./settings/AnniversaryCountdownSettings";
+import { MinimumStaffingManager } from "./settings/MinimumStaffingManager";
 
 // Constants - UPDATED WITH YOUR CURRENT SETTINGS FROM SUPABASE
 export const DEFAULT_COLORS = {
@@ -667,7 +668,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-<TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 h-auto">
+<TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 h-auto"> {/* Changed from 7 to 8 */}
   <TabsTrigger value="notifications" className="py-2">
     Notifications
   </TabsTrigger>
@@ -677,8 +678,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   <TabsTrigger value="pto" className="py-2">
     PTO Settings
   </TabsTrigger>
-  <TabsTrigger value="events" className="py-2"> {/* NEW TAB */}
+  <TabsTrigger value="events" className="py-2">
     Events Dashboard
+  </TabsTrigger>
+  <TabsTrigger value="staffing" className="py-2"> {/* NEW TAB */}
+    Staffing Rules
   </TabsTrigger>
   <TabsTrigger value="colors" className="py-2">
     Colors
@@ -729,6 +733,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             isPreviewLoading={isGeneratingPreview}
           />
         </TabsContent>
+
+        {/* Minimum Staff TAB */}
+        <TabsContent value="staffing" className="space-y-6 mt-6">
+  <MinimumStaffingManager />
+</TabsContent>
 
         {/* PTO SETTINGS TAB */}
         <TabsContent value="pto" className="space-y-6 mt-6">

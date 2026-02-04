@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { OfficerSectionMobile, PTOSectionMobile } from "./OfficerSectionMobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getScheduleData, isBirthdayToday, isAnniversaryToday, calculateYearsOfService } from '@/utils/scheduleDataUtils';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -32,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePDFExport } from "@/hooks/usePDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
+import { getScheduleData } from "./DailyScheduleView";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";

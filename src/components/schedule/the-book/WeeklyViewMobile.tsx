@@ -216,21 +216,7 @@ minStaffingData?.forEach(staffing => {
   });
 });
 
-        // Add this function inside the component, before the return statement:
-const getMinimumStaffing = (dayOfWeek: number) => {
-  if (!scheduleData?.minimumStaffing) {
-    return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
-  }
-  
-  const dayStaffing = scheduleData.minimumStaffing.get(dayOfWeek);
-  if (dayStaffing instanceof Map) {
-    const shiftStaffing = dayStaffing.get(selectedShiftId);
-    // Use 0 as default instead of 1
-    return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
-  }
-  
-  return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
-};
+
 
         // Organize data
         const allOfficers = new Map();
@@ -687,6 +673,22 @@ const getMinimumStaffing = (dayOfWeek: number) => {
   }
 
   const hasOvertime = scheduleData.overtimeOfficers && scheduleData.overtimeOfficers.length > 0;
+
+          // Add this function inside the component, before the return statement:
+const getMinimumStaffing = (dayOfWeek: number) => {
+  if (!scheduleData?.minimumStaffing) {
+    return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
+  }
+  
+  const dayStaffing = scheduleData.minimumStaffing.get(dayOfWeek);
+  if (dayStaffing instanceof Map) {
+    const shiftStaffing = dayStaffing.get(selectedShiftId);
+    // Use 0 as default instead of 1
+    return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
+  }
+  
+  return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
+};
 
   return (
     <div className="space-y-4">

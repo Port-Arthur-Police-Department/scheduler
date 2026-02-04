@@ -15,8 +15,7 @@ import { toast } from "sonner";
 import { sortOfficersConsistently } from "@/utils/sortingUtils";
 import { 
   isShiftUnderstaffed,
-  hasMinimumRequirements,
-  formatStaffingCount  // ADD THIS
+  hasMinimumRequirements 
 } from "@/utils/staffingUtils";
 
 interface ExtendedViewProps extends ViewProps {
@@ -803,7 +802,7 @@ const ppos = sortedOriginalOfficers.filter(officer => {
 
 const getMinimumStaffing = (dayOfWeek: number) => {
   if (!localSchedules.minimumStaffing) {
-    return { minimumOfficers: 0, minimumSupervisors: 0 }; // Already fixed - good
+    return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
   }
   
   if (localSchedules.minimumStaffing instanceof Map) {
@@ -822,7 +821,7 @@ const getMinimumStaffing = (dayOfWeek: number) => {
     return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
   }
   
-  return { minimumOfficers: 0, minimumSupervisors: 0 }; // Already fixed - good
+  return { minimumOfficers: 0, minimumSupervisors: 0 }; // Changed from 1 to 0
 };
 
   // ============ NOW EARLY RETURNS ARE SAFE ============
@@ -917,7 +916,7 @@ return (
             
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumOfficers = minStaffing.minimumOfficers || 0;
-            const minimumSupervisors = minStaffing.minimumSupervisors || 0;
+            const minimumSupervisors = minStaffing.minimumSupervisors || 1;
             
             // Get overtime officers for this day
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
@@ -968,17 +967,19 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                   <div>{dayName}</div>
                   <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
                 </Button>
-<Badge 
+                <Badge 
   variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
   className="text-xs mb-1"
 >
-  {formatStaffingCount(supervisorCount, minimumSupervisors, 'Sup')}
+  {supervisorCount} / {minimumSupervisors} Sup
+  {minimumSupervisors === 0 && " (No min)"}
 </Badge>
 <Badge 
   variant={isOfficersUnderstaffed ? "destructive" : "outline"} 
   className="text-xs"
 >
-  {formatStaffingCount(officerCount, minimumOfficers, 'Ofc')}
+  {officerCount} / {minimumOfficers} Ofc
+  {minimumOfficers === 0 && " (No min)"}
 </Badge>
               </div>
             );
@@ -994,7 +995,7 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
             
             const minStaffing = getMinimumStaffing(dayOfWeek);
-            const minimumSupervisors = minStaffing.minimumSupervisors || 0;
+            const minimumSupervisors = minStaffing.minimumSupervisors || 1;
             
             // CRITICAL: Count ONLY non-overtime supervisors from daySchedule
             const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {

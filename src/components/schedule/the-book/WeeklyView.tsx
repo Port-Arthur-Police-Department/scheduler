@@ -1,4 +1,4 @@
-// Updated WeeklyView.tsx with FIXED hooks order and overtime counting
+// Updated WeeklyView.tsx with FIXED hooks order, overtime counting, and partnership handling
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, isSameDay, startOfWeek, addWeeks } from "date-fns";
@@ -18,6 +18,44 @@ import {
   hasMinimumRequirements,
   formatStaffingCount  
 } from "@/utils/staffingUtils";
+
+// ============ ADD PARTNERSHIP HELPER FUNCTIONS HERE ============
+// Add these helper functions RIGHT HERE - after all imports but before any interfaces
+
+const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
+  if (!position) return false;
+  const positionLower = position.toLowerCase();
+  return (
+    positionLower.includes('riding with') ||
+    positionLower.includes('riding partner') ||
+    positionLower.includes('emergency partner') ||
+    positionLower === 'other'
+  );
+};
+
+// Check if officer is in a partnership
+const isInPartnership = (officer: any): boolean => {
+  // Check multiple possible ways partnership is indicated
+  if (officer?.isPartnership) return true;
+  if (officer?.shiftInfo?.isPartnership) return true;
+  
+  // Check position for "riding with partner"
+  const position = officer?.shiftInfo?.position || officer?.position || "";
+  if (isRidingWithPartnerPosition(position)) return true;
+  
+  // Check for partner officer ID
+  if (officer?.partnerOfficerId || officer?.shiftInfo?.partner_officer_id) return true;
+  
+  return false;
+};
+
+// Check if partnership is active (not suspended)
+const isActivePartnership = (officer: any): boolean => {
+  return isInPartnership(officer) && 
+         !officer?.partnershipSuspended && 
+         !officer?.shiftInfo?.partnership_suspended;
+};
+// ============ END PARTNERSHIP HELPER FUNCTIONS ============
 
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
@@ -321,15 +359,30 @@ const detectPTOForOfficer = (officer: any, scheduleDay: any) => {
   return { hasPTO, ptoType, ptoData };
 };
 
-  // Helper functions must be declared before early returns
-  const isSpecialAssignment = (position: string) => {
-    return position && (
-      position.toLowerCase().includes('other') ||
-      (position && !PREDEFINED_POSITIONS.includes(position))
+  // Updated isSpecialAssignment function (must be declared before early returns)
+  const isSpecialAssignment = (position: string, officer: any = null) => {
+    if (!position) return false;
+    
+    const positionLower = position.toLowerCase();
+    
+    // CRITICAL: If this is a partnership position, it's NOT a special assignment
+    if (isRidingWithPartnerPosition(position)) {
+      return false;
+    }
+    
+    // If officer is provided, check partnership status
+    if (officer && isInPartnership(officer)) {
+      return false; // Officers in partnerships are not special assignments
+    }
+    
+    // Now check for actual special assignments
+    return (
+      (positionLower.includes('other') && !isRidingWithPartnerPosition(position)) ||
+      (position && !PREDEFINED_POSITIONS.includes(position) && !isRidingWithPartnerPosition(position))
     );
   };
 
-// Helper to check if an officer is working overtime on this shift
+  // Helper to check if an officer is working overtime on this shift
 const isOfficerOvertime = (officer: any): boolean => {
   if (!officer) return false;
   
@@ -363,6 +416,60 @@ const isOfficerOvertime = (officer: any): boolean => {
       onDateChange(weekStart);
     }
   };
+
+// ============ ADD COUNTING HELPER FUNCTIONS ============
+// Helper function to count regular (non-overtime) supervisors for a day
+const countRegularSupervisors = (daySchedule: any, dateStr: string): number => {
+  if (!daySchedule?.officers) return 0;
+  
+  return daySchedule.officers.filter((officer: any) => {
+    const isSupervisor = isSupervisorByRank(officer);
+    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+    
+    // Use the updated isSpecialAssignment function that excludes partnership positions
+    const isSpecial = isSpecialAssignment(officer.shiftInfo?.position, officer);
+    
+    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+    const isOvertime = officer.shiftInfo?.is_extra_shift === true;
+    
+    return isSupervisor && isScheduled && !isOvertime;
+  }).length || 0;
+};
+
+// Helper function to count regular (non-overtime) officers for a day
+const countRegularOfficers = (daySchedule: any, dateStr: string): number => {
+  if (!daySchedule?.officers) return 0;
+  
+  return daySchedule.officers.filter((officer: any) => {
+    const isOfficer = !isSupervisorByRank(officer);
+    const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
+    const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+    
+    // Use the updated isSpecialAssignment function that excludes partnership positions
+    const isSpecial = isSpecialAssignment(officer.shiftInfo?.position, officer);
+    
+    const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
+    const isOvertime = officer.shiftInfo?.is_extra_shift === true;
+    
+    return isOfficer && isNotPPO && isScheduled && !isOvertime;
+  }).length || 0;
+};
+
+// Helper function to count overtime supervisors
+const countOvertimeSupervisors = (overtimeForDay: any[]): number => {
+  return overtimeForDay.filter((officer: any) => {
+    const position = officer.shiftInfo?.position || "";
+    return isSupervisorPosition(position);
+  }).length || 0;
+};
+
+// Helper function to count overtime officers
+const countOvertimeOfficers = (overtimeForDay: any[]): number => {
+  return overtimeForDay.filter((officer: any) => {
+    const position = officer.shiftInfo?.position || "";
+    return !isSupervisorPosition(position) && !isSpecialAssignment(position);
+  }).length || 0;
+};
 
 // ============ PROCESS REGULAR OFFICERS (EXCLUDING OVERTIME) ============
 // In the processedOfficersData useMemo, update the section where you process recurring schedules:
@@ -499,7 +606,11 @@ const processedOfficersData = useMemo(() => {
             service_credit_override: profileData?.service_credit_override || 0,
             recurringDays: recurringSchedulesByOfficer.get(officerId) || new Set(),
             weeklySchedule: {} as Record<string, any>,
-            service_credit: 0
+            service_credit: 0,
+            // Add partnership data
+            isPartnership: officer.isPartnership || false,
+            partnerOfficerId: officer.partnerOfficerId || officer.shiftInfo?.partner_officer_id || null,
+            partnershipSuspended: officer.partnershipSuspended || officer.shiftInfo?.partnership_suspended || false
           });
         }
         
@@ -521,6 +632,10 @@ const processedOfficersData = useMemo(() => {
           scheduleId: officer.scheduleId || officer.shiftInfo?.scheduleId,
           scheduleType: isException ? 'exception' : 'recurring',
           isRegularRecurringDay: isRecurringDay && !hasPTO,
+          // Add partnership data
+          isPartnership: officer.isPartnership || false,
+          partnerOfficerId: officer.partnerOfficerId || officer.shiftInfo?.partner_officer_id || null,
+          partnershipSuspended: officer.partnershipSuspended || officer.shiftInfo?.partnership_suspended || false,
           shiftInfo: {
             scheduleId: officer.shiftInfo?.scheduleId || officer.scheduleId,
             scheduleType: isException ? 'exception' : 'recurring',
@@ -537,7 +652,11 @@ const processedOfficersData = useMemo(() => {
             }) : undefined,
             reason: officer.shiftInfo?.reason || ptoType,
             custom_start_time: officer.shiftInfo?.custom_start_time,
-            custom_end_time: officer.shiftInfo?.custom_end_time
+            custom_end_time: officer.shiftInfo?.custom_end_time,
+            // Add partnership info to shiftInfo
+            isPartnership: officer.isPartnership || false,
+            partner_officer_id: officer.partnerOfficerId || officer.shiftInfo?.partner_officer_id || null,
+            partnership_suspended: officer.partnershipSuspended || officer.shiftInfo?.partnership_suspended || false
           }
         };
         
@@ -772,6 +891,8 @@ const supervisors = sortedOriginalOfficers.filter(officer => {
     return dayOfficer?.shiftInfo?.is_extra_shift === true;
   });
   
+  // DO NOT exclude supervisors who are in partnerships
+  // Their partnership status doesn't affect their supervisor role
   return isSupervisor && !hasOvertimeShifts;
 });
 
@@ -785,6 +906,8 @@ const regularOfficers = sortedOriginalOfficers.filter(officer => {
     return dayOfficer?.shiftInfo?.is_extra_shift === true;
   });
   
+  // INCLUDE officers who are in partnerships - they should show as regular officers
+  // The only checks are: not supervisor, not PPO, not overtime
   return isNotSupervisor && isNotPPO && !hasOvertimeShifts;
 });
 
@@ -798,6 +921,7 @@ const ppos = sortedOriginalOfficers.filter(officer => {
     return dayOfficer?.shiftInfo?.is_extra_shift === true;
   });
   
+  // INCLUDE PPOs who are in partnerships - they should show as PPOs
   return isNotSupervisor && isPPO && !hasOvertimeShifts;
 });
 
@@ -915,53 +1039,22 @@ return (
           <div className="p-2 font-semibold border-r">NAME</div>
           {weekDays.map(({ dateStr, dayName, formattedDate, isToday, dayOfWeek }) => {
             const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
-            
+            const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumOfficers = minStaffing.minimumOfficers || 0;
             const minimumSupervisors = minStaffing.minimumSupervisors || 0;
             
-            // Get overtime officers for this day
-            const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-            
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-              const isSupervisor = isSupervisorByRank(officer);
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isSupervisor && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime supervisors (those assigned as "Supervisor" or similar)
-            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return isSupervisorPosition(position);
-            }).length || 0;
-            
+            // Use helper functions
+            const regularSupervisorCount = countRegularSupervisors(daySchedule, dateStr);
+            const overtimeSupervisorCount = countOvertimeSupervisors(overtimeForDay);
             const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
             
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-              const isOfficer = !isSupervisorByRank(officer);
-              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isOfficer && isNotPPO && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime officers (those NOT assigned as supervisors)
-            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-            }).length || 0;
-            
+            const regularOfficerCount = countRegularOfficers(daySchedule, dateStr);
+            const overtimeOfficerCount = countOvertimeOfficers(overtimeForDay);
             const officerCount = regularOfficerCount + overtimeOfficerCount;
             
-const isOfficersUnderstaffed = minimumOfficers > 0 && officerCount < minimumOfficers;
-const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < minimumSupervisors;
+            const isOfficersUnderstaffed = minimumOfficers > 0 && officerCount < minimumOfficers;
+            const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < minimumSupervisors;
 
             return (
               <div key={dateStr} className={`p-2 text-center font-semibold border-r ${isToday ? 'bg-primary/10' : ''}`}>
@@ -969,20 +1062,20 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                   <div>{dayName}</div>
                   <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
                 </Button>
-<Badge 
-  variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
-  className="text-xs mb-1"
->
-  {supervisorCount} / {minimumSupervisors} Sup
-  {minimumSupervisors === 0 && " (No min)"}
-</Badge>
-<Badge 
-  variant={isOfficersUnderstaffed ? "destructive" : "outline"} 
-  className="text-xs"
->
-  {officerCount} / {minimumOfficers} Ofc
-  {minimumOfficers === 0 && " (No min)"}
-</Badge>
+                <Badge 
+                  variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
+                  className="text-xs mb-1"
+                >
+                  {supervisorCount} / {minimumSupervisors} Sup
+                  {minimumSupervisors === 0 && " (No min)"}
+                </Badge>
+                <Badge 
+                  variant={isOfficersUnderstaffed ? "destructive" : "outline"} 
+                  className="text-xs"
+                >
+                  {officerCount} / {minimumOfficers} Ofc
+                  {minimumOfficers === 0 && " (No min)"}
+                </Badge>
               </div>
             );
           })}
@@ -995,81 +1088,82 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
           {weekDays.map(({ dateStr, dayOfWeek }) => {
             const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-            
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumSupervisors = minStaffing.minimumSupervisors || 0;
             
-            // CRITICAL: Count ONLY non-overtime supervisors from daySchedule
-            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-              const isSupervisor = isSupervisorByRank(officer);
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isSupervisor && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime supervisors
-            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return isSupervisorPosition(position);
-            }).length || 0;
-            
+            // Use helper functions
+            const regularSupervisorCount = countRegularSupervisors(daySchedule, dateStr);
+            const overtimeSupervisorCount = countOvertimeSupervisors(overtimeForDay);
             const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
             
             return (
-<div key={dateStr} className="p-2 text-center border-r text-sm">
-  {supervisorCount} {minimumSupervisors > 0 ? `/ ${minimumSupervisors}` : ''}
-  {minimumSupervisors === 0 && <div className="text-xs text-muted-foreground">No min</div>}
-</div>
+              <div key={dateStr} className="p-2 text-center border-r text-sm">
+                {supervisorCount} {minimumSupervisors > 0 ? `/ ${minimumSupervisors}` : ''}
+                {minimumSupervisors === 0 && <div className="text-xs text-muted-foreground">No min</div>}
+              </div>
             );
           })}
         </div>
 
 {/* SUPERVISORS */}
-{supervisors.map((officer: any) => (
-  <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
-    style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
-    <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
-    <div className="p-2 border-r font-medium">
-      {getLastName(officer.officerName || '')}
-      <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
-      <div className="text-xs text-muted-foreground">
-        SC: {officer.service_credit?.toFixed(1) || '0.0'}
+{supervisors.map((officer: any) => {
+  // Check if this officer is in a partnership today
+  const isPartnerToday = weekDays.some(({ dateStr }) => {
+    const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+    return dayOfficer && isActivePartnership(dayOfficer);
+  });
+  
+  return (
+    <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
+      style={{ backgroundColor: weeklyColors.supervisor?.bg, color: weeklyColors.supervisor?.text }}>
+      <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
+      <div className="p-2 border-r font-medium">
+        {getLastName(officer.officerName || '')}
+        {isPartnerToday && (
+          <Badge variant="outline" className="ml-2 text-xs bg-blue-50">
+            Partner
+          </Badge>
+        )}
+        <div className="text-xs opacity-80">{officer.rank || 'Officer'}</div>
+        <div className="text-xs text-muted-foreground">
+          SC: {officer.service_credit?.toFixed(1) || '0.0'}
+        </div>
       </div>
+      {weekDays.map(({ dateStr }) => {
+        const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+        return (
+          <ScheduleCell
+            key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
+            officer={dayOfficer}
+            dateStr={dateStr}
+            officerId={officer.officerId}
+            officerName={officer.officerName}
+            isAdminOrSupervisor={isAdminOrSupervisor}
+            onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
+            onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
+            onEditAssignment={() => {
+              if (onEventHandlers.onEditAssignment) {
+                onEventHandlers.onEditAssignment(officer, dateStr);
+              }
+            }}
+            onRemoveOfficer={() => {
+              if (onEventHandlers.onRemoveOfficer) {
+                onEventHandlers.onRemoveOfficer(
+                  dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
+                  (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
+                  officer
+                );
+              }
+            }}
+            isUpdating={mutations.removeOfficerMutation.isPending}
+            isPartnership={isActivePartnership(dayOfficer)}
+            partnerInfo={dayOfficer?.shiftInfo?.position?.includes('Partner') ? dayOfficer.shiftInfo.position : null}
+          />
+        );
+      })}
     </div>
-    {weekDays.map(({ dateStr }) => {
-      const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-      return (
-        <ScheduleCell
-          key={`${dateStr}-${officer.officerId}-${dayOfficer?.shiftInfo?.hasPTO ? 'pto' : 'no-pto'}`}
-          officer={dayOfficer}
-          dateStr={dateStr}
-          officerId={officer.officerId}
-          officerName={officer.officerName}
-          isAdminOrSupervisor={isAdminOrSupervisor}
-          onAssignPTO={(scheduleData) => handleAssignPTO(scheduleData, dateStr, officer.officerId, officer.officerName)}
-          onRemovePTO={(scheduleData) => handleRemovePTO(scheduleData, dateStr, officer.officerId)}
-          onEditAssignment={() => {
-            if (onEventHandlers.onEditAssignment) {
-              onEventHandlers.onEditAssignment(officer, dateStr);
-            }
-          }}
-          onRemoveOfficer={() => {
-            if (onEventHandlers.onRemoveOfficer) {
-              onEventHandlers.onRemoveOfficer(
-                dayOfficer?.shiftInfo?.scheduleId || dayOfficer?.scheduleId,
-                (dayOfficer?.shiftInfo?.scheduleType || dayOfficer?.scheduleType) as 'recurring' | 'exception',
-                officer
-              );
-            }
-          }}
-          isUpdating={mutations.removeOfficerMutation.isPending}
-        />
-      );
-    })}
-  </div>
-))}
+  );
+})}
 
         {/* SEPARATION ROW WITH OFFICER COUNT (EXCLUDING PPOS AND SPECIAL ASSIGNMENTS) */}
         <div className="grid grid-cols-9 border-b bg-muted/30">
@@ -1078,35 +1172,19 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
           {weekDays.map(({ dateStr, dayOfWeek }) => {
             const daySchedule = localSchedules.dailySchedules?.find(s => s.date === dateStr);
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
-            
-            // Get minimum staffing using safe function
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumOfficers = minStaffing.minimumOfficers || 0;
             
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-              const isOfficer = !isSupervisorByRank(officer);
-              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isOfficer && isNotPPO && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime officers (those NOT assigned as supervisors or special assignments)
-            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-            }).length || 0;
-            
+            // Use helper functions
+            const regularOfficerCount = countRegularOfficers(daySchedule, dateStr);
+            const overtimeOfficerCount = countOvertimeOfficers(overtimeForDay);
             const officerCount = regularOfficerCount + overtimeOfficerCount;
             
             return (
-<div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
-  {officerCount} {minimumOfficers > 0 ? `/ ${minimumOfficers}` : ''}
-  {minimumOfficers === 0 && <div className="text-xs text-muted-foreground">No min</div>}
-</div>
+              <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">
+                {officerCount} {minimumOfficers > 0 ? `/ ${minimumOfficers}` : ''}
+                {minimumOfficers === 0 && <div className="text-xs text-muted-foreground">No min</div>}
+              </div>
             );
           })}
         </div>
@@ -1126,12 +1204,23 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
               return null;
             }
             
+            // Check if this officer is in a partnership today
+            const isPartnerToday = weekDays.some(({ dateStr }) => {
+              const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+              return dayOfficer && isActivePartnership(dayOfficer);
+            });
+            
             return (
               <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30"
                 style={{ backgroundColor: weeklyColors.officer?.bg, color: weeklyColors.officer?.text }}>
                 <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
                 <div className="p-2 border-r font-medium">
                   {getLastName(officer.officerName || '')}
+                  {isPartnerToday && (
+                    <Badge variant="outline" className="ml-2 text-xs bg-blue-50">
+                      Partner
+                    </Badge>
+                  )}
                   <div className="text-xs text-muted-foreground">
                     SC: {officer.service_credit?.toFixed(1) || '0.0'}
                   </div>
@@ -1163,6 +1252,8 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                         }
                       }}
                       isUpdating={mutations.removeOfficerMutation.isPending}
+                      isPartnership={isActivePartnership(dayOfficer)}
+                      partnerInfo={dayOfficer?.shiftInfo?.position?.includes('Partner') ? dayOfficer.shiftInfo.position : null}
                     />
                   );
                 })}
@@ -1185,6 +1276,12 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
             return null;
           }
           
+          // Check if this officer is in a partnership today
+          const isPartnerToday = weekDays.some(({ dateStr }) => {
+            const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
+            return dayOfficer && isActivePartnership(dayOfficer);
+          });
+          
           return (
             <div key={officer.officerId} className="grid grid-cols-9 border-b hover:opacity-90 transition-opacity"
               style={{ backgroundColor: weeklyColors.ppo?.bg, color: weeklyColors.ppo?.text }}>
@@ -1201,6 +1298,11 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                 >
                   PPO
                 </Badge>
+                {isPartnerToday && (
+                  <Badge variant="outline" className="text-xs bg-blue-50">
+                    Partner
+                  </Badge>
+                )}
                 <div className="text-xs text-muted-foreground">
                   SC: {officer.service_credit?.toFixed(1) || '0.0'}
                 </div>
@@ -1242,7 +1344,8 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
                     }}
                     isUpdating={mutations.removeOfficerMutation.isPending}
                     isPPO={true}
-                    partnerInfo={partnerInfo}
+                    isPartnership={isActivePartnership(dayOfficer)}
+                    partnerInfo={partnerInfo || (dayOfficer?.shiftInfo?.position?.includes('Partner') ? dayOfficer.shiftInfo.position : null)}
                   />
                 );
               })}

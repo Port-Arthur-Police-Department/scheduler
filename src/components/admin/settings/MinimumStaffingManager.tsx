@@ -193,12 +193,7 @@ export const MinimumStaffingManager = () => {
       toast.success('Staffing rule added successfully');
     } catch (error: any) {
       console.error('Error adding rule:', error);
-      // Check if it's the constraint error
-      if (error.code === '23514') {
-        toast.error('Database constraint error: Please ensure minimum officers is 0 or greater');
-      } else {
-        toast.error('Failed to add staffing rule');
-      }
+      toast.error('Failed to add staffing rule');
     } finally {
       setSaving(false);
     }
@@ -226,11 +221,7 @@ export const MinimumStaffingManager = () => {
       toast.success('Rule updated successfully');
     } catch (error: any) {
       console.error('Error updating rule:', error);
-      if (error.code === '23514') {
-        toast.error('Database constraint error: Please ensure value is 0 or greater');
-      } else {
-        toast.error('Failed to update rule');
-      }
+      toast.error('Failed to update rule');
     } finally {
       setSaving(false);
     }
@@ -298,11 +289,7 @@ export const MinimumStaffingManager = () => {
       toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
     } catch (error: any) {
       console.error('Error adding rules:', error);
-      if (error.code === '23514') {
-        toast.error('Database constraint error: Please run the SQL to update constraints');
-      } else {
-        toast.error('Failed to add rules');
-      }
+      toast.error('Failed to add rules');
     } finally {
       setSaving(false);
     }
@@ -323,22 +310,10 @@ export const MinimumStaffingManager = () => {
     <Card>
       <CardHeader>
         <CardTitle>Minimum Staffing Configuration</CardTitle>
-        <div className="space-y-2">
-          <p className="text-sm text-gray-500">
-            Set minimum staffing requirements for each shift and day of the week.
-          </p>
-          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-            <strong>Important:</strong> To use 0 as a minimum value, you need to run this SQL in your Supabase SQL Editor:
-            <pre className="mt-1 bg-gray-100 p-2 rounded text-xs overflow-x-auto">
-              {`ALTER TABLE public.minimum_staffing 
-DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_officers_check;
-
-ALTER TABLE public.minimum_staffing 
-ADD CONSTRAINT minimum_staffing_minimum_officers_check 
-CHECK (minimum_officers >= 0);`}
-            </pre>
-          </div>
-        </div>
+        <p className="text-sm text-gray-500">
+          Set minimum staffing requirements for each shift and day of the week. 
+          Use 0 for shifts with no minimum requirement.
+        </p>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Add New Rule Form */}
@@ -617,38 +592,6 @@ CHECK (minimum_officers >= 0);`}
               );
             })}
           </div>
-        </div>
-
-        {/* Database Update Instructions */}
-        <div className="p-4 border border-amber-200 bg-amber-50 rounded-lg">
-          <h4 className="font-semibold text-amber-800 mb-2">
-            Database Constraint Update Required
-          </h4>
-          <p className="text-sm text-amber-700 mb-3">
-            To allow 0 as a minimum value, you must update the database constraint.
-            Run this SQL in your Supabase SQL Editor:
-          </p>
-          <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
-{`-- Drop the old constraint (requires minimum_officers > 0)
-ALTER TABLE public.minimum_staffing 
-DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_officers_check;
-
--- Create new constraint (allows minimum_officers >= 0)
-ALTER TABLE public.minimum_staffing 
-ADD CONSTRAINT minimum_staffing_minimum_officers_check 
-CHECK (minimum_officers >= 0);
-
--- Optional: Do the same for supervisors if needed
-ALTER TABLE public.minimum_staffing 
-DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_supervisors_check;
-
-ALTER TABLE public.minimum_staffing 
-ADD CONSTRAINT minimum_staffing_minimum_supervisors_check 
-CHECK (minimum_supervisors >= 0);`}
-          </pre>
-          <p className="text-xs text-amber-600 mt-2">
-            After running this SQL, the constraint error will no longer occur.
-          </p>
         </div>
       </CardContent>
     </Card>

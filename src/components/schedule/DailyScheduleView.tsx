@@ -27,6 +27,13 @@ import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
+import { 
+  isShiftUnderstaffed, 
+  getStaffingDescription,
+  getRequirementsSummary,
+  getStaffingSeverity,
+  formatStaffingCount 
+} from "@/utils/staffingUtils";
 
 // Add these helper functions RIGHT HERE - after all imports but before any components
 
@@ -547,10 +554,15 @@ export const DailyScheduleView = ({
       </CardHeader>
       <CardContent className="space-y-6">
         {scheduleData?.map((shiftData) => {
-          const supervisorsUnderstaffed = shiftData.currentSupervisors < shiftData.minSupervisors;
-          const officersUnderstaffed = shiftData.currentOfficers < shiftData.minOfficers;
-          const isAnyUnderstaffed = supervisorsUnderstaffed || officersUnderstaffed;
-          const isFullyStaffed = !isAnyUnderstaffed;
+const isAnyUnderstaffed = isShiftUnderstaffed(
+  shiftData.currentSupervisors,
+  shiftData.minSupervisors,
+  shiftData.currentOfficers,
+  shiftData.minOfficers
+);
+const supervisorsUnderstaffed = shiftData.minSupervisors > 0 && shiftData.currentSupervisors < shiftData.minSupervisors;
+const officersUnderstaffed = shiftData.minOfficers > 0 && shiftData.currentOfficers < shiftData.minOfficers;
+const isFullyStaffed = !isAnyUnderstaffed;
 
           return (
             <div key={shiftData.shift.id} id={`shift-card-${shiftData.shift.id}`} className="border rounded-lg p-4 space-y-4">
@@ -599,7 +611,7 @@ export const DailyScheduleView = ({
 
 {/* Supervisor Section */}
 <OfficerSection
-  title="Supervisors"
+  title={`Supervisors (${formatStaffingCount(shiftData.currentSupervisors, shiftData.minSupervisors, '')})`}
   officers={shiftData.supervisors}
   minCount={shiftData.minSupervisors}
   currentCount={shiftData.currentSupervisors}
@@ -629,7 +641,7 @@ export const DailyScheduleView = ({
 
 {/* Officer Section */}
 <OfficerSection
-  title="Officers"
+  title={`Officers (${formatStaffingCount(shiftData.currentOfficers, shiftData.minOfficers, '')})`}
   officers={shiftData.officers}
   minCount={shiftData.minOfficers}
   currentCount={shiftData.currentOfficers}
@@ -1194,19 +1206,15 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
   if (shiftError) throw shiftError;
 
   // Get minimum staffing
-  const { data: minimumStaffing, error: minError } = await supabase
-    .from("minimum_staffing")
-    .select("minimum_officers, minimum_supervisors, shift_type_id")
-    .eq("day_of_week", dayOfWeek);
-  if (minError) {
-    console.error("Minimum staffing error:", minError);
-    // Provide fallback values
-    const fallbackStaffing = [
-      { shift_type_id: shiftTypes?.[0]?.id, minimum_officers: 8, minimum_supervisors: 1 },
-      { shift_type_id: shiftTypes?.[1]?.id, minimum_officers: 8, minimum_supervisors: 1 }
-    ];
-    // Use fallback if query fails
-  }
+const { data: minimumStaffing, error: minError } = await supabase
+  .from("minimum_staffing")
+  .select("minimum_officers, minimum_supervisors, shift_type_id")
+  .eq("day_of_week", dayOfWeek);
+if (minError) {
+  console.error("Minimum staffing error:", minError);
+  // Use empty array as fallback - components will handle no rules gracefully
+  minimumStaffing = [];
+}
 
   // Get default assignments for all officers for this date
   const { data: allDefaultAssignments, error: defaultAssignmentsError } = await supabase
@@ -1996,8 +2004,8 @@ console.log(`📊 Staffing counts for ${shift.name}:`, {
 
 return {
   shift,
-  minSupervisors: minStaff?.minimum_supervisors || 1,
-  minOfficers: minStaff?.minimum_officers || 0,
+  minSupervisors: minStaff?.minimum_supervisors || 0,  // Changed from 1 to 0
+  minOfficers: minStaff?.minimum_officers || 0,       // Changed from 0 to explicit 0
   currentSupervisors: countedSupervisors.length,
   currentOfficers: countedOfficers.length,
   supervisors,

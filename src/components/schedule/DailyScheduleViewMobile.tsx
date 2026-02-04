@@ -551,7 +551,6 @@ const staffingSeverity = getStaffingSeverity(
     }
   </div>
 </div>
-                </div>
 
                 {/* Shift Content - Collapsible */}
                 {isExpanded && (

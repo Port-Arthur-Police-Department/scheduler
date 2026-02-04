@@ -1917,21 +1917,30 @@ const regularOfficers = processedOfficers.filter(o => {
   
   return true;
 }).sort((a, b) => {
-  // Sort combined partnerships first, then by position
-  const aIsCombined = a.isCombinedPartnership ? 0 : 1;
-  const bIsCombined = b.isCombinedPartnership ? 0 : 1;
+  // FIXED: Extract district numbers from positions
+  const extractDistrictNumber = (position: string) => {
+    if (!position) return Infinity; // Put non-district positions at the end
+    
+    const match = position.match(/district\s*(\d+)/i);
+    if (match) return parseInt(match[1]);
+    
+    // For positions without district numbers, use alphabetical sorting
+    return Infinity;
+  };
   
-  if (aIsCombined !== bIsCombined) {
-    return aIsCombined - bIsCombined;
+  const aDistrict = extractDistrictNumber(a.position);
+  const bDistrict = extractDistrictNumber(b.position);
+  
+  // Both have district numbers - sort numerically
+  if (aDistrict !== Infinity && bDistrict !== Infinity) {
+    return aDistrict - bDistrict;
   }
   
-  const aMatch = a.position?.match(/district\s*(\d+)/i);
-  const bMatch = b.position?.match(/district\s*(\d+)/i);
+  // Only one has a district number
+  if (aDistrict !== Infinity && bDistrict === Infinity) return -1;
+  if (aDistrict === Infinity && bDistrict !== Infinity) return 1;
   
-  if (aMatch && bMatch) {
-    return parseInt(aMatch[1]) - parseInt(bMatch[1]);
-  }
-  
+  // Neither has district number - sort alphabetically by position
   return (a.position || '').localeCompare(b.position || '');
 });
 

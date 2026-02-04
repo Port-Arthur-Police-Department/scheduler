@@ -191,50 +191,53 @@ export const MinimumStaffingManager = () => {
     }
   };
 
-  const addRulesForAllDays = async (shiftId: string) => {
-    const shift = shifts.find(s => s.id === shiftId);
-    if (!shift) return;
+const addRulesForAllDays = async (shiftId: string) => {
+  const shift = shifts.find(s => s.id === shiftId);
+  if (!shift) return;
 
-    setSaving(true);
-    try {
-      // Check if any rules already exist for this shift
-      const existingRules = rules.filter(rule => rule.shift_type_id === shiftId);
-      const existingDays = existingRules.map(rule => rule.day_of_week);
+  setSaving(true);
+  try {
+    // Check if any rules already exist for this shift
+    const existingRules = rules.filter(rule => rule.shift_type_id === shiftId);
+    const existingDays = existingRules.map(rule => rule.day_of_week);
 
-      // Prepare rules for missing days
-      const rulesToAdd = DAYS_OF_WEEK
-        .filter(day => !existingDays.includes(day.value))
-        .map(day => ({
-          shift_type_id: shiftId,
-          day_of_week: day.value,
-          minimum_officers: 1, // Default value
-          minimum_supervisors: shift.name === 'Admin' ? 0 : 1, // Default based on shift type
-        }));
+    // Get smart defaults based on shift name
+    const defaults = getDefaultStaffingForShift(shift.name);
 
-      if (rulesToAdd.length === 0) {
-        toast.info('Rules already exist for all days');
-        return;
-      }
+    // Prepare rules for missing days with smart defaults
+    const rulesToAdd = DAYS_OF_WEEK
+      .filter(day => !existingDays.includes(day.value))
+      .map(day => ({
+        shift_type_id: shiftId,
+        day_of_week: day.value,
+        minimum_officers: defaults.officers,
+        minimum_supervisors: defaults.supervisors,
+      }));
 
-      const { data, error } = await supabase
-        .from('minimum_staffing')
-        .insert(rulesToAdd)
-        .select(`
-          *,
-          shift_type:shift_type_id (id, name, start_time, end_time)
-        `);
-
-      if (error) throw error;
-
-      setRules([...rules, ...(data || [])]);
-      toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
-    } catch (error) {
-      console.error('Error adding rules:', error);
-      toast.error('Failed to add rules');
-    } finally {
-      setSaving(false);
+    if (rulesToAdd.length === 0) {
+      toast.info('Rules already exist for all days');
+      return;
     }
-  };
+
+    const { data, error } = await supabase
+      .from('minimum_staffing')
+      .insert(rulesToAdd)
+      .select(`
+        *,
+        shift_type:shift_type_id (id, name, start_time, end_time)
+      `);
+
+    if (error) throw error;
+
+    setRules([...rules, ...(data || [])]);
+    toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
+  } catch (error) {
+    console.error('Error adding rules:', error);
+    toast.error('Failed to add rules');
+  } finally {
+    setSaving(false);
+  }
+};
 
   if (loading) {
     return (

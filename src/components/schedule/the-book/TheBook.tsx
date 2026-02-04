@@ -44,7 +44,6 @@ import { BeatPreferencesView } from "./BeatPreferencesView";
 import { ScheduleExportDialog } from "./ScheduleExportDialog";
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 import { PTODialogMobile } from "./PTODialogMobile";
-import { getScheduleData, isBirthdayToday, isAnniversaryToday, calculateYearsOfService } from '@/utils/scheduleDataUtils';
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";

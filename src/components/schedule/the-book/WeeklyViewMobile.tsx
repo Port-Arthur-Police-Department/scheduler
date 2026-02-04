@@ -20,7 +20,6 @@ import {
   hasMinimumRequirements,
   formatStaffingCount 
 } from "@/utils/staffingUtils";
-import { getScheduleData, isBirthdayToday, isAnniversaryToday, calculateYearsOfService } from '@/utils/scheduleDataUtils';
 
 interface WeeklyViewMobileProps {
   currentWeekStart: Date;

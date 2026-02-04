@@ -49,6 +49,30 @@ const DAYS_OF_WEEK = [
   { value: 6, label: 'Saturday' },
 ];
 
+// ADD THE HELPER FUNCTION HERE, RIGHT AFTER DAYS_OF_WEEK AND BEFORE THE COMPONENT
+const getDefaultStaffingForShift = (shiftName: string) => {
+  const lowerName = shiftName.toLowerCase();
+  
+  if (lowerName.includes('admin')) {
+    return { officers: 1, supervisors: 0 };
+  }
+  if (lowerName.includes('supervisor') || lowerName.includes('command')) {
+    return { officers: 0, supervisors: 1 };
+  }
+  if (lowerName.includes('day') || lowerName.includes('morning')) {
+    return { officers: 8, supervisors: 2 };
+  }
+  if (lowerName.includes('evening') || lowerName.includes('swing')) {
+    return { officers: 6, supervisors: 1 };
+  }
+  if (lowerName.includes('night') || lowerName.includes('graveyard')) {
+    return { officers: 4, supervisors: 1 };
+  }
+  
+  // Default values for other shifts
+  return { officers: 4, supervisors: 1 };
+};
+
 export const MinimumStaffingManager = () => {
   const [shifts, setShifts] = useState<ShiftType[]>([]);
   const [rules, setRules] = useState<MinimumStaffingRule[]>([]);

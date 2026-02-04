@@ -18,6 +18,7 @@ import {
   hasMinimumRequirements,
   formatStaffingCount  
 } from "@/utils/staffingUtils";
+import { getScheduleData, isBirthdayToday, isAnniversaryToday, calculateYearsOfService } from '@/utils/scheduleDataUtils';
 
 // ============ ADD PARTNERSHIP HELPER FUNCTIONS HERE ============
 // Add these helper functions RIGHT HERE - after all imports but before any interfaces

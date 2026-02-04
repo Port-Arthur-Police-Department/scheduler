@@ -49,12 +49,12 @@ const DAYS_OF_WEEK = [
   { value: 6, label: 'Saturday' },
 ];
 
-// ADD THE HELPER FUNCTION HERE, RIGHT AFTER DAYS_OF_WEEK AND BEFORE THE COMPONENT
+// Helper function to get smart defaults based on shift name
 const getDefaultStaffingForShift = (shiftName: string) => {
   const lowerName = shiftName.toLowerCase();
   
   if (lowerName.includes('admin')) {
-    return { officers: 1, supervisors: 0 };
+    return { officers: 0, supervisors: 0 };
   }
   if (lowerName.includes('supervisor') || lowerName.includes('command')) {
     return { officers: 0, supervisors: 1 };
@@ -70,7 +70,7 @@ const getDefaultStaffingForShift = (shiftName: string) => {
   }
   
   // Default values for other shifts
-  return { officers: 4, supervisors: 1 };
+  return { officers: 0, supervisors: 0 };
 };
 
 export const MinimumStaffingManager = () => {
@@ -81,13 +81,28 @@ export const MinimumStaffingManager = () => {
   const [newRule, setNewRule] = useState({
     shift_type_id: '',
     day_of_week: 1,
-    minimum_officers: 1,
+    minimum_officers: 0,
     minimum_supervisors: 0,
   });
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Update defaults when shift is selected
+  useEffect(() => {
+    if (newRule.shift_type_id) {
+      const selectedShift = shifts.find(s => s.id === newRule.shift_type_id);
+      if (selectedShift) {
+        const defaults = getDefaultStaffingForShift(selectedShift.name);
+        setNewRule(prev => ({
+          ...prev,
+          minimum_officers: defaults.officers,
+          minimum_supervisors: defaults.supervisors,
+        }));
+      }
+    }
+  }, [newRule.shift_type_id, shifts]);
 
   const fetchData = async () => {
     try {
@@ -127,6 +142,17 @@ export const MinimumStaffingManager = () => {
       return;
     }
 
+    // Validation: Ensure values are not negative
+    if (newRule.minimum_officers < 0) {
+      toast.error('Minimum officers cannot be negative');
+      return;
+    }
+
+    if (newRule.minimum_supervisors < 0) {
+      toast.error('Minimum supervisors cannot be negative');
+      return;
+    }
+
     // Check if rule already exists for this shift and day
     const existingRule = rules.find(
       rule => 
@@ -161,19 +187,30 @@ export const MinimumStaffingManager = () => {
       setNewRule({
         shift_type_id: '',
         day_of_week: 1,
-        minimum_officers: 1,
+        minimum_officers: 0,
         minimum_supervisors: 0,
       });
       toast.success('Staffing rule added successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding rule:', error);
-      toast.error('Failed to add staffing rule');
+      // Check if it's the constraint error
+      if (error.code === '23514') {
+        toast.error('Database constraint error: Please ensure minimum officers is 0 or greater');
+      } else {
+        toast.error('Failed to add staffing rule');
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const handleUpdateRule = async (id: string, field: string, value: number) => {
+    // Validate value is not negative
+    if (value < 0) {
+      toast.error('Value cannot be negative');
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -187,9 +224,13 @@ export const MinimumStaffingManager = () => {
         rule.id === id ? { ...rule, [field]: value } : rule
       ));
       toast.success('Rule updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating rule:', error);
-      toast.error('Failed to update rule');
+      if (error.code === '23514') {
+        toast.error('Database constraint error: Please ensure value is 0 or greater');
+      } else {
+        toast.error('Failed to update rule');
+      }
     } finally {
       setSaving(false);
     }
@@ -215,53 +256,57 @@ export const MinimumStaffingManager = () => {
     }
   };
 
-const addRulesForAllDays = async (shiftId: string) => {
-  const shift = shifts.find(s => s.id === shiftId);
-  if (!shift) return;
+  const addRulesForAllDays = async (shiftId: string) => {
+    const shift = shifts.find(s => s.id === shiftId);
+    if (!shift) return;
 
-  setSaving(true);
-  try {
-    // Check if any rules already exist for this shift
-    const existingRules = rules.filter(rule => rule.shift_type_id === shiftId);
-    const existingDays = existingRules.map(rule => rule.day_of_week);
+    setSaving(true);
+    try {
+      // Check if any rules already exist for this shift
+      const existingRules = rules.filter(rule => rule.shift_type_id === shiftId);
+      const existingDays = existingRules.map(rule => rule.day_of_week);
 
-    // Get smart defaults based on shift name
-    const defaults = getDefaultStaffingForShift(shift.name);
+      // Get smart defaults based on shift name
+      const defaults = getDefaultStaffingForShift(shift.name);
 
-    // Prepare rules for missing days with smart defaults
-    const rulesToAdd = DAYS_OF_WEEK
-      .filter(day => !existingDays.includes(day.value))
-      .map(day => ({
-        shift_type_id: shiftId,
-        day_of_week: day.value,
-        minimum_officers: defaults.officers,
-        minimum_supervisors: defaults.supervisors,
-      }));
+      // Prepare rules for missing days with smart defaults
+      const rulesToAdd = DAYS_OF_WEEK
+        .filter(day => !existingDays.includes(day.value))
+        .map(day => ({
+          shift_type_id: shiftId,
+          day_of_week: day.value,
+          minimum_officers: defaults.officers,
+          minimum_supervisors: defaults.supervisors,
+        }));
 
-    if (rulesToAdd.length === 0) {
-      toast.info('Rules already exist for all days');
-      return;
+      if (rulesToAdd.length === 0) {
+        toast.info('Rules already exist for all days');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('minimum_staffing')
+        .insert(rulesToAdd)
+        .select(`
+          *,
+          shift_type:shift_type_id (id, name, start_time, end_time)
+        `);
+
+      if (error) throw error;
+
+      setRules([...rules, ...(data || [])]);
+      toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
+    } catch (error: any) {
+      console.error('Error adding rules:', error);
+      if (error.code === '23514') {
+        toast.error('Database constraint error: Please run the SQL to update constraints');
+      } else {
+        toast.error('Failed to add rules');
+      }
+    } finally {
+      setSaving(false);
     }
-
-    const { data, error } = await supabase
-      .from('minimum_staffing')
-      .insert(rulesToAdd)
-      .select(`
-        *,
-        shift_type:shift_type_id (id, name, start_time, end_time)
-      `);
-
-    if (error) throw error;
-
-    setRules([...rules, ...(data || [])]);
-    toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
-  } catch (error) {
-    console.error('Error adding rules:', error);
-    toast.error('Failed to add rules');
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -278,9 +323,22 @@ const addRulesForAllDays = async (shiftId: string) => {
     <Card>
       <CardHeader>
         <CardTitle>Minimum Staffing Configuration</CardTitle>
-        <p className="text-sm text-gray-500">
-          Set minimum staffing requirements for each shift and day of the week.
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-gray-500">
+            Set minimum staffing requirements for each shift and day of the week.
+          </p>
+          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+            <strong>Important:</strong> To use 0 as a minimum value, you need to run this SQL in your Supabase SQL Editor:
+            <pre className="mt-1 bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+              {`ALTER TABLE public.minimum_staffing 
+DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_officers_check;
+
+ALTER TABLE public.minimum_staffing 
+ADD CONSTRAINT minimum_staffing_minimum_officers_check 
+CHECK (minimum_officers >= 0);`}
+            </pre>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Add New Rule Form */}
@@ -288,7 +346,7 @@ const addRulesForAllDays = async (shiftId: string) => {
           <h3 className="font-semibold">Add New Staffing Rule</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="shift_type">Shift Type</Label>
+              <Label htmlFor="shift_type">Shift Type *</Label>
               <Select
                 value={newRule.shift_type_id}
                 onValueChange={(value) => 
@@ -309,7 +367,7 @@ const addRulesForAllDays = async (shiftId: string) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="day_of_week">Day of Week</Label>
+              <Label htmlFor="day_of_week">Day of Week *</Label>
               <Select
                 value={newRule.day_of_week.toString()}
                 onValueChange={(value) => 
@@ -335,13 +393,16 @@ const addRulesForAllDays = async (shiftId: string) => {
                 type="number"
                 min="0"
                 value={newRule.minimum_officers}
-                onChange={(e) => 
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
                   setNewRule({ 
                     ...newRule, 
-                    minimum_officers: parseInt(e.target.value) || 0 
-                  })
-                }
+                    minimum_officers: value >= 0 ? value : 0
+                  });
+                }}
+                className="w-full"
               />
+              <p className="text-xs text-gray-500">Enter 0 if no minimum required</p>
             </div>
 
             <div className="space-y-2">
@@ -350,13 +411,16 @@ const addRulesForAllDays = async (shiftId: string) => {
                 type="number"
                 min="0"
                 value={newRule.minimum_supervisors}
-                onChange={(e) => 
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
                   setNewRule({ 
                     ...newRule, 
-                    minimum_supervisors: parseInt(e.target.value) || 0 
-                  })
-                }
+                    minimum_supervisors: value >= 0 ? value : 0
+                  });
+                }}
+                className="w-full"
               />
+              <p className="text-xs text-gray-500">Enter 0 if no minimum required</p>
             </div>
           </div>
           <Button 
@@ -382,6 +446,8 @@ const addRulesForAllDays = async (shiftId: string) => {
           <div className="flex flex-wrap gap-2">
             {shifts.map(shift => {
               const shiftRules = rules.filter(r => r.shift_type_id === shift.id);
+              const defaults = getDefaultStaffingForShift(shift.name);
+              
               return (
                 <Button
                   key={shift.id}
@@ -389,9 +455,15 @@ const addRulesForAllDays = async (shiftId: string) => {
                   size="sm"
                   onClick={() => addRulesForAllDays(shift.id)}
                   disabled={saving || shiftRules.length === 7}
+                  className="flex flex-col items-start h-auto py-2"
                 >
-                  <Plus className="h-3 w-3 mr-1" />
-                  {shift.name} ({shiftRules.length}/7 days)
+                  <div className="flex items-center">
+                    <Plus className="h-3 w-3 mr-1" />
+                    <span className="font-medium">{shift.name}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {shiftRules.length}/7 days • Default: {defaults.officers} off, {defaults.supervisors} sup
+                  </div>
                 </Button>
               );
             })}
@@ -429,36 +501,48 @@ const addRulesForAllDays = async (shiftId: string) => {
                         </TableCell>
                         <TableCell>{day?.label || 'Unknown Day'}</TableCell>
                         <TableCell>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={rule.minimum_officers}
-                            onChange={(e) => 
-                              handleUpdateRule(
-                                rule.id, 
-                                'minimum_officers', 
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            disabled={saving}
-                            className="w-20"
-                          />
+                          <div className="flex items-center space-x-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={rule.minimum_officers}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                handleUpdateRule(
+                                  rule.id, 
+                                  'minimum_officers', 
+                                  value >= 0 ? value : 0
+                                );
+                              }}
+                              disabled={saving}
+                              className={`w-20 ${rule.minimum_officers === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
+                            />
+                            {rule.minimum_officers === 0 && (
+                              <span className="text-xs text-amber-600">No min</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={rule.minimum_supervisors}
-                            onChange={(e) => 
-                              handleUpdateRule(
-                                rule.id, 
-                                'minimum_supervisors', 
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            disabled={saving}
-                            className="w-20"
-                          />
+                          <div className="flex items-center space-x-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={rule.minimum_supervisors}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                handleUpdateRule(
+                                  rule.id, 
+                                  'minimum_supervisors', 
+                                  value >= 0 ? value : 0
+                                );
+                              }}
+                              disabled={saving}
+                              className={`w-20 ${rule.minimum_supervisors === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
+                            />
+                            {rule.minimum_supervisors === 0 && (
+                              <span className="text-xs text-amber-600">No min</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -466,6 +550,7 @@ const addRulesForAllDays = async (shiftId: string) => {
                             size="sm"
                             onClick={() => handleDeleteRule(rule.id)}
                             disabled={saving}
+                            className="hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -486,11 +571,13 @@ const addRulesForAllDays = async (shiftId: string) => {
             {shifts.map(shift => {
               const shiftRules = rules.filter(r => r.shift_type_id === shift.id);
               const avgOfficers = shiftRules.length > 0 
-                ? Math.round(shiftRules.reduce((sum, r) => sum + r.minimum_officers, 0) / shiftRules.length)
+                ? Math.round(shiftRules.reduce((sum, r) => sum + r.minimum_officers, 0) / shiftRules.length * 10) / 10
                 : 0;
               const avgSupervisors = shiftRules.length > 0 
-                ? Math.round(shiftRules.reduce((sum, r) => sum + r.minimum_supervisors, 0) / shiftRules.length)
+                ? Math.round(shiftRules.reduce((sum, r) => sum + r.minimum_supervisors, 0) / shiftRules.length * 10) / 10
                 : 0;
+              const zeroOfficerDays = shiftRules.filter(r => r.minimum_officers === 0).length;
+              const zeroSupervisorDays = shiftRules.filter(r => r.minimum_supervisors === 0).length;
 
               return (
                 <Card key={shift.id} className="p-4">
@@ -510,20 +597,58 @@ const addRulesForAllDays = async (shiftId: string) => {
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>
-                  <div className="mt-2 space-y-1 text-sm">
+                  <div className="mt-3 space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span>Avg. Officers:</span>
-                      <span className="font-medium">{avgOfficers}</span>
+                      <span className="text-gray-600">Avg. Officers:</span>
+                      <span className={`font-medium ${avgOfficers === 0 ? 'text-amber-600' : ''}`}>
+                        {avgOfficers.toFixed(1)}
+                        {zeroOfficerDays > 0 && ` (${zeroOfficerDays}×0)`}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Avg. Supervisors:</span>
-                      <span className="font-medium">{avgSupervisors}</span>
+                      <span className="text-gray-600">Avg. Supervisors:</span>
+                      <span className={`font-medium ${avgSupervisors === 0 ? 'text-amber-600' : ''}`}>
+                        {avgSupervisors.toFixed(1)}
+                        {zeroSupervisorDays > 0 && ` (${zeroSupervisorDays}×0)`}
+                      </span>
                     </div>
                   </div>
                 </Card>
               );
             })}
           </div>
+        </div>
+
+        {/* Database Update Instructions */}
+        <div className="p-4 border border-amber-200 bg-amber-50 rounded-lg">
+          <h4 className="font-semibold text-amber-800 mb-2">
+            Database Constraint Update Required
+          </h4>
+          <p className="text-sm text-amber-700 mb-3">
+            To allow 0 as a minimum value, you must update the database constraint.
+            Run this SQL in your Supabase SQL Editor:
+          </p>
+          <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
+{`-- Drop the old constraint (requires minimum_officers > 0)
+ALTER TABLE public.minimum_staffing 
+DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_officers_check;
+
+-- Create new constraint (allows minimum_officers >= 0)
+ALTER TABLE public.minimum_staffing 
+ADD CONSTRAINT minimum_staffing_minimum_officers_check 
+CHECK (minimum_officers >= 0);
+
+-- Optional: Do the same for supervisors if needed
+ALTER TABLE public.minimum_staffing 
+DROP CONSTRAINT IF EXISTS minimum_staffing_minimum_supervisors_check;
+
+ALTER TABLE public.minimum_staffing 
+ADD CONSTRAINT minimum_staffing_minimum_supervisors_check 
+CHECK (minimum_supervisors >= 0);`}
+          </pre>
+          <p className="text-xs text-amber-600 mt-2">
+            After running this SQL, the constraint error will no longer occur.
+          </p>
         </div>
       </CardContent>
     </Card>

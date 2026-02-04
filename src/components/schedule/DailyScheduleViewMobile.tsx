@@ -36,6 +36,13 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
+import { 
+  isShiftUnderstaffed,
+  getStaffingDescription,
+  getStaffingSeverity,
+  formatStaffingCount,
+  hasMinimumRequirements 
+} from "@/utils/staffingUtils";
 
 // Add Popover and Calendar imports
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -484,9 +491,22 @@ export const DailyScheduleViewMobile = ({
           ) : scheduleData?.map((shiftData) => {
             const shiftId = shiftData.shift.id;
             const isExpanded = expandedShifts.has(shiftId);
-            const supervisorsUnderstaffed = shiftData.currentSupervisors < shiftData.minSupervisors;
-            const officersUnderstaffed = shiftData.currentOfficers < shiftData.minOfficers;
-            const isAnyUnderstaffed = supervisorsUnderstaffed || officersUnderstaffed;
+const isAnyUnderstaffed = isShiftUnderstaffed(
+  shiftData.currentSupervisors,
+  shiftData.minSupervisors,
+  shiftData.currentOfficers,
+  shiftData.minOfficers
+);
+const supervisorsUnderstaffed = shiftData.minSupervisors > 0 && shiftData.currentSupervisors < shiftData.minSupervisors;
+const officersUnderstaffed = shiftData.minOfficers > 0 && shiftData.currentOfficers < shiftData.minOfficers;
+
+// Use the severity function for visual indicators
+const staffingSeverity = getStaffingSeverity(
+  shiftData.currentSupervisors,
+  shiftData.minSupervisors,
+  shiftData.currentOfficers,
+  shiftData.minOfficers
+);
 
             return (
               <div key={shiftId} className="border rounded-lg overflow-hidden">
@@ -503,27 +523,34 @@ export const DailyScheduleViewMobile = ({
                       </Button>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge variant={isAnyUnderstaffed ? "destructive" : "default"} className="gap-1">
-                        {isAnyUnderstaffed ? (
-                          <>
-                            <AlertTriangle className="h-3 w-3" />
-                            Understaffed
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="h-3 w-3" />
-                            Fully Staffed
-                          </>
-                        )}
-                      </Badge>
-                      <Badge variant="outline">
-                        {shiftData.currentSupervisors}/{shiftData.minSupervisors} Sup
-                      </Badge>
-                      <Badge variant="outline">
-                        {shiftData.currentOfficers}/{shiftData.minOfficers} Off
-                      </Badge>
-                    </div>
-                  </div>
+  <Badge variant={staffingSeverity === "danger" ? "destructive" : staffingSeverity === "warning" ? "warning" : "default"} className="gap-1">
+    {isAnyUnderstaffed ? (
+      <>
+        <AlertTriangle className="h-3 w-3" />
+        Understaffed
+      </>
+    ) : (
+      <>
+        <CheckCircle className="h-3 w-3" />
+        {hasMinimumRequirements(shiftData.minSupervisors, shiftData.minOfficers) ? "Fully Staffed" : "No Requirements"}
+      </>
+    )}
+  </Badge>
+  <Badge variant="outline">
+    {formatStaffingCount(shiftData.currentSupervisors, shiftData.minSupervisors, 'Sup')}
+  </Badge>
+  <Badge variant="outline">
+    {formatStaffingCount(shiftData.currentOfficers, shiftData.minOfficers, 'Off')}
+  </Badge>
+  
+  {/* ADD THIS LINE - Description tooltip */}
+  <div className="mt-1 text-xs text-muted-foreground">
+    {shiftData.minSupervisors === 0 && shiftData.minOfficers === 0 ? 
+      "No minimum requirements set" : 
+      isAnyUnderstaffed ? "Staffing below minimum" : "Meeting minimum requirements"
+    }
+  </div>
+</div>
                 </div>
 
                 {/* Shift Content - Collapsible */}

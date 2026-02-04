@@ -60,17 +60,44 @@ const getDefaultStaffingForShift = (shiftName: string) => {
     return { officers: 0, supervisors: 1 };
   }
   if (lowerName.includes('day') || lowerName.includes('morning')) {
-    return { officers: 8, supervisors: 2 };
+    return { officers: 8, supervisors: 1 };
   }
   if (lowerName.includes('evening') || lowerName.includes('swing')) {
-    return { officers: 6, supervisors: 1 };
+    return { officers: 9, supervisors: 1 };
   }
   if (lowerName.includes('night') || lowerName.includes('graveyard')) {
-    return { officers: 4, supervisors: 1 };
+    return { officers: 8, supervisors: 1 };
   }
   
   // Default values for other shifts
   return { officers: 0, supervisors: 0 };
+};
+
+// Helper function to order shifts by their typical start time
+const orderShiftsByTime = (shifts: ShiftType[]): ShiftType[] => {
+  return [...shifts].sort((a, b) => {
+    // Parse time strings for comparison
+    const timeA = a.start_time || '00:00';
+    const timeB = b.start_time || '00:00';
+    
+    // Convert HH:MM to minutes for comparison
+    const [hoursA, minutesA] = timeA.split(':').map(Number);
+    const [hoursB, minutesB] = timeB.split(':').map(Number);
+    
+    const totalMinutesA = hoursA * 60 + minutesA;
+    const totalMinutesB = hoursB * 60 + minutesB;
+    
+    // Handle midnight-crossing shifts
+    const isOvernightA = a.crosses_midnight || timeA > timeB;
+    const isOvernightB = b.crosses_midnight || timeB > timeA;
+    
+    // Overnight shifts should come after daytime shifts
+    if (isOvernightA && !isOvernightB) return 1;
+    if (!isOvernightA && isOvernightB) return -1;
+    
+    // Otherwise sort by start time
+    return totalMinutesA - totalMinutesB;
+  });
 };
 
 export const MinimumStaffingManager = () => {
@@ -122,12 +149,26 @@ export const MinimumStaffingManager = () => {
         .from('minimum_staffing')
         .select(`
           *,
-          shift_type:shift_type_id (id, name, start_time, end_time)
-        `)
-        .order('day_of_week');
+          shift_type:shift_type_id (id, name, start_time, end_time, crosses_midnight)
+        `);
 
       if (rulesError) throw rulesError;
-      setRules(rulesData || []);
+      
+      // Sort rules by shift name and day of week
+      const sortedRules = (rulesData || []).sort((a, b) => {
+        // First, sort by shift name
+        const shiftNameA = a.shift_type?.name || '';
+        const shiftNameB = b.shift_type?.name || '';
+        
+        if (shiftNameA !== shiftNameB) {
+          return shiftNameA.localeCompare(shiftNameB);
+        }
+        
+        // Then sort by day of week (0 = Sunday, 6 = Saturday)
+        return a.day_of_week - b.day_of_week;
+      });
+      
+      setRules(sortedRules);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load staffing rules');
@@ -177,13 +218,25 @@ export const MinimumStaffingManager = () => {
         }])
         .select(`
           *,
-          shift_type:shift_type_id (id, name, start_time, end_time)
+          shift_type:shift_type_id (id, name, start_time, end_time, crosses_midnight)
         `)
         .single();
 
       if (error) throw error;
 
-      setRules([...rules, data]);
+      // Add new rule and re-sort
+      const updatedRules = [...rules, data].sort((a, b) => {
+        const shiftNameA = a.shift_type?.name || '';
+        const shiftNameB = b.shift_type?.name || '';
+        
+        if (shiftNameA !== shiftNameB) {
+          return shiftNameA.localeCompare(shiftNameB);
+        }
+        
+        return a.day_of_week - b.day_of_week;
+      });
+      
+      setRules(updatedRules);
       setNewRule({
         shift_type_id: '',
         day_of_week: 1,
@@ -280,12 +333,24 @@ export const MinimumStaffingManager = () => {
         .insert(rulesToAdd)
         .select(`
           *,
-          shift_type:shift_type_id (id, name, start_time, end_time)
+          shift_type:shift_type_id (id, name, start_time, end_time, crosses_midnight)
         `);
 
       if (error) throw error;
 
-      setRules([...rules, ...(data || [])]);
+      // Add new rules and re-sort
+      const updatedRules = [...rules, ...(data || [])].sort((a, b) => {
+        const shiftNameA = a.shift_type?.name || '';
+        const shiftNameB = b.shift_type?.name || '';
+        
+        if (shiftNameA !== shiftNameB) {
+          return shiftNameA.localeCompare(shiftNameB);
+        }
+        
+        return a.day_of_week - b.day_of_week;
+      });
+      
+      setRules(updatedRules);
       toast.success(`Added ${rulesToAdd.length} rules for ${shift.name}`);
     } catch (error: any) {
       console.error('Error adding rules:', error);
@@ -294,6 +359,23 @@ export const MinimumStaffingManager = () => {
       setSaving(false);
     }
   };
+
+  // Group rules by shift for better organization in the table
+  const groupRulesByShift = () => {
+    const grouped: { [shiftName: string]: MinimumStaffingRule[] } = {};
+    
+    rules.forEach(rule => {
+      const shiftName = rule.shift_type?.name || 'Unknown Shift';
+      if (!grouped[shiftName]) {
+        grouped[shiftName] = [];
+      }
+      grouped[shiftName].push(rule);
+    });
+    
+    return grouped;
+  };
+
+  const groupedRules = groupRulesByShift();
 
   if (loading) {
     return (
@@ -419,7 +501,7 @@ export const MinimumStaffingManager = () => {
             Add rules for all 7 days to a shift (will skip existing days)
           </p>
           <div className="flex flex-wrap gap-2">
-            {shifts.map(shift => {
+            {orderShiftsByTime(shifts).map(shift => {
               const shiftRules = rules.filter(r => r.shift_type_id === shift.id);
               const defaults = getDefaultStaffingForShift(shift.name);
               
@@ -445,7 +527,7 @@ export const MinimumStaffingManager = () => {
           </div>
         </div>
 
-        {/* Existing Rules Table */}
+        {/* Existing Rules Table - Grouped by Shift */}
         <div className="space-y-4">
           <h3 className="font-semibold">Current Staffing Rules</h3>
           {rules.length === 0 ? (
@@ -453,88 +535,92 @@ export const MinimumStaffingManager = () => {
               No staffing rules configured yet. Add rules above.
             </p>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Shift</TableHead>
-                    <TableHead>Day</TableHead>
-                    <TableHead>Min Officers</TableHead>
-                    <TableHead>Min Supervisors</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rules.map((rule) => {
-                    const shift = shifts.find(s => s.id === rule.shift_type_id);
-                    const day = DAYS_OF_WEEK.find(d => d.value === rule.day_of_week);
-                    
-                    return (
-                      <TableRow key={rule.id}>
-                        <TableCell className="font-medium">
-                          {shift?.name || 'Unknown Shift'}
-                        </TableCell>
-                        <TableCell>{day?.label || 'Unknown Day'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              value={rule.minimum_officers}
-                              onChange={(e) => {
-                                const value = parseInt(e.target.value) || 0;
-                                handleUpdateRule(
-                                  rule.id, 
-                                  'minimum_officers', 
-                                  value >= 0 ? value : 0
-                                );
-                              }}
-                              disabled={saving}
-                              className={`w-20 ${rule.minimum_officers === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
-                            />
-                            {rule.minimum_officers === 0 && (
-                              <span className="text-xs text-amber-600">No min</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              value={rule.minimum_supervisors}
-                              onChange={(e) => {
-                                const value = parseInt(e.target.value) || 0;
-                                handleUpdateRule(
-                                  rule.id, 
-                                  'minimum_supervisors', 
-                                  value >= 0 ? value : 0
-                                );
-                              }}
-                              disabled={saving}
-                              className={`w-20 ${rule.minimum_supervisors === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
-                            />
-                            {rule.minimum_supervisors === 0 && (
-                              <span className="text-xs text-amber-600">No min</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteRule(rule.id)}
-                            disabled={saving}
-                            className="hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+            <div className="space-y-8">
+              {Object.entries(groupedRules).map(([shiftName, shiftRules]) => (
+                <div key={shiftName} className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b">
+                    <h4 className="font-semibold text-gray-800">{shiftName}</h4>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-32">Day of Week</TableHead>
+                        <TableHead>Min Officers</TableHead>
+                        <TableHead>Min Supervisors</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {shiftRules.sort((a, b) => a.day_of_week - b.day_of_week).map((rule) => {
+                        const day = DAYS_OF_WEEK.find(d => d.value === rule.day_of_week);
+                        
+                        return (
+                          <TableRow key={rule.id}>
+                            <TableCell className="font-medium">
+                              {day?.label || 'Unknown Day'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={rule.minimum_officers}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value) || 0;
+                                    handleUpdateRule(
+                                      rule.id, 
+                                      'minimum_officers', 
+                                      value >= 0 ? value : 0
+                                    );
+                                  }}
+                                  disabled={saving}
+                                  className={`w-20 ${rule.minimum_officers === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
+                                />
+                                {rule.minimum_officers === 0 && (
+                                  <span className="text-xs text-amber-600">No min</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={rule.minimum_supervisors}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value) || 0;
+                                    handleUpdateRule(
+                                      rule.id, 
+                                      'minimum_supervisors', 
+                                      value >= 0 ? value : 0
+                                    );
+                                  }}
+                                  disabled={saving}
+                                  className={`w-20 ${rule.minimum_supervisors === 0 ? 'border-amber-200 bg-amber-50' : ''}`}
+                                />
+                                {rule.minimum_supervisors === 0 && (
+                                  <span className="text-xs text-amber-600">No min</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteRule(rule.id)}
+                                disabled={saving}
+                                className="hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -543,7 +629,7 @@ export const MinimumStaffingManager = () => {
         <div className="space-y-4">
           <h3 className="font-semibold">Summary by Shift</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {shifts.map(shift => {
+            {orderShiftsByTime(shifts).map(shift => {
               const shiftRules = rules.filter(r => r.shift_type_id === shift.id);
               const avgOfficers = shiftRules.length > 0 
                 ? Math.round(shiftRules.reduce((sum, r) => sum + r.minimum_officers, 0) / shiftRules.length * 10) / 10

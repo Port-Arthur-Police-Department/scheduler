@@ -928,42 +928,53 @@ return (
             // Get overtime officers for this day
             const overtimeForDay = processedOvertimeData.overtimeByDate[dateStr] || [];
             
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-              const isSupervisor = isSupervisorByRank(officer);
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isSupervisor && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime supervisors (those assigned as "Supervisor" or similar)
-            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return isSupervisorPosition(position);
-            }).length || 0;
-            
-            const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-            
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-              const isOfficer = !isSupervisorByRank(officer);
-              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isOfficer && isNotPPO && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime officers (those NOT assigned as supervisors)
-            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-            }).length || 0;
-            
-            const officerCount = regularOfficerCount + overtimeOfficerCount;
+// Process officers for this day
+const dayOfficersForProcessing = daySchedule?.officers || [];
+const processedOfficers = dayOfficersForProcessing.map(officer => ({
+  scheduleId: officer.scheduleId,
+  officerId: officer.officerId,
+  name: officer.officerName,
+  badge: officer.badgeNumber,
+  rank: officer.rank,
+  isPPO: officer.rank?.toLowerCase() === 'probationary',
+  position: officer.shiftInfo?.position,
+  unitNumber: officer.shiftInfo?.unitNumber,
+  notes: officer.shiftInfo?.notes,
+  type: officer.scheduleType === 'exception' ? 'exception' : 'recurring',
+  hasPTO: officer.shiftInfo?.hasPTO || false,
+  ptoData: officer.shiftInfo?.hasPTO ? {
+    id: officer.scheduleId,
+    ptoType: officer.shiftInfo?.ptoData?.ptoType || officer.shiftInfo?.reason,
+    startTime: officer.shiftInfo?.custom_start_time,
+    endTime: officer.shiftInfo?.custom_end_time,
+    isFullShift: !officer.shiftInfo?.custom_start_time && !officer.shiftInfo?.custom_end_time
+  } : undefined,
+  isPartnership: false, // Weekly view doesn't track partnerships
+  partnerOfficerId: undefined,
+  partnershipSuspended: false,
+  isExtraShift: officer.shiftInfo?.is_extra_shift === true,
+  shift: { id: selectedShiftId, name: 'Weekly View Shift' },
+  date: dateStr,
+  dayOfWeek: dayOfWeek
+}));
+
+// Categorize officers
+const categorized = categorizeOfficers(processedOfficers);
+const staffingCounts = calculateStaffingCounts(categorized);
+
+// Add overtime officers
+const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
+  const position = officer.shiftInfo?.position || "";
+  return isSupervisorPosition(position);
+}).length || 0;
+
+const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
+  const position = officer.shiftInfo?.position || "";
+  return !isSupervisorPosition(position) && !isSpecialAssignment(position);
+}).length || 0;
+
+const supervisorCount = staffingCounts.currentSupervisors + overtimeSupervisorCount;
+const officerCount = staffingCounts.currentOfficers + overtimeOfficerCount;
             
 const isOfficersUnderstaffed = minimumOfficers > 0 && officerCount < minimumOfficers;
 const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < minimumSupervisors;
@@ -1002,23 +1013,47 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumSupervisors = minStaffing.minimumSupervisors || 0;
             
-            // CRITICAL: Count ONLY non-overtime supervisors from daySchedule
-            const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
-              const isSupervisor = isSupervisorByRank(officer);
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isSupervisor && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime supervisors
-            const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return isSupervisorPosition(position);
-            }).length || 0;
-            
-            const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
+// Process officers for this day
+const dayOfficersForProcessing = daySchedule?.officers || [];
+const processedOfficers = dayOfficersForProcessing.map(officer => ({
+  scheduleId: officer.scheduleId,
+  officerId: officer.officerId,
+  name: officer.officerName,
+  badge: officer.badgeNumber,
+  rank: officer.rank,
+  isPPO: officer.rank?.toLowerCase() === 'probationary',
+  position: officer.shiftInfo?.position,
+  unitNumber: officer.shiftInfo?.unitNumber,
+  notes: officer.shiftInfo?.notes,
+  type: officer.scheduleType === 'exception' ? 'exception' : 'recurring',
+  hasPTO: officer.shiftInfo?.hasPTO || false,
+  ptoData: officer.shiftInfo?.hasPTO ? {
+    id: officer.scheduleId,
+    ptoType: officer.shiftInfo?.ptoData?.ptoType || officer.shiftInfo?.reason,
+    startTime: officer.shiftInfo?.custom_start_time,
+    endTime: officer.shiftInfo?.custom_end_time,
+    isFullShift: !officer.shiftInfo?.custom_start_time && !officer.shiftInfo?.custom_end_time
+  } : undefined,
+  isPartnership: false,
+  partnerOfficerId: undefined,
+  partnershipSuspended: false,
+  isExtraShift: officer.shiftInfo?.is_extra_shift === true,
+  shift: { id: selectedShiftId, name: 'Weekly View Shift' },
+  date: dateStr,
+  dayOfWeek: dayOfWeek
+}));
+
+// Categorize officers and get staffing counts
+const categorized = categorizeOfficers(processedOfficers);
+const staffingCounts = calculateStaffingCounts(categorized);
+
+// Add overtime supervisors
+const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
+  const position = officer.shiftInfo?.position || "";
+  return isSupervisorPosition(position);
+}).length || 0;
+
+const supervisorCount = staffingCounts.currentSupervisors + overtimeSupervisorCount;
             
             return (
 <div key={dateStr} className="p-2 text-center border-r text-sm">
@@ -1086,24 +1121,47 @@ const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < mi
             const minStaffing = getMinimumStaffing(dayOfWeek);
             const minimumOfficers = minStaffing.minimumOfficers || 0;
             
-            // CRITICAL: Count ONLY non-overtime officers from daySchedule
-            const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
-              const isOfficer = !isSupervisorByRank(officer);
-              const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
-              const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
-              const isSpecial = isSpecialAssignment(officer.shiftInfo?.position);
-              const isScheduled = officer.shiftInfo && !officer.shiftInfo.isOff && !hasFullDayPTO && !isSpecial;
-              const isOvertime = officer.shiftInfo?.is_extra_shift === true; // STRICT CHECK
-              return isOfficer && isNotPPO && isScheduled && !isOvertime;
-            }).length || 0;
-            
-            // Count overtime officers (those NOT assigned as supervisors or special assignments)
-            const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
-              const position = officer.shiftInfo?.position || "";
-              return !isSupervisorPosition(position) && !isSpecialAssignment(position);
-            }).length || 0;
-            
-            const officerCount = regularOfficerCount + overtimeOfficerCount;
+// Process officers for this day
+const dayOfficersForProcessing = daySchedule?.officers || [];
+const processedOfficers = dayOfficersForProcessing.map(officer => ({
+  scheduleId: officer.scheduleId,
+  officerId: officer.officerId,
+  name: officer.officerName,
+  badge: officer.badgeNumber,
+  rank: officer.rank,
+  isPPO: officer.rank?.toLowerCase() === 'probationary',
+  position: officer.shiftInfo?.position,
+  unitNumber: officer.shiftInfo?.unitNumber,
+  notes: officer.shiftInfo?.notes,
+  type: officer.scheduleType === 'exception' ? 'exception' : 'recurring',
+  hasPTO: officer.shiftInfo?.hasPTO || false,
+  ptoData: officer.shiftInfo?.hasPTO ? {
+    id: officer.scheduleId,
+    ptoType: officer.shiftInfo?.ptoData?.ptoType || officer.shiftInfo?.reason,
+    startTime: officer.shiftInfo?.custom_start_time,
+    endTime: officer.shiftInfo?.custom_end_time,
+    isFullShift: !officer.shiftInfo?.custom_start_time && !officer.shiftInfo?.custom_end_time
+  } : undefined,
+  isPartnership: false,
+  partnerOfficerId: undefined,
+  partnershipSuspended: false,
+  isExtraShift: officer.shiftInfo?.is_extra_shift === true,
+  shift: { id: selectedShiftId, name: 'Weekly View Shift' },
+  date: dateStr,
+  dayOfWeek: dayOfWeek
+}));
+
+// Categorize officers and get staffing counts
+const categorized = categorizeOfficers(processedOfficers);
+const staffingCounts = calculateStaffingCounts(categorized);
+
+// Add overtime officers
+const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
+  const position = officer.shiftInfo?.position || "";
+  return !isSupervisorPosition(position) && !isSpecialAssignment(position);
+}).length || 0;
+
+const officerCount = staffingCounts.currentOfficers + overtimeOfficerCount;
             
             return (
 <div key={dateStr} className="p-2 text-center border-r text-sm font-medium">

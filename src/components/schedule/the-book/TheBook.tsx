@@ -34,6 +34,18 @@ import { useWeeklyScheduleMutations } from "@/hooks/useWeeklyScheduleMutations";
 import { useColorSettings } from "@/hooks/useColorSettings";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { auditLogger } from "@/lib/auditLogger";
+import { 
+  isShiftUnderstaffed, 
+  hasMinimumRequirements,
+  formatStaffingCount  
+} from "@/utils/staffingUtils";
+import { 
+  categorizeOfficers, 
+  calculateStaffingCounts as calculateStaffingCountsFromUtils,
+  isSupervisorByRank as isSupervisorByRankUtil,
+  isRidingWithPartnerPosition,
+  OfficerData 
+} from "@/utils/scheduleUtils";
 
 // Import view components
 import { WeeklyView } from "./WeeklyView";

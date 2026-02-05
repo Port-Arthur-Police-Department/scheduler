@@ -858,41 +858,6 @@ const handleSaveAssignment = async (assignmentData: any) => {
     toast.dismiss();
   }
 };
-    
-    return; // Exit early since we handled new assignment
-  }
-  
-  // For existing assignments (updates)
-  console.log('✏️ Updating EXISTING assignment');
-  
-  updatePositionMutation.mutate(assignmentData, {
-    onSuccess: () => {
-      // Force cache invalidation
-      invalidateScheduleQueries();
-      
-      // Log audit trail
-      try {
-        auditLogger.logPositionChange(
-          assignmentData.officerId,
-          editingAssignment?.officerName || "Unknown Officer",
-          editingAssignment?.officer?.shiftInfo?.currentPosition || 'Unknown',
-          assignmentData.positionName,
-          userEmail,
-          `Changed position for ${editingAssignment?.officerName || 'Unknown'} on ${assignmentData.date}`
-        );
-      } catch (logError) {
-        console.error('Failed to log position change audit:', logError);
-      }
-      
-      setEditingAssignment(null);
-      toast.success("Assignment updated successfully");
-    },
-    onError: (error) => {
-      console.error('❌ Error updating assignment:', error);
-      toast.error(error.message || "Failed to update assignment");
-    }
-  });
-};
 
   const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     safeRemoveOfficerMutation.mutate({

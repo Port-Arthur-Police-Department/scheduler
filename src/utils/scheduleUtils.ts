@@ -1,88 +1,188 @@
-// src/utils/scheduleUtils.ts
+// src/utils/scheduleUtils.ts - UPDATED VERSION
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
+import { isPPOByRank } from "@/utils/ppoUtils";
+import { sortSupervisorsByRank } from "./sortingUtils";
+
+export interface OfficerData {
+  scheduleId: string;
+  officerId: string;
+  name: string;
+  badge?: string;
+  rank?: string;
+  isPPO: boolean;
+  position?: string;
+  unitNumber?: string;
+  notes?: string;
+  type: "recurring" | "exception";
+  hasPTO: boolean;
+  ptoData?: {
+    id: string;
+    ptoType: string;
+    startTime: string;
+    endTime: string;
+    isFullShift: boolean;
+  };
+  isPartnership: boolean;
+  partnerOfficerId?: string;
+  partnershipSuspended: boolean;
+  isExtraShift: boolean;
+  shift: any;
+  date?: string;
+  dayOfWeek?: number;
+}
 
 /**
- * Get last name from full name
+ * Check if officer is a supervisor by rank (matching DailyScheduleView logic)
  */
-export const getLastName = (fullName: string): string => {
-  return fullName?.split(' ').pop() || fullName;
+export const isSupervisorByRank = (rank: string | undefined | null): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  return (
+    rankLower.includes('sergeant') ||
+    rankLower.includes('lieutenant') ||
+    rankLower.includes('captain') ||
+    rankLower.includes('chief') ||
+    rankLower.includes('commander') ||
+    rankLower.includes('supervisor')
+  );
 };
 
 /**
- * Sort supervisors by rank, then by last name
+ * Check if position is "Riding with partner" or similar
  */
-export const sortSupervisorsByRank = (supervisors: any[]) => {
-  return supervisors.sort((a, b) => {
-    const rankA = a.rank || 'Officer';
-    const rankB = b.rank || 'Officer';
-    const rankComparison = 
-      (RANK_ORDER[rankA as keyof typeof RANK_ORDER] || 99) - 
-      (RANK_ORDER[rankB as keyof typeof RANK_ORDER] || 99);
-    
-    if (rankComparison === 0) {
-      return getLastName(a.officerName || a.name || '').localeCompare(
-        getLastName(b.officerName || b.name || '')
-      );
-    }
-    
-    return rankComparison;
-  });
-};
-
-/**
- * Categorize and sort officers into supervisors and regular officers
- */
-export const categorizeAndSortOfficers = (officers: any[]) => {
-  const supervisors = officers
-    .filter(officer => 
-      officer.shiftInfo?.position?.toLowerCase().includes('supervisor') ||
-      officer.position?.toLowerCase().includes('supervisor')
-    );
-  
-  const sortedSupervisors = sortSupervisorsByRank(supervisors);
-
-  const regularOfficers = officers
-    .filter(officer => 
-      !(officer.shiftInfo?.position?.toLowerCase().includes('supervisor') ||
-        officer.position?.toLowerCase().includes('supervisor'))
-    )
-    .sort((a, b) => 
-      getLastName(a.officerName || a.name || '').localeCompare(
-        getLastName(b.officerName || b.name || '')
-      )
-    );
-
-  return { supervisors: sortedSupervisors, regularOfficers };
-};
-
-/**
- * Check if position is a special assignment
- */
-export const isSpecialAssignment = (position: string | undefined): boolean => {
+export const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
   if (!position) return false;
-  
-  return position.toLowerCase().includes('other') ||
-         !PREDEFINED_POSITIONS.includes(position);
+  const positionLower = position.toLowerCase();
+  return (
+    positionLower.includes('riding with') ||
+    positionLower.includes('riding partner') ||
+    positionLower.includes('emergency partner') ||
+    positionLower === 'other'
+  );
 };
 
 /**
- * Calculate staffing counts excluding PTO and special assignments
+ * Check if officer should be counted in staffing calculations (matches DailyScheduleView)
+ */
+export const shouldCountOfficerForStaffing = (officer: OfficerData): boolean => {
+  // Exclude officers with full day PTO
+  if (officer.hasPTO && officer.ptoData?.isFullShift) {
+    return false;
+  }
+  
+  // Exclude PPOs from officer counts (but supervisors can be PPOs)
+  const isSupervisor = isSupervisorByRank(officer.rank);
+  if (!isSupervisor && officer.isPPO) {
+    return false;
+  }
+  
+  return true;
+};
+
+/**
+ * Categorize officers (matching DailyScheduleView logic)
+ */
+export const categorizeOfficers = (
+  allOfficers: OfficerData[]
+): {
+  supervisors: OfficerData[];
+  regularOfficers: OfficerData[];
+  suspendedPartnershipOfficers: OfficerData[];
+  specialAssignmentOfficers: OfficerData[];
+} => {
+  // 1. Special assignments first (exclude those in partnerships)
+  const specialAssignmentOfficers = allOfficers.filter(o => {
+    // Skip officers in ANY partnership
+    if (o.isPartnership) return false;
+    
+    const position = o.position?.toLowerCase() || '';
+    const isSpecialAssignment = 
+      (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
+      (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
+    
+    return isSpecialAssignment;
+  });
+
+  // 2. Supervisors (excluding special assignments and partnerships)
+  const supervisors = sortSupervisorsByRank(
+    allOfficers.filter(o => {
+      // Skip special assignment officers
+      const position = o.position?.toLowerCase() || '';
+      const isSpecialAssignment = 
+        (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
+        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
+      if (isSpecialAssignment) return false;
+      
+      // Skip officers in ANY partnership
+      if (o.isPartnership) return false;
+      
+      // Check by position OR by rank
+      const hasSupervisorPosition = position.includes('supervisor');
+      const hasSupervisorRank = isSupervisorByRank(o.rank);
+      
+      return hasSupervisorPosition || hasSupervisorRank;
+    })
+  );
+
+  // 3. Regular officers (everyone else)
+  const regularOfficers = allOfficers.filter(o => {
+    // Skip officers with full day PTO
+    if (o.hasPTO && o.ptoData?.isFullShift) return false;
+    
+    // Skip special assignment officers
+    const position = o.position?.toLowerCase() || '';
+    const isSpecialAssignment = 
+      (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
+      (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
+    if (isSpecialAssignment) return false;
+    
+    // Skip supervisors
+    const hasSupervisorPosition = position.includes('supervisor');
+    const hasSupervisorRank = isSupervisorByRank(o.rank);
+    if (hasSupervisorPosition || hasSupervisorRank) return false;
+    
+    // Skip suspended partnerships
+    if (o.partnershipSuspended) return false;
+    
+    return true;
+  });
+
+  // 4. Suspended partnerships
+  const suspendedPartnershipOfficers = allOfficers.filter(o => 
+    o.isPartnership && o.partnershipSuspended
+  );
+
+  return {
+    supervisors,
+    regularOfficers,
+    suspendedPartnershipOfficers,
+    specialAssignmentOfficers
+  };
+};
+
+/**
+ * Calculate staffing counts (matching DailyScheduleView logic)
  */
 export const calculateStaffingCounts = (
-  categorizedOfficers: { supervisors: any[]; regularOfficers: any[] }
-) => {
-  const supervisorCount = categorizedOfficers.supervisors.filter(
-    officer => !officer.shiftInfo?.hasPTO
-  ).length;
+  categorizedOfficers: ReturnType<typeof categorizeOfficers>
+): {
+  currentSupervisors: number;
+  currentOfficers: number;
+} => {
+  // Count supervisors (excluding full day PTO)
+  const countedSupervisors = categorizedOfficers.supervisors.filter(supervisor => 
+    !(supervisor.hasPTO && supervisor.ptoData?.isFullShift)
+  );
 
-  const officerCount = categorizedOfficers.regularOfficers.filter(officer => {
-    const position = officer.shiftInfo?.position;
-    return !officer.shiftInfo?.hasPTO && !isSpecialAssignment(position);
-  }).length;
+  // Count officers (excluding PPOs and full day PTO)
+  const countedOfficers = categorizedOfficers.regularOfficers.filter(officer => {
+    const isPPO = officer.isPPO;
+    const hasFullDayPTO = officer.hasPTO && officer.ptoData?.isFullShift;
+    return !isPPO && !hasFullDayPTO;
+  });
 
-  return { supervisorCount, officerCount };
+  return {
+    currentSupervisors: countedSupervisors.length,
+    currentOfficers: countedOfficers.length
+  };
 };
-
-// REMOVED: Hardcoded minimum staffing values since we use the database table
-// export const MINIMUM_STAFFING = { ... };
-// export const MINIMUM_SUPERVISORS = 1;

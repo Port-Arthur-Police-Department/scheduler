@@ -21,7 +21,7 @@ import {
 import { 
   categorizeOfficers, 
   calculateStaffingCounts,
-  isSupervisorByRank,
+  isSupervisorByRank as isSupervisorByRankUtil, 
   isRidingWithPartnerPosition,
   OfficerData 
 } from "@/utils/scheduleUtils";

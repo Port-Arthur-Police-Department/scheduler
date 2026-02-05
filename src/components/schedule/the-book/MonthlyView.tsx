@@ -1,15 +1,14 @@
-// MonthlyView.tsx - UPDATED WITH MOBILE VERSION LOGIC
+// MonthlyView.tsx - UPDATED USING CONSTANTS
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths, startOfYear, endOfYear } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { ViewProps } from "./types";
-import { calculateStaffingCounts, getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
-import TheBookMobile from "./TheBookMobile";
+import { getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
+import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -30,7 +29,6 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   getRankAbbreviation = getRankAbbreviationUtil,
   onDateChange,
 }) => {
-  // Add state hooks here
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthDate, setSelectedMonthDate] = useState(currentDate);
 
@@ -38,13 +36,6 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   useEffect(() => {
     setSelectedMonthDate(currentDate);
   }, [currentDate]);
-
-  // Call onDateChange when component mounts with initial date
-  useEffect(() => {
-    if (onDateChange) {
-      onDateChange(currentDate);
-    }
-  }, []);
 
   // Sync selected date when popover opens
   useEffect(() => {
@@ -83,9 +74,9 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
     }
   };
 
-  // ============ MOBILE VERSION LOGIC FOR STAFFING ============
+  // ============ STAFFING CALCULATION LOGIC ============
   
-  // Helper function to check if an officer is a supervisor (matches mobile logic)
+  // Helper function to check if an officer is a supervisor
   const isSupervisorByRank = (officer: any) => {
     const rank = officer?.rank || '';
     const rankLower = rank.toLowerCase();
@@ -97,45 +88,42 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
            rankLower.includes('captain');
   };
 
-  // Helper function to check if an assignment is "other" or special
-  // This matches the logic in WeeklyView's isSpecialAssignment
-  const isSpecialAssignment = (position: string) => {
+  // Helper function to check if an assignment is a regular position (not special)
+  // USING PREDEFINED_POSITIONS from constants
+  const isRegularPosition = (position: string) => {
     if (!position) return false;
     
     const positionLower = position.toLowerCase();
     
     // Check if it's a "Partner with" assignment
     if (positionLower.includes('partner with')) {
-      return false; // Partner assignments are regular assignments
+      return false; // Partner assignments are NOT regular positions
     }
     
-    // Check if it contains "other" or looks like a special assignment
-    return positionLower.includes('other') || 
-           (!positionLower.match(/^\d+$/) && // Not just a number (like "1", "2", etc.)
-            !positionLower.includes('sgt') &&
-            !positionLower.includes('supervisor') &&
-            !positionLower.includes('lieutenant') &&
-            !positionLower.includes('chief') &&
-            !positionLower.includes('captain'));
+    // Check if position matches any predefined position (case-insensitive)
+    return PREDEFINED_POSITIONS.some(predefined => 
+      positionLower === predefined.toLowerCase() || 
+      positionLower.includes(predefined.toLowerCase())
+    );
   };
 
-  // Get minimum staffing - matches mobile logic from WeeklyViewMobile
+  // Helper function to check if an assignment is special (not a regular position)
+  const isSpecialAssignment = (position: string) => {
+    return !isRegularPosition(position);
+  };
+
+  // Get minimum staffing
   const getMinimumStaffing = (dayOfWeek: number) => {
     if (!schedules?.minimumStaffing) {
       return { minimumOfficers: 0, minimumSupervisors: 0 };
     }
     
-    console.log('📊 MonthlyView - Checking minimum staffing for day:', dayOfWeek);
-    console.log('Minimum staffing structure:', schedules.minimumStaffing);
-    
     // Handle Map structure (from TheBook.tsx query)
     if (schedules.minimumStaffing instanceof Map) {
       const dayStaffing = schedules.minimumStaffing.get(dayOfWeek);
-      console.log('Day staffing from Map:', dayStaffing);
       
       if (dayStaffing && dayStaffing instanceof Map) {
         const shiftStaffing = dayStaffing.get(selectedShiftId);
-        console.log('Shift staffing:', shiftStaffing);
         return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
       }
     }
@@ -143,20 +131,17 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
     // Handle object structure (fallback)
     if (typeof schedules.minimumStaffing === 'object') {
       const dayStaffing = (schedules.minimumStaffing as any)[dayOfWeek];
-      console.log('Day staffing from object:', dayStaffing);
       
       if (dayStaffing && typeof dayStaffing === 'object') {
         const shiftStaffing = dayStaffing[selectedShiftId];
-        console.log('Shift staffing:', shiftStaffing);
         return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
       }
     }
     
-    console.log('⚠️ No minimum staffing found, using defaults');
     return { minimumOfficers: 0, minimumSupervisors: 0 };
   };
 
-  // Calculate staffing for a day - matches mobile/WeeklyView logic
+  // Calculate staffing for a day - INCLUDES OVERTIME OFFICERS
   const calculateDayStaffing = (daySchedule: any) => {
     if (!daySchedule || !daySchedule.officers) {
       return { supervisorCount: 0, officerCount: 0 };
@@ -172,18 +157,27 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
       const isSupervisor = isSupervisorByRank(officer);
       const isPPO = officer.rank?.toLowerCase() === 'probationary';
       
+      // Check if it's a regular position (not special assignment)
+      const isRegular = isRegularPosition(position);
+      
       // Check if it's a special assignment
-      const isSpecial = isSpecialAssignment(position);
+      const isSpecial = !isRegular;
       
       // IMPORTANT: Officer is counted for staffing IF:
-      // 1. They are NOT off
+      // 1. They are NOT off (unless they're working overtime)
       // 2. They do NOT have PTO
       // 3. They are NOT assigned to a special assignment
       // 4. They are NOT a PPO (PPOs have separate minimums if any)
-      // 5. They are NOT working overtime (is_extra_shift)
+      // 5. OVERTIME OFFICERS ARE COUNTED (is_extra_shift = true)
+      
       const isOvertime = officer.shiftInfo?.is_extra_shift === true;
       
-      const shouldCount = !isOff && !hasPTO && !isSpecial && !isPPO && !isOvertime;
+      // Overtime officers should be counted UNLESS they have PTO
+      if (isOvertime && hasPTO) {
+        return; // Overtime officer with PTO doesn't count
+      }
+      
+      const shouldCount = !isOff && !hasPTO && !isSpecial && !isPPO;
       
       if (shouldCount) {
         if (isSupervisor) {
@@ -194,11 +188,10 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
       }
     });
     
-    console.log(`👮 Day ${daySchedule?.date}: ${supervisorCount} sup, ${officerCount} ofc`);
     return { supervisorCount, officerCount };
   };
 
-  // Helper function to format staffing count (matches WeeklyView)
+  // Helper function to format staffing count
   const formatStaffingCount = (count: number, minimum: number, label: string) => {
     if (minimum > 0) {
       return `${count}/${minimum} ${label}`;
@@ -315,12 +308,10 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
           const isCurrentMonthDay = isSameMonth(day, currentDate);
           const isToday = isSameDay(day, new Date());
           
-          // Get minimum staffing using the same logic as mobile
+          // Get minimum staffing
           const minStaffing = getMinimumStaffing(dayOfWeek);
           const minimumOfficers = minStaffing.minimumOfficers || 0;
           const minimumSupervisors = minStaffing.minimumSupervisors || 0;
-          
-          console.log(`📅 MonthlyView Day ${dateStr}: Min=${minimumSupervisors} sup, ${minimumOfficers} ofc`);
           
           // Filter PTO officers
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => {
@@ -333,12 +324,12 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
                    ptoType.includes('sick') || ptoType.includes('comp');
           }) || [];
 
-          // Calculate staffing counts using mobile logic
+          // Calculate staffing counts - INCLUDES OVERTIME
           const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
             ? calculateDayStaffing(daySchedule)
             : { supervisorCount: 0, officerCount: 0 };
 
-          // Check understaffing - matches mobile logic
+          // Check understaffing
           const isOfficersUnderstaffed = isCurrentMonthDay && 
                                          minimumOfficers > 0 && 
                                          officerCount < minimumOfficers;
@@ -348,8 +339,6 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
                                            supervisorCount < minimumSupervisors;
           
           const isUnderstaffed = isCurrentMonthDay && (isOfficersUnderstaffed || isSupervisorsUnderstaffed);
-
-          console.log(`👮 MonthlyView ${dateStr}: ${supervisorCount}/${minimumSupervisors} sup, ${officerCount}/${minimumOfficers} ofc, Understaffed=${isUnderstaffed}`);
 
           return (
             <div

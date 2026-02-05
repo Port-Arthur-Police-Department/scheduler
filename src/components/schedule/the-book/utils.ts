@@ -1,15 +1,16 @@
 // src/components/schedule/the-book/utils.ts
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
-import { getLastName as getLastNameFromUtils } from "@/utils/sortingUtils"; // FIXED: Import from sortingUtils
+import { getLastName as getLastNameFromUtils } from "@/utils/scheduleUtils";
 import { isPPOByRank } from "@/utils/ppoUtils";
 import { 
   sortOfficersConsistently, 
   getServiceCreditForSorting,
   type OfficerForSorting,
-  isSupervisor as isSupervisorFromSortingUtils 
+  isSupervisor as isSupervisorFromSortingUtils
+  // REMOVE THIS: isPPO as isPPOFromSortingUtils 
 } from "@/utils/sortingUtils";
 
-// Re-export from sortingUtils (not scheduleUtils)
+// Re-export from scheduleUtils
 export { getLastNameFromUtils as getLastName };
 
 export const getRankAbbreviation = (rank: string): string => {

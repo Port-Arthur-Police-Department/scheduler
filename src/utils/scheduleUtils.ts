@@ -1,7 +1,7 @@
 // src/utils/scheduleUtils.ts - UPDATED VERSION
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
 import { isPPOByRank } from "@/utils/ppoUtils";
-import { sortSupervisorsByRank } from "./sortingUtils";
+import { getLastName } from "@/utils/sortingUtils";
 
 export interface OfficerData {
   scheduleId: string;
@@ -45,6 +45,32 @@ export const isSupervisorByRank = (rank: string | undefined | null): boolean => 
     rankLower.includes('commander') ||
     rankLower.includes('supervisor')
   );
+};
+
+/**
+ * Sort supervisors by rank (matching DailyScheduleView logic)
+ */
+export const sortSupervisorsByRank = (supervisors: any[]): any[] => {
+  if (!supervisors || supervisors.length === 0) return [];
+  
+  return [...supervisors].sort((a, b) => {
+    const rankA = a.rank || 'Officer';
+    const rankB = b.rank || 'Officer';
+    
+    // Get rank priority from RANK_ORDER
+    const rankComparison = 
+      (RANK_ORDER[rankA as keyof typeof RANK_ORDER] || 99) - 
+      (RANK_ORDER[rankB as keyof typeof RANK_ORDER] || 99);
+    
+    // If same rank, sort by last name
+    if (rankComparison === 0) {
+      const lastNameA = getLastName(a.name || a.officerName || '');
+      const lastNameB = getLastName(b.name || b.officerName || '');
+      return lastNameA.localeCompare(lastNameB);
+    }
+    
+    return rankComparison;
+  });
 };
 
 /**

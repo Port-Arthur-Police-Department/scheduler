@@ -1,8 +1,9 @@
-// src/utils/sortingUtils.ts
+// src/utils/sortingUtils.ts - UPDATED WITH ALL EXPORTS
+import { RANK_ORDER } from "@/constants/positions";
 import { isPPOByRank } from "@/utils/ppoUtils";
 
-// Helper function to extract last name
-const getLastName = (fullName: string = ""): string => {
+// Helper function to extract last name - NOW EXPORTED
+export const getLastName = (fullName: string = ""): string => {
   if (!fullName) return "";
   const parts = fullName.trim().split(/\s+/);
   return parts[parts.length - 1] || "";
@@ -164,20 +165,32 @@ export const sortOfficersByLastName = (officers: any[]): any[] => {
   });
 };
 
-export const isPPOByRank = (rank: string | undefined | null): boolean => {
-  if (!rank) return false;
-  const rankLower = rank.toLowerCase().trim();
-  return (
-    rankLower === 'probationary' ||
-    rankLower.includes('probationary') ||
-    rankLower.includes('ppo') ||
-    rankLower.includes('probation') ||
-    rankLower === 'ppo' ||
-    rankLower.includes('probationary officer') ||
-    rankLower.includes('probationary peace officer')
-  );
+/**
+ * Sort supervisors by rank (matching DailyScheduleView logic)
+ * This is now exported so it can be imported by scheduleUtils.ts
+ */
+export const sortSupervisorsByRank = (supervisors: any[]): any[] => {
+  if (!supervisors || supervisors.length === 0) return [];
+  
+  return [...supervisors].sort((a, b) => {
+    const rankA = a.rank || 'Officer';
+    const rankB = b.rank || 'Officer';
+    
+    // Get rank priority from RANK_ORDER
+    const rankComparison = 
+      (RANK_ORDER[rankA as keyof typeof RANK_ORDER] || 99) - 
+      (RANK_ORDER[rankB as keyof typeof RANK_ORDER] || 99);
+    
+    // If same rank, sort by last name
+    if (rankComparison === 0) {
+      const lastNameA = getLastName(a.name || a.officerName || '');
+      const lastNameB = getLastName(b.name || b.officerName || '');
+      return lastNameA.localeCompare(lastNameB);
+    }
+    
+    return rankComparison;
+  });
 };
-
 
 /**
  * Get officer type with consistent logic

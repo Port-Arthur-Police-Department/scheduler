@@ -16,8 +16,14 @@ import { sortOfficersConsistently } from "@/utils/sortingUtils";
 import { 
   isShiftUnderstaffed,
   hasMinimumRequirements,
-  formatStaffingCount  // ADD THIS
+  formatStaffingCount  
 } from "@/utils/staffingUtils";
+import { 
+  categorizeOfficers, 
+  calculateStaffingCounts,
+  isSupervisorByRank,
+  OfficerData 
+} from "@/utils/scheduleUtils";
 
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;

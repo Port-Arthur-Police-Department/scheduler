@@ -9,6 +9,13 @@ import { CalendarDays, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { ViewProps } from "./types";
 import { getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { 
+  categorizeOfficers, 
+  calculateStaffingCounts,
+  isSupervisorByRank,
+  isRidingWithPartnerPosition,
+  OfficerData 
+} from "@/utils/scheduleUtils";
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -324,10 +331,47 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
                    ptoType.includes('sick') || ptoType.includes('comp');
           }) || [];
 
-          // Calculate staffing counts - INCLUDES OVERTIME
-          const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
-            ? calculateDayStaffing(daySchedule)
-            : { supervisorCount: 0, officerCount: 0 };
+// Calculate staffing counts using shared utilities
+let supervisorCount = 0;
+let officerCount = 0;
+
+if (isCurrentMonthDay && daySchedule) {
+  // Transform officers to match OfficerData interface
+  const processedOfficers = daySchedule.officers?.map((officer: any) => ({
+    scheduleId: officer.scheduleId,
+    officerId: officer.officerId,
+    name: officer.officerName,
+    badge: officer.badgeNumber,
+    rank: officer.rank,
+    isPPO: officer.rank?.toLowerCase() === 'probationary',
+    position: officer.shiftInfo?.position,
+    unitNumber: officer.shiftInfo?.unitNumber,
+    notes: officer.shiftInfo?.notes,
+    type: officer.scheduleType === 'exception' ? 'exception' : 'recurring',
+    hasPTO: officer.shiftInfo?.hasPTO || false,
+    ptoData: officer.shiftInfo?.hasPTO ? {
+      id: officer.scheduleId,
+      ptoType: officer.shiftInfo?.ptoData?.ptoType || officer.shiftInfo?.reason,
+      startTime: officer.shiftInfo?.custom_start_time,
+      endTime: officer.shiftInfo?.custom_end_time,
+      isFullShift: !officer.shiftInfo?.custom_start_time && !officer.shiftInfo?.custom_end_time
+    } : undefined,
+    isPartnership: false, // Monthly view doesn't track partnerships
+    partnerOfficerId: undefined,
+    partnershipSuspended: false,
+    isExtraShift: officer.shiftInfo?.is_extra_shift === true,
+    shift: { id: selectedShiftId, name: 'Monthly View Shift' },
+    date: dateStr,
+    dayOfWeek: dayOfWeek
+  })) || [];
+
+  // Categorize officers
+  const categorized = categorizeOfficers(processedOfficers);
+  const staffingCounts = calculateStaffingCounts(categorized);
+  
+  supervisorCount = staffingCounts.currentSupervisors;
+  officerCount = staffingCounts.currentOfficers;
+}
 
           // Check understaffing
           const isOfficersUnderstaffed = isCurrentMonthDay && 

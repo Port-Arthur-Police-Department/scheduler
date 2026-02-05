@@ -1,4 +1,4 @@
-// MonthlyView.tsx
+// MonthlyView.tsx - UPDATED VERSION
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths, startOfYear, endOfYear } from "date-fns";
@@ -34,24 +34,24 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthDate, setSelectedMonthDate] = useState(currentDate);
 
-// Sync with parent when date changes
-useEffect(() => {
-  setSelectedMonthDate(currentDate);
-}, [currentDate]);
-
-// Call onDateChange when component mounts with initial date
-useEffect(() => {
-  if (onDateChange) {
-    onDateChange(currentDate);
-  }
-}, []);
-
-// ADD THIS NEW USEEFFECT: Sync selected date when popover opens
-useEffect(() => {
-  if (monthPickerOpen) {
+  // Sync with parent when date changes
+  useEffect(() => {
     setSelectedMonthDate(currentDate);
-  }
-}, [monthPickerOpen, currentDate]);
+  }, [currentDate]);
+
+  // Call onDateChange when component mounts with initial date
+  useEffect(() => {
+    if (onDateChange) {
+      onDateChange(currentDate);
+    }
+  }, []);
+
+  // Sync selected date when popover opens
+  useEffect(() => {
+    if (monthPickerOpen) {
+      setSelectedMonthDate(currentDate);
+    }
+  }, [monthPickerOpen, currentDate]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -74,6 +74,76 @@ useEffect(() => {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
+  // FIXED: Helper function to get minimum staffing
+  const getMinimumStaffing = (dayOfWeek: number) => {
+    if (!schedules?.minimumStaffing) {
+      console.log('❌ No minimum staffing data available');
+      return { minimumOfficers: 0, minimumSupervisors: 0 };
+    }
+    
+    console.log('🔍 Checking minimum staffing for day:', dayOfWeek, 'shift:', selectedShiftId);
+    console.log('📊 Minimum staffing structure:', schedules.minimumStaffing);
+    
+    // Handle both Map and object structures
+    if (schedules.minimumStaffing instanceof Map) {
+      // Map structure from TheBook.tsx query
+      const dayStaffing = schedules.minimumStaffing.get(dayOfWeek);
+      console.log('🗺️ Day staffing from Map:', dayStaffing);
+      
+      if (dayStaffing instanceof Map) {
+        const shiftStaffing = dayStaffing.get(selectedShiftId);
+        console.log('🎯 Shift staffing from Map:', shiftStaffing);
+        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
+      }
+    } else if (typeof schedules.minimumStaffing === 'object') {
+      // Object structure (fallback)
+      const dayStaffing = schedules.minimumStaffing[dayOfWeek];
+      console.log('📋 Day staffing from object:', dayStaffing);
+      
+      if (dayStaffing && typeof dayStaffing === 'object') {
+        const shiftStaffing = dayStaffing[selectedShiftId];
+        console.log('🎯 Shift staffing from object:', shiftStaffing);
+        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
+      }
+    }
+    
+    console.log('⚠️ Using default minimum staffing (0, 0)');
+    return { minimumOfficers: 0, minimumSupervisors: 0 };
+  };
+
+  // FIXED: Helper function to calculate staffing counts for a day
+  const calculateDayStaffing = (daySchedule: any) => {
+    if (!daySchedule || !daySchedule.officers) {
+      return { supervisorCount: 0, officerCount: 0, ppoCount: 0 };
+    }
+    
+    let supervisorCount = 0;
+    let officerCount = 0;
+    let ppoCount = 0;
+    
+    // Filter out officers with full-day PTO or who are off
+    daySchedule.officers.forEach((officer: any) => {
+      const isSupervisor = isSupervisorByRank(officer);
+      const isPPO = officer.rank?.toLowerCase() === 'probationary';
+      const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
+      const isOff = officer.shiftInfo?.isOff === true;
+      const isScheduled = officer.shiftInfo && !isOff && !hasFullDayPTO;
+      
+      if (isScheduled) {
+        if (isSupervisor) {
+          supervisorCount++;
+        } else if (isPPO) {
+          ppoCount++;
+        } else {
+          officerCount++;
+        }
+      }
+    });
+    
+    console.log(`📊 Day ${daySchedule.date}: Sup=${supervisorCount}, Ofc=${officerCount}, PPO=${ppoCount}`);
+    return { supervisorCount, officerCount, ppoCount };
+  };
+
   // Handle jump to month
   const handleJumpToMonth = (date: Date) => {
     const monthStart = startOfMonth(date);
@@ -81,6 +151,18 @@ useEffect(() => {
     if (onDateChange) {
       onDateChange(monthStart);
     }
+  };
+
+  // FIXED: Helper function for supervisor detection
+  const isSupervisorByRank = (officer: any) => {
+    const rank = officer?.rank || '';
+    const rankLower = rank.toLowerCase();
+    return rankLower.includes('lieutenant') || 
+           rankLower.includes('sergeant') ||
+           rankLower.includes('sgt') ||
+           rankLower.includes('lt') ||
+           rankLower.includes('chief') ||
+           rankLower.includes('captain');
   };
 
   return (
@@ -192,10 +274,12 @@ useEffect(() => {
           const isCurrentMonthDay = isSameMonth(day, currentDate);
           const isToday = isSameDay(day, new Date());
           
-          // Get minimum staffing from database
-          const minStaffingForDay = schedules.minimumStaffing?.get(dayOfWeek)?.get(selectedShiftId);
-          const minimumOfficers = minStaffingForDay?.minimumOfficers || 0;
-          const minimumSupervisors = minStaffingForDay?.minimumSupervisors || 1;
+          // FIXED: Get minimum staffing using the helper function
+          const minStaffing = getMinimumStaffing(dayOfWeek);
+          const minimumOfficers = minStaffing.minimumOfficers || 0;
+          const minimumSupervisors = minStaffing.minimumSupervisors || 0;
+          
+          console.log(`📅 Day ${dateStr} (${dayOfWeek}): Min=${minimumSupervisors} sup, ${minimumOfficers} ofc`);
           
           // Filter PTO officers
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => {
@@ -208,14 +292,23 @@ useEffect(() => {
                    ptoType.includes('sick') || ptoType.includes('comp');
           }) || [];
 
-          // Calculate staffing counts
+          // FIXED: Calculate staffing counts for the day
           const { supervisorCount, officerCount } = isCurrentMonthDay && daySchedule
-            ? calculateStaffingCounts(daySchedule.categorizedOfficers || { supervisors: [], officers: [], ppos: [] })
+            ? calculateDayStaffing(daySchedule)
             : { supervisorCount: 0, officerCount: 0 };
 
-          const isOfficersUnderstaffed = isCurrentMonthDay && (officerCount < minimumOfficers);
-          const isSupervisorsUnderstaffed = isCurrentMonthDay && (supervisorCount < minimumSupervisors);
+          // FIXED: Only show understaffed if we have minimum requirements AND are below them
+          const isOfficersUnderstaffed = isCurrentMonthDay && 
+                                         minimumOfficers > 0 && 
+                                         officerCount < minimumOfficers;
+          
+          const isSupervisorsUnderstaffed = isCurrentMonthDay && 
+                                           minimumSupervisors > 0 && 
+                                           supervisorCount < minimumSupervisors;
+          
           const isUnderstaffed = isCurrentMonthDay && (isOfficersUnderstaffed || isSupervisorsUnderstaffed);
+
+          console.log(`👮 Day ${dateStr}: ${supervisorCount}/${minimumSupervisors} sup, ${officerCount}/${minimumOfficers} ofc, Understaffed=${isUnderstaffed}`);
 
           return (
             <div
@@ -261,13 +354,23 @@ useEffect(() => {
                       PTO: {ptoOfficers.length}
                     </Badge>
                   )}
-                  {isCurrentMonthDay && !isUnderstaffed && (
+                  {isCurrentMonthDay && !isUnderstaffed && minimumSupervisors > 0 && (
                     <div className="flex flex-col gap-1">
                       <Badge variant="outline" className="text-xs h-4">
                         {supervisorCount}/{minimumSupervisors} Sup
                       </Badge>
                       <Badge variant="outline" className="text-xs h-4">
                         {officerCount}/{minimumOfficers} Ofc
+                      </Badge>
+                    </div>
+                  )}
+                  {isCurrentMonthDay && !isUnderstaffed && minimumSupervisors === 0 && (
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className="text-xs h-4">
+                        {supervisorCount} Sup
+                      </Badge>
+                      <Badge variant="outline" className="text-xs h-4">
+                        {officerCount} Ofc
                       </Badge>
                     </div>
                   )}

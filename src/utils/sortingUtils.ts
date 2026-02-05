@@ -2,7 +2,7 @@
 import { RANK_ORDER } from "@/constants/positions";
 import { isPPOByRank } from "@/utils/ppoUtils";
 
-// Helper function to extract last name - NOW EXPORTED
+// Make sure this is properly exported
 export const getLastName = (fullName: string = ""): string => {
   if (!fullName) return "";
   const parts = fullName.trim().split(/\s+/);

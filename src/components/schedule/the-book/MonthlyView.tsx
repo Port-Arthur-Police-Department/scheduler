@@ -12,7 +12,7 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { 
   categorizeOfficers, 
   calculateStaffingCounts,
-  isSupervisorByRank,
+  isSupervisorByRank as isSupervisorByRankUtil, 
   isRidingWithPartnerPosition,
   OfficerData 
 } from "@/utils/scheduleUtils";

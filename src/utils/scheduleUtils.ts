@@ -1,7 +1,7 @@
 // src/utils/scheduleUtils.ts - UPDATED VERSION
 import { RANK_ORDER, PREDEFINED_POSITIONS } from "@/constants/positions";
 import { isPPOByRank } from "@/utils/ppoUtils";
-import { getLastName } from "@/utils/sortingUtils";
+import { getLastName, sortSupervisorsByRank } from "@/utils/sortingUtils";
 
 export interface OfficerData {
   scheduleId: string;

@@ -8,9 +8,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { ViewProps } from "./types";
-import { calculateStaffingCounts, getRankAbbreviation as getRankAbbreviationUtil, isSupervisorByRank as isSupervisorByRankUtil } from "./utils";
-import TheBookMobile from "./TheBookMobile";
+import { calculateStaffingCounts, getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
 import { calculateDailyStaffing, getStaffingMinimums } from "@/utils/staffingCalculations";
+import TheBookMobile from "./TheBookMobile";
+
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {

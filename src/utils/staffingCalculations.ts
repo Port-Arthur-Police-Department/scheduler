@@ -1,5 +1,19 @@
 // src/utils/staffingCalculations.ts
-import { isSupervisorByRank } from "@/utils/scheduleUtils";
+
+// Helper function to check if an officer is a supervisor based on rank
+export const isSupervisorByRank = (rank: string | undefined): boolean => {
+  if (!rank) return false;
+  
+  const rankLower = rank.toLowerCase();
+  return (
+    rankLower.includes('lieutenant') ||
+    rankLower.includes('sergeant') ||
+    rankLower.includes('sgt') ||
+    rankLower.includes('chief') ||
+    rankLower.includes('captain') ||
+    rankLower.includes('supervisor')
+  );
+};
 
 export const calculateDailyStaffing = (daySchedule: any) => {
   if (!daySchedule?.officers) return { supervisorCount: 0, officerCount: 0, ppoCount: 0 };
@@ -18,7 +32,7 @@ export const calculateDailyStaffing = (daySchedule: any) => {
     const hasFullDayPTO = officer.shiftInfo?.hasPTO === true;
     
     if (!isOff && !hasFullDayPTO) {
-      const isSupervisor = isSupervisorByRank({ rank: officer.rank });
+      const isSupervisor = isSupervisorByRank(officer.rank);
       const isPPO = officer.rank?.toLowerCase() === 'probationary';
       
       if (isSupervisor) {

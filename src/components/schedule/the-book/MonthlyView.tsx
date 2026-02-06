@@ -31,7 +31,6 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   getLastName,
   getRankAbbreviation = getRankAbbreviationUtil,
   onDateChange,
-  isSupervisorByRank = isSupervisorByRankUtil,
 }) => {
   // Add state hooks here
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);

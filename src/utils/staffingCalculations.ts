@@ -1,5 +1,57 @@
 // src/utils/staffingCalculations.ts
 import { isSupervisorByRank } from "@/components/schedule/the-book/utils";
+import { PREDEFINED_POSITIONS } from "@/constants/positions";
+
+// Helper to check if position is "Riding with partner" or similar
+export const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
+  if (!position) return false;
+  const positionLower = position.toLowerCase();
+  return (
+    positionLower.includes('riding with') ||
+    positionLower.includes('riding partner') ||
+    positionLower.includes('emergency partner') ||
+    positionLower === 'other'
+  );
+};
+
+/**
+ * Check if an officer has a special assignment that should be excluded from regular staffing
+ */
+export const isSpecialAssignment = (position: string | undefined | null): boolean => {
+  if (!position) return false;
+  
+  const positionLower = position.toLowerCase();
+  const isOtherAssignment = positionLower.includes('other');
+  const isPredefinedPosition = PREDEFINED_POSITIONS.includes(position);
+  
+  return (isOtherAssignment && !isRidingWithPartnerPosition(position)) || 
+         (position && !isPredefinedPosition && !isRidingWithPartnerPosition(position));
+};
+
+/**
+ * Check if an officer should be counted for staffing (enhanced version)
+ */
+export const shouldCountForStaffing = (officer: any): boolean => {
+  if (!officer) return false;
+  
+  // Check basic conditions from existing function
+  const isOff = officer.shiftInfo?.isOff === true;
+  const hasFullDayPTO = officer.shiftInfo?.hasPTO === true;
+  
+  if (isOff || hasFullDayPTO) return false;
+  
+  // Check for excluded PTO types
+  if (isExcludedPTO(officer)) return false;
+  
+  // Check for "Other (Custom)" assignment
+  const position = officer.shiftInfo?.position || '';
+  if (isExcludedSpecialAssignment(position)) return false;
+  
+  // NEW: Check for special assignments (excluding "Riding with partner")
+  if (isSpecialAssignment(position)) return false;
+  
+  return true;
+};
 
 // PTO types that should NOT count toward staffing
 const PTO_TYPES_TO_EXCLUDE = ['vacation', 'holiday', 'sick', 'comp', 'other'];

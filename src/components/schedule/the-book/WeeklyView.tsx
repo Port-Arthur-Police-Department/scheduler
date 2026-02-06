@@ -13,12 +13,13 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { sortOfficersConsistently } from "@/utils/sortingUtils";
+
 import { 
   isShiftUnderstaffed,
   hasMinimumRequirements,
   formatStaffingCount  
 } from "@/utils/staffingUtils";
-import { calculateDailyStaffing, getStaffingMinimums } from "@/utils/staffingCalculations";
+import { calculateDailyStaffing, getStaffingMinimums,isSpecialAssignment } from "@/utils/staffingCalculations";
 
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
@@ -378,6 +379,17 @@ const processedOfficersData = useMemo(() => {
         regularOfficers: []
       };
     }
+
+    // Update the processedOfficersData useMemo to use it:
+const specialAssignmentOfficers = processedOfficers.filter(o => {
+  // Skip officers in ANY partnership
+  if (isInPartnership(o)) return false;
+  
+  // Use the shared function
+  const isSpecial = isSpecialAssignment(o.position);
+  
+  return isSpecial;
+});
 
     const allOfficers = new Map();
     const recurringSchedulesByOfficer = new Map();

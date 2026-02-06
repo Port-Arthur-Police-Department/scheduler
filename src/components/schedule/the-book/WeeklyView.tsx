@@ -12,7 +12,7 @@ import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { calculateShiftStaffing } from "@/utils/scheduleCalculations";
+import { calculateWeeklyStaffing, calculateShiftStaffing } from "@/utils/scheduleCalculations";
 import { sortOfficersConsistently } from "@/utils/sortingUtils";
 import { 
   isShiftUnderstaffed,

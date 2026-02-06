@@ -301,27 +301,6 @@ export const getStaffingMinimums = (minimumStaffing: any, dayOfWeek: number, shi
   return { minimumOfficers: 0, minimumSupervisors: 0 };
 };
 
-/**
- * Check if an officer should be counted for staffing
- */
-export const shouldCountForStaffing = (officer: any): boolean => {
-  if (!officer) return false;
-  
-  // Check basic conditions
-  const isOff = officer.shiftInfo?.isOff === true;
-  const hasFullDayPTO = officer.shiftInfo?.hasPTO === true;
-  
-  if (isOff || hasFullDayPTO) return false;
-  
-  // Check for excluded PTO types
-  if (isExcludedPTO(officer)) return false;
-  
-  // Check for "Other (Custom)" assignment
-  const position = officer.shiftInfo?.position || '';
-  if (isExcludedSpecialAssignment(position)) return false;
-  
-  return true;
-};
 
 /**
  * Get the staffing category for an officer based on position

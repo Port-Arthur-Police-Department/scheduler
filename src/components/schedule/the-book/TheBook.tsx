@@ -184,15 +184,25 @@ const TheBook = ({
     }
   }, [shiftTypes, userCurrentShift, selectedShiftId]);
 
-  // Fetch default assignments
+  // Fetch default assignments for all officers
   const { data: allDefaultAssignments } = useQuery({
-    queryKey: ["all-default-assignments"],
+    queryKey: ["all-default-assignments", selectedShiftId],
     queryFn: async () => {
+      if (!selectedShiftId) return [];
+      
+      const today = format(new Date(), "yyyy-MM-dd");
+      
       const { data, error } = await supabase
         .from("officer_default_assignments")
-        .select("*")
-        .or(`end_date.is.null,end_date.gte.${new Date().toISOString().split('T')[0]}`)
-        .lte("start_date", new Date().toISOString().split('T')[0]);
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${today}`)
+        .lte("start_date", today);
 
       if (error) {
         console.error("Error fetching default assignments:", error);
@@ -200,17 +210,19 @@ const TheBook = ({
       }
       return data || [];
     },
-    enabled: true, // Changed: Default assignments are officer-specific, not shift-specific
+    enabled: !!selectedShiftId,
   });
-  
-  // Helper function to get default assignment
-  const getDefaultAssignment = (officerId: string, date: string) => {
+
+  // Function to get default assignment for an officer on a specific day
+  const getDefaultAssignmentForDay = (officerId: string, dayOfWeek: number) => {
     if (!allDefaultAssignments) return null;
-    const dateObj = parseISO(date);
+    
+    const today = new Date();
     return allDefaultAssignments.find(da => 
       da.officer_id === officerId &&
-      parseISO(da.start_date) <= dateObj &&
-      (!da.end_date || parseISO(da.end_date) >= dateObj)
+      da.day_of_week === dayOfWeek &&
+      parseISO(da.start_date) <= today &&
+      (!da.end_date || parseISO(da.end_date) >= today)
     );
   };
 
@@ -241,230 +253,309 @@ const TheBook = ({
     return serviceCredits;
   };
 
-  // Function to fetch minimum staffing from database
-  const fetchMinimumStaffing = async (dayOfWeek: number) => {
-    const { data, error } = await supabase
-      .from("minimum_staffing")
-      .select("minimum_officers, minimum_supervisors, shift_type_id, day_of_week")
-      .eq("day_of_week", dayOfWeek);
-    
-    if (error) {
-      console.error("Error fetching minimum staffing:", error);
-      return new Map();
-    }
-    
-    // Create a map of shift_type_id to minimum staffing
-    const staffingMap = new Map();
-    data?.forEach(item => {
-      staffingMap.set(item.shift_type_id, {
-        minimumOfficers: item.minimum_officers,
-        minimumSupervisors: item.minimum_supervisors
-      });
-    });
-    
-    return staffingMap;
-  };
-
   // Build the main schedule query key
   const scheduleQueryKey = ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()];
 
-// In TheBook.tsx, REPLACE the entire schedule query (lines ~245-510) with:
+  // Main schedule query - FIXED with default assignments support
+  const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
+    queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
+    queryFn: async () => {
+      if (!selectedShiftId) return null;
 
-// Main schedule query - SIMPLIFIED version that matches mobile
-const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
-  queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
-  queryFn: async () => {
-    if (!selectedShiftId) return null;
+      console.log('📱 [Desktop] Fetching schedule data...');
+      
+      const startStr = activeView === "weekly" 
+        ? format(currentWeekStart, "yyyy-MM-dd") 
+        : format(startOfMonth(currentMonth), "yyyy-MM-dd");
+      
+      const endStr = activeView === "weekly"
+        ? format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd")
+        : format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
-    console.log('📱 [Desktop] Fetching schedule data...');
-    
-    const startStr = activeView === "weekly" 
-      ? format(currentWeekStart, "yyyy-MM-dd") 
-      : format(startOfMonth(currentMonth), "yyyy-MM-dd");
-    
-    const endStr = activeView === "weekly"
-      ? format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd")
-      : format(endOfMonth(currentMonth), "yyyy-MM-dd");
+      console.log('📅 Desktop date range:', startStr, 'to', endStr);
 
-    console.log('📅 Desktop date range:', startStr, 'to', endStr);
+      try {
+        // Fetch schedule exceptions (including overtime)
+        const { data: exceptions, error: exceptionsError } = await supabase
+          .from("schedule_exceptions")
+          .select(`
+            *,
+            profiles:officer_id (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("shift_type_id", selectedShiftId)
+          .gte("date", startStr)
+          .lte("date", endStr)
+          .order("date", { ascending: true });
 
-    try {
-      // Fetch schedule exceptions (including overtime)
-      const { data: exceptions, error: exceptionsError } = await supabase
-        .from("schedule_exceptions")
-        .select(`
-          *,
-          profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date,
-            promotion_date_sergeant, promotion_date_lieutenant,
-            service_credit_override
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .gte("date", startStr)
-        .lte("date", endStr)
-        .order("date", { ascending: true });
+        if (exceptionsError) throw exceptionsError;
 
-      if (exceptionsError) throw exceptionsError;
+        // Fetch recurring schedules
+        const { data: recurringSchedules, error: recurringError } = await supabase
+          .from("recurring_schedules")
+          .select(`
+            *,
+            profiles:officer_id (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("shift_type_id", selectedShiftId)
+          .or(`end_date.is.null,end_date.gte.${startStr}`);
 
-      // Fetch recurring schedules
-      const { data: recurringSchedules, error: recurringError } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          *,
-          profiles:officer_id (
-            id, full_name, badge_number, rank, hire_date,
-            promotion_date_sergeant, promotion_date_lieutenant,
-            service_credit_override
-          )
-        `)
-        .eq("shift_type_id", selectedShiftId)
-        .or(`end_date.is.null,end_date.gte.${startStr}`);
+        if (recurringError) throw recurringError;
 
-      if (recurringError) throw recurringError;
+        // Fetch minimum staffing
+        const { data: minStaffingData, error: minStaffingError } = await supabase
+          .from("minimum_staffing")
+          .select("*")
+          .eq("shift_type_id", selectedShiftId);
 
-      // Fetch minimum staffing
-      const { data: minStaffingData, error: minStaffingError } = await supabase
-        .from("minimum_staffing")
-        .select("*")
-        .eq("shift_type_id", selectedShiftId);
-
-      if (minStaffingError) {
-        console.error("Error fetching minimum staffing:", minStaffingError);
-      }
-
-      // Create minimum staffing map
-      const minimumStaffing = new Map();
-      minStaffingData?.forEach(staffing => {
-        if (!minimumStaffing.has(staffing.day_of_week)) {
-          minimumStaffing.set(staffing.day_of_week, new Map());
+        if (minStaffingError) {
+          console.error("Error fetching minimum staffing:", minStaffingError);
         }
-        minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
-          minimumOfficers: staffing.minimum_officers || 0,
-          minimumSupervisors: staffing.minimum_supervisors || 0
+
+        // Create minimum staffing map
+        const minimumStaffing = new Map();
+        minStaffingData?.forEach(staffing => {
+          if (!minimumStaffing.has(staffing.day_of_week)) {
+            minimumStaffing.set(staffing.day_of_week, new Map());
+          }
+          minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
+            minimumOfficers: staffing.minimum_officers || 0,
+            minimumSupervisors: staffing.minimum_supervisors || 0
+          });
         });
-      });
 
-      // Generate dates array
-      const dates = activeView === "weekly"
-        ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
-            .map(date => format(date, "yyyy-MM-dd"))
-        : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
-            .map(date => format(date, "yyyy-MM-dd"));
+        // Generate dates array
+        const dates = activeView === "weekly"
+          ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
+              .map(date => format(date, "yyyy-MM-dd"))
+          : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
+              .map(date => format(date, "yyyy-MM-dd"));
 
-      // Organize data by day for WeeklyView
-      const dailySchedules = dates.map(dateStr => {
-        const date = parseISO(dateStr);
-        const dayOfWeek = date.getDay();
+        // Create a map to store all officers and their service credits
+        const allOfficersMap = new Map();
         
-        // Get exceptions for this day
-        const dayExceptions = exceptions?.filter(e => e.date === dateStr) || [];
-        const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === dayOfWeek) || [];
+        // First, collect all officers from exceptions and recurring schedules
+        const allOfficerIds = new Set<string>();
         
-        const officers = [];
-        const processedOfficers = new Set();
+        // Add officer IDs from exceptions
+        exceptions?.forEach(exception => {
+          if (exception.officer_id) {
+            allOfficerIds.add(exception.officer_id);
+          }
+        });
         
-        // Process exceptions first (they override recurring)
-        dayExceptions.forEach(exception => {
-          const officerId = exception.officer_id;
-          processedOfficers.add(officerId);
+        // Add officer IDs from recurring schedules
+        recurringSchedules?.forEach(recurring => {
+          if (recurring.officer_id) {
+            allOfficerIds.add(recurring.officer_id);
+          }
+        });
+
+        // Fetch service credits for all officers
+        let serviceCreditsMap = new Map();
+        if (allOfficerIds.size > 0) {
+          serviceCreditsMap = await fetchServiceCredits(Array.from(allOfficerIds));
+        }
+
+        // Organize data by day for WeeklyView/MonthlyView - WITH DEFAULT ASSIGNMENTS
+        const dailySchedules = dates.map(dateStr => {
+          const date = parseISO(dateStr);
+          const dayOfWeek = date.getDay();
           
-          const profile = exception.profiles || {};
-          officers.push({
-            officerId: officerId,
-            officerName: profile.full_name || "Unknown",
-            badgeNumber: profile.badge_number || "9999",
-            rank: profile.rank || "Officer",
-            hire_date: profile.hire_date,
-            promotion_date_sergeant: profile.promotion_date_sergeant,
-            promotion_date_lieutenant: profile.promotion_date_lieutenant,
-            service_credit_override: profile.service_credit_override || 0,
-            date: dateStr,
-            dayOfWeek: dayOfWeek,
-            scheduleType: "exception",
-            shiftInfo: {
-              scheduleId: exception.id,
+          // Get exceptions for this day
+          const dayExceptions = exceptions?.filter(e => e.date === dateStr) || [];
+          const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === dayOfWeek) || [];
+          
+          const officers = [];
+          const processedOfficers = new Set();
+          
+          // Process exceptions first (they override recurring and defaults)
+          dayExceptions.forEach(exception => {
+            const officerId = exception.officer_id;
+            processedOfficers.add(officerId);
+            
+            const profile = exception.profiles || {};
+            const officerData = {
+              officerId: officerId,
+              officerName: profile.full_name || "Unknown",
+              badgeNumber: profile.badge_number || "9999",
+              rank: profile.rank || "Officer",
+              hire_date: profile.hire_date,
+              promotion_date_sergeant: profile.promotion_date_sergeant,
+              promotion_date_lieutenant: profile.promotion_date_lieutenant,
+              service_credit_override: profile.service_credit_override || 0,
+              service_credit: serviceCreditsMap.get(officerId) || 0,
+              date: dateStr,
+              dayOfWeek: dayOfWeek,
               scheduleType: "exception",
-              position: exception.position_name,
-              unitNumber: exception.unit_number,
-              isOff: exception.is_off || false,
-              hasPTO: exception.is_off && !!exception.reason,
-              ptoData: exception.is_off ? {
-                ptoType: exception.reason,
-                isFullShift: !exception.custom_start_time && !exception.custom_end_time,
-                startTime: exception.custom_start_time,
-                endTime: exception.custom_end_time
-              } : undefined,
-              reason: exception.reason,
-              is_extra_shift: exception.is_extra_shift || false,
-              custom_start_time: exception.custom_start_time,
-              custom_end_time: exception.custom_end_time
+              isException: true,
+              shiftInfo: {
+                scheduleId: exception.id,
+                scheduleType: "exception",
+                position: exception.position_name,
+                unitNumber: exception.unit_number,
+                isOff: exception.is_off || false,
+                hasPTO: exception.is_off && !!exception.reason,
+                ptoData: exception.is_off ? {
+                  ptoType: exception.reason,
+                  isFullShift: !exception.custom_start_time && !exception.custom_end_time,
+                  startTime: exception.custom_start_time,
+                  endTime: exception.custom_end_time
+                } : undefined,
+                reason: exception.reason,
+                is_extra_shift: exception.is_extra_shift || false,
+                custom_start_time: exception.custom_start_time,
+                custom_end_time: exception.custom_end_time
+              }
+            };
+            
+            // Store officer in map for easy access
+            if (!allOfficersMap.has(officerId)) {
+              allOfficersMap.set(officerId, {
+                ...officerData,
+                weeklySchedule: {}
+              });
             }
+            
+            officers.push(officerData);
           });
-        });
-        
-        // Process recurring schedules that weren't overridden by exceptions
-        dayRecurring.forEach(recurring => {
-          const officerId = recurring.officer_id;
-          if (processedOfficers.has(officerId)) return; // Skip if already processed
           
-          const profile = recurring.profiles || {};
-          officers.push({
-            officerId: officerId,
-            officerName: profile.full_name || "Unknown",
-            badgeNumber: profile.badge_number || "9999",
-            rank: profile.rank || "Officer",
-            hire_date: profile.hire_date,
-            promotion_date_sergeant: profile.promotion_date_sergeant,
-            promotion_date_lieutenant: profile.promotion_date_lieutenant,
-            service_credit_override: profile.service_credit_override || 0,
+          // Process recurring schedules that weren't overridden by exceptions
+          dayRecurring.forEach(recurring => {
+            const officerId = recurring.officer_id;
+            if (processedOfficers.has(officerId)) return; // Skip if already processed
+            
+            processedOfficers.add(officerId);
+            
+            const profile = recurring.profiles || {};
+            const officerData = {
+              officerId: officerId,
+              officerName: profile.full_name || "Unknown",
+              badgeNumber: profile.badge_number || "9999",
+              rank: profile.rank || "Officer",
+              hire_date: profile.hire_date,
+              promotion_date_sergeant: profile.promotion_date_sergeant,
+              promotion_date_lieutenant: profile.promotion_date_lieutenant,
+              service_credit_override: profile.service_credit_override || 0,
+              service_credit: serviceCreditsMap.get(officerId) || 0,
+              date: dateStr,
+              dayOfWeek: dayOfWeek,
+              scheduleType: "recurring",
+              isRegularRecurringDay: true,
+              shiftInfo: {
+                scheduleId: recurring.id,
+                scheduleType: "recurring",
+                position: recurring.position_name,
+                unitNumber: recurring.unit_number,
+                isOff: false,
+                hasPTO: false,
+                is_extra_shift: false
+              }
+            };
+            
+            // Store officer in map
+            if (!allOfficersMap.has(officerId)) {
+              allOfficersMap.set(officerId, {
+                ...officerData,
+                weeklySchedule: {}
+              });
+            }
+            
+            officers.push(officerData);
+          });
+          
+          // ADD DEFAULT ASSIGNMENTS for officers not already scheduled
+          if (allDefaultAssignments) {
+            allDefaultAssignments.forEach(defaultAssignment => {
+              const officerId = defaultAssignment.officer_id;
+              
+              // Skip if officer already scheduled for this day
+              if (processedOfficers.has(officerId)) return;
+              
+              // Check if default assignment applies to this day of week
+              if (defaultAssignment.day_of_week === dayOfWeek) {
+                processedOfficers.add(officerId);
+                
+                const profile = defaultAssignment.profiles || {};
+                const defaultOfficerData = {
+                  officerId: officerId,
+                  officerName: profile.full_name || "Unknown",
+                  badgeNumber: profile.badge_number || "9999",
+                  rank: profile.rank || "Officer",
+                  hire_date: profile.hire_date,
+                  service_credit: serviceCreditsMap.get(officerId) || 0,
+                  date: dateStr,
+                  dayOfWeek: dayOfWeek,
+                  scheduleType: "default",
+                  isDefaultAssignment: true,
+                  shiftInfo: {
+                    scheduleType: "default",
+                    position: defaultAssignment.position_name || "Default Assignment",
+                    isDefaultAssignment: true,
+                    isOff: false,
+                    hasPTO: false,
+                    is_extra_shift: false
+                  }
+                };
+                
+                // Store officer in map
+                if (!allOfficersMap.has(officerId)) {
+                  allOfficersMap.set(officerId, {
+                    ...defaultOfficerData,
+                    weeklySchedule: {}
+                  });
+                }
+                
+                officers.push(defaultOfficerData);
+                console.log(`✅ Added default assignment for ${profile.full_name} on ${dateStr}`);
+              }
+            });
+          }
+          
+          return {
             date: dateStr,
             dayOfWeek: dayOfWeek,
-            scheduleType: "recurring",
-            isRegularRecurringDay: true,
-            shiftInfo: {
-              scheduleId: recurring.id,
-              scheduleType: "recurring",
-              position: recurring.position_name,
-              unitNumber: recurring.unit_number,
-              isOff: false,
-              hasPTO: false,
-              is_extra_shift: false
-            }
-          });
+            officers: officers,
+            isCurrentMonth: activeView === "monthly" ? isSameMonth(date, currentMonth) : true
+          };
         });
-        
+
+        console.log('✅ Desktop schedule data fetched:', {
+          dates: dates.length,
+          dailySchedules: dailySchedules.length,
+          totalOfficers: dailySchedules.reduce((sum, day) => sum + day.officers.length, 0),
+          uniqueOfficers: allOfficersMap.size,
+          defaultAssignmentsApplied: dailySchedules.reduce((sum, day) => 
+            sum + day.officers.filter((o: any) => o.isDefaultAssignment).length, 0
+          )
+        });
+
         return {
-          date: dateStr,
-          dayOfWeek: dayOfWeek,
-          officers: officers,
-          isCurrentMonth: activeView === "monthly" ? isSameMonth(date, currentMonth) : true
+          dailySchedules,
+          dates,
+          recurring: recurringSchedules || [],
+          exceptions: exceptions || [],
+          startDate: startStr,
+          endDate: endStr,
+          minimumStaffing,
+          officerProfiles: allOfficersMap,
+          allOfficers: Array.from(allOfficersMap.values())
         };
-      });
 
-      console.log('✅ Desktop schedule data fetched:', {
-        dates: dates.length,
-        dailySchedules: dailySchedules.length,
-        totalOfficers: dailySchedules.reduce((sum, day) => sum + day.officers.length, 0)
-      });
-
-      return {
-        dailySchedules,
-        dates,
-        recurring: recurringSchedules || [],
-        exceptions: exceptions || [],
-        startDate: startStr,
-        endDate: endStr,
-        minimumStaffing
-      };
-
-    } catch (error) {
-      console.error('❌ Desktop schedule query error:', error);
-      throw error;
-    }
-  },
-  enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
-});
+      } catch (error) {
+        console.error('❌ Desktop schedule query error:', error);
+        throw error;
+      }
+    },
+    enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
+  });
 
   // Navigation functions
   const goToPreviousWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
@@ -501,6 +592,12 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
       // Invalidate officer profiles query
       queryClient.invalidateQueries({ 
         queryKey: ['officer-profiles-weekly'],
+        refetchType: 'all'
+      });
+      
+      // Invalidate default assignments query
+      queryClient.invalidateQueries({ 
+        queryKey: ['all-default-assignments', selectedShiftId],
         refetchType: 'all'
       });
       
@@ -556,114 +653,114 @@ const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
     }
   };
 
-// SIMPLIFIED handleSavePTO in TheBook.tsx
-const handleSavePTO = async (ptoData: any) => {
-  console.log('💾 Saving PTO for:', selectedOfficerForPTO?.name);
+  // SIMPLIFIED handleSavePTO in TheBook.tsx
+  const handleSavePTO = async (ptoData: any) => {
+    console.log('💾 Saving PTO for:', selectedOfficerForPTO?.name);
 
-  if (!selectedOfficerForPTO || !selectedShiftId) {
-    toast.error("Missing required information");
-    return;
-  }
-
-  try {
-    toast.loading("Assigning PTO...");
-
-    // Prepare PTO data
-    const startTime = ptoData.isFullShift 
-      ? (ptoData.startTime || "00:00") 
-      : ptoData.startTime;
-    
-    const endTime = ptoData.isFullShift 
-      ? (ptoData.endTime || "23:59") 
-      : ptoData.endTime;
-
-    // Create or update PTO exception
-    const { data: existingExceptions } = await supabase
-      .from("schedule_exceptions")
-      .select("id")
-      .eq("officer_id", selectedOfficerForPTO.id)
-      .eq("date", selectedOfficerForPTO.date)
-      .eq("shift_type_id", selectedShiftId);
-
-    if (existingExceptions && existingExceptions.length > 0) {
-      // Update existing
-      await supabase
-        .from("schedule_exceptions")
-        .update({
-          is_off: true,
-          reason: ptoData.ptoType,
-          custom_start_time: ptoData.isFullShift ? null : startTime,
-          custom_end_time: ptoData.isFullShift ? null : endTime,
-        })
-        .eq("id", existingExceptions[0].id);
-    } else {
-      // Create new
-      await supabase
-        .from("schedule_exceptions")
-        .insert({
-          officer_id: selectedOfficerForPTO.id,
-          date: selectedOfficerForPTO.date,
-          shift_type_id: selectedShiftId,
-          is_off: true,
-          reason: ptoData.ptoType,
-          custom_start_time: ptoData.isFullShift ? null : startTime,
-          custom_end_time: ptoData.isFullShift ? null : endTime,
-        });
+    if (!selectedOfficerForPTO || !selectedShiftId) {
+      toast.error("Missing required information");
+      return;
     }
 
-    // Handle PTO balance if enabled
-    if (websiteSettings?.show_pto_balances) {
-      const ptoColumn = getPTOColumn(ptoData.ptoType);
-      if (ptoColumn) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", selectedOfficerForPTO.id)
-          .single();
+    try {
+      toast.loading("Assigning PTO...");
 
-        if (profile) {
-          let hoursUsed = 8; // Default
-          if (!ptoData.isFullShift) {
-            hoursUsed = calculateHoursUsed(startTime, endTime);
-          }
-          
-          const currentBalance = profile[ptoColumn as keyof typeof profile] as number || 0;
-          
-          await supabase
+      // Prepare PTO data
+      const startTime = ptoData.isFullShift 
+        ? (ptoData.startTime || "00:00") 
+        : ptoData.startTime;
+      
+      const endTime = ptoData.isFullShift 
+        ? (ptoData.endTime || "23:59") 
+        : ptoData.endTime;
+
+      // Create or update PTO exception
+      const { data: existingExceptions } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", selectedOfficerForPTO.id)
+        .eq("date", selectedOfficerForPTO.date)
+        .eq("shift_type_id", selectedShiftId);
+
+      if (existingExceptions && existingExceptions.length > 0) {
+        // Update existing
+        await supabase
+          .from("schedule_exceptions")
+          .update({
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
+          })
+          .eq("id", existingExceptions[0].id);
+      } else {
+        // Create new
+        await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: selectedOfficerForPTO.id,
+            date: selectedOfficerForPTO.date,
+            shift_type_id: selectedShiftId,
+            is_off: true,
+            reason: ptoData.ptoType,
+            custom_start_time: ptoData.isFullShift ? null : startTime,
+            custom_end_time: ptoData.isFullShift ? null : endTime,
+          });
+      }
+
+      // Handle PTO balance if enabled
+      if (websiteSettings?.show_pto_balances) {
+        const ptoColumn = getPTOColumn(ptoData.ptoType);
+        if (ptoColumn) {
+          const { data: profile } = await supabase
             .from("profiles")
-            .update({
-              [ptoColumn]: Math.max(0, currentBalance - hoursUsed),
-            })
-            .eq("id", selectedOfficerForPTO.id);
+            .select("*")
+            .eq("id", selectedOfficerForPTO.id)
+            .single();
+
+          if (profile) {
+            let hoursUsed = 8; // Default
+            if (!ptoData.isFullShift) {
+              hoursUsed = calculateHoursUsed(startTime, endTime);
+            }
+            
+            const currentBalance = profile[ptoColumn as keyof typeof profile] as number || 0;
+            
+            await supabase
+              .from("profiles")
+              .update({
+                [ptoColumn]: Math.max(0, currentBalance - hoursUsed),
+              })
+              .eq("id", selectedOfficerForPTO.id);
+          }
         }
       }
+
+      // Log audit
+      auditLogger.logPTOAssignment(
+        selectedOfficerForPTO.id,
+        ptoData.ptoType,
+        selectedOfficerForPTO.date,
+        userEmail,
+        `Assigned ${ptoData.ptoType} PTO`
+      );
+
+      // CRITICAL: Close dialog FIRST
+      setPtoDialogOpen(false);
+      setSelectedOfficerForPTO(null);
+
+      // Then invalidate and show success
+      invalidateScheduleQueries();
+      
+      toast.success(`${ptoData.ptoType} PTO assigned successfully`);
+
+    } catch (error: any) {
+      toast.error(error.message || "Failed to assign PTO");
+      console.error('PTO assignment error:', error);
+    } finally {
+      toast.dismiss();
     }
-
-    // Log audit
-    auditLogger.logPTOAssignment(
-      selectedOfficerForPTO.id,
-      ptoData.ptoType,
-      selectedOfficerForPTO.date,
-      userEmail,
-      `Assigned ${ptoData.ptoType} PTO`
-    );
-
-    // CRITICAL: Close dialog FIRST
-    setPtoDialogOpen(false);
-    setSelectedOfficerForPTO(null);
-
-    // Then invalidate and show success
-    queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
-    
-    toast.success(`${ptoData.ptoType} PTO assigned successfully`);
-
-  } catch (error: any) {
-    toast.error(error.message || "Failed to assign PTO");
-    console.error('PTO assignment error:', error);
-  } finally {
-    toast.dismiss();
-  }
-};
+  };
 
   const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
     console.log('🔄 Removing PTO from MonthlyView:', { schedule, date, officerId });
@@ -735,141 +832,136 @@ const handleSavePTO = async (ptoData: any) => {
     });
   };
 
-// FIXED: Assignment Edit Handler - properly detects new assignments
-const handleEditAssignment = (officer: any, dateStr: string) => {
-  console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
-  console.log('Full officer object:', officer);
-  console.log('Officer shiftInfo:', officer?.shiftInfo);
-  console.log('Date:', dateStr);
-  
-  const officerId = officer?.officerId || officer?.officer_id || officer?.id;
-  const officerName = officer?.officerName || officer?.full_name || "Unknown Officer";
-  
-  console.log('Found officerId:', officerId);
-  console.log('Found officerName:', officerName);
-  
-  // Check if this is a NEW assignment (no scheduleId or no officer data at all)
-  const isNewAssignment = !officer || 
-                         !officer.shiftInfo || 
-                         !officer.shiftInfo.scheduleId ||
-                         officer.shiftInfo.scheduleId === 'new' ||
-                         officer.shiftInfo.scheduleType === 'new';
-  
-  console.log('Is this a new assignment?', isNewAssignment);
-  
-  // Prepare officer data for editing
-  const officerData = {
-    ...officer,
-    officerId: officerId,
-    officerName: officerName,
-    shiftInfo: {
-      ...officer?.shiftInfo,
-      currentPosition: officer?.shiftInfo?.position || '',
-      // For new assignments, ensure proper defaults
-      scheduleId: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleId,
-      scheduleType: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleType,
-      isOff: false // CRITICAL: New assignments should NOT be "off"
+  // FIXED: Assignment Edit Handler - properly detects new assignments
+  const handleEditAssignment = (officer: any, dateStr: string) => {
+    console.log('=== EDIT ASSIGNMENT CLICKED (desktop) ===');
+    console.log('Full officer object:', officer);
+    console.log('Officer shiftInfo:', officer?.shiftInfo);
+    console.log('Date:', dateStr);
+    
+    const officerId = officer?.officerId || officer?.officer_id || officer?.id;
+    const officerName = officer?.officerName || officer?.full_name || "Unknown Officer";
+    
+    console.log('Found officerId:', officerId);
+    console.log('Found officerName:', officerName);
+    
+    // Check if this is a NEW assignment (no scheduleId or no officer data at all)
+    const isNewAssignment = !officer || 
+                           !officer.shiftInfo || 
+                           !officer.shiftInfo.scheduleId ||
+                           officer.shiftInfo.scheduleId === 'new' ||
+                           officer.shiftInfo.scheduleType === 'new' ||
+                           officer.scheduleType === 'default';
+    
+    console.log('Is this a new assignment?', isNewAssignment);
+    
+    // Prepare officer data for editing
+    const officerData = {
+      ...officer,
+      officerId: officerId,
+      officerName: officerName,
+      shiftInfo: {
+        ...officer?.shiftInfo,
+        currentPosition: officer?.shiftInfo?.position || '',
+        // For new assignments, ensure proper defaults
+        scheduleId: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleId,
+        scheduleType: isNewAssignment ? 'new' : officer?.shiftInfo?.scheduleType,
+        isOff: false // CRITICAL: New assignments should NOT be "off"
+      }
+    };
+    
+    console.log('Prepared officer data for editing:', officerData);
+    
+    setEditingAssignment({ 
+      officer: officerData, 
+      dateStr,
+      shiftTypeId: selectedShiftId,
+      officerId: officerId,
+      officerName: officerName
+    });
+  };
+
+  // FIXED: Save Assignment Handler (handles new assignments properly)
+  const handleSaveAssignment = async (assignmentData: any) => {
+    console.log('💾 [Desktop] Saving assignment:', assignmentData);
+    
+    if (!assignmentData.officerId || !assignmentData.date) {
+      toast.error("Missing required information");
+      return;
+    }
+    
+    try {
+      toast.loading("Saving assignment...");
+      
+      // Check if this is a new assignment
+      const { data: existingExceptions } = await supabase
+        .from("schedule_exceptions")
+        .select("id")
+        .eq("officer_id", assignmentData.officerId)
+        .eq("date", assignmentData.date)
+        .eq("shift_type_id", selectedShiftId);
+      
+      let result;
+      
+      if (existingExceptions && existingExceptions.length > 0) {
+        // Update existing exception
+        const { error } = await supabase
+          .from("schedule_exceptions")
+          .update({
+            position_name: assignmentData.positionName,
+            unit_number: assignmentData.unitNumber || null,
+            notes: assignmentData.notes || null,
+            is_off: false,
+            is_extra_shift: assignmentData.isExtraShift || false
+          })
+          .eq("id", existingExceptions[0].id);
+        
+        if (error) throw error;
+        result = { id: existingExceptions[0].id, updated: true };
+      } else {
+        // Create new exception
+        const { data, error } = await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: assignmentData.officerId,
+            date: assignmentData.date,
+            shift_type_id: selectedShiftId,
+            position_name: assignmentData.positionName,
+            unit_number: assignmentData.unitNumber || null,
+            notes: assignmentData.notes || null,
+            is_off: false,
+            is_extra_shift: assignmentData.isExtraShift || false
+          })
+          .select("id")
+          .single();
+        
+        if (error) throw error;
+        result = { id: data.id, updated: false };
+      }
+      
+      // Invalidate queries to refresh data
+      invalidateScheduleQueries();
+      
+      // Log audit
+      auditLogger.logPositionChange(
+        assignmentData.officerId,
+        editingAssignment?.officerName || "Unknown",
+        editingAssignment?.officer?.shiftInfo?.position || 'None',
+        assignmentData.positionName,
+        userEmail,
+        `Updated assignment on desktop`
+      );
+      
+      setEditingAssignment(null);
+      toast.success("Assignment saved successfully");
+      
+    } catch (error: any) {
+      console.error('❌ Error saving assignment:', error);
+      toast.error(error.message || "Failed to save assignment");
+    } finally {
+      toast.dismiss();
     }
   };
-  
-  console.log('Prepared officer data for editing:', officerData);
-  
-  setEditingAssignment({ 
-    officer: officerData, 
-    dateStr,
-    shiftTypeId: selectedShiftId,
-    officerId: officerId,
-    officerName: officerName
-  });
-};
-
-// FIXED: Save Assignment Handler (handles new assignments properly)
-// In TheBook.tsx, REPLACE the handleSaveAssignment function (lines ~850-920) with:
-
-// SIMPLIFIED: Save Assignment Handler
-const handleSaveAssignment = async (assignmentData: any) => {
-  console.log('💾 [Desktop] Saving assignment:', assignmentData);
-  
-  if (!assignmentData.officerId || !assignmentData.date) {
-    toast.error("Missing required information");
-    return;
-  }
-  
-  try {
-    toast.loading("Saving assignment...");
-    
-    // Check if this is a new assignment
-    const { data: existingExceptions } = await supabase
-      .from("schedule_exceptions")
-      .select("id")
-      .eq("officer_id", assignmentData.officerId)
-      .eq("date", assignmentData.date)
-      .eq("shift_type_id", selectedShiftId);
-    
-    let result;
-    
-    if (existingExceptions && existingExceptions.length > 0) {
-      // Update existing exception
-      const { error } = await supabase
-        .from("schedule_exceptions")
-        .update({
-          position_name: assignmentData.positionName,
-          unit_number: assignmentData.unitNumber || null,
-          notes: assignmentData.notes || null,
-          is_off: false,
-          is_extra_shift: assignmentData.isExtraShift || false
-        })
-        .eq("id", existingExceptions[0].id);
-      
-      if (error) throw error;
-      result = { id: existingExceptions[0].id, updated: true };
-    } else {
-      // Create new exception
-      const { data, error } = await supabase
-        .from("schedule_exceptions")
-        .insert({
-          officer_id: assignmentData.officerId,
-          date: assignmentData.date,
-          shift_type_id: selectedShiftId,
-          position_name: assignmentData.positionName,
-          unit_number: assignmentData.unitNumber || null,
-          notes: assignmentData.notes || null,
-          is_off: false,
-          is_extra_shift: assignmentData.isExtraShift || false
-        })
-        .select("id")
-        .single();
-      
-      if (error) throw error;
-      result = { id: data.id, updated: false };
-    }
-    
-    // Invalidate queries to refresh data
-    queryClient.invalidateQueries({ 
-      queryKey: scheduleQueryKey,
-      refetchType: 'all'
-    });
-    
-    // Log audit
-    auditLogger.logPositionChange(
-      assignmentData.officerId,
-      editingAssignment?.officerName || "Unknown",
-      editingAssignment?.officer?.shiftInfo?.position || 'None',
-      assignmentData.positionName,
-      userEmail,
-      `Updated assignment on desktop`
-    );
-    
-    setEditingAssignment(null);
-    toast.success("Assignment saved successfully");
-    
-  } catch (error: any) {
-    console.error('❌ Error saving assignment:', error);
-    toast.error(error.message || "Failed to save assignment");
-  } finally {
-    toast.dismiss();
-  }
-};
 
   const handleRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     safeRemoveOfficerMutation.mutate({
@@ -901,77 +993,75 @@ const handleSaveAssignment = async (assignmentData: any) => {
   };
 
   // Prepare common props for view components
-// In TheBook.tsx, update the viewProps object (lines ~950-970):
-
-const viewProps = {
-  currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
-  selectedShiftId,
-  schedules: schedules || null,
-  shiftTypes: shiftTypes || [],
-  isAdminOrSupervisor,
-  weeklyColors,
-  currentWeekStart: currentWeekStart,
-  queryKey: scheduleQueryKey,
-  onDateChange: (date: Date) => {
-    if (activeView === "weekly") {
-      setCurrentWeekStart(date);
-    } else if (activeView === "monthly") {
-      setCurrentMonth(date);
-    }
-  },
-  onDateNavigation: {
-    goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
-    goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
-    goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
-  },
-  onEventHandlers: {
-    onAssignPTO: handleAssignPTO,
-    onRemovePTO: handleRemovePTO,
-    onEditAssignment: handleEditAssignment,
-    onRemoveOfficer: handleRemoveOfficer,
-  },
-  mutations: {
-    removeOfficerMutation: safeRemoveOfficerMutation,
-    removePTOMutation: safeRemovePTOMutation,
-    updatePositionMutation,
-  },
-  navigateToDailySchedule,
-  getLastName,
-  getRankAbbreviation,
-  getRankPriority,
-  isSupervisorByRank,
-  officerProfiles: schedules?.officerProfiles || new Map(),
-  // ADD these missing props that WeeklyView expects:
-  refetchScheduleData: invalidateScheduleQueries,
-  getMinimumStaffing: (dayOfWeek: number) => {
-    if (!schedules?.minimumStaffing) {
+  const viewProps = {
+    currentDate: activeView === "weekly" ? currentWeekStart : currentMonth,
+    selectedShiftId,
+    schedules: schedules || null,
+    shiftTypes: shiftTypes || [],
+    isAdminOrSupervisor,
+    weeklyColors,
+    currentWeekStart: currentWeekStart,
+    queryKey: scheduleQueryKey,
+    onDateChange: (date: Date) => {
+      if (activeView === "weekly") {
+        setCurrentWeekStart(date);
+      } else if (activeView === "monthly") {
+        setCurrentMonth(date);
+      }
+    },
+    onDateNavigation: {
+      goToPrevious: activeView === "weekly" ? goToPreviousWeek : goToPreviousMonth,
+      goToNext: activeView === "weekly" ? goToNextWeek : goToNextMonth,
+      goToCurrent: activeView === "weekly" ? goToCurrentWeek : goToCurrentMonth,
+    },
+    onEventHandlers: {
+      onAssignPTO: handleAssignPTO,
+      onRemovePTO: handleRemovePTO,
+      onEditAssignment: handleEditAssignment,
+      onRemoveOfficer: handleRemoveOfficer,
+    },
+    mutations: {
+      removeOfficerMutation: safeRemoveOfficerMutation,
+      removePTOMutation: safeRemovePTOMutation,
+      updatePositionMutation,
+    },
+    navigateToDailySchedule,
+    getLastName,
+    getRankAbbreviation,
+    getRankPriority,
+    isSupervisorByRank,
+    officerProfiles: schedules?.officerProfiles || new Map(),
+    // ADD these missing props that WeeklyView expects:
+    refetchScheduleData: invalidateScheduleQueries,
+    getMinimumStaffing: (dayOfWeek: number) => {
+      if (!schedules?.minimumStaffing) {
+        return { minimumOfficers: 0, minimumSupervisors: 0 };
+      }
+      
+      if (schedules.minimumStaffing instanceof Map) {
+        const dayStaffing = schedules.minimumStaffing.get(dayOfWeek);
+        if (dayStaffing instanceof Map) {
+          const shiftStaffing = dayStaffing.get(selectedShiftId);
+          return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
+        }
+      }
+      
       return { minimumOfficers: 0, minimumSupervisors: 0 };
     }
-    
-    if (schedules.minimumStaffing instanceof Map) {
-      const dayStaffing = schedules.minimumStaffing.get(dayOfWeek);
-      if (dayStaffing instanceof Map) {
-        const shiftStaffing = dayStaffing.get(selectedShiftId);
-        return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
-      }
-    }
-    
-    return { minimumOfficers: 0, minimumSupervisors: 0 };
-  }
-};
+  };
 
-const renderView = () => {
-  switch (activeView) {
-    case "weekly":
-      return <WeeklyView 
-        {...viewProps}
-        schedules={{
-          ...schedules,
-          dailySchedules: schedules?.dailySchedules || [],
-          minimumStaffing: schedules?.minimumStaffing || new Map()
-        }}
-        refetchScheduleData={invalidateScheduleQueries}
-      />;
+  const renderView = () => {
+    switch (activeView) {
+      case "weekly":
+        return <WeeklyView 
+          {...viewProps}
+          schedules={{
+            ...schedules,
+            dailySchedules: schedules?.dailySchedules || [],
+            minimumStaffing: schedules?.minimumStaffing || new Map()
+          }}
+          refetchScheduleData={invalidateScheduleQueries}
+        />;
       case "monthly":
         return <MonthlyView {...viewProps} />;
       case "force-list":
@@ -1150,28 +1240,28 @@ const renderView = () => {
 
       {/* FIXED: PTO Dialog (same as mobile) */}
       {selectedOfficerForPTO && (
-<PTODialogMobile
-  open={ptoDialogOpen}
-  onOpenChange={(open) => {
-    setPtoDialogOpen(open);
-    if (!open) {
-      setSelectedOfficerForPTO(null);
-    }
-  }}
-  officerName={selectedOfficerForPTO.name}
-  date={selectedOfficerForPTO.date}
-  officerId={selectedOfficerForPTO.id}
-  shiftTypeId={selectedShiftId}
-  shiftStartTime={selectedOfficerForPTO.shiftStartTime}
-  shiftEndTime={selectedOfficerForPTO.shiftEndTime}
-  onSave={handleSavePTO}
-  onSuccess={() => {
-    // This will be called after successful save
-    setPtoDialogOpen(false);
-    setSelectedOfficerForPTO(null);
-  }}
-  isUpdating={false}
-/>
+        <PTODialogMobile
+          open={ptoDialogOpen}
+          onOpenChange={(open) => {
+            setPtoDialogOpen(open);
+            if (!open) {
+              setSelectedOfficerForPTO(null);
+            }
+          }}
+          officerName={selectedOfficerForPTO.name}
+          date={selectedOfficerForPTO.date}
+          officerId={selectedOfficerForPTO.id}
+          shiftTypeId={selectedShiftId}
+          shiftStartTime={selectedOfficerForPTO.shiftStartTime}
+          shiftEndTime={selectedOfficerForPTO.shiftEndTime}
+          onSave={handleSavePTO}
+          onSuccess={() => {
+            // This will be called after successful save
+            setPtoDialogOpen(false);
+            setSelectedOfficerForPTO(null);
+          }}
+          isUpdating={false}
+        />
       )}
 
       <ScheduleExportDialog

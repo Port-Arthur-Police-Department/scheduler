@@ -380,17 +380,6 @@ const processedOfficersData = useMemo(() => {
       };
     }
 
-    // Update the processedOfficersData useMemo to use it:
-const specialAssignmentOfficers = processedOfficers.filter(o => {
-  // Skip officers in ANY partnership
-  if (isInPartnership(o)) return false;
-  
-  // Use the shared function
-  const isSpecial = isSpecialAssignment(o.position);
-  
-  return isSpecial;
-});
-
     const allOfficers = new Map();
     const recurringSchedulesByOfficer = new Map();
 

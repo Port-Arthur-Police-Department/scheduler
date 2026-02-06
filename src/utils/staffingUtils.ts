@@ -24,6 +24,80 @@ export interface StaffingComparison {
   minOfficers: number;
 }
 
+// Add to src/utils/staffingUtils.ts
+
+/**
+ * Check if a position is a district/beat assignment
+ * @param position The position name
+ * @returns True if it's a district/beat assignment
+ */
+export const isDistrictAssignment = (position: string): boolean => {
+  if (!position) return false;
+  
+  const positionLower = position.toLowerCase();
+  return (
+    positionLower.includes('district') ||
+    positionLower.includes('beat') ||
+    positionLower.includes('patrol') ||
+    positionLower.match(/^\d+/) !== null // Starts with numbers
+  );
+};
+
+/**
+ * Categorize an officer for staffing purposes
+ * @param officer The officer object
+ * @returns Object with categorization flags
+ */
+export const categorizeOfficerForStaffing = (
+  officer: any,
+  isSupervisorByRank: (officer: any) => boolean
+) => {
+  const isSupervisor = isSupervisorByRank(officer);
+  const isPPO = officer.rank?.toLowerCase() === 'probationary';
+  const isDistrict = isDistrictAssignment(officer.shiftInfo?.position || '');
+  
+  return {
+    isSupervisor,
+    isPPO,
+    isDistrict,
+    countsAsSupervisor: isSupervisor && !isDistrict,
+    countsAsOfficer: (!isSupervisor && !isPPO) || (isSupervisor && isDistrict),
+    countsAsPPO: isPPO
+  };
+};
+
+/**
+ * Calculate staffing with district supervisor logic
+ * @param officers Array of officer objects
+ * @param isSupervisorByRank Function to check if officer is supervisor by rank
+ * @returns Object with counts
+ */
+export const calculateStaffingWithDistricts = (
+  officers: any[],
+  isSupervisorByRank: (officer: any) => boolean
+) => {
+  let supervisorCount = 0;
+  let officerCount = 0;
+  let ppoCount = 0;
+  
+  officers.forEach((officer) => {
+    // Skip if officer is off or on PTO
+    const isOff = officer.shiftInfo?.isOff === true;
+    const hasFullDayPTO = officer.shiftInfo?.hasPTO === true;
+    
+    if (!isOff && !hasFullDayPTO) {
+      const { countsAsSupervisor, countsAsOfficer, countsAsPPO } = 
+        categorizeOfficerForStaffing(officer, isSupervisorByRank);
+      
+      if (countsAsSupervisor) supervisorCount++;
+      if (countsAsOfficer) officerCount++;
+      if (countsAsPPO) ppoCount++;
+    }
+  });
+  
+  return { supervisorCount, officerCount, ppoCount };
+};
+
 /**
  * Check if a shift has minimum requirements configured
  * @param minSupervisors Minimum supervisors required (0 means no requirement)

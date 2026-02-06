@@ -26,6 +26,7 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
+import { isSpecialAssignment } from "@/utils/staffingCalculations";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
 import { 
   isShiftUnderstaffed, 
@@ -1874,11 +1875,7 @@ const specialAssignmentOfficers = processedOfficers.filter(o => {
   if (isInPartnership(o)) return false;
   
   const position = o.position?.toLowerCase() || '';
-  const isSpecialAssignment = (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
-        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
-  
-  return isSpecialAssignment;
-}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
 
 // THIRD: Identify supervisors (excluding those with special assignments or partnerships)
 const supervisors = sortSupervisorsByRank(

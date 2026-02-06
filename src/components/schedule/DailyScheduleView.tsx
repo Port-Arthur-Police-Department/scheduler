@@ -1874,6 +1874,10 @@ const specialAssignmentOfficers = processedOfficers.filter(o => {
   // Skip officers in ANY partnership
   if (isInPartnership(o)) return false;
   
+  // Use the imported function
+  return isSpecialAssignment(o.position);
+}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  
   const position = o.position?.toLowerCase() || '';
 
 

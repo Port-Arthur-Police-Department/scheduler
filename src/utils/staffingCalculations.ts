@@ -20,12 +20,10 @@ export const isRidingWithPartnerPosition = (position: string | undefined | null)
 export const isSpecialAssignment = (position: string | undefined | null): boolean => {
   if (!position) return false;
   
+  // Only positions that start with "Other" are special assignments
+  // Everything else (including positions not in PREDEFINED_POSITIONS) are regular assignments
   const positionLower = position.toLowerCase();
-  const isOtherAssignment = positionLower.includes('other');
-  const isPredefinedPosition = PREDEFINED_POSITIONS.includes(position);
-  
-  return (isOtherAssignment && !isRidingWithPartnerPosition(position)) || 
-         (position && !isPredefinedPosition && !isRidingWithPartnerPosition(position));
+  return positionLower.startsWith('other');
 };
 
 /**

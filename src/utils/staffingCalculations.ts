@@ -21,7 +21,16 @@ export const calculateDailyStaffing = (daySchedule: any) => {
       const isSupervisor = isSupervisorByRank({ rank: officer.rank });
       const isPPO = officer.rank?.toLowerCase() === 'probationary';
       
-      if (isSupervisor) {
+      // KEY LOGIC: Check if supervisor is assigned to a district
+      const position = officer.shiftInfo?.position || '';
+      const isDistrictAssignment = position.toLowerCase().includes('district') || 
+                                   position.toLowerCase().includes('beat') ||
+                                   position.match(/^\d+/); // Starts with numbers (like "1A", "2B")
+      
+      // If supervisor is assigned to a district, count them as an officer
+      if (isSupervisor && isDistrictAssignment) {
+        officerCount++;
+      } else if (isSupervisor) {
         supervisorCount++;
       } else if (isPPO) {
         ppoCount++;

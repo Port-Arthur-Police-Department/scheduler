@@ -23,6 +23,16 @@ const getLastName = (fullName: string) => {
   return parts[parts.length - 1] || '';
 };
 
+// Helper function to check if officer is a PPO
+const isPPO = (officer: any): boolean => {
+  if (!officer || !officer.rank) {
+    console.log("❌ isPPO: No officer or rank", { 
+      officer: officer?.full_name || officer?.name, 
+      rank: officer?.rank 
+    });
+    return false;
+  }
+
   
   // Use the same logic as isPPOByRank
   return isPPOByRank(officer.rank);

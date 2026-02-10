@@ -23,15 +23,6 @@ const getLastName = (fullName: string) => {
   return parts[parts.length - 1] || '';
 };
 
-// Helper function to check if officer is a PPO
-const isPPO = (officer: any): boolean => {
-  if (!officer || !officer.rank) {
-    console.log("❌ isPPO: No officer or rank", { 
-      officer: officer?.full_name || officer?.name, 
-      rank: officer?.rank 
-    });
-    return false;
-  }
   
   // Use the same logic as isPPOByRank
   return isPPOByRank(officer.rank);
@@ -62,6 +53,7 @@ export const PartnershipManager = ({ officer, onPartnershipChange }: Partnership
     partnershipSuspended: officer.partnershipSuspended,
     partnerData: officer.partnerData
   });
+
 
 // Emergency partners query - finds regular officers (non-PPOs) for emergency pairing
 const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyError } = useQuery({
@@ -707,11 +699,21 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
                         </div>
 {emergencyPartners.map((partner) => (
   <SelectItem key={partner.id} value={partner.id}>
-    <div className="flex flex-col py-1">
-      <span className="font-medium">{partner.name}</span>
-      <span className="text-xs text-muted-foreground">
-        Badge: {partner.badge || 'N/A'} • {partner.rank || 'Officer'}
-      </span>
+    <div className="flex flex-col py-2">
+      {/* REMOVE this badge section */}
+      <div className="flex items-center justify-between">
+        <span className="font-medium">{partner.name}</span>
+      </div>
+      <div className="text-xs text-muted-foreground space-y-1 mt-1">
+        <div className="flex items-center gap-2">
+          <span>Badge: {partner.badge || 'N/A'}</span>
+          <span>•</span>
+          <span>{partner.rank || 'Officer'}</span>
+        </div>
+        {partner.isPPO && (
+          <span className="text-red-600">⚠️ Cannot select PPO</span>
+        )}
+      </div>
     </div>
   </SelectItem>
 ))}
@@ -828,7 +830,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     <div className="flex flex-col py-1">
       <span className="font-medium">{partner.full_name}</span>
       <span className="text-xs text-muted-foreground">
-        Badge: {partner.badge_number} • {partner.rank}
+        Badge: {partner.badge_number || 'N/A'} • {partner.rank}
       </span>
     </div>
   </SelectItem>

@@ -622,29 +622,11 @@ const isFullyStaffed = !isAnyUnderstaffed;
   onSaveUnitNumber={handleSaveUnitNumber}
   onSaveNotes={handleSaveNotes}
   onAssignPTO={(officer) => {
-    console.log("🔄 Assign PTO clicked for supervisor:", {
-      name: officer.name,
-      officerId: officer.officerId,
-      isPartnership: officer.isPartnership,
-      partnerOfficerId: officer.partnerOfficerId,
-      partnerData: officer.partnerData,
-      rank: officer.rank
-    });
-    
     setSelectedOfficer({
       officerId: officer.officerId,
       name: officer.name,
       scheduleId: officer.scheduleId,
       type: officer.type,
-      // Pass partnership data if available
-      ...(officer.partnerOfficerId && {
-        partnerOfficerId: officer.partnerOfficerId,
-      }),
-      ...(officer.partnerData && {
-        partnerName: officer.partnerData.partnerName,
-      }),
-      // Pass rank for PPO detection
-      rank: officer.rank
     });
     setSelectedShift(officer.shift);
     setPtoDialogOpen(true);
@@ -655,7 +637,7 @@ const isFullyStaffed = !isAnyUnderstaffed;
   isUpdating={updateScheduleMutation.isPending}
   sectionType="regular"
   colorSettings={websiteSettings?.color_settings}
-  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
 />
 
 {/* Officer Section */}
@@ -670,30 +652,11 @@ const isFullyStaffed = !isAnyUnderstaffed;
   onSaveUnitNumber={handleSaveUnitNumber}
   onSaveNotes={handleSaveNotes}
   onAssignPTO={(officer) => {
-    console.log("🔄 Assign PTO clicked for officer:", {
-      name: officer.name,
-      officerId: officer.officerId,
-      isPartnership: officer.isPartnership,
-      partnerOfficerId: officer.partnerOfficerId,
-      partnerData: officer.partnerData,
-      rank: officer.rank,
-      isCombinedPartnership: officer.isCombinedPartnership
-    });
-    
     setSelectedOfficer({
       officerId: officer.officerId,
       name: officer.name,
       scheduleId: officer.scheduleId,
       type: officer.type,
-      // Pass partnership data if available
-      ...(officer.partnerOfficerId && {
-        partnerOfficerId: officer.partnerOfficerId,
-      }),
-      ...(officer.partnerData && {
-        partnerName: officer.partnerData.partnerName,
-      }),
-      // Pass rank for PPO detection
-      rank: officer.rank
     });
     setSelectedShift(officer.shift);
     setPtoDialogOpen(true);
@@ -704,7 +667,7 @@ const isFullyStaffed = !isAnyUnderstaffed;
   isUpdating={updateScheduleMutation.isPending}
   sectionType="regular"
   colorSettings={websiteSettings?.color_settings}
-  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
 />
 
 {/* Suspended Partnerships Section */}
@@ -720,28 +683,11 @@ const isFullyStaffed = !isAnyUnderstaffed;
     onSaveUnitNumber={handleSaveUnitNumber}
     onSaveNotes={handleSaveNotes}
     onAssignPTO={(officer) => {
-      console.log("🔄 Assign PTO clicked for suspended partnership officer:", {
-        name: officer.name,
-        officerId: officer.officerId,
-        partnerData: officer.partnerData,
-        partnershipSuspended: officer.partnershipSuspended,
-        rank: officer.rank
-      });
-      
       setSelectedOfficer({
         officerId: officer.officerId,
         name: officer.name,
         scheduleId: officer.scheduleId,
         type: officer.type,
-        // Pass partnership data (suspended partnerships still have partner data)
-        ...(officer.partnerOfficerId && {
-          partnerOfficerId: officer.partnerOfficerId,
-        }),
-        ...(officer.partnerData && {
-          partnerName: officer.partnerData.partnerName,
-        }),
-        // Pass rank for PPO detection
-        rank: officer.rank
       });
       setSelectedShift(officer.shift);
       setPtoDialogOpen(true);
@@ -769,20 +715,11 @@ const isFullyStaffed = !isAnyUnderstaffed;
     onSaveUnitNumber={handleSaveUnitNumber}
     onSaveNotes={handleSaveNotes}
     onAssignPTO={(officer) => {
-      console.log("🔄 Assign PTO clicked for special assignment officer:", {
-        name: officer.name,
-        officerId: officer.officerId,
-        rank: officer.rank
-      });
-      
       setSelectedOfficer({
         officerId: officer.officerId,
         name: officer.name,
         scheduleId: officer.scheduleId,
         type: officer.type,
-        // Special assignments usually don't have partnerships
-        // but include rank for PPO detection
-        rank: officer.rank
       });
       setSelectedShift(officer.shift);
       setPtoDialogOpen(true);
@@ -810,7 +747,7 @@ const isFullyStaffed = !isAnyUnderstaffed;
     isUpdating={updatePTODetailsMutation.isPending}
     sectionType="pto"
     colorSettings={websiteSettings?.color_settings}
-    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS LINE
   />
 )}
             </div>
@@ -871,7 +808,7 @@ const isFullyStaffed = !isAnyUnderstaffed;
               setAddOfficerDialogOpen(false);
               setSelectedShiftForAdd(null);
             }}
-            refetchSchedule={refetchSchedule} 
+            refetchSchedule={refetchSchedule} // ADD THIS LINE - CRITICAL FOR AUTO-REFRESH
           />
         </DialogContent>
       </Dialog>

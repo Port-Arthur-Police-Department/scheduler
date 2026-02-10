@@ -9,8 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Users, Shield, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { parseISO, format, isValid } from "date-fns";
-import { Label } from "@/components/ui/label";
-
 
 interface EmergencyPartnerReassignmentProps {
   ppoOfficer: any;

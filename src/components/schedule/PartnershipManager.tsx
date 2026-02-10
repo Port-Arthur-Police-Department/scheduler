@@ -823,7 +823,16 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
                   <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                     Select a Probationary Officer (PPO) to partner with
                   </div>
-availablePartners.map
+{availablePartners.map((partner) => (
+  <SelectItem key={partner.id} value={partner.id}>
+    <div className="flex flex-col py-1">
+      <span className="font-medium">{partner.full_name}</span>
+      <span className="text-xs text-muted-foreground">
+        Badge: {partner.badge_number} • {partner.rank}
+      </span>
+    </div>
+  </SelectItem>
+))}
                 </div>
               )}
             </SelectContent>

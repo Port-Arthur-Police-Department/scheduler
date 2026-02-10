@@ -56,6 +56,12 @@ const PTO_TYPES = [
   { value: "holiday", label: "Holiday", column: "holiday_hours" },
 ];
 
+// Helper function to check if officer is PPO
+const isPPO = (rank: string | undefined | null): boolean => {
+  if (!rank) return false;
+  const rankLower = rank.toLowerCase();
+  return rankLower.includes('probationary') || rankLower.includes('ppo');
+};
 
 // ADD THIS HELPER FUNCTION - IT WAS MISSING
 const calculateHours = (start: string, end: string) => {

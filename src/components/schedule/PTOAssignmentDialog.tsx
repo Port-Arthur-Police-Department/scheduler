@@ -37,6 +37,10 @@ interface PTOAssignmentDialogProps {
       endTime: string;
       isFullShift: boolean;
     };
+    // ADD THESE OPTIONAL FIELDS:
+    partnerOfficerId?: string;
+    partnerName?: string;
+    rank?: string;
   } | null;
   shift: {
     id: string;
@@ -98,93 +102,106 @@ export const PTOAssignmentDialog = ({
 
   // Check for partnerships and PPO status when dialog opens
   useEffect(() => {
-    const checkPartnershipAndPPO = async () => {
-// In the checkPartnershipAndPPO function in useEffect, REPLACE the partnership detection part:
+// In the checkPartnershipAndPPO function in useEffect, REPLACE the entire function with:
 
-if (open && officer && shift) {
-  console.log("🔍 Checking for partnerships and PPO status for officer:", officer.officerId);
-  
-  // Check if officer is PPO
-  const { data: officerProfile } = await supabase
-    .from("profiles")
-    .select("rank")
-    .eq("id", officer.officerId)
-    .single();
-  
-  setIsOfficerPPO(isPPOByRank(officerProfile?.rank));
-
-  // Check for existing partnership on this date/shift - FIXED QUERY
-  const { data: partnership } = await supabase
-    .from("schedule_exceptions")
-    .select(`
-      id,
-      officer_id,
-      partner_officer_id,
-      is_partnership,
-      partnership_suspended,
-      profiles!schedule_exceptions_partner_officer_id_fkey (
-        id,
-        full_name,
-        badge_number,
-        rank
-      )
-    `)
-    .or(`officer_id.eq.${officer.officerId},partner_officer_id.eq.${officer.officerId}`)
-    .eq("date", date)
-    .eq("shift_type_id", shift.id)
-    .eq("is_off", false)
-    .maybeSingle();
-
-  console.log("🔍 Schedule exception partnership query result:", partnership);
-
-  if (partnership?.is_partnership && partnership.partner_officer_id) {
-    console.log("✅ Officer has a partnership via schedule_exception:", partnership);
+const checkPartnershipAndPPO = async () => {
+  if (open && officer && shift) {
+    console.log("🔍 Checking for partnerships and PPO status for officer:", officer.officerId);
     
-    // Determine which officer is the partner
-    const partnerId = partnership.officer_id === officer.officerId 
-      ? partnership.partner_officer_id 
-      : partnership.officer_id;
-    
-    // Get partner profile
-    const { data: partnerProfile } = await supabase
+    // Check if officer is PPO
+    const { data: officerProfile } = await supabase
       .from("profiles")
-      .select("id, full_name, badge_number, rank")
-      .eq("id", partnerId)
+      .select("rank")
+      .eq("id", officer.officerId)
       .single();
     
-    if (partnerProfile) {
-      setOfficerHasPartnership(true);
-      setPartnerInfo(partnerProfile);
-      setIsPartnerPPO(isPPOByRank(partnerProfile.rank));
-    } else {
-      console.log("❌ Could not find partner profile for ID:", partnerId);
+    setIsOfficerPPO(isPPOByRank(officerProfile?.rank));
+
+    // Check for existing partnership on this date/shift - FIXED QUERY
+    const { data: scheduleExceptionPartnership } = await supabase
+      .from("schedule_exceptions")
+      .select(`
+        id,
+        officer_id,
+        partner_officer_id,
+        is_partnership
+      `)
+      .eq("date", date)
+      .eq("shift_type_id", shift.id)
+      .eq("is_off", false)
+      .or(`officer_id.eq.${officer.officerId},partner_officer_id.eq.${officer.officerId}`);
+
+    console.log("🔍 Schedule exception partnership query result:", scheduleExceptionPartnership);
+
+    // Check if any result has a partnership with this officer
+    const partnership = scheduleExceptionPartnership?.find(p => 
+      p.is_partnership && p.partner_officer_id && 
+      (p.officer_id === officer.officerId || p.partner_officer_id === officer.officerId)
+    );
+
+    if (partnership) {
+      console.log("✅ Officer has a partnership via schedule_exception:", partnership);
+      
+      // Determine which officer is the partner
+      const partnerId = partnership.officer_id === officer.officerId 
+        ? partnership.partner_officer_id 
+        : partnership.officer_id;
+      
+      // Get partner profile
+      const { data: partnerProfile } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number, rank")
+        .eq("id", partnerId)
+        .single();
+      
+      if (partnerProfile) {
+        setOfficerHasPartnership(true);
+        setPartnerInfo(partnerProfile);
+        setIsPartnerPPO(isPPOByRank(partnerProfile.rank));
+        return;
+      } else {
+        console.log("❌ Could not find partner profile for ID:", partnerId);
+      }
     }
-  } else {
-    // Check recurring partnerships - FIXED QUERY
+
+    // Check recurring partnerships - FIXED QUERY (simpler approach)
     const dayOfWeek = new Date(date).getDay();
-    const { data: recurringPartnership } = await supabase
+    
+    // First check if officer is the primary officer in partnership
+    const { data: recurringAsPrimary } = await supabase
       .from("recurring_schedules")
       .select(`
         id,
         officer_id,
         partner_officer_id,
-        is_partnership,
-        partnership_suspended,
-        profiles!recurring_schedules_partner_officer_id_fkey (
-          id,
-          full_name,
-          badge_number,
-          rank
-        )
+        is_partnership
       `)
-      .or(`officer_id.eq.${officer.officerId},partner_officer_id.eq.${officer.officerId}`)
+      .eq("officer_id", officer.officerId)
       .eq("shift_type_id", shift.id)
       .eq("day_of_week", dayOfWeek)
-      .maybeSingle();
+      .eq("is_partnership", true)
+      .not("partner_officer_id", "is", null);
 
-    console.log("🔍 Recurring schedule partnership query result:", recurringPartnership);
+    // Then check if officer is the partner officer in partnership
+    const { data: recurringAsPartner } = await supabase
+      .from("recurring_schedules")
+      .select(`
+        id,
+        officer_id,
+        partner_officer_id,
+        is_partnership
+      `)
+      .eq("partner_officer_id", officer.officerId)
+      .eq("shift_type_id", shift.id)
+      .eq("day_of_week", dayOfWeek)
+      .eq("is_partnership", true);
 
-    if (recurringPartnership?.is_partnership && recurringPartnership.partner_officer_id) {
+    console.log("🔍 Recurring as primary:", recurringAsPrimary);
+    console.log("🔍 Recurring as partner:", recurringAsPartner);
+
+    const recurringPartnership = recurringAsPrimary?.[0] || recurringAsPartner?.[0];
+
+    if (recurringPartnership) {
       console.log("✅ Officer has a recurring partnership:", recurringPartnership);
       
       // Determine which officer is the partner
@@ -203,23 +220,23 @@ if (open && officer && shift) {
         setOfficerHasPartnership(true);
         setPartnerInfo(partnerProfile);
         setIsPartnerPPO(isPPOByRank(partnerProfile.rank));
+        return;
       } else {
         console.log("❌ Could not find partner profile for ID:", partnerId);
       }
-    } else {
-      console.log("❌ No partnership found for officer in either table");
-      setOfficerHasPartnership(false);
-      setPartnerInfo(null);
-      setIsPartnerPPO(false);
     }
+
+    console.log("❌ No partnership found for officer in either table");
+    setOfficerHasPartnership(false);
+    setPartnerInfo(null);
+    setIsPartnerPPO(false);
+  } else {
+    setOfficerHasPartnership(false);
+    setPartnerInfo(null);
+    setIsPartnerPPO(false);
+    setIsOfficerPPO(false);
   }
-} else {
-  setOfficerHasPartnership(false);
-  setPartnerInfo(null);
-  setIsPartnerPPO(false);
-  setIsOfficerPPO(false);
-}
-    };
+};
 
     if (open && officer && shift) {
       checkPartnershipAndPPO();

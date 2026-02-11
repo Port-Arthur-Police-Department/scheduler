@@ -94,13 +94,14 @@ export const PTOAssignmentDialog = ({
   const [partnerInfo, setPartnerInfo] = useState<any>(null);
   const [isPartnerPPO, setIsPartnerPPO] = useState(false);
   const [isOfficerPPO, setIsOfficerPPO] = useState(false);
+  // ADD THIS STATE FOR PARTNER SELECTION
   const [ptoAssignedTo, setPtoAssignedTo] = useState<"clickedOfficer" | "partner">("clickedOfficer");
 
   // Check for partnerships and PPO status when dialog opens
   useEffect(() => {
     const checkPartnershipAndPPO = async () => {
       if (open && officer && shift) {
-        console.log("🔍 Checking for partnerships for officer:", officer.officerId);
+        console.log("🔍 Checking for partnerships and PPO status for officer:", officer.officerId);
         
         // Get officer profile with rank
         const { data: officerProfile } = await supabase
@@ -111,7 +112,7 @@ export const PTOAssignmentDialog = ({
         
         setIsOfficerPPO(isPPOByRank(officerProfile?.rank));
 
-        // Try multiple ways to find partnerships
+        // Check for existing partnership on this date/shift
         const dayOfWeek = new Date(date).getDay();
         
         // Method 1: Check schedule_exceptions for active partnership
@@ -798,6 +799,7 @@ export const PTOAssignmentDialog = ({
                     value="clickedOfficer"
                     checked={ptoAssignedTo === "clickedOfficer"}
                     onChange={(e) => setPtoAssignedTo(e.target.value as any)}
+                    className="h-4 w-4 text-blue-600"
                   />
                   <Label htmlFor="ptoClickedOfficer" className="cursor-pointer">
                     {officer.name} {isOfficerPPO && (
@@ -815,6 +817,7 @@ export const PTOAssignmentDialog = ({
                     value="partner"
                     checked={ptoAssignedTo === "partner"}
                     onChange={(e) => setPtoAssignedTo(e.target.value as any)}
+                    className="h-4 w-4 text-blue-600"
                   />
                   <Label htmlFor="ptoPartner" className="cursor-pointer">
                     {partnerInfo.full_name} {isPartnerPPO && (

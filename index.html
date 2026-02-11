@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/scheduler/icons/icon-192x192.png" />
+    
+    <!-- Theme Color Meta Tags -->
+    <meta name="theme-color" content="#1e40af" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PAPD Scheduler">
+    
+    <!-- Viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/scheduler/manifest.webmanifest" />
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/scheduler/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/scheduler/icons/icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/scheduler/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/scheduler/icons/icon-192x192.png" />
+    
+    <!-- Microsoft Tile -->
+    <meta name="msapplication-TileColor" content="#1e40af" />
+    <meta name="msapplication-TileImage" content="/scheduler/icons/icon-144x144.png" />
+    <meta name="msapplication-config" content="/scheduler/browserconfig.xml" />
+    
+    <!-- REMOVED: OneSignal SDK -->
+    
+    <title>Police Department Scheduler</title>
+    <script type="module" crossorigin src="./assets/main-BLvpoJBL.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/main-MGMbut1a.css">
+  <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- PWA Install Prompt Handler -->
+    <script>
+      let deferredPrompt;
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later
+        deferredPrompt = e;
+        
+        // Show install button or custom UI
+        showInstallPromotion();
+        
+        console.log('PWA install prompt available');
+      });
+      
+      window.addEventListener('appinstalled', () => {
+        console.log('PWA was installed');
+        deferredPrompt = null;
+      });
+      
+      function showInstallPromotion() {
+        // Add your custom install button logic here
+        console.log('Show install button to user');
+      }
+      
+      function installPWA() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+              console.log('User accepted PWA installation');
+            } else {
+              console.log('User dismissed PWA installation');
+            }
+            deferredPrompt = null;
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

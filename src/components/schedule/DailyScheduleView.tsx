@@ -1924,21 +1924,45 @@ const regularOfficers = processedOfficers.filter(o => {
   
   return true;
 }).sort((a, b) => {
-  // Sort combined partnerships first, then by position
-  const aIsCombined = a.isCombinedPartnership ? 0 : 1;
-  const bIsCombined = b.isCombinedPartnership ? 0 : 1;
+  // Function to normalize position for sorting
+  const normalizePosition = (position: string) => {
+    if (!position) return { sortKey: '9999', display: position };
+    
+    const positionLower = position.toLowerCase();
+    
+    // City-Wide should be first
+    if (positionLower.includes('city-wide') || positionLower.includes('citywide')) {
+      return { sortKey: '0000', display: position };
+    }
+    
+    // Extract numbers from position
+    const numbers = position.match(/\d+/g) || [];
+    
+    if (numbers.length === 0) {
+      // No numbers found - use position string for sorting
+      return { sortKey: '9999' + positionLower, display: position };
+    }
+    
+    // Create a sortable key from numbers
+    // For single districts: pad to 4 digits (e.g., 1 -> 0001)
+    // For combined districts: pad each and separate (e.g., 1/2 -> 0001.0002)
+    const paddedNumbers = numbers.map(num => 
+      num.padStart(4, '0')
+    ).join('.');
+    
+    return { sortKey: paddedNumbers, display: position };
+  };
   
-  if (aIsCombined !== bIsCombined) {
-    return aIsCombined - bIsCombined;
+  const aNorm = normalizePosition(a.position);
+  const bNorm = normalizePosition(b.position);
+  
+  // Compare the sort keys
+  const keyComparison = aNorm.sortKey.localeCompare(bNorm.sortKey);
+  if (keyComparison !== 0) {
+    return keyComparison;
   }
   
-  const aMatch = a.position?.match(/district\s*(\d+)/i);
-  const bMatch = b.position?.match(/district\s*(\d+)/i);
-  
-  if (aMatch && bMatch) {
-    return parseInt(aMatch[1]) - parseInt(bMatch[1]);
-  }
-  
+  // If sort keys are the same, fall back to alphabetical by position
   return (a.position || '').localeCompare(b.position || '');
 });
 

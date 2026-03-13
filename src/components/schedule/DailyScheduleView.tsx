@@ -2074,13 +2074,13 @@ const isRidingWithPartnerPosition = (position: string | undefined | null): boole
   );
 };
 
-// SECOND: Identify special assignment officers (INCLUDE those whose partnerships are suspended)
+// SECOND: Identify special assignment officers (including those whose partnerships were just suspended)
 const specialAssignmentOfficers = processedOfficers.filter(officer => {
   // Use the imported function to check if this is a special assignment
   const hasSpecialAssignment = isSpecialAssignment(officer.position);
   
-  // Only skip if they're in an ACTIVE partnership (not suspended)
-  // But we want to include them if they have a special assignment
+  // Include if they have a special assignment, regardless of partnership status
+  // The partnership processing above has already cleared their partnership flags
   if (hasSpecialAssignment) {
     console.log(`📋 Including in special assignments: ${officer.name}`, {
       position: officer.position,
@@ -2181,12 +2181,15 @@ const regularOfficers = processedOfficers.filter(o => {
   return (a.position || '').localeCompare(b.position || '');
 });
 
-// FIFTH: Suspended partnerships ONLY - PPOs whose partners are on PTO
+// FIFTH: Suspended partnerships - PPOs whose trainers are on special assignment or PTO
 const suspendedPartnershipOfficers = processedOfficers.filter(o => {
-  const shouldBeSuspended = o.isPartnership && o.partnershipSuspended;
+  const shouldBeSuspended = o.partnershipSuspended === true || o.needsEmergencyPartner === true;
   
   if (shouldBeSuspended) {
-    console.log(`✅ Adding to suspended partnerships: ${o.name} (partner on PTO)`);
+    console.log(`✅ Adding to suspended partnerships: ${o.name}`, {
+      reason: o.partnershipSuspensionReason || 'Trainer on special assignment',
+      needsEmergencyPartner: o.needsEmergencyPartner
+    });
   }
   
   return shouldBeSuspended;

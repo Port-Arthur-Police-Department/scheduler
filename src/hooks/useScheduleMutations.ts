@@ -811,22 +811,99 @@ const updatePartnershipMutation = useMutation({
           .single()
       ]);
 
-      // Determine if each officer is a PPO
-      const isOfficerPpo = isPPOByRank(officerProfile?.rank);
-      const isPartnerPpo = isPPOByRank(partnerProfile?.rank);
+      console.log("🔍 Raw rank values from profiles:", {
+        officer: {
+          name: officerProfile?.full_name,
+          rank: officerProfile?.rank,
+          rankType: typeof officerProfile?.rank,
+          rankValue: officerProfile?.rank
+        },
+        partner: {
+          name: partnerProfile?.full_name,
+          rank: partnerProfile?.rank,
+          rankType: typeof partnerProfile?.rank,
+          rankValue: partnerProfile?.rank
+        }
+      });
 
-      console.log("🔍 Partnership rank check:", {
+      // Custom function to check if a rank is PPO
+      // This is a more robust check that doesn't rely on the imported function
+      const isRankPPO = (rank: any): boolean => {
+        if (!rank) return false;
+        
+        const rankStr = String(rank).toLowerCase().trim();
+        console.log(`Checking rank "${rankStr}" for PPO status`);
+        
+        // List of ranks that are NOT PPO (Training Officers)
+        const nonPPORanks = [
+          'police officer',
+          'officer',
+          'training officer',
+          'field training officer',
+          'fto',
+          'senior officer',
+          'master officer',
+          'corporal',
+          'sergeant',
+          'lieutenant',
+          'captain',
+          'commander',
+          'chief'
+        ];
+        
+        // If it's in the non-PPO list, it's NOT a PPO
+        if (nonPPORanks.some(r => rankStr.includes(r))) {
+          console.log(`Rank "${rankStr}" is NOT a PPO (matched non-PPO list)`);
+          return false;
+        }
+        
+        // Check if it's explicitly a PPO rank
+        const isPPO = rankStr.includes('ppo') || 
+                      rankStr.includes('probationary') || 
+                      rankStr === 'p' ||
+                      rankStr === 'ppo';
+        
+        console.log(`Rank "${rankStr}" is ${isPPO ? '' : 'NOT '}a PPO`);
+        return isPPO;
+      };
+
+      // Determine if each officer is a PPO using our custom function
+      const isOfficerPpo = isRankPPO(officerProfile?.rank);
+      const isPartnerPpo = isRankPPO(partnerProfile?.rank);
+
+      console.log("🔍 Partnership rank check (after processing):", {
         officer: officerProfile?.full_name,
-        officerRank: officerProfile?.rank,
+        officerRawRank: officerProfile?.rank,
+        officerProcessedRank: String(officerProfile?.rank).toLowerCase().trim(),
         isOfficerPpo,
         partner: partnerProfile?.full_name,
-        partnerRank: partnerProfile?.rank,
+        partnerRawRank: partnerProfile?.rank,
+        partnerProcessedRank: String(partnerProfile?.rank).toLowerCase().trim(),
         isPartnerPpo
       });
 
       // VALIDATION: Ensure one is PPO and one is not
       if (isOfficerPpo === isPartnerPpo) {
-        throw new Error("Partnership must be between a Training Officer (non-PPO) and a PPO");
+        console.error("❌ Partnership validation failed:", {
+          officer: {
+            name: officerProfile?.full_name,
+            rank: officerProfile?.rank,
+            isPPO: isOfficerPpo
+          },
+          partner: {
+            name: partnerProfile?.full_name,
+            rank: partnerProfile?.rank,
+            isPPO: isPartnerPpo
+          },
+          message: "Both officers have the same PPO status"
+        });
+        
+        // Provide a more helpful error message
+        if (isOfficerPpo && isPartnerPpo) {
+          throw new Error("Cannot create partnership between two PPOs. A Training Officer (non-PPO) is required.");
+        } else {
+          throw new Error("Cannot create partnership between two Training Officers. A PPO is required.");
+        }
       }
 
       // DETERMINE WHO IS THE TRAINING OFFICER (non-PPO) AND WHO IS THE PPO
@@ -872,8 +949,8 @@ const updatePartnershipMutation = useMutation({
           profile: partnerProfile
         };
         
-        console.log("👨‍🏫 Training officer:", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name, "will have NULL position");
+        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
+        console.log("👶 PPO:", ppo.name);
         
       } else if (isOfficerPpo && !isPartnerPpo) {
         // Officer is PPO, partner is training officer
@@ -926,8 +1003,8 @@ const updatePartnershipMutation = useMutation({
           profile: officerProfile
         };
         
-        console.log("👨‍🏫 Training officer:", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name, "will have NULL position");
+        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
+        console.log("👶 PPO:", ppo.name);
       }
 
       console.log("📋 Partnership details:", {
@@ -935,12 +1012,16 @@ const updatePartnershipMutation = useMutation({
           id: trainingOfficer.id,
           name: trainingOfficer.name,
           position: trainingOfficer.position,
-          unit: trainingOfficer.unit
+          unit: trainingOfficer.unit,
+          rank: trainingOfficer.profile?.rank,
+          isPPO: false
         },
         ppo: {
           id: ppo.id,
           name: ppo.name,
-          position: null // Explicitly show null
+          position: null,
+          rank: ppo.profile?.rank,
+          isPPO: true
         }
       });
 
@@ -1033,7 +1114,7 @@ const updatePartnershipMutation = useMutation({
       }
 
       // Update recurring_schedules if this is a recurring partnership
-      if (!isEmergency && (officer.type === 'recurring' || partnerOfficerId)) {
+      if (!isEmergency && (officer.type === 'recurring' || officer.type === 'recurring')) {
         console.log("🔄 Updating recurring_schedules for partnership");
         
         // For training officer (recurring)

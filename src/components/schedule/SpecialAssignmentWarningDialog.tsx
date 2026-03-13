@@ -1,4 +1,4 @@
-// Create a new file: SpecialAssignmentWarningDialog.tsx
+// src/components/schedule/SpecialAssignmentWarningDialog.tsx
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Users } from "lucide-react";

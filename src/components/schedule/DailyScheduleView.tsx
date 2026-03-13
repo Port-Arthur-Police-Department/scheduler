@@ -35,6 +35,7 @@ import {
   getStaffingSeverity,
   formatStaffingCount 
 } from "@/utils/staffingUtils";
+import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog"; 
 
 // Add these helper functions RIGHT HERE - after all imports but before any components
 
@@ -361,36 +362,46 @@ export const DailyScheduleView = ({
     });
   };
 
-  // Combined handler that routes to the correct function
-  const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
-    if (partnerOfficerId) {
-      // This is a create operation
-      handleCreatePartnership(officer, partnerOfficerId);
-      
-      // Log partnership creation
-      auditLogger.logPartnershipChange(
-        officer.officerId,
-        officer.name,
-        partnerOfficerId,
-        'created',
-        userEmail,
-        `Created partnership between ${officer.name} and partner`
-      );
-    } else {
-      // This is a remove operation  
-      handleRemovePartnership(officer);
-      
-      // Log partnership removal
-      auditLogger.logPartnershipChange(
-        officer.officerId,
-        officer.name,
-        officer.partnerOfficerId,
-        'removed',
-        userEmail,
-        `Removed partnership for ${officer.name}`
+// Combined handler that routes to the correct function
+const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
+  if (partnerOfficerId) {
+    // This is a create operation
+    handleCreatePartnership(officer, partnerOfficerId);
+    
+    // Log partnership creation
+    auditLogger.logPartnershipChange(
+      officer.officerId,
+      officer.name,
+      partnerOfficerId,
+      'created',
+      userEmail,
+      `Created partnership between ${officer.name} and partner`
+    );
+  } else {
+    // This is a remove/suspend operation  
+    handleRemovePartnership(officer);
+    
+    // Log partnership removal/suspension
+    auditLogger.logPartnershipChange(
+      officer.officerId,
+      officer.name,
+      officer.partnerOfficerId,
+      'removed',
+      userEmail,
+      officer.partnerData?.partnerIsPPO 
+        ? `Suspended partnership - PPO ${officer.partnerData.partnerName} needs emergency partner`
+        : `Removed partnership for ${officer.name}`
+    );
+    
+    // Show a toast to remind about emergency partner for PPO
+    if (officer.partnerData?.partnerIsPPO) {
+      toast.warning(
+        `The PPO ${officer.partnerData.partnerName} now needs an emergency partner. Please assign one immediately.`,
+        { duration: 8000 }
       );
     }
-  };
+  }
+};
 
   // FIXED: Handlers for PTO
   const handleSavePTOUnitNumber = (ptoRecord: any, unitNumber: string) => {

@@ -469,10 +469,7 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     enabled: open && !emergencyMode && !hasActivePartnership && !isOfficerPPO, // Regular officers can create partnerships with PPOs
     staleTime: 0,
   });
-  
-// In PartnershipManager.tsx - Update the handleCreatePartnership function
 
-// In PartnershipManager.tsx - Update the handleCreatePartnership function
 
 const handleCreatePartnership = async () => {
   if (!selectedPartner) {

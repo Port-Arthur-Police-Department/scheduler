@@ -1662,11 +1662,9 @@ for (const officer of allOfficers) {
       const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
       const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
       
-      // NEW: Check if either officer has a special assignment position
-      const officerHasSpecialAssignment = isSpecialAssignment(officer.position) || 
-        (officer.position && !PREDEFINED_POSITIONS.includes(officer.position as any));
-      const partnerHasSpecialAssignment = isSpecialAssignment(partnerOfficer.position) || 
-        (partnerOfficer.position && !PREDEFINED_POSITIONS.includes(partnerOfficer.position as any));
+      // NEW: Check if either officer has a special assignment position (using imported function)
+      const officerHasSpecialAssignment = isSpecialAssignment(officer.position);
+      const partnerHasSpecialAssignment = isSpecialAssignment(partnerOfficer.position);
       
       // Handle PTO cases (existing logic)
       if (officerOnPTO && partnerOnPTO) {

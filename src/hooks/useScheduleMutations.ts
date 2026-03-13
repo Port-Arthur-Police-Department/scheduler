@@ -571,7 +571,7 @@ const updateScheduleMutation = useMutation({
     // FIRST: Check if this officer is in a partnership
     const { data: currentSchedule, error: fetchError } = await supabase
       .from("schedule_exceptions")
-      .select("id, is_partnership, partner_officer_id, position_name, unit_number, notes, schedule_type")
+      .select("id, is_partnership, partner_officer_id, position_name, unit_number, notes, schedule_type, partnership_suspended")
       .eq("officer_id", params.officerId)
       .eq("date", params.date)
       .eq("shift_type_id", params.shiftTypeId)
@@ -663,7 +663,7 @@ const updateScheduleMutation = useMutation({
 
       console.log("✅ Training officer updated successfully");
 
-      // CRITICAL: Update or create the PPO's record with partnership reference preserved
+      // CRITICAL: Update or create the PPO's record with partnership reference preserved and MARK AS SUSPENDED
       if (partnerSchedule) {
         // Update existing PPO schedule
         console.log("Updating existing PPO schedule:", partnerSchedule.id);

@@ -260,43 +260,73 @@ export const DailyScheduleView = ({
     });
   };
 
-  // NEW: Handle creating partnerships
-  const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
-    console.log("🔄 Creating partnership:", { 
-      officer: officer.officerId, 
-      officerName: officer.name,
-      partnerOfficerId: partnerOfficerId,
-      scheduleId: officer.scheduleId,
-      type: officer.type
-    });
-    
-    if (!officer?.scheduleId || !officer?.officerId || !partnerOfficerId) {
-      toast.error("Invalid data for partnership creation");
-      return;
-    }
+ // In DailyScheduleView.tsx - Update handleCreatePartnership
 
-    updatePartnershipMutation.mutate({
-      officer: {
-        ...officer,
-        // Ensure we have all required fields
-        date: officer.date || dateStr,
-        dayOfWeek: officer.dayOfWeek || dayOfWeek,
-        scheduleId: officer.scheduleId,
-        officerId: officer.officerId,
-        type: officer.type,
-        shift: officer.shift
-      },
-      partnerOfficerId: partnerOfficerId,
-      action: 'create'
-    }, {
-      onSuccess: () => {
-        // Refresh the schedule after partnership creation
-        refetchSchedule();
-      }
-    });
+// NEW: Handle creating partnerships
+const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
+  console.log("🔄 Creating partnership:", { 
+    officer: officer.officerId, 
+    officerName: officer.name,
+    officerPosition: officer.position, // Log position
+    officerUnit: officer.unitNumber, // Log unit
+    partnerOfficerId: partnerOfficerId,
+    scheduleId: officer.scheduleId,
+    type: officer.type,
+    isEmergency: !!officer.emergencyPartner // Flag if this is emergency
+  });
+  
+  if (!officer?.scheduleId || !officer?.officerId || !partnerOfficerId) {
+    toast.error("Invalid data for partnership creation");
+    return;
+  }
+
+  // Check if this is an emergency partnership (PPO needing partner)
+  const isEmergency = officer.emergencyPartner !== undefined;
+  
+  // Prepare officer data with preserved position for emergency
+  const officerData = {
+    ...officer,
+    // Ensure position and unit are preserved for emergency
+    position: officer.position,
+    unitNumber: officer.unitNumber,
+    date: officer.date || dateStr,
+    dayOfWeek: officer.dayOfWeek || dayOfWeek,
+    scheduleId: officer.scheduleId,
+    officerId: officer.officerId,
+    type: officer.type,
+    shift: officer.shift,
+    // Mark as emergency if applicable
+    isEmergencyPartnership: isEmergency
   };
 
-// In DailyScheduleView.tsx - Update handleRemovePartnership
+  updatePartnershipMutation.mutate({
+    officer: officerData,
+    partnerOfficerId: partnerOfficerId,
+    action: 'create'
+  }, {
+    onSuccess: () => {
+      // Log partnership creation
+      auditLogger.logPartnershipChange(
+        officer.officerId,
+        officer.name,
+        partnerOfficerId,
+        'created',
+        userEmail,
+        isEmergency 
+          ? `Created EMERGENCY partnership for PPO ${officer.name} with position ${officer.position}`
+          : `Created partnership between ${officer.name} and partner`
+      );
+      
+      // Show appropriate toast
+      if (isEmergency) {
+        toast.success(`Emergency partner assigned. ${officer.name} will maintain position ${officer.position}`);
+      }
+      
+      // Refresh the schedule after partnership creation
+      refetchSchedule();
+    }
+  });
+};
 
 const handleRemovePartnership = (officer: any) => {
   console.log("🔄 Removing partnership:", { 

@@ -565,9 +565,157 @@ const updateScheduleMutation = useMutation({
   mutationFn: async (params: UpdateScheduleParams) => {
     console.log("📝 Updating schedule with params:", params);
 
-    // Check if this is a special assignment
-    const isSpecialAssignment = params.positionName?.toLowerCase() === 'other';
+    // Check if this is a special assignment (position contains "other" case-insensitive)
+    const isSpecialAssignment = params.positionName?.toLowerCase().includes('other');
+    
+    // FIRST: Check if this officer is in a partnership
+    const { data: currentSchedule } = await supabase
+      .from("schedule_exceptions")
+      .select("id, is_partnership, partner_officer_id, position_name, unit_number, notes, schedule_type")
+      .eq("officer_id", params.officerId)
+      .eq("date", params.date)
+      .eq("shift_type_id", params.shiftTypeId)
+      .eq("is_off", false)
+      .maybeSingle();
 
+    // If this is a special assignment AND the officer is in a partnership
+    if (isSpecialAssignment && currentSchedule?.is_partnership && currentSchedule?.partner_officer_id) {
+      console.log("🔴 Handling special assignment for training officer in partnership:", params.officerId);
+      
+      // Get the training officer's profile to get their default position
+      const { data: officerProfile } = await supabase
+        .from("profiles")
+        .select("default_position, default_unit, full_name, rank")
+        .eq("id", params.officerId)
+        .single();
+
+      // Get the PPO's profile
+      const { data: ppoProfile } = await supabase
+        .from("profiles")
+        .select("full_name, rank")
+        .eq("id", currentSchedule.partner_officer_id)
+        .single();
+
+      // Get the PPO's current schedule
+      const { data: partnerSchedule } = await supabase
+        .from("schedule_exceptions")
+        .select("id, position_name, unit_number, notes, schedule_type")
+        .eq("officer_id", currentSchedule.partner_officer_id)
+        .eq("date", params.date)
+        .eq("shift_type_id", params.shiftTypeId)
+        .eq("is_off", false)
+        .maybeSingle();
+
+      // Store the original position
+      const originalPosition = officerProfile?.default_position || currentSchedule.position_name || 'Unknown';
+      
+      console.log("📋 Special assignment details:", {
+        trainingOfficer: officerProfile?.full_name,
+        originalPosition,
+        newPosition: params.positionName,
+        ppo: ppoProfile?.full_name
+      });
+
+      // Update the training officer to special assignment
+      const { error: officerError } = await supabase
+        .from("schedule_exceptions")
+        .update({
+          position_name: params.positionName, // This will be "other (custom)" or whatever was entered
+          unit_number: params.unitNumber || currentSchedule.unit_number,
+          notes: `SPECIAL ASSIGNMENT: ${params.positionName} - Original position: ${originalPosition}`,
+          schedule_type: 'special_assignment',
+          // Keep the partnership info - DON'T break it
+          is_partnership: true,
+          partner_officer_id: currentSchedule.partner_officer_id,
+          // Clear any suspension flags
+          partnership_suspended: false,
+          partnership_suspension_reason: null
+        })
+        .eq("id", currentSchedule.id);
+
+      if (officerError) throw officerError;
+
+      // Update or create the PPO's record to show partnership suspended
+      if (partnerSchedule) {
+        // Update existing PPO schedule
+        const { error: partnerError } = await supabase
+          .from("schedule_exceptions")
+          .update({
+            // PPO should have null position
+            position_name: null,
+            unit_number: params.unitNumber || currentSchedule.unit_number,
+            notes: `⚠️ PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}. Emergency partner needed.`,
+            schedule_type: 'partnership_suspended',
+            // Keep the partnership reference
+            is_partnership: true,
+            partner_officer_id: params.officerId,
+            // Mark as suspended
+            partnership_suspended: true,
+            partnership_suspension_reason: 'training_officer_special_assignment'
+          })
+          .eq("id", partnerSchedule.id);
+
+        if (partnerError) throw partnerError;
+      } else {
+        // Create new exception for PPO
+        const { error: createPartnerError } = await supabase
+          .from("schedule_exceptions")
+          .insert({
+            officer_id: currentSchedule.partner_officer_id,
+            date: params.date,
+            shift_type_id: params.shiftTypeId,
+            is_off: false,
+            position_name: null,
+            unit_number: params.unitNumber || currentSchedule.unit_number,
+            notes: `⚠️ PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}. Emergency partner needed.`,
+            schedule_type: 'partnership_suspended',
+            is_partnership: true,
+            partner_officer_id: params.officerId,
+            partnership_suspended: true,
+            partnership_suspension_reason: 'training_officer_special_assignment',
+            custom_start_time: null,
+            custom_end_time: null
+          });
+
+        if (createPartnerError) throw createPartnerError;
+      }
+
+      // Log this special assignment in partnership_exceptions
+      await supabase
+        .from("partnership_exceptions")
+        .insert({
+          officer_id: params.officerId,
+          partner_officer_id: currentSchedule.partner_officer_id,
+          date: params.date,
+          shift_type_id: params.shiftTypeId,
+          reason: `Training Officer on special assignment: ${params.positionName}`,
+          exception_type: 'special_assignment_suspension',
+          created_at: new Date().toISOString()
+        });
+
+      console.log("✅ Special assignment created, partnership suspended:", {
+        trainingOfficer: officerProfile?.full_name,
+        originalPosition: originalPosition,
+        newPosition: params.positionName,
+        ppo: ppoProfile?.full_name,
+        status: 'suspended - needs emergency partner'
+      });
+
+      // Invalidate queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["available-partners"] });
+      
+      toast.success(`${officerProfile?.full_name} assigned to ${params.positionName}`);
+      toast.info(`${ppoProfile?.full_name} needs emergency partner`);
+
+      return; // Exit early as we've handled the special assignment
+    }
+
+    // If we get here, it's either:
+    // 1. Not a special assignment
+    // 2. Or a regular officer not in a partnership (which already works)
+    
     if (params.type === "recurring") {
       // For recurring officers, update via exceptions table
       const { data: existingExceptions, error: checkError } = await supabase
@@ -587,8 +735,6 @@ const updateScheduleMutation = useMutation({
         if (params.isPartnership && params.partnerOfficerId) {
           console.log("🤝 Updating partnership in exception");
           
-          // For special assignments, we need to preserve the partnership
-          // but allow the position to be "Other"
           const updateData: any = {
             position_name: params.positionName,
             unit_number: params.unitNumber,
@@ -596,9 +742,8 @@ const updateScheduleMutation = useMutation({
             is_partnership: params.isPartnership
           };
 
-          // If this is a special assignment, store the original position
+          // For regular officers not in partnership, this won't trigger
           if (isSpecialAssignment) {
-            // Get the original position from the training officer's profile or recurring schedule
             const { data: officerProfile } = await supabase
               .from("profiles")
               .select("default_position")
@@ -611,7 +756,6 @@ const updateScheduleMutation = useMutation({
             updateData.notes = params.notes;
           }
           
-          // Update current officer
           const { error } = await supabase
             .from("schedule_exceptions")
             .update(updateData)
@@ -630,13 +774,11 @@ const updateScheduleMutation = useMutation({
             .maybeSingle();
 
           if (partnerException) {
-            // Partner's position should remain null (PPO) or their original position
             await supabase
               .from("schedule_exceptions")
               .update({
                 partner_officer_id: params.officerId,
                 is_partnership: params.isPartnership,
-                // Add note about training officer on special assignment
                 notes: isSpecialAssignment ? `Training Officer on special assignment` : null
               })
               .eq("id", partnerException.id);
@@ -650,9 +792,7 @@ const updateScheduleMutation = useMutation({
             is_partnership: params.isPartnership || false
           };
 
-          // If this is a special assignment and officer is in a partnership
           if (isSpecialAssignment && exception.is_partnership) {
-            // Store the original position in notes
             updateData.notes = `Special assignment - Original position: ${exception.position_name || 'Unknown'}`;
             updateData.schedule_type = 'special_assignment';
           } else {
@@ -681,7 +821,6 @@ const updateScheduleMutation = useMutation({
           custom_end_time: null
         };
 
-        // If this is a special assignment, add note about original position
         if (isSpecialAssignment && params.isPartnership) {
           const { data: officerProfile } = await supabase
             .from("profiles")
@@ -697,7 +836,7 @@ const updateScheduleMutation = useMutation({
 
         const { error } = await supabase
           .from("schedule_exceptions")
-            .insert(insertData);
+          .insert(insertData);
         
         if (error) throw error;
       }
@@ -735,7 +874,6 @@ const updateScheduleMutation = useMutation({
 
       // If updating partnership, also update partner's record
       if (params.isPartnership && params.partnerOfficerId) {
-        // Find partner's exception for this date/shift
         const { data: partnerException } = await supabase
           .from("schedule_exceptions")
           .select("id")
@@ -757,8 +895,11 @@ const updateScheduleMutation = useMutation({
       }
     }
   },
-  onSuccess: () => {
-    toast.success("Schedule updated");
+  onSuccess: (data, variables) => {
+    // Only show toast if we haven't already shown one in the special assignment handler
+    if (!variables.positionName?.toLowerCase().includes('other')) {
+      toast.success("Schedule updated");
+    }
     queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
   },

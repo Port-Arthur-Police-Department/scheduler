@@ -1778,6 +1778,8 @@ for (const officer of allOfficers) {
         if (isWorkingOfficerPPO) {
           // Working officer is a PPO - needs emergency partner button
           console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${specialAssignmentOfficer.name} on Special Assignment)`);
+          
+          // Add the suspended PPO (will go to Partnerships (Suspended) section)
           const suspendedOfficer = {
             ...workingOfficer,
             isPartnership: true,
@@ -1796,32 +1798,86 @@ for (const officer of allOfficers) {
             _suspendedPartnership: true,
             _processed: true
           };
-          
           processedOfficers.push(suspendedOfficer);
+          
+          // ADD THE SPECIAL ASSIGNMENT OFFICER (will go to Special Assignments section)
+          const specialAssignmentProcessed = {
+            ...specialAssignmentOfficer,
+            isPartnership: false,
+            partnerOfficerId: null,
+            partnershipSuspended: false,
+            partnerData: undefined,
+            hasPTO: false,
+            ptoData: undefined,
+            _suspendedPartnership: false,
+            _processed: true
+          };
+          console.log(`✅ Adding special assignment officer to list: ${specialAssignmentOfficer.name}`);
+          processedOfficers.push(specialAssignmentProcessed);
+          
         } else if (isSpecialAssignmentOfficerPPO) {
           // Working officer is regular, PPO is on special assignment
           console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${specialAssignmentOfficer.name} on Special Assignment)`);
+          
+          // Add the regular working officer (will go to regular section)
           processedOfficers.push({
             ...workingOfficer,
             isPartnership: false,
             partnerOfficerId: null,
             partnershipSuspended: false,
             partnerData: undefined,
+            hasPTO: false,
+            ptoData: undefined,
             _suspendedPartnership: false,
             _processed: true
           });
+          
+          // ADD THE PPO ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
+          const ppoOnSpecialAssignment = {
+            ...specialAssignmentOfficer,
+            isPartnership: false,
+            partnerOfficerId: null,
+            partnershipSuspended: false,
+            partnerData: undefined,
+            hasPTO: false,
+            ptoData: undefined,
+            _suspendedPartnership: false,
+            _processed: true
+          };
+          console.log(`✅ Adding PPO on special assignment to list: ${specialAssignmentOfficer.name}`);
+          processedOfficers.push(ppoOnSpecialAssignment);
+          
         } else {
           // Both are regular officers, one on special assignment
           console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
+          
+          // Add the regular working officer (will go to regular section)
           processedOfficers.push({
             ...workingOfficer,
             isPartnership: false,
             partnerOfficerId: null,
             partnershipSuspended: false,
             partnerData: undefined,
+            hasPTO: false,
+            ptoData: undefined,
             _suspendedPartnership: false,
             _processed: true
           });
+          
+          // ADD THE REGULAR OFFICER ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
+          const regularOnSpecialAssignment = {
+            ...specialAssignmentOfficer,
+            isPartnership: false,
+            partnerOfficerId: null,
+            partnershipSuspended: false,
+            partnerData: undefined,
+            hasPTO: false,
+            ptoData: undefined,
+            _suspendedPartnership: false,
+            _processed: true
+          };
+          console.log(`✅ Adding regular officer on special assignment to list: ${specialAssignmentOfficer.name}`);
+          processedOfficers.push(regularOnSpecialAssignment);
         }
       } 
       else {

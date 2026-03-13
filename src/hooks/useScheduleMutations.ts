@@ -700,677 +700,437 @@ export const useScheduleMutations = (dateStr: string) => {
     },
   });
 
-// Enhanced partnership mutation with PTO handling, verification, and better error handling
-const updatePartnershipMutation = useMutation({
-  mutationFn: async ({ 
-    officer, 
-    partnerOfficerId, 
-    action,
-    position,
-    isEmergency,
-    isOfficerPPO
-  }: { 
-    officer: any; 
-    partnerOfficerId?: string; 
-    action: 'create' | 'remove' | 'emergency';
-    position?: string;
-    isEmergency?: boolean;
-    isOfficerPPO?: boolean;
-  }) => {
-    console.log("🔄 Partnership mutation:", { 
-      officerName: officer.name, 
-      officerId: officer.officerId,
-      officerRank: officer.rank,
-      officerPosition: officer.position,
+  // Enhanced partnership mutation with PTO handling, verification, and better error handling
+  const updatePartnershipMutation = useMutation({
+    mutationFn: async ({ 
+      officer, 
       partnerOfficerId, 
       action,
-      position,
-      isEmergency,
-      isOfficerPPO
-    });
-
-    if (action === 'create' && partnerOfficerId) {
-      // Validate inputs
-      if (!officer.officerId || !partnerOfficerId) {
-        throw new Error("Missing officer IDs for partnership");
-      }
-
-      const targetDate = officer.date || dateStr;
-      const shiftId = officer.shift.id;
-      const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
-
-      // FIRST - Get officer and partner profiles for rank checking and details
-      // This needs to happen BEFORE any validation that depends on rank
-      console.log("📊 Fetching profiles for officers:", {
+      position
+    }: { 
+      officer: any; 
+      partnerOfficerId?: string; 
+      action: 'create' | 'remove' | 'emergency';
+      position?: string;
+    }) => {
+      console.log("🔄 Partnership mutation:", { 
+        officerName: officer.name, 
         officerId: officer.officerId,
-        partnerId: partnerOfficerId
+        partnerOfficerId, 
+        action,
+        position 
       });
 
-      const [officerProfileResult, partnerProfileResult] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
-          .eq("id", officer.officerId)
-          .single(),
-        supabase
-          .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
-          .eq("id", partnerOfficerId)
-          .single()
-      ]);
-
-      if (officerProfileResult.error) {
-        console.error("Error fetching officer profile:", officerProfileResult.error);
-        throw new Error(`Failed to fetch officer profile: ${officerProfileResult.error.message}`);
-      }
-
-      if (partnerProfileResult.error) {
-        console.error("Error fetching partner profile:", partnerProfileResult.error);
-        throw new Error(`Failed to fetch partner profile: ${partnerProfileResult.error.message}`);
-      }
-
-      const officerProfile = officerProfileResult.data;
-      const partnerProfile = partnerProfileResult.data;
-
-      console.log("🔍 Raw rank values from profiles:", {
-        officer: {
-          id: officer.officerId,
-          name: officerProfile?.full_name,
-          rank: officerProfile?.rank,
-          rankType: typeof officerProfile?.rank,
-          rankValue: officerProfile?.rank,
-          rankLowerCase: officerProfile?.rank?.toLowerCase?.()
-        },
-        partner: {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name,
-          rank: partnerProfile?.rank,
-          rankType: typeof partnerProfile?.rank,
-          rankValue: partnerProfile?.rank,
-          rankLowerCase: partnerProfile?.rank?.toLowerCase?.()
+      if (action === 'create' && partnerOfficerId) {
+        // Validate inputs
+        if (!officer.officerId || !partnerOfficerId) {
+          throw new Error("Missing officer IDs for partnership");
         }
-      });
 
-      // Custom function to check if a rank is PPO
-      const isRankPPO = (rank: any): boolean => {
-        if (!rank) {
-          console.log("⚠️ Rank is null or undefined, defaulting to non-PPO");
-          return false;
-        }
-        
-        const rankStr = String(rank).toLowerCase().trim();
-        console.log(`Checking rank "${rankStr}" for PPO status`);
-        
-        // List of ranks that are NOT PPO (Training Officers)
-        const nonPPORanks = [
-          'police officer',
-          'officer',
-          'training officer',
-          'field training officer',
-          'fto',
-          'senior officer',
-          'master officer',
-          'corporal',
-          'sergeant',
-          'lieutenant',
-          'captain',
-          'commander',
-          'chief',
-          'deputy',
-          'sheriff',
-          'marshal',
-          'agent',
-          'inspector'
-        ];
-        
-        // If it's in the non-PPO list, it's NOT a PPO
-        if (nonPPORanks.some(r => rankStr.includes(r))) {
-          console.log(`Rank "${rankStr}" is NOT a PPO (matched non-PPO list: "${nonPPORanks.find(r => rankStr.includes(r))}")`);
-          return false;
-        }
-        
-        // Check if it's explicitly a PPO rank
-        const isPPO = rankStr.includes('ppo') || 
-                      rankStr.includes('probationary') || 
-                      rankStr === 'p' ||
-                      rankStr === 'ppo' ||
-                      rankStr.includes('probationary police officer');
-        
-        console.log(`Rank "${rankStr}" is ${isPPO ? '' : 'NOT '}a PPO`);
-        return isPPO;
-      };
+        const targetDate = officer.date || dateStr;
+        const shiftId = officer.shift.id;
+        const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
 
-      // Determine if each officer is a PPO using our custom function
-      const isOfficerPpo = isRankPPO(officerProfile?.rank);
-      const isPartnerPpo = isRankPPO(partnerProfile?.rank);
-
-      console.log("🔍 Partnership rank check (after processing):", {
-        officer: {
-          id: officer.officerId,
-          name: officerProfile?.full_name,
-          rawRank: officerProfile?.rank,
-          processedRank: String(officerProfile?.rank || '').toLowerCase().trim(),
-          isPPO: isOfficerPpo
-        },
-        partner: {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name,
-          rawRank: partnerProfile?.rank,
-          processedRank: String(partnerProfile?.rank || '').toLowerCase().trim(),
-          isPPO: isPartnerPpo
-        }
-      });
-
-      // Check if either officer is on PTO (now that we have profiles)
-      const [{ data: officerPTO }, { data: partnerPTO }] = await Promise.all([
-        supabase
-          .from("schedule_exceptions")
-          .select("id")
-          .eq("officer_id", officer.officerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", true)
-          .maybeSingle(),
-        supabase
-          .from("schedule_exceptions")
-          .select("id")
-          .eq("officer_id", partnerOfficerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", true)
-          .maybeSingle()
-      ]);
-
-      if (officerPTO) {
-        throw new Error(`${officerProfile?.full_name || officer.name} is on PTO and cannot be partnered`);
-      }
-
-      if (partnerPTO) {
-        throw new Error(`${partnerProfile?.full_name} is on PTO and cannot be partnered`);
-      }
-
-      // Check if either officer already has a partnership for this date/shift
-      const [{ data: existingOfficerSchedule }, { data: existingPartnerSchedule }] = await Promise.all([
-        supabase
-          .from("schedule_exceptions")
-          .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
-          .eq("officer_id", officer.officerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", false)
-          .maybeSingle(),
-        supabase
-          .from("schedule_exceptions")
-          .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
-          .eq("officer_id", partnerOfficerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", false)
-          .maybeSingle()
-      ]);
-
-      // Check if officer already has a partnership
-      if (existingOfficerSchedule?.is_partnership) {
-        throw new Error(`${officerProfile?.full_name || officer.name} is already in a partnership for this shift`);
-      }
-
-      // Check if partner already has a partnership
-      if (existingPartnerSchedule?.is_partnership) {
-        throw new Error(`${partnerProfile?.full_name} is already in a partnership for this shift`);
-      }
-
-      // VALIDATION: Ensure one is PPO and one is not
-      if (isOfficerPpo === isPartnerPpo) {
-        console.error("❌ Partnership validation failed:", {
-          officer: {
-            id: officer.officerId,
-            name: officerProfile?.full_name,
-            rank: officerProfile?.rank,
-            isPPO: isOfficerPpo
-          },
-          partner: {
-            id: partnerOfficerId,
-            name: partnerProfile?.full_name,
-            rank: partnerProfile?.rank,
-            isPPO: isPartnerPpo
-          },
-          message: "Both officers have the same PPO status"
-        });
-        
-        // Provide a more helpful error message
-        if (isOfficerPpo && isPartnerPpo) {
-          throw new Error(`Cannot create partnership between two PPOs (${officerProfile?.full_name} and ${partnerProfile?.full_name}). A Training Officer (non-PPO) is required.`);
-        } else {
-          throw new Error(`Cannot create partnership between two Training Officers (${officerProfile?.full_name} and ${partnerProfile?.full_name}). A PPO is required.`);
-        }
-      }
-
-      // DETERMINE WHO IS THE TRAINING OFFICER (non-PPO) AND WHO IS THE PPO
-      let trainingOfficer = {
-        id: '',
-        name: '',
-        position: '',
-        unit: '',
-        scheduleId: '',
-        type: '',
-        existingSchedule: null as any,
-        profile: null as any
-      };
-      
-      let ppo = {
-        id: '',
-        name: '',
-        scheduleId: '',
-        type: '',
-        existingSchedule: null as any,
-        profile: null as any
-      };
-
-      if (!isOfficerPpo && isPartnerPpo) {
-        // Officer is training officer, partner is PPO
-        trainingOfficer = {
-          id: officer.officerId,
-          name: officerProfile?.full_name || officer.name,
-          position: officerProfile?.position_name || officer.position || existingOfficerSchedule?.position_name || '',
-          unit: officerProfile?.unit_number || officer.unitNumber || existingOfficerSchedule?.unit_number || '',
-          scheduleId: officer.scheduleId,
-          type: officer.type,
-          existingSchedule: existingOfficerSchedule,
-          profile: officerProfile
-        };
-        
-        ppo = {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name || 'Unknown',
-          scheduleId: existingPartnerSchedule?.id || null,
-          type: 'exception',
-          existingSchedule: existingPartnerSchedule,
-          profile: partnerProfile
-        };
-        
-        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name);
-        
-      } else if (isOfficerPpo && !isPartnerPpo) {
-        // Officer is PPO, partner is training officer
-        
-        // Get training officer's position from their profile or schedule
-        let trainingOfficerPosition = '';
-        let trainingOfficerUnit = '';
-        
-        // First try from profile
-        if (partnerProfile?.position_name) {
-          trainingOfficerPosition = partnerProfile.position_name;
-          trainingOfficerUnit = partnerProfile.unit_number || '';
-        } 
-        // Then try from existing schedule
-        else if (existingPartnerSchedule?.position_name) {
-          trainingOfficerPosition = existingPartnerSchedule.position_name;
-          trainingOfficerUnit = existingPartnerSchedule.unit_number || '';
-        } 
-        // Finally try from recurring_schedules
-        else {
-          const { data: trainingOfficerSchedule } = await supabase
-            .from("recurring_schedules")
-            .select("position_name, unit_number")
-            .eq("officer_id", partnerOfficerId)
+        // Check if either officer is on PTO
+        const [{ data: officerPTO }, { data: partnerPTO }] = await Promise.all([
+          supabase
+            .from("schedule_exceptions")
+            .select("id")
+            .eq("officer_id", officer.officerId)
+            .eq("date", targetDate)
             .eq("shift_type_id", shiftId)
-            .eq("day_of_week", dayOfWeek)
-            .maybeSingle();
-            
-          trainingOfficerPosition = trainingOfficerSchedule?.position_name || '';
-          trainingOfficerUnit = trainingOfficerSchedule?.unit_number || '';
+            .eq("is_off", true)
+            .maybeSingle(),
+          supabase
+            .from("schedule_exceptions")
+            .select("id")
+            .eq("officer_id", partnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", true)
+            .maybeSingle()
+        ]);
+
+        if (officerPTO) {
+          throw new Error(`${officer.name} is on PTO and cannot be partnered`);
         }
-        
-        // If still no position, use a default
-        if (!trainingOfficerPosition) {
-          trainingOfficerPosition = 'Training Officer';
+
+        if (partnerPTO) {
+          throw new Error("Partner officer is on PTO and cannot be partnered");
         }
-        
-        trainingOfficer = {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name || 'Unknown',
-          position: trainingOfficerPosition,
-          unit: trainingOfficerUnit,
-          scheduleId: existingPartnerSchedule?.id || null,
-          type: 'recurring',
-          existingSchedule: existingPartnerSchedule,
-          profile: partnerProfile
-        };
-        
-        ppo = {
-          id: officer.officerId,
-          name: officerProfile?.full_name || officer.name,
-          scheduleId: officer.scheduleId,
-          type: officer.type,
-          existingSchedule: existingOfficerSchedule,
-          profile: officerProfile
-        };
-        
-        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name);
-      }
 
-      console.log("📋 Partnership details:", {
-        trainingOfficer: {
-          id: trainingOfficer.id,
-          name: trainingOfficer.name,
-          position: trainingOfficer.position,
-          unit: trainingOfficer.unit,
-          rank: trainingOfficer.profile?.rank,
-          isPPO: false
-        },
-        ppo: {
-          id: ppo.id,
-          name: ppo.name,
-          position: null,
-          rank: ppo.profile?.rank,
-          isPPO: true
+        // Check if either officer already has a partnership for this date/shift
+        const [{ data: existingOfficerSchedule }, { data: existingPartnerSchedule }] = await Promise.all([
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
+            .eq("officer_id", officer.officerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .maybeSingle(),
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, position_name, unit_number, notes, schedule_type")
+            .eq("officer_id", partnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .maybeSingle()
+        ]);
+
+        // Check if officer already has a partnership
+        if (existingOfficerSchedule?.is_partnership) {
+          throw new Error(`${officer.name} is already in a partnership for this shift`);
         }
-      });
 
-      // Create or update schedule exceptions for both officers
-      const updates = [];
-
-      // FOR THE TRAINING OFFICER - Keep their original position
-      if (trainingOfficer.existingSchedule) {
-        // Update existing exception for training officer
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: true,
-              partner_officer_id: ppo.id,
-              position_name: trainingOfficer.position, // Keep original position - NOT NULL
-              unit_number: trainingOfficer.unit,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              notes: isEmergency ? `EMERGENCY: Training PPO ${ppo.name}` : `Training PPO ${ppo.name}`
-            })
-            .eq("id", trainingOfficer.existingSchedule.id)
-        );
-      } else {
-        // Create new exception for training officer
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .insert({
-              officer_id: trainingOfficer.id,
-              date: targetDate,
-              shift_type_id: shiftId,
-              is_off: false,
-              is_partnership: true,
-              partner_officer_id: ppo.id,
-              position_name: trainingOfficer.position, // Keep original position - NOT NULL
-              unit_number: trainingOfficer.unit,
-              notes: isEmergency ? `EMERGENCY: Training PPO ${ppo.name}` : `Training PPO ${ppo.name}`,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              custom_start_time: null,
-              custom_end_time: null
-            })
-        );
-      }
-
-      // FOR THE PPO - EXPLICITLY SET position_name TO null (NO POSITION)
-      if (ppo.existingSchedule) {
-        // Update existing exception for PPO
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: true,
-              partner_officer_id: trainingOfficer.id,
-              position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
-              unit_number: trainingOfficer.unit, // Use training officer's unit
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              notes: `Riding with Training Officer ${trainingOfficer.name}`
-            })
-            .eq("id", ppo.existingSchedule.id)
-        );
-      } else {
-        // Create new exception for PPO
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .insert({
-              officer_id: ppo.id,
-              date: targetDate,
-              shift_type_id: shiftId,
-              is_off: false,
-              is_partnership: true,
-              partner_officer_id: trainingOfficer.id,
-              position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
-              unit_number: trainingOfficer.unit, // Use training officer's unit
-              notes: `Riding with Training Officer ${trainingOfficer.name}`,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              custom_start_time: null,
-              custom_end_time: null
-            })
-        );
-      }
-
-      // Execute all updates
-      const results = await Promise.all(updates);
-      const errors = results.filter(result => result.error).map(result => result.error);
-      
-      if (errors.length > 0) {
-        console.error("Errors creating partnership:", errors);
-        throw new Error(`Failed to create partnership: ${errors[0]?.message}`);
-      }
-
-      // Update recurring_schedules if this is a recurring partnership
-      if (!isEmergency && (officer.type === 'recurring' || officer.type === 'recurring')) {
-        console.log("🔄 Updating recurring_schedules for partnership");
-        
-        // For training officer (recurring)
-        const { data: trainingRecurring } = await supabase
-          .from("recurring_schedules")
-          .select("id")
-          .eq("officer_id", trainingOfficer.id)
-          .eq("shift_type_id", shiftId)
-          .eq("day_of_week", dayOfWeek)
-          .maybeSingle();
-          
-        if (trainingRecurring) {
-          const { error: trainingError } = await supabase
-            .from("recurring_schedules")
-            .update({
-              is_partnership: true,
-              partner_officer_id: ppo.id,
-              position_name: trainingOfficer.position, // Keep position - NOT NULL
-              unit_number: trainingOfficer.unit
-            })
-            .eq("id", trainingRecurring.id);
-            
-          if (trainingError) {
-            console.warn("Error updating training officer recurring:", trainingError);
-          } else {
-            console.log("✅ Updated training officer recurring schedule with position:", trainingOfficer.position);
-          }
+        // Check if partner already has a partnership
+        if (existingPartnerSchedule?.is_partnership) {
+          throw new Error("Partner officer is already in a partnership for this shift");
         }
+
+        // Get officer and partner profiles for rank checking
+        const [{ data: officerProfile }, { data: partnerProfile }] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("full_name, rank")
+            .eq("id", officer.officerId)
+            .single(),
+          supabase
+            .from("profiles")
+            .select("full_name, rank")
+            .eq("id", partnerOfficerId)
+            .single()
+        ]);
+
+        // Determine positions
+        // Use provided position, existing position, or default based on rank
+        const officerPosition = position || 
+                               existingOfficerSchedule?.position_name || 
+                               (isPPOByRank(officerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
         
-        // For PPO (recurring) - EXPLICITLY SET position_name TO null
-        const { data: ppoRecurring } = await supabase
-          .from("recurring_schedules")
-          .select("id")
-          .eq("officer_id", ppo.id)
-          .eq("shift_type_id", shiftId)
-          .eq("day_of_week", dayOfWeek)
-          .maybeSingle();
-          
-        if (ppoRecurring) {
-          const { error: ppoError } = await supabase
-            .from("recurring_schedules")
-            .update({
-              is_partnership: true,
-              partner_officer_id: trainingOfficer.id,
-              position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
-              unit_number: trainingOfficer.unit
-            })
-            .eq("id", ppoRecurring.id);
-            
-          if (ppoError) {
-            console.warn("Error updating PPO recurring:", ppoError);
-          } else {
-            console.log("✅ Updated PPO recurring schedule with position: null");
-          }
+        // For partner, use their existing position or default based on rank
+        const partnerPosition = existingPartnerSchedule?.position_name || 
+                                (isPPOByRank(partnerProfile?.rank) ? "Riding Partner (PPO)" : "Riding Partner");
+
+        // Check if this is a recurring day (not a one-time exception)
+        const isRecurringDay = officer.type === 'recurring' || 
+                               (officer.dayOfWeek !== undefined && officer.dayOfWeek !== null);
+
+        // Create or update schedule exceptions for both officers
+        const updates = [];
+
+        // For officer
+        if (existingOfficerSchedule) {
+          // Update existing exception to be a partnership
+          updates.push(
+            supabase
+              .from("schedule_exceptions")
+              .update({
+                is_partnership: true,
+                partner_officer_id: partnerOfficerId,
+                position_name: officerPosition,
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership'
+                // Keep existing unit_number and notes
+              })
+              .eq("id", existingOfficerSchedule.id)
+          );
+        } else {
+          // Create new exception for officer
+          updates.push(
+            supabase
+              .from("schedule_exceptions")
+              .insert({
+                officer_id: officer.officerId,
+                date: targetDate,
+                shift_type_id: shiftId,
+                is_off: false,
+                is_partnership: true,
+                partner_officer_id: partnerOfficerId,
+                position_name: officerPosition,
+                unit_number: officer.unitNumber || null,
+                notes: officer.notes || null,
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership',
+                custom_start_time: null,
+                custom_end_time: null
+              })
+          );
         }
-      }
 
-      // Verify the PPO has null position
-      const { data: verifyPPO } = await supabase
-        .from("schedule_exceptions")
-        .select("position_name")
-        .eq("officer_id", ppo.id)
-        .eq("date", targetDate)
-        .eq("shift_type_id", shiftId)
-        .single();
+        // For partner
+        if (existingPartnerSchedule) {
+          // Update existing exception to be a partnership
+          updates.push(
+            supabase
+              .from("schedule_exceptions")
+              .update({
+                is_partnership: true,
+                partner_officer_id: officer.officerId,
+                position_name: partnerPosition,
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership'
+                // Keep existing unit_number and notes
+              })
+              .eq("id", existingPartnerSchedule.id)
+          );
+        } else {
+          // Create new exception for partner
+          updates.push(
+            supabase
+              .from("schedule_exceptions")
+              .insert({
+                officer_id: partnerOfficerId,
+                date: targetDate,
+                shift_type_id: shiftId,
+                is_off: false,
+                is_partnership: true,
+                partner_officer_id: officer.officerId,
+                position_name: partnerPosition,
+                unit_number: officer.partnerUnitNumber || null,
+                notes: officer.partnerNotes || null,
+                schedule_type: action === 'emergency' ? 'emergency_partnership' : 'manual_partnership',
+                custom_start_time: null,
+                custom_end_time: null
+              })
+          );
+        }
 
-      console.log("🔍 Verification - PPO position_name:", verifyPPO?.position_name);
-
-      console.log("✅ Partnership created successfully:", {
-        trainingOfficer: trainingOfficer.name,
-        trainingOfficerPosition: trainingOfficer.position,
-        ppo: ppo.name,
-        ppoPosition: null
-      });
-
-      return { 
-        success: true,
-        trainingOfficer: trainingOfficer.name,
-        ppo: ppo.name,
-        message: `${trainingOfficer.name} (${trainingOfficer.position}) is now training ${ppo.name}`
-      };
-
-    } else if (action === 'remove') {
-      // Handle partnership removal
-      console.log("🗑️ Removing partnership for:", officer.officerId);
-      
-      const targetDate = officer.date || dateStr;
-      const shiftId = officer.shift.id;
-      const actualPartnerOfficerId = partnerOfficerId || officer.partnerOfficerId;
-      
-      if (!actualPartnerOfficerId) {
-        throw new Error("No partner officer ID provided for removal");
-      }
-      
-      // Get the current schedules to know what positions to restore
-      const [{ data: officerSchedule }, { data: partnerSchedule }] = await Promise.all([
-        supabase
-          .from("schedule_exceptions")
-          .select("id, position_name, unit_number, notes, schedule_type")
-          .eq("officer_id", officer.officerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", false)
-          .maybeSingle(),
-        supabase
-          .from("schedule_exceptions")
-          .select("id, position_name, unit_number, notes, schedule_type")
-          .eq("officer_id", actualPartnerOfficerId)
-          .eq("date", targetDate)
-          .eq("shift_type_id", shiftId)
-          .eq("is_off", false)
-          .maybeSingle()
-      ]);
-      
-      // Remove partnership from schedule exceptions
-      const updates = [];
-      
-      if (officerSchedule) {
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: false,
-              partner_officer_id: null,
-              // Reset position based on schedule type
-              position_name: officerSchedule.schedule_type === "manual_partnership" || 
-                            officerSchedule.schedule_type === "emergency_partnership" 
-                            ? null 
-                            : officerSchedule.position_name
-            })
-            .eq("id", officerSchedule.id)
-        );
-      }
-      
-      if (partnerSchedule) {
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: false,
-              partner_officer_id: null,
-              // Reset position based on schedule type
-              position_name: partnerSchedule.schedule_type === "manual_partnership" || 
-                            partnerSchedule.schedule_type === "emergency_partnership" 
-                            ? null 
-                            : partnerSchedule.position_name
-            })
-            .eq("id", partnerSchedule.id)
-        );
-      }
-      
-      if (updates.length > 0) {
+        // Execute all updates
         const results = await Promise.all(updates);
-        const errors = results.filter(r => r.error).map(r => r.error);
+        const errors = results.filter(result => result.error).map(result => result.error);
+        
         if (errors.length > 0) {
-          console.error("Errors removing partnership:", errors);
-          throw new Error("Failed to remove partnership");
+          console.error("Errors creating partnership:", errors);
+          throw new Error(`Failed to create partnership: ${errors[0]?.message}`);
         }
-      }
-      
-      // Also update recurring schedules to remove partnership
-      const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
-      
-      await Promise.all([
-        supabase
-          .from("recurring_schedules")
+
+        // NEW: Also update recurring_schedules if this is a recurring partnership
+        if (isRecurringDay) {
+          console.log("🔄 Updating recurring_schedules for partnership");
+          const recurringResult = await updateRecurringPartnership(
+            officer.officerId,
+            partnerOfficerId,
+            shiftId,
+            dayOfWeek,
+            officerPosition,
+            partnerPosition
+          );
+          
+          if (!recurringResult.success) {
+            console.warn("⚠️ Could not update recurring schedules, but exception was created:", recurringResult.error);
+          }
+        }
+
+        // VERIFY partnership was created correctly
+        const verificationPromises = [
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, partner_officer_id, position_name")
+            .eq("officer_id", officer.officerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .single(),
+          supabase
+            .from("schedule_exceptions")
+            .select("id, is_partnership, partner_officer_id, position_name")
+            .eq("officer_id", partnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .single()
+        ];
+
+        const verificationResults = await Promise.all(verificationPromises);
+        
+        const [officerVerification, partnerVerification] = verificationResults;
+        
+        if (officerVerification.error || !officerVerification.data?.is_partnership) {
+          console.error("❌ Officer partnership verification failed:", officerVerification.error);
+          throw new Error("Failed to verify officer partnership creation");
+        }
+        
+        if (partnerVerification.error || !partnerVerification.data?.is_partnership) {
+          console.error("❌ Partner partnership verification failed:", partnerVerification.error);
+          throw new Error("Failed to verify partner partnership creation");
+        }
+
+        console.log("✅ Partnership verified for both officers");
+
+        // Log partnership creation
+        await supabase
+          .from("partnership_exceptions")
+          .insert({
+            officer_id: officer.officerId,
+            partner_officer_id: partnerOfficerId,
+            date: targetDate,
+            shift_type_id: shiftId,
+            reason: action === 'emergency' ? 'Emergency reassignment' : 'Partnership created',
+            exception_type: action === 'emergency' ? 'emergency_reassignment' : 'created',
+            created_at: new Date().toISOString()
+          });
+
+        console.log(`✅ Partnership created: ${officerProfile?.full_name} ↔ ${partnerProfile?.full_name}`);
+
+        return {
+          success: true,
+          officerName: officerProfile?.full_name,
+          partnerName: partnerProfile?.full_name,
+          officerPosition: officerPosition,
+          partnerPosition: partnerPosition
+        };
+
+      } else if (action === 'remove') {
+        console.log("Removing partnership for officer:", officer.officerId);
+        
+        const targetDate = officer.date || dateStr;
+        const shiftId = officer.shift.id;
+        const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
+        const actualPartnerOfficerId = officer.partnerOfficerId || officer.partnerData?.partnerOfficerId;
+
+        // Get officer's current schedule to preserve unit_number and notes
+        const { data: officerSchedule } = await supabase
+          .from("schedule_exceptions")
+          .select("position_name, unit_number, notes, schedule_type")
+          .eq("officer_id", officer.officerId)
+          .eq("date", targetDate)
+          .eq("shift_type_id", shiftId)
+          .eq("is_off", false)
+          .maybeSingle();
+
+        // Remove partnership from officer's schedule exception
+        const { error: officerError } = await supabase
+          .from("schedule_exceptions")
           .update({
             is_partnership: false,
-            partner_officer_id: null
+            partner_officer_id: null,
+            partnership_suspended: false,
+            partnership_suspension_reason: null,
+            // If it was a manual partnership, keep the position, otherwise reset to null
+            position_name: officerSchedule?.schedule_type === "manual_partnership" || 
+                          officerSchedule?.schedule_type === "emergency_partnership" 
+                          ? null 
+                          : officerSchedule?.position_name
           })
           .eq("officer_id", officer.officerId)
+          .eq("date", targetDate)
           .eq("shift_type_id", shiftId)
-          .eq("day_of_week", dayOfWeek),
-        supabase
-          .from("recurring_schedules")
-          .update({
-            is_partnership: false,
-            partner_officer_id: null
-          })
-          .eq("officer_id", actualPartnerOfficerId)
-          .eq("shift_type_id", shiftId)
-          .eq("day_of_week", dayOfWeek)
-      ]);
-      
-      console.log("✅ Partnership removed successfully");
-      return { success: true };
-    }
+          .eq("is_off", false);
 
-    throw new Error(`Unknown action: ${action}`);
-  },
-  onSuccess: (data, variables) => {
-    console.log("✅ Partnership mutation successful:", variables);
-    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
-    queryClient.invalidateQueries({ queryKey: ["available-partners"] });
-    
-    // Show appropriate success message
-    if (variables.action === 'create') {
-      if (variables.isEmergency) {
+        if (officerError) {
+          console.error("Error removing officer partnership:", officerError);
+          throw officerError;
+        }
+
+        console.log("Successfully removed partnership from officer");
+
+        // Remove partnership from partner officer if partner exists
+        if (actualPartnerOfficerId) {
+          console.log("Removing partnership from partner officer:", actualPartnerOfficerId);
+
+          // Get partner's current schedule
+          const { data: partnerSchedule } = await supabase
+            .from("schedule_exceptions")
+            .select("position_name, unit_number, notes, schedule_type")
+            .eq("officer_id", actualPartnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false)
+            .maybeSingle();
+
+          const { error: partnerError } = await supabase
+            .from("schedule_exceptions")
+            .update({
+              is_partnership: false,
+              partner_officer_id: null,
+              partnership_suspended: false,
+              partnership_suspension_reason: null,
+              // If it was a manual partnership, keep the position, otherwise reset to null
+              position_name: partnerSchedule?.schedule_type === "manual_partnership" || 
+                            partnerSchedule?.schedule_type === "emergency_partnership" 
+                            ? null 
+                            : partnerSchedule?.position_name
+            })
+            .eq("officer_id", actualPartnerOfficerId)
+            .eq("date", targetDate)
+            .eq("shift_type_id", shiftId)
+            .eq("is_off", false);
+
+          if (partnerError) {
+            console.error("Error removing partner relationship:", partnerError);
+            // Don't throw - we still want to remove the primary officer's partnership
+          } else {
+            console.log("Successfully removed partnership from partner officer");
+          }
+        } else {
+          console.warn("No partnerOfficerId found for removal");
+        }
+
+        // NEW: Also remove from recurring_schedules if this is a recurring partnership
+        if (officer.type === 'recurring' || officer.originalScheduleId) {
+          console.log("🔄 Also removing from recurring_schedules");
+          
+          if (actualPartnerOfficerId) {
+            const recurringResult = await removeRecurringPartnership(
+              officer.officerId,
+              actualPartnerOfficerId,
+              shiftId,
+              dayOfWeek
+            );
+            
+            if (!recurringResult.success) {
+              console.warn("⚠️ Could not remove from recurring schedules:", recurringResult.error);
+            }
+          }
+        }
+
+        // Log partnership removal
+        await supabase
+          .from("partnership_exceptions")
+          .insert({
+            officer_id: officer.officerId,
+            partner_officer_id: actualPartnerOfficerId,
+            date: targetDate,
+            shift_type_id: shiftId,
+            reason: 'Partnership removed',
+            exception_type: 'removed',
+            created_at: new Date().toISOString()
+          });
+
+        return {
+          success: true,
+          officerName: officer.name,
+          partnerName: officer.partnerData?.partnerName
+        };
+      }
+
+      throw new Error(`Unknown action: ${action}`);
+    },
+    onSuccess: (data, variables) => {
+      const action = variables.action;
+      if (action === 'remove') {
+        toast.success("Partnership removed successfully");
+      } else if (action === 'emergency') {
         toast.success("Emergency partnership created successfully");
       } else {
         toast.success("Partnership created successfully");
       }
-    } else if (variables.action === 'remove') {
-      toast.success("Partnership removed successfully");
-    }
-  },
-  onError: (error: any) => {
-    console.error("❌ Partnership mutation failed:", error);
-    toast.error(error.message || "Failed to update partnership");
-  }
-});
+      
+      // Force refresh all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["available-partners"] });
+      
+      // Add a small delay to ensure the backend has processed the changes
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      }, 500);
+    },
+    onError: (error: any) => {
+      console.error("Partnership mutation error:", error);
+      toast.error(error.message || "Failed to update partnership");
+    },
+  });
 
   const addOfficerMutation = useMutation({
     mutationFn: async ({ 

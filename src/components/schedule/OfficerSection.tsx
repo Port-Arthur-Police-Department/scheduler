@@ -167,48 +167,67 @@ export const OfficerSection = ({
     }
   };
 
-  // UPDATED: Handler for confirming special assignment after warning
-  const handleConfirmSpecialAssignment = async () => {
-    if (specialAssignmentWarning) {
-      const { officer, newPosition } = specialAssignmentWarning;
-      
-      console.log("🔴 Confirming special assignment for:", officer.name);
-      console.log("🔴 Partner data:", officer.partnerData);
-      
-      // First, save the new position
+// In OfficerSection.tsx - Update the handleConfirmSpecialAssignment function
+
+const handleConfirmSpecialAssignment = async () => {
+  if (specialAssignmentWarning) {
+    const { officer, newPosition } = specialAssignmentWarning;
+    
+    console.log("🔴 Confirming special assignment for:", officer.name);
+    console.log("🔴 Partner data:", officer.partnerData);
+    console.log("🔴 New position:", newPosition);
+    
+    try {
+      // First, save the new position and wait for it to complete
+      console.log("🔴 Step 1: Saving new position...");
       await onSavePosition(officer, newPosition);
+      console.log("🔴 Step 1 complete: Position saved");
       
       // Then, if there's a partnership, trigger suspension
       if (officer.partnerData && onPartnershipChange) {
-        console.log("🔴 Triggering partnership suspension for:", officer.name);
+        console.log("🔴 Step 2: Triggering partnership suspension for:", officer.name);
+        console.log("🔴 Partner to suspend:", officer.partnerData.partnerName);
         
         // Create a properly formatted officer object with all necessary data
         const officerWithPartner = {
           ...officer,
           // Ensure partner data is properly passed
           partnerOfficerId: officer.partnerData.partnerOfficerId,
-          partnerData: officer.partnerData
+          partnerData: {
+            ...officer.partnerData,
+            // Make sure we have all the partner info
+            partnerOfficerId: officer.partnerData.partnerOfficerId,
+            partnerName: officer.partnerData.partnerName,
+            partnerBadge: officer.partnerData.partnerBadge,
+            partnerRank: officer.partnerData.partnerRank,
+            partnerIsPPO: officer.partnerData.partnerIsPPO
+          },
+          // Mark this as a suspension due to special assignment
+          suspensionReason: 'special_assignment',
+          newPosition: newPosition,
+          // CRITICAL: Mark that this officer should no longer be in a partnership
+          isPartnership: false,
+          partnershipSuspended: false
         };
         
         // Call onPartnershipChange with undefined to remove/suspend the partnership
         // This will trigger the handleRemovePartnership function in DailyScheduleView
-        onPartnershipChange(officerWithPartner, undefined);
-        
-        console.log("🔴 Partnership suspension triggered");
+        await onPartnershipChange(officerWithPartner, undefined);
+        console.log("🔴 Step 2 complete: Partnership suspension triggered");
       } else {
         console.log("🔴 No partner data or onPartnershipChange not available");
       }
       
+      console.log("🔴 Step 3: Closing dialog");
       // Close the dialog
       setSpecialAssignmentWarning(null);
       
-      // Force a small delay to allow the mutations to complete
-      setTimeout(() => {
-        console.log("🔴 Special assignment process completed");
-      }, 500);
+    } catch (error) {
+      console.error("❌ Error during special assignment process:", error);
+      setSpecialAssignmentWarning(null);
     }
-  };
-
+  }
+};
   return (
     <div className="space-y-2">
       <div 

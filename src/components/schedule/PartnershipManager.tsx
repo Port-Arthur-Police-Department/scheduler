@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Users, AlertTriangle, Shield, Clock } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { isPPOByRank } from "@/utils/ppoUtils";
+import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 interface PartnershipManagerProps {
   officer: any;

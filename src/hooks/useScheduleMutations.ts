@@ -1108,43 +1108,43 @@ const updatePartnershipMutation = useMutation({
         );
       }
 
-      // FOR THE PPO - EXPLICITLY SET position_name TO null (NO POSITION)
-      if (ppo.existingSchedule) {
-        // Update existing exception for PPO
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: true,
-              partner_officer_id: trainingOfficer.id,
-              position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
-              unit_number: trainingOfficer.unit, // Use training officer's unit
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              notes: `Riding with Training Officer ${trainingOfficer.name}`
-            })
-            .eq("id", ppo.existingSchedule.id)
-        );
-      } else {
-        // Create new exception for PPO
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .insert({
-              officer_id: ppo.id,
-              date: targetDate,
-              shift_type_id: shiftId,
-              is_off: false,
-              is_partnership: true,
-              partner_officer_id: trainingOfficer.id,
-              position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
-              unit_number: trainingOfficer.unit, // Use training officer's unit
-              notes: `Riding with Training Officer ${trainingOfficer.name}`,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              custom_start_time: null,
-              custom_end_time: null
-            })
-        );
-      }
+// FOR THE PPO - EXPLICITLY SET position_name TO null (NO POSITION)
+if (ppo.existingSchedule) {
+  // Update existing exception for PPO
+  updates.push(
+    supabase
+      .from("schedule_exceptions")
+      .update({
+        is_partnership: true,
+        partner_officer_id: trainingOfficer.id,
+        position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
+        unit_number: trainingOfficer.unit, // Use training officer's unit
+        schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership'
+        // notes field removed - will keep existing notes or null
+      })
+      .eq("id", ppo.existingSchedule.id)
+  );
+} else {
+  // Create new exception for PPO
+  updates.push(
+    supabase
+      .from("schedule_exceptions")
+      .insert({
+        officer_id: ppo.id,
+        date: targetDate,
+        shift_type_id: shiftId,
+        is_off: false,
+        is_partnership: true,
+        partner_officer_id: trainingOfficer.id,
+        position_name: null, // CRITICAL: EXPLICITLY SET TO null - NO POSITION
+        unit_number: trainingOfficer.unit, // Use training officer's unit
+        schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
+        custom_start_time: null,
+        custom_end_time: null
+        // notes field omitted - will default to null
+      })
+  );
+}
 
       // Execute all updates
       const results = await Promise.all(updates);

@@ -569,7 +569,7 @@ const updateScheduleMutation = useMutation({
     const isSpecialAssignment = params.positionName?.toLowerCase().includes('other');
     
     // FIRST: Check if this officer is in a partnership
-    const { data: currentSchedule } = await supabase
+    const { data: currentSchedule, error: fetchError } = await supabase
       .from("schedule_exceptions")
       .select("id, is_partnership, partner_officer_id, position_name, unit_number, notes, schedule_type")
       .eq("officer_id", params.officerId)
@@ -578,26 +578,41 @@ const updateScheduleMutation = useMutation({
       .eq("is_off", false)
       .maybeSingle();
 
+    if (fetchError) {
+      console.error("Error fetching current schedule:", fetchError);
+      throw fetchError;
+    }
+
     // If this is a special assignment AND the officer is in a partnership
     if (isSpecialAssignment && currentSchedule?.is_partnership && currentSchedule?.partner_officer_id) {
       console.log("🔴 Handling special assignment for training officer in partnership:", params.officerId);
       
       // Get the training officer's profile
-      const { data: officerProfile } = await supabase
+      const { data: officerProfile, error: officerProfileError } = await supabase
         .from("profiles")
         .select("default_position, default_unit, full_name, rank")
         .eq("id", params.officerId)
         .single();
 
+      if (officerProfileError) {
+        console.error("Error fetching officer profile:", officerProfileError);
+        throw officerProfileError;
+      }
+
       // Get the PPO's profile
-      const { data: ppoProfile } = await supabase
+      const { data: ppoProfile, error: ppoProfileError } = await supabase
         .from("profiles")
         .select("full_name, rank")
         .eq("id", currentSchedule.partner_officer_id)
         .single();
 
-      // Get the PPO's current schedule - IMPORTANT: We need to find or create this
-      let { data: partnerSchedule } = await supabase
+      if (ppoProfileError) {
+        console.error("Error fetching PPO profile:", ppoProfileError);
+        throw ppoProfileError;
+      }
+
+      // Get the PPO's current schedule
+      let { data: partnerSchedule, error: partnerScheduleError } = await supabase
         .from("schedule_exceptions")
         .select("id, position_name, unit_number, notes, schedule_type, partnership_suspended")
         .eq("officer_id", currentSchedule.partner_officer_id)
@@ -606,14 +621,21 @@ const updateScheduleMutation = useMutation({
         .eq("is_off", false)
         .maybeSingle();
 
+      if (partnerScheduleError) {
+        console.error("Error fetching partner schedule:", partnerScheduleError);
+        throw partnerScheduleError;
+      }
+
       // Store the original position
       const originalPosition = officerProfile?.default_position || currentSchedule.position_name || 'Unknown';
       
       console.log("📋 Special assignment details:", {
         trainingOfficer: officerProfile?.full_name,
+        trainingOfficerId: params.officerId,
         originalPosition,
         newPosition: params.positionName,
         ppo: ppoProfile?.full_name,
+        ppoId: currentSchedule.partner_officer_id,
         ppoHasSchedule: !!partnerSchedule
       });
 
@@ -634,11 +656,17 @@ const updateScheduleMutation = useMutation({
         })
         .eq("id", currentSchedule.id);
 
-      if (officerError) throw officerError;
+      if (officerError) {
+        console.error("Error updating training officer:", officerError);
+        throw officerError;
+      }
+
+      console.log("✅ Training officer updated successfully");
 
       // CRITICAL: Update or create the PPO's record with partnership reference preserved
       if (partnerSchedule) {
         // Update existing PPO schedule
+        console.log("Updating existing PPO schedule:", partnerSchedule.id);
         const { error: partnerError } = await supabase
           .from("schedule_exceptions")
           .update({
@@ -656,9 +684,14 @@ const updateScheduleMutation = useMutation({
           })
           .eq("id", partnerSchedule.id);
 
-        if (partnerError) throw partnerError;
+        if (partnerError) {
+          console.error("Error updating PPO schedule:", partnerError);
+          throw partnerError;
+        }
+        console.log("✅ PPO schedule updated successfully");
       } else {
         // Create new exception for PPO - this is crucial if they don't have one yet
+        console.log("Creating new PPO schedule");
         const { error: createPartnerError } = await supabase
           .from("schedule_exceptions")
           .insert({
@@ -680,14 +713,18 @@ const updateScheduleMutation = useMutation({
             custom_end_time: null
           });
 
-        if (createPartnerError) throw createPartnerError;
+        if (createPartnerError) {
+          console.error("Error creating PPO schedule:", createPartnerError);
+          throw createPartnerError;
+        }
+        console.log("✅ PPO schedule created successfully");
       }
 
       // Also update recurring_schedules if this is a recurring day
       const dayOfWeek = parseISO(params.date).getDay();
       
       // Check if this is a recurring schedule day for training officer
-      const { data: trainingRecurring } = await supabase
+      const { data: trainingRecurring, error: trainingRecurringError } = await supabase
         .from("recurring_schedules")
         .select("id")
         .eq("officer_id", params.officerId)
@@ -695,9 +732,11 @@ const updateScheduleMutation = useMutation({
         .eq("day_of_week", dayOfWeek)
         .maybeSingle();
 
-      if (trainingRecurring) {
+      if (trainingRecurringError) {
+        console.error("Error fetching training recurring:", trainingRecurringError);
+      } else if (trainingRecurring) {
         // Update training officer's recurring schedule to note special assignment
-        await supabase
+        const { error: updateTrainingRecurringError } = await supabase
           .from("recurring_schedules")
           .update({
             is_partnership: true,
@@ -706,10 +745,16 @@ const updateScheduleMutation = useMutation({
             unit_number: params.unitNumber || currentSchedule.unit_number
           })
           .eq("id", trainingRecurring.id);
+
+        if (updateTrainingRecurringError) {
+          console.error("Error updating training recurring:", updateTrainingRecurringError);
+        } else {
+          console.log("✅ Training officer recurring schedule updated");
+        }
       }
 
       // Check for PPO's recurring schedule
-      const { data: ppoRecurring } = await supabase
+      const { data: ppoRecurring, error: ppoRecurringError } = await supabase
         .from("recurring_schedules")
         .select("id")
         .eq("officer_id", currentSchedule.partner_officer_id)
@@ -717,9 +762,11 @@ const updateScheduleMutation = useMutation({
         .eq("day_of_week", dayOfWeek)
         .maybeSingle();
 
-      if (ppoRecurring) {
+      if (ppoRecurringError) {
+        console.error("Error fetching PPO recurring:", ppoRecurringError);
+      } else if (ppoRecurring) {
         // Update PPO's recurring schedule to mark as suspended
-        await supabase
+        const { error: updatePPORecurringError } = await supabase
           .from("recurring_schedules")
           .update({
             is_partnership: true,
@@ -728,20 +775,52 @@ const updateScheduleMutation = useMutation({
             unit_number: params.unitNumber || currentSchedule.unit_number
           })
           .eq("id", ppoRecurring.id);
+
+        if (updatePPORecurringError) {
+          console.error("Error updating PPO recurring:", updatePPORecurringError);
+        } else {
+          console.log("✅ PPO recurring schedule updated");
+        }
       }
 
-      // Log this special assignment in partnership_exceptions
-      await supabase
+      // Check if a partnership exception already exists for today
+      const { data: existingException, error: checkExceptionError } = await supabase
         .from("partnership_exceptions")
-        .insert({
-          officer_id: params.officerId,
-          partner_officer_id: currentSchedule.partner_officer_id,
-          date: params.date,
-          shift_type_id: params.shiftTypeId,
-          reason: `Training Officer on special assignment: ${params.positionName}`,
-          exception_type: 'special_assignment_suspension',
-          created_at: new Date().toISOString()
-        });
+        .select("id")
+        .eq("officer_id", params.officerId)
+        .eq("partner_officer_id", currentSchedule.partner_officer_id)
+        .eq("date", params.date)
+        .eq("shift_type_id", params.shiftTypeId)
+        .maybeSingle();
+
+      if (checkExceptionError) {
+        console.error("Error checking existing partnership exception:", checkExceptionError);
+      }
+
+      // Only insert if no existing exception
+      if (!existingException) {
+        console.log("Creating new partnership exception record");
+        const { error: insertExceptionError } = await supabase
+          .from("partnership_exceptions")
+          .insert({
+            officer_id: params.officerId,
+            partner_officer_id: currentSchedule.partner_officer_id,
+            date: params.date,
+            shift_type_id: params.shiftTypeId,
+            reason: `Training Officer on special assignment: ${params.positionName}`,
+            exception_type: 'special_assignment_suspension',
+            created_at: new Date().toISOString()
+          });
+
+        if (insertExceptionError) {
+          console.error("Error inserting partnership exception:", insertExceptionError);
+          // Don't throw - this is non-critical
+        } else {
+          console.log("✅ Partnership exception created");
+        }
+      } else {
+        console.log("Partnership exception already exists, skipping insert");
+      }
 
       console.log("✅ Special assignment created, partnership preserved and suspended:", {
         trainingOfficer: officerProfile?.full_name,
@@ -763,10 +842,6 @@ const updateScheduleMutation = useMutation({
 
       return; // Exit early
     }
-
-    // If we get here, it's either:
-    // 1. Not a special assignment
-    // 2. Or a regular officer not in a partnership (which already works)
     
     if (params.type === "recurring") {
       // For recurring officers, update via exceptions table

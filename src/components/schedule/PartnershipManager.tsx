@@ -470,60 +470,74 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     staleTime: 0,
   });
   
-  const handleCreatePartnership = async () => {
-    if (!selectedPartner) {
-      console.error("No partner selected");
+// In PartnershipManager.tsx - Update the handleCreatePartnership function
+
+const handleCreatePartnership = async () => {
+  if (!selectedPartner) {
+    console.error("No partner selected");
+    return;
+  }
+  
+  if (emergencyMode) {
+    // Emergency partnership for PPO
+    const partner = emergencyPartners?.find(p => p.id === selectedPartner);
+    console.log("🚨 Creating EMERGENCY partnership for PPO:", {
+      ppo: officer.name,
+      ppoRank: officer.rank,
+      ppoPosition: officer.position, // Log the PPO's position
+      ppoUnitNumber: officer.unitNumber, // Log the PPO's unit
+      partner: partner?.name,
+      partnerRank: partner?.rank,
+      partnerId: selectedPartner,
+      shift: officer.shift.name,
+      date: officer.date || format(new Date(), "yyyy-MM-dd")
+    });
+
+    // Double-check this is a PPO
+    if (!isOfficerPPO) {
+      console.error("❌ Emergency partnerships only for PPOs!");
       return;
     }
+
+    // For emergency partnerships - PASS THE OFFICER'S POSITION AND UNIT
+    // Create a copy of the officer with all their original data
+    const officerWithPosition = {
+      ...officer,
+      // Ensure position and unit are preserved
+      position: officer.position,
+      unitNumber: officer.unitNumber,
+      // Pass the partner data
+      emergencyPartner: partner
+    };
     
-    if (emergencyMode) {
-      // Emergency partnership for PPO
-      const partner = emergencyPartners?.find(p => p.id === selectedPartner);
-      console.log("🚨 Creating EMERGENCY partnership for PPO:", {
-        ppo: officer.name,
-        ppoRank: officer.rank,
-        partner: partner?.name,
-        partnerRank: partner?.rank,
-        partnerId: selectedPartner,
-        shift: officer.shift.name,
-        date: officer.date || format(new Date(), "yyyy-MM-dd")
-      });
+    onPartnershipChange(officerWithPosition, selectedPartner);
+  } else {
+    // Regular partnership (regular officer with PPO)
+    const partner = availablePartners?.find(p => p.id === selectedPartner);
+    console.log("🤝 Creating regular partnership:", {
+      officer: officer.name,
+      officerRank: officer.rank,
+      partner: partner?.full_name,
+      partnerRank: partner?.rank,
+      partnerId: selectedPartner,
+      shift: officer.shift.name,
+      date: officer.date || format(new Date(), "yyyy-MM-dd")
+    });
 
-      // Double-check this is a PPO
-      if (!isOfficerPPO) {
-        console.error("❌ Emergency partnerships only for PPOs!");
-        return;
-      }
-
-      // For emergency partnerships
-      onPartnershipChange(officer, selectedPartner);
-    } else {
-      // Regular partnership (regular officer with PPO)
-      const partner = availablePartners?.find(p => p.id === selectedPartner);
-      console.log("🤝 Creating regular partnership:", {
-        officer: officer.name,
-        officerRank: officer.rank,
-        partner: partner?.full_name,
-        partnerRank: partner?.rank,
-        partnerId: selectedPartner,
-        shift: officer.shift.name,
-        date: officer.date || format(new Date(), "yyyy-MM-dd")
-      });
-
-      // Double-check this is NOT a PPO
-      if (isOfficerPPO) {
-        console.error("❌ Regular partnerships cannot be created by PPOs!");
-        return;
-      }
-
-      // For regular partnerships
-      onPartnershipChange(officer, selectedPartner);
+    // Double-check this is NOT a PPO
+    if (isOfficerPPO) {
+      console.error("❌ Regular partnerships cannot be created by PPOs!");
+      return;
     }
-    
-    setOpen(false);
-    setSelectedPartner("");
-    setEmergencyMode(false);
-  };
+
+    // For regular partnerships
+    onPartnershipChange(officer, selectedPartner);
+  }
+  
+  setOpen(false);
+  setSelectedPartner("");
+  setEmergencyMode(false);
+};
   
   const handleRemovePartnership = async () => {
     console.log("🗑️ Removing partnership for:", {

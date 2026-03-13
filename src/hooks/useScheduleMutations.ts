@@ -635,7 +635,7 @@ const updateScheduleMutation = useMutation({
 
       if (officerError) throw officerError;
 
-      // Update or create the PPO's record to show partnership suspended
+      // Update or create the PPO's record to show partnership suspended (like PTO suspension)
       if (partnerSchedule) {
         // Update existing PPO schedule
         const { error: partnerError } = await supabase
@@ -644,14 +644,16 @@ const updateScheduleMutation = useMutation({
             // PPO should have null position
             position_name: null,
             unit_number: params.unitNumber || currentSchedule.unit_number,
-            notes: `⚠️ PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}. Emergency partner needed.`,
+            notes: `PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}`,
             schedule_type: 'partnership_suspended',
             // Keep the partnership reference
             is_partnership: true,
             partner_officer_id: params.officerId,
-            // Mark as suspended
+            // Mark as suspended (this will move them to suspended section)
             partnership_suspended: true,
-            partnership_suspension_reason: 'training_officer_special_assignment'
+            partnership_suspension_reason: 'training_officer_special_assignment',
+            // PPO is still working (not off duty)
+            is_off: false
           })
           .eq("id", partnerSchedule.id);
 
@@ -667,7 +669,7 @@ const updateScheduleMutation = useMutation({
             is_off: false,
             position_name: null,
             unit_number: params.unitNumber || currentSchedule.unit_number,
-            notes: `⚠️ PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}. Emergency partner needed.`,
+            notes: `PARTNERSHIP SUSPENDED - Training Officer (${officerProfile?.full_name}) on special assignment: ${params.positionName}`,
             schedule_type: 'partnership_suspended',
             is_partnership: true,
             partner_officer_id: params.officerId,
@@ -678,6 +680,55 @@ const updateScheduleMutation = useMutation({
           });
 
         if (createPartnerError) throw createPartnerError;
+      }
+
+      // Also update recurring_schedules if this is a recurring day
+      const dayOfWeek = parseISO(params.date).getDay();
+      
+      // Check if this is a recurring schedule day
+      const { data: trainingRecurring } = await supabase
+        .from("recurring_schedules")
+        .select("id")
+        .eq("officer_id", params.officerId)
+        .eq("shift_type_id", params.shiftTypeId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle();
+
+      if (trainingRecurring) {
+        // Update training officer's recurring schedule to mark partnership but note special assignment
+        await supabase
+          .from("recurring_schedules")
+          .update({
+            is_partnership: true,
+            partner_officer_id: currentSchedule.partner_officer_id,
+            // Keep original position in recurring
+            position_name: originalPosition,
+            unit_number: params.unitNumber || currentSchedule.unit_number,
+            // Add a note about special assignment in recurring? (if field exists)
+          })
+          .eq("id", trainingRecurring.id);
+      }
+
+      const { data: ppoRecurring } = await supabase
+        .from("recurring_schedules")
+        .select("id")
+        .eq("officer_id", currentSchedule.partner_officer_id)
+        .eq("shift_type_id", params.shiftTypeId)
+        .eq("day_of_week", dayOfWeek)
+        .maybeSingle();
+
+      if (ppoRecurring) {
+        // Update PPO's recurring schedule to mark as suspended
+        await supabase
+          .from("recurring_schedules")
+          .update({
+            is_partnership: true,
+            partner_officer_id: params.officerId,
+            position_name: null,
+            unit_number: params.unitNumber || currentSchedule.unit_number,
+            // Mark as suspended in recurring? (if field exists)
+          })
+          .eq("id", ppoRecurring.id);
       }
 
       // Log this special assignment in partnership_exceptions
@@ -698,7 +749,7 @@ const updateScheduleMutation = useMutation({
         originalPosition: originalPosition,
         newPosition: params.positionName,
         ppo: ppoProfile?.full_name,
-        status: 'suspended - needs emergency partner'
+        status: 'suspended - moved to suspended partnerships section'
       });
 
       // Invalidate queries to refresh the UI
@@ -707,7 +758,7 @@ const updateScheduleMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["available-partners"] });
       
       toast.success(`${officerProfile?.full_name} assigned to ${params.positionName}`);
-      toast.info(`${ppoProfile?.full_name} needs emergency partner`);
+      toast.info(`${ppoProfile?.full_name} moved to suspended partnerships`);
 
       return; // Exit early as we've handled the special assignment
     }

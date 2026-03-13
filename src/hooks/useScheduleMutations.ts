@@ -739,129 +739,7 @@ const updatePartnershipMutation = useMutation({
       const shiftId = officer.shift.id;
       const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
 
-      // FIRST - Get officer and partner profiles for rank checking and details
-      // This needs to happen BEFORE any validation that depends on rank
-      console.log("📊 Fetching profiles for officers:", {
-        officerId: officer.officerId,
-        partnerId: partnerOfficerId
-      });
-
-      const [officerProfileResult, partnerProfileResult] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
-          .eq("id", officer.officerId)
-          .single(),
-        supabase
-          .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
-          .eq("id", partnerOfficerId)
-          .single()
-      ]);
-
-      if (officerProfileResult.error) {
-        console.error("Error fetching officer profile:", officerProfileResult.error);
-        throw new Error(`Failed to fetch officer profile: ${officerProfileResult.error.message}`);
-      }
-
-      if (partnerProfileResult.error) {
-        console.error("Error fetching partner profile:", partnerProfileResult.error);
-        throw new Error(`Failed to fetch partner profile: ${partnerProfileResult.error.message}`);
-      }
-
-      const officerProfile = officerProfileResult.data;
-      const partnerProfile = partnerProfileResult.data;
-
-      console.log("🔍 Raw rank values from profiles:", {
-        officer: {
-          id: officer.officerId,
-          name: officerProfile?.full_name,
-          rank: officerProfile?.rank,
-          rankType: typeof officerProfile?.rank,
-          rankValue: officerProfile?.rank,
-          rankLowerCase: officerProfile?.rank?.toLowerCase?.()
-        },
-        partner: {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name,
-          rank: partnerProfile?.rank,
-          rankType: typeof partnerProfile?.rank,
-          rankValue: partnerProfile?.rank,
-          rankLowerCase: partnerProfile?.rank?.toLowerCase?.()
-        }
-      });
-
-      // Custom function to check if a rank is PPO
-      const isRankPPO = (rank: any): boolean => {
-        if (!rank) {
-          console.log("⚠️ Rank is null or undefined, defaulting to non-PPO");
-          return false;
-        }
-        
-        const rankStr = String(rank).toLowerCase().trim();
-        console.log(`Checking rank "${rankStr}" for PPO status`);
-        
-        // List of ranks that are NOT PPO (Training Officers)
-        const nonPPORanks = [
-          'police officer',
-          'officer',
-          'training officer',
-          'field training officer',
-          'fto',
-          'senior officer',
-          'master officer',
-          'corporal',
-          'sergeant',
-          'lieutenant',
-          'captain',
-          'commander',
-          'chief',
-          'deputy',
-          'sheriff',
-          'marshal',
-          'agent',
-          'inspector'
-        ];
-        
-        // If it's in the non-PPO list, it's NOT a PPO
-        if (nonPPORanks.some(r => rankStr.includes(r))) {
-          console.log(`Rank "${rankStr}" is NOT a PPO (matched non-PPO list: "${nonPPORanks.find(r => rankStr.includes(r))}")`);
-          return false;
-        }
-        
-        // Check if it's explicitly a PPO rank
-        const isPPO = rankStr.includes('ppo') || 
-                      rankStr.includes('probationary') || 
-                      rankStr === 'p' ||
-                      rankStr === 'ppo' ||
-                      rankStr.includes('probationary police officer');
-        
-        console.log(`Rank "${rankStr}" is ${isPPO ? '' : 'NOT '}a PPO`);
-        return isPPO;
-      };
-
-      // Determine if each officer is a PPO using our custom function
-      const isOfficerPpo = isRankPPO(officerProfile?.rank);
-      const isPartnerPpo = isRankPPO(partnerProfile?.rank);
-
-      console.log("🔍 Partnership rank check (after processing):", {
-        officer: {
-          id: officer.officerId,
-          name: officerProfile?.full_name,
-          rawRank: officerProfile?.rank,
-          processedRank: String(officerProfile?.rank || '').toLowerCase().trim(),
-          isPPO: isOfficerPpo
-        },
-        partner: {
-          id: partnerOfficerId,
-          name: partnerProfile?.full_name,
-          rawRank: partnerProfile?.rank,
-          processedRank: String(partnerProfile?.rank || '').toLowerCase().trim(),
-          isPPO: isPartnerPpo
-        }
-      });
-
-      // Check if either officer is on PTO (now that we have profiles)
+      // Check if either officer is on PTO
       const [{ data: officerPTO }, { data: partnerPTO }] = await Promise.all([
         supabase
           .from("schedule_exceptions")
@@ -882,11 +760,11 @@ const updatePartnershipMutation = useMutation({
       ]);
 
       if (officerPTO) {
-        throw new Error(`${officerProfile?.full_name || officer.name} is on PTO and cannot be partnered`);
+        throw new Error(`${officer.name} is on PTO and cannot be partnered`);
       }
 
       if (partnerPTO) {
-        throw new Error(`${partnerProfile?.full_name} is on PTO and cannot be partnered`);
+        throw new Error("Partner officer is on PTO and cannot be partnered");
       }
 
       // Check if either officer already has a partnership for this date/shift
@@ -911,38 +789,44 @@ const updatePartnershipMutation = useMutation({
 
       // Check if officer already has a partnership
       if (existingOfficerSchedule?.is_partnership) {
-        throw new Error(`${officerProfile?.full_name || officer.name} is already in a partnership for this shift`);
+        throw new Error(`${officer.name} is already in a partnership for this shift`);
       }
 
       // Check if partner already has a partnership
       if (existingPartnerSchedule?.is_partnership) {
-        throw new Error(`${partnerProfile?.full_name} is already in a partnership for this shift`);
+        throw new Error("Partner officer is already in a partnership for this shift");
       }
+
+      // Get officer and partner profiles for rank checking and details
+      const [{ data: officerProfile }, { data: partnerProfile }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name, rank, unit_number, position_name, district")
+          .eq("id", officer.officerId)
+          .single(),
+        supabase
+          .from("profiles")
+          .select("full_name, rank, unit_number, position_name, district")
+          .eq("id", partnerOfficerId)
+          .single()
+      ]);
+
+      // Determine if each officer is a PPO
+      const isOfficerPpo = isPPOByRank(officerProfile?.rank);
+      const isPartnerPpo = isPPOByRank(partnerProfile?.rank);
+
+      console.log("🔍 Partnership rank check:", {
+        officer: officerProfile?.full_name,
+        officerRank: officerProfile?.rank,
+        isOfficerPpo,
+        partner: partnerProfile?.full_name,
+        partnerRank: partnerProfile?.rank,
+        isPartnerPpo
+      });
 
       // VALIDATION: Ensure one is PPO and one is not
       if (isOfficerPpo === isPartnerPpo) {
-        console.error("❌ Partnership validation failed:", {
-          officer: {
-            id: officer.officerId,
-            name: officerProfile?.full_name,
-            rank: officerProfile?.rank,
-            isPPO: isOfficerPpo
-          },
-          partner: {
-            id: partnerOfficerId,
-            name: partnerProfile?.full_name,
-            rank: partnerProfile?.rank,
-            isPPO: isPartnerPpo
-          },
-          message: "Both officers have the same PPO status"
-        });
-        
-        // Provide a more helpful error message
-        if (isOfficerPpo && isPartnerPpo) {
-          throw new Error(`Cannot create partnership between two PPOs (${officerProfile?.full_name} and ${partnerProfile?.full_name}). A Training Officer (non-PPO) is required.`);
-        } else {
-          throw new Error(`Cannot create partnership between two Training Officers (${officerProfile?.full_name} and ${partnerProfile?.full_name}). A PPO is required.`);
-        }
+        throw new Error("Partnership must be between a Training Officer (non-PPO) and a PPO");
       }
 
       // DETERMINE WHO IS THE TRAINING OFFICER (non-PPO) AND WHO IS THE PPO
@@ -988,8 +872,8 @@ const updatePartnershipMutation = useMutation({
           profile: partnerProfile
         };
         
-        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name);
+        console.log("👨‍🏫 Training officer:", trainingOfficer.name, "with position:", trainingOfficer.position);
+        console.log("👶 PPO:", ppo.name, "will have NULL position");
         
       } else if (isOfficerPpo && !isPartnerPpo) {
         // Officer is PPO, partner is training officer
@@ -1022,11 +906,6 @@ const updatePartnershipMutation = useMutation({
           trainingOfficerUnit = trainingOfficerSchedule?.unit_number || '';
         }
         
-        // If still no position, use a default
-        if (!trainingOfficerPosition) {
-          trainingOfficerPosition = 'Training Officer';
-        }
-        
         trainingOfficer = {
           id: partnerOfficerId,
           name: partnerProfile?.full_name || 'Unknown',
@@ -1047,8 +926,8 @@ const updatePartnershipMutation = useMutation({
           profile: officerProfile
         };
         
-        console.log("👨‍🏫 Training officer (non-PPO):", trainingOfficer.name, "with position:", trainingOfficer.position);
-        console.log("👶 PPO:", ppo.name);
+        console.log("👨‍🏫 Training officer:", trainingOfficer.name, "with position:", trainingOfficer.position);
+        console.log("👶 PPO:", ppo.name, "will have NULL position");
       }
 
       console.log("📋 Partnership details:", {
@@ -1056,16 +935,12 @@ const updatePartnershipMutation = useMutation({
           id: trainingOfficer.id,
           name: trainingOfficer.name,
           position: trainingOfficer.position,
-          unit: trainingOfficer.unit,
-          rank: trainingOfficer.profile?.rank,
-          isPPO: false
+          unit: trainingOfficer.unit
         },
         ppo: {
           id: ppo.id,
           name: ppo.name,
-          position: null,
-          rank: ppo.profile?.rank,
-          isPPO: true
+          position: null // Explicitly show null
         }
       });
 
@@ -1158,7 +1033,7 @@ const updatePartnershipMutation = useMutation({
       }
 
       // Update recurring_schedules if this is a recurring partnership
-      if (!isEmergency && (officer.type === 'recurring' || officer.type === 'recurring')) {
+      if (!isEmergency && (officer.type === 'recurring' || partnerOfficerId)) {
         console.log("🔄 Updating recurring_schedules for partnership");
         
         // For training officer (recurring)

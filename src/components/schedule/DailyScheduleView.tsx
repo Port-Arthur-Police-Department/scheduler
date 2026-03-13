@@ -1940,14 +1940,10 @@ const isRidingWithPartnerPosition = (position: string | undefined | null): boole
   );
 };
 
-// SECOND: Identify special assignment officers (EXCLUDE those in partnerships)
-const specialAssignmentOfficers = processedOfficers.filter(officer => {
-  // Skip officers in ANY partnership
-  if (isInPartnership(officer)) return false;
-  
-  // Use the imported function
-  return isSpecialAssignment(officer.position);
-}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+// SECOND: Identify special assignment officers (regardless of partnership status)
+const specialAssignmentOfficers = processedOfficers.filter(officer => 
+  isSpecialAssignment(officer.position)
+).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
 
 // THIRD: Identify supervisors (excluding those with special assignments or partnerships)

@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Users, AlertTriangle, Shield, Clock } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { isPPOByRank } from "@/utils/ppoUtils";
-import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 interface PartnershipManagerProps {
   officer: any;
@@ -469,90 +468,61 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
     enabled: open && !emergencyMode && !hasActivePartnership && !isOfficerPPO, // Regular officers can create partnerships with PPOs
     staleTime: 0,
   });
-
-
-const handleCreatePartnership = async () => {
-  if (!selectedPartner) {
-    console.error("No partner selected");
-    return;
-  }
   
-  if (emergencyMode) {
-    // Emergency partnership for PPO
-    const partner = emergencyPartners?.find(p => p.id === selectedPartner);
-    console.log("🚨 Creating EMERGENCY partnership for PPO:", {
-      ppo: officer.name,
-      ppoRank: officer.rank,
-      partner: partner?.name,
-      partnerRank: partner?.rank,
-      partnerPosition: partner?.position, // Log partner's position
-      partnerUnit: partner?.unitNumber, // Log partner's unit
-      partnerId: selectedPartner,
-      shift: officer.shift.name,
-      date: officer.date || format(new Date(), "yyyy-MM-dd")
-    });
-
-    // Double-check this is a PPO
-    if (!isOfficerPPO) {
-      console.error("❌ Emergency partnerships only for PPOs!");
+  const handleCreatePartnership = async () => {
+    if (!selectedPartner) {
+      console.error("No partner selected");
       return;
     }
-
-    // For emergency partnerships - PPO should take the partner's position with "Riding with" prefix
-    const partnerPosition = partner?.position || 'Unknown';
-    const partnerName = partner?.name || 'Unknown';
     
-    // Create a copy of the officer with updated position based on partner
-    const officerWithUpdatedPosition = {
-      ...officer,
-      // PPO's position should be based on their partner
-      position: `Riding with ${partnerName} (${partnerPosition})`,
-      // PPO should use partner's unit number
-      unitNumber: partner?.unitNumber || officer.unitNumber,
-      // Store original partner data
-      emergencyPartner: partner,
-      // Clear any previous position that might cause issues
-      originalPosition: officer.position,
-      // Mark that this is an emergency partnership
-      isEmergencyPartnership: true
-    };
-    
-    onPartnershipChange(officerWithUpdatedPosition, selectedPartner);
-  } else {
-    // Regular partnership (regular officer with PPO)
-    const partner = availablePartners?.find(p => p.id === selectedPartner);
-    console.log("🤝 Creating regular partnership:", {
-      officer: officer.name,
-      officerRank: officer.rank,
-      partner: partner?.full_name,
-      partnerRank: partner?.rank,
-      partnerId: selectedPartner,
-      shift: officer.shift.name,
-      date: officer.date || format(new Date(), "yyyy-MM-dd")
-    });
+    if (emergencyMode) {
+      // Emergency partnership for PPO
+      const partner = emergencyPartners?.find(p => p.id === selectedPartner);
+      console.log("🚨 Creating EMERGENCY partnership for PPO:", {
+        ppo: officer.name,
+        ppoRank: officer.rank,
+        partner: partner?.name,
+        partnerRank: partner?.rank,
+        partnerId: selectedPartner,
+        shift: officer.shift.name,
+        date: officer.date || format(new Date(), "yyyy-MM-dd")
+      });
 
-    // Double-check this is NOT a PPO
-    if (isOfficerPPO) {
-      console.error("❌ Regular partnerships cannot be created by PPOs!");
-      return;
+      // Double-check this is a PPO
+      if (!isOfficerPPO) {
+        console.error("❌ Emergency partnerships only for PPOs!");
+        return;
+      }
+
+      // For emergency partnerships
+      onPartnershipChange(officer, selectedPartner);
+    } else {
+      // Regular partnership (regular officer with PPO)
+      const partner = availablePartners?.find(p => p.id === selectedPartner);
+      console.log("🤝 Creating regular partnership:", {
+        officer: officer.name,
+        officerRank: officer.rank,
+        partner: partner?.full_name,
+        partnerRank: partner?.rank,
+        partnerId: selectedPartner,
+        shift: officer.shift.name,
+        date: officer.date || format(new Date(), "yyyy-MM-dd")
+      });
+
+      // Double-check this is NOT a PPO
+      if (isOfficerPPO) {
+        console.error("❌ Regular partnerships cannot be created by PPOs!");
+        return;
+      }
+
+      // For regular partnerships
+      onPartnershipChange(officer, selectedPartner);
     }
-
-    // For regular partnerships - the PPO (partner) will take the officer's position
-    // The officer (trainer) keeps their position
-    const officerWithPartnerInfo = {
-      ...officer,
-      // Store that this officer will be training a PPO
-      isTrainingPPO: true,
-      ppoTrainee: partner
-    };
     
-    onPartnershipChange(officerWithPartnerInfo, selectedPartner);
-  }
-  
-  setOpen(false);
-  setSelectedPartner("");
-  setEmergencyMode(false);
-};
+    setOpen(false);
+    setSelectedPartner("");
+    setEmergencyMode(false);
+  };
   
   const handleRemovePartnership = async () => {
     console.log("🗑️ Removing partnership for:", {

@@ -167,7 +167,6 @@ export const OfficerSection = ({
     }
   };
 
-// In OfficerSection.tsx - Update the handleConfirmSpecialAssignment function
 
 const handleConfirmSpecialAssignment = async () => {
   if (specialAssignmentWarning) {
@@ -178,12 +177,12 @@ const handleConfirmSpecialAssignment = async () => {
     console.log("🔴 New position:", newPosition);
     
     try {
-      // First, save the new position and wait for it to complete
+      // FIRST: Save the new position and WAIT for it to complete
       console.log("🔴 Step 1: Saving new position...");
       await onSavePosition(officer, newPosition);
       console.log("🔴 Step 1 complete: Position saved");
       
-      // Then, if there's a partnership, trigger suspension
+      // SECOND: If there's a partnership, trigger suspension
       if (officer.partnerData && onPartnershipChange) {
         console.log("🔴 Step 2: Triggering partnership suspension for:", officer.name);
         console.log("🔴 Partner to suspend:", officer.partnerData.partnerName);
@@ -195,7 +194,6 @@ const handleConfirmSpecialAssignment = async () => {
           partnerOfficerId: officer.partnerData.partnerOfficerId,
           partnerData: {
             ...officer.partnerData,
-            // Make sure we have all the partner info
             partnerOfficerId: officer.partnerData.partnerOfficerId,
             partnerName: officer.partnerData.partnerName,
             partnerBadge: officer.partnerData.partnerBadge,
@@ -205,22 +203,23 @@ const handleConfirmSpecialAssignment = async () => {
           // Mark this as a suspension due to special assignment
           suspensionReason: 'special_assignment',
           newPosition: newPosition,
-          // CRITICAL: Mark that this officer should no longer be in a partnership
+          // CRITICAL: This officer should no longer be in a partnership
           isPartnership: false,
           partnershipSuspended: false
         };
         
         // Call onPartnershipChange with undefined to remove/suspend the partnership
-        // This will trigger the handleRemovePartnership function in DailyScheduleView
         await onPartnershipChange(officerWithPartner, undefined);
         console.log("🔴 Step 2 complete: Partnership suspension triggered");
-      } else {
-        console.log("🔴 No partner data or onPartnershipChange not available");
       }
       
       console.log("🔴 Step 3: Closing dialog");
-      // Close the dialog
       setSpecialAssignmentWarning(null);
+      
+      // Force a small delay to allow mutations to complete
+      setTimeout(() => {
+        console.log("🔴 Special assignment process completed");
+      }, 1000);
       
     } catch (error) {
       console.error("❌ Error during special assignment process:", error);

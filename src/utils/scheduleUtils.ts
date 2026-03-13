@@ -58,11 +58,12 @@ export const categorizeAndSortOfficers = (officers: any[]) => {
 /**
  * Check if position is a special assignment
  */
-export const isSpecialAssignment = (position: string | undefined): boolean => {
+export const isSpecialAssignment = (position: string | undefined | null): boolean => {
   if (!position) return false;
   
-  return position.toLowerCase().includes('other') ||
-         !PREDEFINED_POSITIONS.includes(position);
+  // Check if it's "Other (Custom)" or not in predefined positions
+  return position === "Other (Custom)" || 
+    (position && !PREDEFINED_POSITIONS.includes(position as any));
 };
 
 /**
@@ -82,7 +83,3 @@ export const calculateStaffingCounts = (
 
   return { supervisorCount, officerCount };
 };
-
-// REMOVED: Hardcoded minimum staffing values since we use the database table
-// export const MINIMUM_STAFFING = { ... };
-// export const MINIMUM_SUPERVISORS = 1;

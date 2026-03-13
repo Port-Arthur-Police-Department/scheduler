@@ -3,8 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { OfficerCard } from "./OfficerCard";
 import { PTOCard } from "./PTOCard";
 import { PartnershipManager } from "./PartnershipManager";
-import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog"; // ADD THIS IMPORT
-import { useState } from "react"; // ADD THIS IMPORT IF NOT ALREADY PRESENT
+import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog";
+import { useState } from "react";
+import { PREDEFINED_POSITIONS } from "@/constants/positions";
 
 interface OfficerSectionProps {
   title: string;
@@ -49,7 +50,7 @@ export const OfficerSection = ({
   colorSettings,
   showSpecialOccasions = true
 }: OfficerSectionProps) => {
-  // ADD THIS STATE FOR THE WARNING DIALOG
+  // State for the special assignment warning dialog
   const [specialAssignmentWarning, setSpecialAssignmentWarning] = useState<{
     open: boolean;
     officer: any;
@@ -59,8 +60,6 @@ export const OfficerSection = ({
   const isPTOSection = sectionType === "pto";
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
 
-  // Function to get section style based on type and settings
-const getSectionStyle = () => {
   // Default colors if no settings
   const defaultColors = {
     schedule_supervisor_bg: "240,248,255",
@@ -73,59 +72,61 @@ const getSectionStyle = () => {
     schedule_pto_text: "0,100,0"
   };
 
-  const colors = colorSettings || defaultColors;
-  
-  switch (sectionType) {
-    case "special":
-      return {
-        headerStyle: {
-          backgroundColor: `rgb(${colors.schedule_special_bg})`,
-          color: `rgb(${colors.schedule_special_text})`,
-          borderColor: `rgb(${colors.schedule_special_bg})`
-        },
-        contentStyle: {
-          backgroundColor: `rgb(${colors.schedule_special_bg})`
-        }
-      };
-    case "pto":
-      return {
-        headerStyle: {
-          backgroundColor: `rgb(${colors.schedule_pto_bg})`,
-          color: `rgb(${colors.schedule_pto_text})`,
-          borderColor: `rgb(${colors.schedule_pto_bg})`
-        },
-        contentStyle: {
-          backgroundColor: `rgb(${colors.schedule_pto_bg})`
-        }
-      };
-    case "regular":
-    default:
-      // Check if this is likely a supervisor section by title
-      if (title.toLowerCase().includes('supervisor')) {
+  // Function to get section style based on type and settings
+  const getSectionStyle = () => {
+    const colors = colorSettings || defaultColors;
+    
+    switch (sectionType) {
+      case "special":
         return {
           headerStyle: {
-            backgroundColor: `rgb(${colors.schedule_supervisor_bg})`,
-            color: `rgb(${colors.schedule_supervisor_text})`,
-            borderColor: `rgb(${colors.schedule_supervisor_bg})`
+            backgroundColor: `rgb(${colors.schedule_special_bg})`,
+            color: `rgb(${colors.schedule_special_text})`,
+            borderColor: `rgb(${colors.schedule_special_bg})`
           },
           contentStyle: {
-            backgroundColor: `rgb(${colors.schedule_supervisor_bg})`
+            backgroundColor: `rgb(${colors.schedule_special_bg})`
           }
         };
-      } else {
+      case "pto":
         return {
           headerStyle: {
-            backgroundColor: `rgb(${colors.schedule_officer_bg})`,
-            color: `rgb(${colors.schedule_officer_text})`,
-            borderColor: `rgb(${colors.schedule_officer_bg})`
+            backgroundColor: `rgb(${colors.schedule_pto_bg})`,
+            color: `rgb(${colors.schedule_pto_text})`,
+            borderColor: `rgb(${colors.schedule_pto_bg})`
           },
           contentStyle: {
-            backgroundColor: `rgb(${colors.schedule_officer_bg})`
+            backgroundColor: `rgb(${colors.schedule_pto_bg})`
           }
         };
-      }
-  }
-};
+      case "regular":
+      default:
+        // Check if this is likely a supervisor section by title
+        if (title.toLowerCase().includes('supervisor')) {
+          return {
+            headerStyle: {
+              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`,
+              color: `rgb(${colors.schedule_supervisor_text})`,
+              borderColor: `rgb(${colors.schedule_supervisor_bg})`
+            },
+            contentStyle: {
+              backgroundColor: `rgb(${colors.schedule_supervisor_bg})`
+            }
+          };
+        } else {
+          return {
+            headerStyle: {
+              backgroundColor: `rgb(${colors.schedule_officer_bg})`,
+              color: `rgb(${colors.schedule_officer_text})`,
+              borderColor: `rgb(${colors.schedule_officer_bg})`
+            },
+            contentStyle: {
+              backgroundColor: `rgb(${colors.schedule_officer_bg})`
+            }
+          };
+        }
+    }
+  };
 
   const sectionStyle = getSectionStyle();
 
@@ -144,11 +145,14 @@ const getSectionStyle = () => {
 
   const backgroundColor = getBackgroundColor();
 
-    const handlePositionChangeWithWarning = (officer: any, newPosition: string) => {
+  // Handler for position changes with partnership warning
+  const handlePositionChangeWithWarning = (officer: any, newPosition: string) => {
     // Check if this is a special assignment that will break a partnership
+    // "Other (Custom)" is in PREDEFINED_POSITIONS, but we need to check
+    // if it's actually a custom value being entered
     const isSpecialAssignment = 
       newPosition === "Other (Custom)" || 
-      (newPosition && !PREDEFINED_POSITIONS.includes(newPosition));
+      (newPosition && !PREDEFINED_POSITIONS.includes(newPosition as any));
     
     const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended && officer.partnerData;
     
@@ -165,6 +169,7 @@ const getSectionStyle = () => {
     }
   };
 
+  // Handler for confirming special assignment after warning
   const handleConfirmSpecialAssignment = () => {
     if (specialAssignmentWarning) {
       const { officer, newPosition } = specialAssignmentWarning;
@@ -237,7 +242,7 @@ const getSectionStyle = () => {
                 key={`${officer.scheduleId}-${officer.type}`}
                 officer={officer}
                 canEdit={canEdit}
-                onSavePosition={onSavePosition}
+                onSavePosition={handlePositionChangeWithWarning} // UPDATED: Using the warning handler
                 onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
                 onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
                 onAssignPTO={onAssignPTO}
@@ -251,6 +256,18 @@ const getSectionStyle = () => {
             ))
             .filter(Boolean)}
         </div>
+      )}
+
+      {/* Special Assignment Warning Dialog */}
+      {specialAssignmentWarning && (
+        <SpecialAssignmentWarningDialog
+          open={specialAssignmentWarning.open}
+          onOpenChange={(open) => !open && setSpecialAssignmentWarning(null)}
+          officer={specialAssignmentWarning.officer}
+          partnerData={specialAssignmentWarning.officer.partnerData}
+          onConfirm={handleConfirmSpecialAssignment}
+          onCancel={() => setSpecialAssignmentWarning(null)}
+        />
       )}
     </div>
   );

@@ -26,7 +26,7 @@ import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
 import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
-import { isSpecialAssignment } from "@/utils/staffingCalculations";
+import { isSpecialAssignment } from "@/utils/scheduleUtils";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
 import { 
   isShiftUnderstaffed, 

@@ -260,19 +260,17 @@ export const DailyScheduleView = ({
     });
   };
 
- // In DailyScheduleView.tsx - Update handleCreatePartnership
-
 // NEW: Handle creating partnerships
 const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
   console.log("🔄 Creating partnership:", { 
     officer: officer.officerId, 
     officerName: officer.name,
-    officerPosition: officer.position, // Log position
-    officerUnit: officer.unitNumber, // Log unit
+    officerPosition: officer.position,
+    officerIsPPO: isPPOByRank(officer.rank),
     partnerOfficerId: partnerOfficerId,
     scheduleId: officer.scheduleId,
     type: officer.type,
-    isEmergency: !!officer.emergencyPartner // Flag if this is emergency
+    isEmergency: !!officer.emergencyPartner
   });
   
   if (!officer?.scheduleId || !officer?.officerId || !partnerOfficerId) {
@@ -281,28 +279,41 @@ const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
   }
 
   // Check if this is an emergency partnership (PPO needing partner)
-  const isEmergency = officer.emergencyPartner !== undefined;
+  const isEmergency = officer.isEmergencyPartnership || false;
+  const isOfficerPPO = isPPOByRank(officer.rank);
   
-  // Prepare officer data with preserved position for emergency
-  const officerData = {
-    ...officer,
-    // Ensure position and unit are preserved for emergency
-    position: officer.position,
-    unitNumber: officer.unitNumber,
-    date: officer.date || dateStr,
-    dayOfWeek: officer.dayOfWeek || dayOfWeek,
-    scheduleId: officer.scheduleId,
-    officerId: officer.officerId,
-    type: officer.type,
-    shift: officer.shift,
-    // Mark as emergency if applicable
-    isEmergencyPartnership: isEmergency
-  };
+  // Prepare officer data based on partnership type
+  let officerData = { ...officer };
+  
+  if (isEmergency && isOfficerPPO) {
+    // This is a PPO getting an emergency partner
+    // The PPO should take the partner's position with "Riding with" prefix
+    console.log("🚨 Setting PPO position based on emergency partner");
+    
+    // We need to find the partner's data to get their position
+    // This will be handled in the mutation by fetching the partner's info
+    officerData = {
+      ...officer,
+      // We'll update these in the mutation after fetching partner data
+      needsPositionUpdate: true,
+      isEmergencyPartnership: true
+    };
+  } else if (!isOfficerPPO) {
+    // This is a regular officer (trainer) getting a PPO partner
+    // The regular officer keeps their position, the PPO will take it
+    console.log("👨‍🏫 Regular officer training PPO - preserving position:", officer.position);
+    officerData = {
+      ...officer,
+      isTrainingPPO: true
+    };
+  }
 
   updatePartnershipMutation.mutate({
     officer: officerData,
     partnerOfficerId: partnerOfficerId,
-    action: 'create'
+    action: 'create',
+    isEmergency: isEmergency,
+    isOfficerPPO: isOfficerPPO
   }, {
     onSuccess: () => {
       // Log partnership creation
@@ -313,13 +324,15 @@ const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
         'created',
         userEmail,
         isEmergency 
-          ? `Created EMERGENCY partnership for PPO ${officer.name} with position ${officer.position}`
+          ? `Created EMERGENCY partnership for PPO ${officer.name}`
           : `Created partnership between ${officer.name} and partner`
       );
       
       // Show appropriate toast
       if (isEmergency) {
-        toast.success(`Emergency partner assigned. ${officer.name} will maintain position ${officer.position}`);
+        toast.success(`Emergency partner assigned to PPO ${officer.name}`);
+      } else {
+        toast.success(`Partnership created successfully`);
       }
       
       // Refresh the schedule after partnership creation
@@ -327,7 +340,6 @@ const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
     }
   });
 };
-
 const handleRemovePartnership = (officer: any) => {
   console.log("🔄 Removing partnership:", { 
     officer: officer.officerId, 

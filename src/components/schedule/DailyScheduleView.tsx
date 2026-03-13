@@ -1658,10 +1658,17 @@ for (const officer of allOfficers) {
       processedOfficerIds.add(officer.officerId);
       processedOfficerIds.add(partnerOfficer.officerId);
       
-      // Check PTO status
+      // Check if either officer is on full-day PTO
       const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
       const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
       
+      // NEW: Check if either officer has a special assignment position
+      const officerHasSpecialAssignment = isSpecialAssignment(officer.position) || 
+        (officer.position && !PREDEFINED_POSITIONS.includes(officer.position as any));
+      const partnerHasSpecialAssignment = isSpecialAssignment(partnerOfficer.position) || 
+        (partnerOfficer.position && !PREDEFINED_POSITIONS.includes(partnerOfficer.position as any));
+      
+      // Handle PTO cases (existing logic)
       if (officerOnPTO && partnerOnPTO) {
         // Both on PTO - don't add to processedOfficers (they'll be in PTO section)
         continue;
@@ -1673,7 +1680,7 @@ for (const officer of allOfficers) {
         const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
         const isPtoOfficerPPO = isPPOByRank(ptoOfficer.rank);
         
-        console.log("🔍 Partnership Suspension Check:", {
+        console.log("🔍 Partnership Suspension Check (PTO):", {
           workingOfficer: workingOfficer.name,
           workingIsPPO: isWorkingOfficerPPO,
           ptoOfficer: ptoOfficer.name,
@@ -1685,7 +1692,7 @@ for (const officer of allOfficers) {
           console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${ptoOfficer.name} on PTO)`);
           const suspendedOfficer = {
             ...workingOfficer,
-            isPartnership: true,  // MUST be true for partnership manager
+            isPartnership: true,
             partnerOfficerId: ptoOfficer.officerId,
             partnershipSuspended: true,
             partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
@@ -1696,29 +1703,23 @@ for (const officer of allOfficers) {
               partnerRank: ptoOfficer.rank,
               partnerIsPPO: isPtoOfficerPPO
             },
-            // Clear PTO flags if this officer is working
             hasPTO: false,
             ptoData: undefined,
-            // Ensure they're NOT in regular officers list
-            _suspendedPartnership: true,  // Flag to identify suspended partnerships
-            // Ensure they're marked as processed
+            _suspendedPartnership: true,
             _processed: true
           };
           
           processedOfficers.push(suspendedOfficer);
         } else if (isPtoOfficerPPO) {
           // Working officer is regular, PPO is on PTO
-          // Regular officer should return to regular schedule (NO partnership flags)
           console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${ptoOfficer.name} on PTO)`);
           processedOfficers.push({
             ...workingOfficer,
-            isPartnership: false,  // MUST be false - no active partnership
+            isPartnership: false,
             partnerOfficerId: null,
             partnershipSuspended: false,
-            partnerData: undefined,  // Clear partner data
-            // Ensure they're NOT in suspended partnerships
+            partnerData: undefined,
             _suspendedPartnership: false,
-            // Ensure they're marked as processed
             _processed: true
           });
         } else {
@@ -1726,18 +1727,82 @@ for (const officer of allOfficers) {
           console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on PTO)`);
           processedOfficers.push({
             ...workingOfficer,
-            isPartnership: false,  // MUST be false
+            isPartnership: false,
             partnerOfficerId: null,
             partnershipSuspended: false,
-            partnerData: undefined,  // Clear partner data
-            // Ensure they're NOT in suspended partnerships
+            partnerData: undefined,
             _suspendedPartnership: false,
-            // Ensure they're marked as processed
             _processed: true
           });
         }
-        // Officer on PTO will appear in PTO section only
-      } else {
+      } 
+      // NEW: Handle Special Assignment cases (same logic as PTO)
+      else if (officerHasSpecialAssignment || partnerHasSpecialAssignment) {
+        // One on special assignment, one working regular
+        const workingOfficer = officerHasSpecialAssignment ? partnerOfficer : officer;
+        const specialAssignmentOfficer = officerHasSpecialAssignment ? officer : partnerOfficer;
+        
+        const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
+        const isSpecialAssignmentOfficerPPO = isPPOByRank(specialAssignmentOfficer.rank);
+        
+        console.log("🔍 Partnership Suspension Check (Special Assignment):", {
+          workingOfficer: workingOfficer.name,
+          workingIsPPO: isWorkingOfficerPPO,
+          specialAssignmentOfficer: specialAssignmentOfficer.name,
+          specialAssignmentIsPPO: isSpecialAssignmentOfficerPPO,
+          specialAssignmentPosition: specialAssignmentOfficer.position
+        });
+        
+        if (isWorkingOfficerPPO) {
+          // Working officer is a PPO - needs emergency partner button
+          console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${specialAssignmentOfficer.name} on Special Assignment)`);
+          const suspendedOfficer = {
+            ...workingOfficer,
+            isPartnership: true,
+            partnerOfficerId: specialAssignmentOfficer.officerId,
+            partnershipSuspended: true,
+            partnershipSuspensionReason: `${specialAssignmentOfficer.name} on Special Assignment`,
+            partnerData: {
+              partnerOfficerId: specialAssignmentOfficer.officerId,
+              partnerName: specialAssignmentOfficer.name,
+              partnerBadge: specialAssignmentOfficer.badge,
+              partnerRank: specialAssignmentOfficer.rank,
+              partnerIsPPO: isSpecialAssignmentOfficerPPO
+            },
+            hasPTO: false,
+            ptoData: undefined,
+            _suspendedPartnership: true,
+            _processed: true
+          };
+          
+          processedOfficers.push(suspendedOfficer);
+        } else if (isSpecialAssignmentOfficerPPO) {
+          // Working officer is regular, PPO is on special assignment
+          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${specialAssignmentOfficer.name} on Special Assignment)`);
+          processedOfficers.push({
+            ...workingOfficer,
+            isPartnership: false,
+            partnerOfficerId: null,
+            partnershipSuspended: false,
+            partnerData: undefined,
+            _suspendedPartnership: false,
+            _processed: true
+          });
+        } else {
+          // Both are regular officers, one on special assignment
+          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
+          processedOfficers.push({
+            ...workingOfficer,
+            isPartnership: false,
+            partnerOfficerId: null,
+            partnershipSuspended: false,
+            partnerData: undefined,
+            _suspendedPartnership: false,
+            _processed: true
+          });
+        }
+      } 
+      else {
         // Normal active partnership - combine them
         console.log(`🤝 Active partnership: ${officer.name} + ${partnerOfficer.name}`);
         
@@ -1780,12 +1845,9 @@ for (const officer of allOfficers) {
             : null,
           isPartnership: true,
           partnershipSuspended: false,
-          // Clear any PTO flags for active partnership
           hasPTO: false,
           ptoData: undefined,
-          // Ensure they're NOT in suspended partnerships
           _suspendedPartnership: false,
-          // Ensure they're marked as processed
           _processed: true
         };
 

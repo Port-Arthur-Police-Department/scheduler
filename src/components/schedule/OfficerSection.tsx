@@ -148,8 +148,6 @@ export const OfficerSection = ({
   // Handler for position changes with partnership warning
   const handlePositionChangeWithWarning = (officer: any, newPosition: string) => {
     // Check if this is a special assignment that will break a partnership
-    // "Other (Custom)" is in PREDEFINED_POSITIONS, but we need to check
-    // if it's actually a custom value being entered
     const isSpecialAssignment = 
       newPosition === "Other (Custom)" || 
       (newPosition && !PREDEFINED_POSITIONS.includes(newPosition as any));
@@ -169,23 +167,45 @@ export const OfficerSection = ({
     }
   };
 
-  // Handler for confirming special assignment after warning
-  const handleConfirmSpecialAssignment = () => {
+  // UPDATED: Handler for confirming special assignment after warning
+  const handleConfirmSpecialAssignment = async () => {
     if (specialAssignmentWarning) {
       const { officer, newPosition } = specialAssignmentWarning;
       
+      console.log("🔴 Confirming special assignment for:", officer.name);
+      console.log("🔴 Partner data:", officer.partnerData);
+      
       // First, save the new position
-      onSavePosition(officer, newPosition);
+      await onSavePosition(officer, newPosition);
       
       // Then, if there's a partnership, trigger suspension
       if (officer.partnerData && onPartnershipChange) {
-        // This will trigger the partnership suspension
-        // The partner will need an emergency partner if they're a PPO
-        onPartnershipChange(officer, undefined); // undefined means remove/suspend partnership
+        console.log("🔴 Triggering partnership suspension for:", officer.name);
+        
+        // Create a properly formatted officer object with all necessary data
+        const officerWithPartner = {
+          ...officer,
+          // Ensure partner data is properly passed
+          partnerOfficerId: officer.partnerData.partnerOfficerId,
+          partnerData: officer.partnerData
+        };
+        
+        // Call onPartnershipChange with undefined to remove/suspend the partnership
+        // This will trigger the handleRemovePartnership function in DailyScheduleView
+        onPartnershipChange(officerWithPartner, undefined);
+        
+        console.log("🔴 Partnership suspension triggered");
+      } else {
+        console.log("🔴 No partner data or onPartnershipChange not available");
       }
       
       // Close the dialog
       setSpecialAssignmentWarning(null);
+      
+      // Force a small delay to allow the mutations to complete
+      setTimeout(() => {
+        console.log("🔴 Special assignment process completed");
+      }, 500);
     }
   };
 
@@ -242,7 +262,7 @@ export const OfficerSection = ({
                 key={`${officer.scheduleId}-${officer.type}`}
                 officer={officer}
                 canEdit={canEdit}
-                onSavePosition={handlePositionChangeWithWarning} // UPDATED: Using the warning handler
+                onSavePosition={handlePositionChangeWithWarning}
                 onSaveUnitNumber={(off, unit) => onSaveUnitNumber(off, unit)}
                 onSaveNotes={(off, notes) => onSaveNotes(off, notes)}
                 onAssignPTO={onAssignPTO}

@@ -740,7 +740,7 @@ const updatePartnershipMutation = useMutation({
       const dayOfWeek = officer.dayOfWeek || parseISO(targetDate).getDay();
 
       // FIRST - Get officer and partner profiles for rank checking and details
-      // This needs to happen BEFORE any validation that depends on rank
+      // Using correct column names from your profile table
       console.log("📊 Fetching profiles for officers:", {
         officerId: officer.officerId,
         partnerId: partnerOfficerId
@@ -749,12 +749,12 @@ const updatePartnershipMutation = useMutation({
       const [officerProfileResult, partnerProfileResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
+          .select("full_name, rank, default_position, default_unit")
           .eq("id", officer.officerId)
           .single(),
         supabase
           .from("profiles")
-          .select("full_name, rank, unit_number, position_name, district")
+          .select("full_name, rank, default_position, default_unit")
           .eq("id", partnerOfficerId)
           .single()
       ]);
@@ -772,22 +772,20 @@ const updatePartnershipMutation = useMutation({
       const officerProfile = officerProfileResult.data;
       const partnerProfile = partnerProfileResult.data;
 
-      console.log("🔍 Raw rank values from profiles:", {
+      console.log("🔍 Raw values from profiles:", {
         officer: {
           id: officer.officerId,
           name: officerProfile?.full_name,
           rank: officerProfile?.rank,
-          rankType: typeof officerProfile?.rank,
-          rankValue: officerProfile?.rank,
-          rankLowerCase: officerProfile?.rank?.toLowerCase?.()
+          default_position: officerProfile?.default_position,
+          default_unit: officerProfile?.default_unit
         },
         partner: {
           id: partnerOfficerId,
           name: partnerProfile?.full_name,
           rank: partnerProfile?.rank,
-          rankType: typeof partnerProfile?.rank,
-          rankValue: partnerProfile?.rank,
-          rankLowerCase: partnerProfile?.rank?.toLowerCase?.()
+          default_position: partnerProfile?.default_position,
+          default_unit: partnerProfile?.default_unit
         }
       });
 
@@ -971,8 +969,8 @@ const updatePartnershipMutation = useMutation({
         trainingOfficer = {
           id: officer.officerId,
           name: officerProfile?.full_name || officer.name,
-          position: officerProfile?.position_name || officer.position || existingOfficerSchedule?.position_name || '',
-          unit: officerProfile?.unit_number || officer.unitNumber || existingOfficerSchedule?.unit_number || '',
+          position: officerProfile?.default_position || officer.position || existingOfficerSchedule?.position_name || '',
+          unit: officerProfile?.default_unit || officer.unitNumber || existingOfficerSchedule?.unit_number || '',
           scheduleId: officer.scheduleId,
           type: officer.type,
           existingSchedule: existingOfficerSchedule,
@@ -999,9 +997,9 @@ const updatePartnershipMutation = useMutation({
         let trainingOfficerUnit = '';
         
         // First try from profile
-        if (partnerProfile?.position_name) {
-          trainingOfficerPosition = partnerProfile.position_name;
-          trainingOfficerUnit = partnerProfile.unit_number || '';
+        if (partnerProfile?.default_position) {
+          trainingOfficerPosition = partnerProfile.default_position;
+          trainingOfficerUnit = partnerProfile.default_unit || '';
         } 
         // Then try from existing schedule
         else if (existingPartnerSchedule?.position_name) {

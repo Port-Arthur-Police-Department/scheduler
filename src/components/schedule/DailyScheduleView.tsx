@@ -296,71 +296,95 @@ export const DailyScheduleView = ({
     });
   };
 
-  // NEW: Handle removing partnerships
-  const handleRemovePartnership = (officer: any) => {
-    console.log("🔄 Removing partnership:", { 
-      officer: officer.officerId, 
-      officerName: officer.name,
-      officerData: officer, // Log the entire officer object to see what's available
-      partnerData: officer.partnerData,
-      partnerOfficerId: officer.partnerOfficerId
-    });
-    
-    if (!officer?.scheduleId || !officer?.officerId) {
-      toast.error("Invalid officer data for partnership removal");
-      return;
-    }
+// In DailyScheduleView.tsx - Update handleRemovePartnership
 
-    // Try multiple ways to find the partner officer ID
-    let partnerIdToRemove = null;
+const handleRemovePartnership = (officer: any) => {
+  console.log("🔄 Removing partnership:", { 
+    officer: officer.officerId, 
+    officerName: officer.name,
+    officerData: officer,
+    partnerData: officer.partnerData,
+    partnerOfficerId: officer.partnerOfficerId,
+    suspensionReason: officer.suspensionReason
+  });
+  
+  if (!officer?.scheduleId || !officer?.officerId) {
+    toast.error("Invalid officer data for partnership removal");
+    return;
+  }
 
-    // Method 1: Check partnerData first
-    if (officer.partnerData?.partnerOfficerId) {
-      partnerIdToRemove = officer.partnerData.partnerOfficerId;
-      console.log("Found partner ID in partnerData:", partnerIdToRemove);
-    }
-    // Method 2: Check direct partnerOfficerId field
-    else if (officer.partnerOfficerId) {
-      partnerIdToRemove = officer.partnerOfficerId;
-      console.log("Found partner ID in partnerOfficerId field:", partnerIdToRemove);
-    }
-    // Method 3: If this is a combined partnership, check the original data
-    else if (officer.isCombinedPartnership && officer.originalPartnerOfficerId) {
-      partnerIdToRemove = officer.originalPartnerOfficerId;
-      console.log("Found partner ID in originalPartnerOfficerId:", partnerIdToRemove);
-    }
+  // Try multiple ways to find the partner officer ID
+  let partnerIdToRemove = null;
 
-    if (!partnerIdToRemove) {
-      console.error("❌ No partner officer ID found for removal. Officer data:", officer);
-      toast.error("Could not find partner information. Please refresh the page and try again.");
-      return;
-    }
+  // Method 1: Check partnerData first
+  if (officer.partnerData?.partnerOfficerId) {
+    partnerIdToRemove = officer.partnerData.partnerOfficerId;
+    console.log("Found partner ID in partnerData:", partnerIdToRemove);
+  }
+  // Method 2: Check direct partnerOfficerId field
+  else if (officer.partnerOfficerId) {
+    partnerIdToRemove = officer.partnerOfficerId;
+    console.log("Found partner ID in partnerOfficerId field:", partnerIdToRemove);
+  }
+  // Method 3: If this is a combined partnership, check the original data
+  else if (officer.isCombinedPartnership && officer.originalPartnerOfficerId) {
+    partnerIdToRemove = officer.originalPartnerOfficerId;
+    console.log("Found partner ID in originalPartnerOfficerId:", partnerIdToRemove);
+  }
 
-    console.log("✅ Removing partnership with partner ID:", partnerIdToRemove);
+  if (!partnerIdToRemove) {
+    console.error("❌ No partner officer ID found for removal. Officer data:", officer);
+    toast.error("Could not find partner information. Please refresh the page and try again.");
+    return;
+  }
 
-    updatePartnershipMutation.mutate({
-      officer: {
-        ...officer,
-        // Ensure we have all required fields
-        date: officer.date || dateStr,
-        dayOfWeek: officer.dayOfWeek || dayOfWeek,
-        scheduleId: officer.scheduleId,
-        officerId: officer.officerId,
-        type: officer.type,
-        shift: officer.shift,
-        // Ensure we have the partner data for removal
-        partnerOfficerId: partnerIdToRemove,
-        partnerData: officer.partnerData
-      },
+  console.log("✅ Removing partnership with partner ID:", partnerIdToRemove);
+
+  // Determine if this is a special assignment suspension
+  const isSpecialAssignmentSuspension = officer.suspensionReason === 'special_assignment';
+  const partnerIsPPO = officer.partnerData?.partnerIsPPO || false;
+
+  updatePartnershipMutation.mutate({
+    officer: {
+      ...officer,
+      date: officer.date || dateStr,
+      dayOfWeek: officer.dayOfWeek || dayOfWeek,
+      scheduleId: officer.scheduleId,
+      officerId: officer.officerId,
+      type: officer.type,
+      shift: officer.shift,
       partnerOfficerId: partnerIdToRemove,
-      action: 'remove'
-    }, {
-      onSuccess: () => {
-        // Refresh the schedule after partnership removal
-        refetchSchedule();
+      partnerData: officer.partnerData,
+      suspensionReason: officer.suspensionReason
+    },
+    partnerOfficerId: partnerIdToRemove,
+    action: 'remove'
+  }, {
+    onSuccess: () => {
+      console.log("✅ Partnership removal successful");
+      
+      // Show appropriate toast message
+      if (isSpecialAssignmentSuspension && partnerIsPPO) {
+        toast.info(
+          `Partnership suspended. ${officer.partnerData?.partnerName} (PPO) now needs an emergency partner.`,
+          { duration: 6000 }
+        );
+      } else if (isSpecialAssignmentSuspension) {
+        toast.info(
+          `Partnership suspended. ${officer.name} assigned to special duty.`,
+          { duration: 4000 }
+        );
       }
-    });
-  };
+      
+      // Refresh the schedule after partnership removal
+      refetchSchedule();
+    },
+    onError: (error) => {
+      console.error("❌ Partnership removal failed:", error);
+      toast.error("Failed to remove partnership");
+    }
+  });
+};
 
 // Combined handler that routes to the correct function
 const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {

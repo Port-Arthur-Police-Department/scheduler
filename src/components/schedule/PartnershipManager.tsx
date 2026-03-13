@@ -472,6 +472,8 @@ const { data: emergencyPartners, isLoading: emergencyLoading, error: emergencyEr
   
 // In PartnershipManager.tsx - Update the handleCreatePartnership function
 
+// In PartnershipManager.tsx - Update the handleCreatePartnership function
+
 const handleCreatePartnership = async () => {
   if (!selectedPartner) {
     console.error("No partner selected");
@@ -484,10 +486,10 @@ const handleCreatePartnership = async () => {
     console.log("🚨 Creating EMERGENCY partnership for PPO:", {
       ppo: officer.name,
       ppoRank: officer.rank,
-      ppoPosition: officer.position, // Log the PPO's position
-      ppoUnitNumber: officer.unitNumber, // Log the PPO's unit
       partner: partner?.name,
       partnerRank: partner?.rank,
+      partnerPosition: partner?.position, // Log partner's position
+      partnerUnit: partner?.unitNumber, // Log partner's unit
       partnerId: selectedPartner,
       shift: officer.shift.name,
       date: officer.date || format(new Date(), "yyyy-MM-dd")
@@ -499,18 +501,26 @@ const handleCreatePartnership = async () => {
       return;
     }
 
-    // For emergency partnerships - PASS THE OFFICER'S POSITION AND UNIT
-    // Create a copy of the officer with all their original data
-    const officerWithPosition = {
+    // For emergency partnerships - PPO should take the partner's position with "Riding with" prefix
+    const partnerPosition = partner?.position || 'Unknown';
+    const partnerName = partner?.name || 'Unknown';
+    
+    // Create a copy of the officer with updated position based on partner
+    const officerWithUpdatedPosition = {
       ...officer,
-      // Ensure position and unit are preserved
-      position: officer.position,
-      unitNumber: officer.unitNumber,
-      // Pass the partner data
-      emergencyPartner: partner
+      // PPO's position should be based on their partner
+      position: `Riding with ${partnerName} (${partnerPosition})`,
+      // PPO should use partner's unit number
+      unitNumber: partner?.unitNumber || officer.unitNumber,
+      // Store original partner data
+      emergencyPartner: partner,
+      // Clear any previous position that might cause issues
+      originalPosition: officer.position,
+      // Mark that this is an emergency partnership
+      isEmergencyPartnership: true
     };
     
-    onPartnershipChange(officerWithPosition, selectedPartner);
+    onPartnershipChange(officerWithUpdatedPosition, selectedPartner);
   } else {
     // Regular partnership (regular officer with PPO)
     const partner = availablePartners?.find(p => p.id === selectedPartner);
@@ -530,8 +540,16 @@ const handleCreatePartnership = async () => {
       return;
     }
 
-    // For regular partnerships
-    onPartnershipChange(officer, selectedPartner);
+    // For regular partnerships - the PPO (partner) will take the officer's position
+    // The officer (trainer) keeps their position
+    const officerWithPartnerInfo = {
+      ...officer,
+      // Store that this officer will be training a PPO
+      isTrainingPPO: true,
+      ppoTrainee: partner
+    };
+    
+    onPartnershipChange(officerWithPartnerInfo, selectedPartner);
   }
   
   setOpen(false);

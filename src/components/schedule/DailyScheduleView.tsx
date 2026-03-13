@@ -1940,11 +1940,25 @@ const isRidingWithPartnerPosition = (position: string | undefined | null): boole
   );
 };
 
-// SECOND: Identify special assignment officers (regardless of partnership status)
-const specialAssignmentOfficers = processedOfficers.filter(officer => 
-  isSpecialAssignment(officer.position)
-).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
+// SECOND: Identify special assignment officers (INCLUDE those whose partnerships are suspended)
+const specialAssignmentOfficers = processedOfficers.filter(officer => {
+  // Use the imported function to check if this is a special assignment
+  const hasSpecialAssignment = isSpecialAssignment(officer.position);
+  
+  // Only skip if they're in an ACTIVE partnership (not suspended)
+  // But we want to include them if they have a special assignment
+  if (hasSpecialAssignment) {
+    console.log(`📋 Including in special assignments: ${officer.name}`, {
+      position: officer.position,
+      isPartnership: officer.isPartnership,
+      partnershipSuspended: officer.partnershipSuspended,
+      hasPartnerData: !!officer.partnerData
+    });
+    return true;
+  }
+  
+  return false;
+}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
 // THIRD: Identify supervisors (excluding those with special assignments or partnerships)
 const supervisors = sortSupervisorsByRank(

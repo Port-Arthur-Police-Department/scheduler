@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { OfficerCard } from "./OfficerCard";
 import { PTOCard } from "./PTOCard";
 import { PartnershipManager } from "./PartnershipManager";
+import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog"; // ADD THIS IMPORT
+import { useState } from "react"; // ADD THIS IMPORT IF NOT ALREADY PRESENT
 
 interface OfficerSectionProps {
   title: string;
@@ -47,6 +49,13 @@ export const OfficerSection = ({
   colorSettings,
   showSpecialOccasions = true
 }: OfficerSectionProps) => {
+  // ADD THIS STATE FOR THE WARNING DIALOG
+  const [specialAssignmentWarning, setSpecialAssignmentWarning] = useState<{
+    open: boolean;
+    officer: any;
+    newPosition: string;
+  } | null>(null);
+
   const isPTOSection = sectionType === "pto";
   const hasData = isPTOSection ? ptoRecords.length > 0 : officers.length > 0;
 
@@ -134,6 +143,46 @@ const getSectionStyle = () => {
   };
 
   const backgroundColor = getBackgroundColor();
+
+    const handlePositionChangeWithWarning = (officer: any, newPosition: string) => {
+    // Check if this is a special assignment that will break a partnership
+    const isSpecialAssignment = 
+      newPosition === "Other (Custom)" || 
+      (newPosition && !PREDEFINED_POSITIONS.includes(newPosition));
+    
+    const hasActivePartnership = officer.isPartnership && !officer.partnershipSuspended && officer.partnerData;
+    
+    if (isSpecialAssignment && hasActivePartnership) {
+      // Show warning dialog
+      setSpecialAssignmentWarning({
+        open: true,
+        officer,
+        newPosition
+      });
+    } else {
+      // No warning needed, proceed directly
+      onSavePosition(officer, newPosition);
+    }
+  };
+
+  const handleConfirmSpecialAssignment = () => {
+    if (specialAssignmentWarning) {
+      const { officer, newPosition } = specialAssignmentWarning;
+      
+      // First, save the new position
+      onSavePosition(officer, newPosition);
+      
+      // Then, if there's a partnership, trigger suspension
+      if (officer.partnerData && onPartnershipChange) {
+        // This will trigger the partnership suspension
+        // The partner will need an emergency partner if they're a PPO
+        onPartnershipChange(officer, undefined); // undefined means remove/suspend partnership
+      }
+      
+      // Close the dialog
+      setSpecialAssignmentWarning(null);
+    }
+  };
 
   return (
     <div className="space-y-2">

@@ -1800,128 +1800,140 @@ for (const officer of allOfficers) {
           });
         }
       } 
-      // NEW: Handle Special Assignment cases (same logic as PTO)
-      else if (officerHasSpecialAssignment || partnerHasSpecialAssignment) {
-        // One on special assignment, one working regular
-        const workingOfficer = officerHasSpecialAssignment ? partnerOfficer : officer;
-        const specialAssignmentOfficer = officerHasSpecialAssignment ? officer : partnerOfficer;
-        
-        const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
-        const isSpecialAssignmentOfficerPPO = isPPOByRank(specialAssignmentOfficer.rank);
-        
-        console.log("🔍 Partnership Suspension Check (Special Assignment):", {
-          workingOfficer: workingOfficer.name,
-          workingIsPPO: isWorkingOfficerPPO,
-          specialAssignmentOfficer: specialAssignmentOfficer.name,
-          specialAssignmentIsPPO: isSpecialAssignmentOfficerPPO,
-          specialAssignmentPosition: specialAssignmentOfficer.position
-        });
-        
-        if (isWorkingOfficerPPO) {
-          // Working officer is a PPO - needs emergency partner button
-          console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${specialAssignmentOfficer.name} on Special Assignment)`);
-          
-          // Add the suspended PPO (will go to Partnerships (Suspended) section)
-          const suspendedOfficer = {
-            ...workingOfficer,
-            isPartnership: true,
-            partnerOfficerId: specialAssignmentOfficer.officerId,
-            partnershipSuspended: true,
-            partnershipSuspensionReason: `${specialAssignmentOfficer.name} on Special Assignment`,
-            partnerData: {
-              partnerOfficerId: specialAssignmentOfficer.officerId,
-              partnerName: specialAssignmentOfficer.name,
-              partnerBadge: specialAssignmentOfficer.badge,
-              partnerRank: specialAssignmentOfficer.rank,
-              partnerIsPPO: isSpecialAssignmentOfficerPPO
-            },
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: true,
-            _processed: true
-          };
-          processedOfficers.push(suspendedOfficer);
-          
-          // ADD THE SPECIAL ASSIGNMENT OFFICER (will go to Special Assignments section)
-          const specialAssignmentProcessed = {
-            ...specialAssignmentOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          };
-          console.log(`✅ Adding special assignment officer to list: ${specialAssignmentOfficer.name}`);
-          processedOfficers.push(specialAssignmentProcessed);
-          
-        } else if (isSpecialAssignmentOfficerPPO) {
-          // Working officer is regular, PPO is on special assignment
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${specialAssignmentOfficer.name} on Special Assignment)`);
-          
-          // Add the regular working officer (will go to regular section)
-          processedOfficers.push({
-            ...workingOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          });
-          
-          // ADD THE PPO ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
-          const ppoOnSpecialAssignment = {
-            ...specialAssignmentOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          };
-          console.log(`✅ Adding PPO on special assignment to list: ${specialAssignmentOfficer.name}`);
-          processedOfficers.push(ppoOnSpecialAssignment);
-          
-        } else {
-          // Both are regular officers, one on special assignment
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
-          
-          // Add the regular working officer (will go to regular section)
-          processedOfficers.push({
-            ...workingOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          });
-          
-          // ADD THE REGULAR OFFICER ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
-          const regularOnSpecialAssignment = {
-            ...specialAssignmentOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          };
-          console.log(`✅ Adding regular officer on special assignment to list: ${specialAssignmentOfficer.name}`);
-          processedOfficers.push(regularOnSpecialAssignment);
-        }
-      } 
+// NEW: Handle Special Assignment cases (same logic as PTO)
+else if (officerHasSpecialAssignment || partnerHasSpecialAssignment) {
+  // One on special assignment, one working regular
+  const workingOfficer = officerHasSpecialAssignment ? partnerOfficer : officer;
+  const specialAssignmentOfficer = officerHasSpecialAssignment ? officer : partnerOfficer;
+  
+  const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
+  const isSpecialAssignmentOfficerPPO = isPPOByRank(specialAssignmentOfficer.rank);
+  
+  console.log("🔍 Partnership Suspension Check (Special Assignment):", {
+    workingOfficer: workingOfficer.name,
+    workingOfficerRank: workingOfficer.rank,
+    workingIsPPO: isWorkingOfficerPPO,
+    specialAssignmentOfficer: specialAssignmentOfficer.name,
+    specialAssignmentOfficerRank: specialAssignmentOfficer.rank,
+    specialAssignmentIsPPO: isSpecialAssignmentOfficerPPO,
+    specialAssignmentPosition: specialAssignmentOfficer.position,
+    isPartnership: specialAssignmentOfficer.isPartnership,
+    partnershipSuspended: specialAssignmentOfficer.partnershipSuspended
+  });
+  
+  if (isWorkingOfficerPPO) {
+    // Working officer is a PPO - needs emergency partner button
+    // Their trainer (specialAssignmentOfficer) is on special assignment
+    console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (trainer ${specialAssignmentOfficer.name} on Special Assignment)`);
+    
+    // Add the suspended PPO (will go to Partnerships (Suspended) section)
+    const suspendedOfficer = {
+      ...workingOfficer,
+      isPartnership: true,
+      partnerOfficerId: specialAssignmentOfficer.officerId,
+      partnershipSuspended: true,
+      partnershipSuspensionReason: `Trainer ${specialAssignmentOfficer.name} on Special Assignment`,
+      partnerData: {
+        partnerOfficerId: specialAssignmentOfficer.officerId,
+        partnerName: specialAssignmentOfficer.name,
+        partnerBadge: specialAssignmentOfficer.badge,
+        partnerRank: specialAssignmentOfficer.rank,
+        partnerIsPPO: isSpecialAssignmentOfficerPPO,
+        partnerPosition: specialAssignmentOfficer.position,
+        partnerUnitNumber: specialAssignmentOfficer.unitNumber
+      },
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: true,
+      _processed: true,
+      // Mark that this PPO needs an emergency partner
+      needsEmergencyPartner: true
+    };
+    processedOfficers.push(suspendedOfficer);
+    
+    // ADD THE TRAINER ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
+    // CRITICAL: Clear all partnership flags so they appear in special assignments
+    const trainerOnSpecialAssignment = {
+      ...specialAssignmentOfficer,
+      isPartnership: false,           // Clear partnership flag
+      partnerOfficerId: null,          // Clear partner ID
+      partnershipSuspended: false,      // Clear suspension flag
+      partnerData: undefined,           // Clear partner data
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: false,
+      _processed: true,
+      // Ensure special assignment position is preserved
+      position: specialAssignmentOfficer.position
+    };
+    console.log(`✅ Adding trainer on special assignment to Special Assignments section: ${specialAssignmentOfficer.name} with position ${specialAssignmentOfficer.position}`);
+    processedOfficers.push(trainerOnSpecialAssignment);
+    
+  } else if (isSpecialAssignmentOfficerPPO) {
+    // Working officer is regular, PPO is on special assignment (unusual but possible)
+    console.log(`⚠️ PPO ${specialAssignmentOfficer.name} on special assignment, regular officer ${workingOfficer.name} working`);
+    
+    // Add the regular working officer (will go to regular section)
+    processedOfficers.push({
+      ...workingOfficer,
+      isPartnership: false,
+      partnerOfficerId: null,
+      partnershipSuspended: false,
+      partnerData: undefined,
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: false,
+      _processed: true
+    });
+    
+    // ADD THE PPO ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
+    const ppoOnSpecialAssignment = {
+      ...specialAssignmentOfficer,
+      isPartnership: false,
+      partnerOfficerId: null,
+      partnershipSuspended: false,
+      partnerData: undefined,
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: false,
+      _processed: true
+    };
+    console.log(`✅ Adding PPO on special assignment to Special Assignments section: ${specialAssignmentOfficer.name}`);
+    processedOfficers.push(ppoOnSpecialAssignment);
+    
+  } else {
+    // Both are regular officers, one on special assignment
+    console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
+    
+    // Add the regular working officer (will go to regular section)
+    processedOfficers.push({
+      ...workingOfficer,
+      isPartnership: false,
+      partnerOfficerId: null,
+      partnershipSuspended: false,
+      partnerData: undefined,
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: false,
+      _processed: true
+    });
+    
+    // ADD THE REGULAR OFFICER ON SPECIAL ASSIGNMENT (will go to Special Assignments section)
+    const regularOnSpecialAssignment = {
+      ...specialAssignmentOfficer,
+      isPartnership: false,
+      partnerOfficerId: null,
+      partnershipSuspended: false,
+      partnerData: undefined,
+      hasPTO: false,
+      ptoData: undefined,
+      _suspendedPartnership: false,
+      _processed: true
+    };
+    console.log(`✅ Adding regular officer on special assignment to Special Assignments section: ${specialAssignmentOfficer.name}`);
+    processedOfficers.push(regularOnSpecialAssignment);
+  }
+}
       else {
         // Normal active partnership - combine them
         console.log(`🤝 Active partnership: ${officer.name} + ${partnerOfficer.name}`);

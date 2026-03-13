@@ -1070,43 +1070,43 @@ const updatePartnershipMutation = useMutation({
       // Create or update schedule exceptions for both officers
       const updates = [];
 
-      // FOR THE TRAINING OFFICER - Keep their original position
-      if (trainingOfficer.existingSchedule) {
-        // Update existing exception for training officer
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .update({
-              is_partnership: true,
-              partner_officer_id: ppo.id,
-              position_name: trainingOfficer.position, // Keep original position - NOT NULL
-              unit_number: trainingOfficer.unit,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              notes: isEmergency ? `EMERGENCY: Training PPO ${ppo.name}` : `Training PPO ${ppo.name}`
-            })
-            .eq("id", trainingOfficer.existingSchedule.id)
-        );
-      } else {
-        // Create new exception for training officer
-        updates.push(
-          supabase
-            .from("schedule_exceptions")
-            .insert({
-              officer_id: trainingOfficer.id,
-              date: targetDate,
-              shift_type_id: shiftId,
-              is_off: false,
-              is_partnership: true,
-              partner_officer_id: ppo.id,
-              position_name: trainingOfficer.position, // Keep original position - NOT NULL
-              unit_number: trainingOfficer.unit,
-              notes: isEmergency ? `EMERGENCY: Training PPO ${ppo.name}` : `Training PPO ${ppo.name}`,
-              schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
-              custom_start_time: null,
-              custom_end_time: null
-            })
-        );
-      }
+// FOR THE TRAINING OFFICER - Keep their original position
+if (trainingOfficer.existingSchedule) {
+  // Update existing exception for training officer
+  updates.push(
+    supabase
+      .from("schedule_exceptions")
+      .update({
+        is_partnership: true,
+        partner_officer_id: ppo.id,
+        position_name: trainingOfficer.position, // Keep original position - NOT NULL
+        unit_number: trainingOfficer.unit,
+        schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership'
+        // notes field removed - will keep existing notes
+      })
+      .eq("id", trainingOfficer.existingSchedule.id)
+  );
+} else {
+  // Create new exception for training officer
+  updates.push(
+    supabase
+      .from("schedule_exceptions")
+      .insert({
+        officer_id: trainingOfficer.id,
+        date: targetDate,
+        shift_type_id: shiftId,
+        is_off: false,
+        is_partnership: true,
+        partner_officer_id: ppo.id,
+        position_name: trainingOfficer.position, // Keep original position - NOT NULL
+        unit_number: trainingOfficer.unit,
+        schedule_type: isEmergency ? 'emergency_partnership' : 'manual_partnership',
+        custom_start_time: null,
+        custom_end_time: null
+        // notes field omitted - will default to null
+      })
+  );
+}
 
 // FOR THE PPO - EXPLICITLY SET position_name TO null (NO POSITION)
 if (ppo.existingSchedule) {

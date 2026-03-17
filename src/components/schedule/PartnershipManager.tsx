@@ -483,10 +483,9 @@ const handleCreatePartnership = async () => {
     console.log("🚨 Creating EMERGENCY partnership for PPO:", {
       ppo: officer.name,
       ppoRank: officer.rank,
+      ppoId: officer.officerId,
       partner: partner?.name,
       partnerRank: partner?.rank,
-      partnerPosition: partner?.position,
-      partnerUnit: partner?.unitNumber,
       partnerId: selectedPartner,
       shift: officer.shift.name,
       date: officer.date || format(new Date(), "yyyy-MM-dd")
@@ -498,13 +497,13 @@ const handleCreatePartnership = async () => {
       return;
     }
 
-    // CRITICAL: For emergency partnerships - preserve the original partnership info
-    // while assigning an emergency partner
-    const officerWithUpdatedPosition = {
+    // CRITICAL FIX: For emergency partnerships, the PPO stays as the PPO (position null)
+    // and the regular officer becomes the emergency partner (keeps their position)
+    const ppoOfficer = {
       ...officer,
-      // PPO's position should be based on their emergency partner
-      position: `Riding with ${partner?.name}`,
-      // PPO should use partner's unit number
+      // PPO should have null position
+      position: null,
+      // Use partner's unit number
       unitNumber: partner?.unitNumber || officer.unitNumber,
       // Store original partner data (the suspended trainer)
       originalPartnerData: officer.partnerData,
@@ -513,15 +512,19 @@ const handleCreatePartnership = async () => {
       isEmergencyPartnership: true,
       // CRITICAL: Preserve the original partnership reference
       originalPartnershipId: officer.partnershipId,
-      // Clear any suspension flags since we're assigning an emergency partner
+      // Clear suspension flags since we're assigning an emergency partner
       partnershipSuspended: false,
       partnershipSuspensionReason: null,
       // Store the emergency partner info
-      emergencyPartner: partner
+      emergencyPartner: partner,
+      // Ensure isPPO flag is correct
+      isPPO: true
     };
     
-    // Pass both officers to ensure the partnership is preserved
-    onPartnershipChange(officerWithUpdatedPosition, selectedPartner);
+    // Pass the PPO as the primary officer and the emergency partner as the partner
+    // The order matters: first param is the officer being updated (PPO), 
+    // second param is the partner ID (emergency regular officer)
+    onPartnershipChange(ppoOfficer, selectedPartner);
   } else {
     // Regular partnership (regular officer with PPO)
     const partner = availablePartners?.find(p => p.id === selectedPartner);
@@ -541,8 +544,8 @@ const handleCreatePartnership = async () => {
       return;
     }
 
-    // For regular partnerships - the PPO (partner) will take the officer's position
-    // The officer (trainer) keeps their position
+    // For regular partnerships - the officer (trainer) keeps their position
+    // The PPO (partner) will have null position
     const officerWithPartnerInfo = {
       ...officer,
       // Store that this officer will be training a PPO
@@ -551,7 +554,9 @@ const handleCreatePartnership = async () => {
       // CRITICAL: Set partnership flags
       isPartnership: true,
       partnershipSuspended: false,
-      partnershipSuspensionReason: null
+      partnershipSuspensionReason: null,
+      // Keep officer's position
+      position: officer.position
     };
     
     onPartnershipChange(officerWithPartnerInfo, selectedPartner);

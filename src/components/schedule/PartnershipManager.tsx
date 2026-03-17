@@ -658,146 +658,150 @@ const handleCreatePartnership = async () => {
     );
   }
 
-  // 2. Suspended Partnership - Show different options for PPOs vs Regular Officers
-  if (hasSuspendedPartnership) {
-    if (isOfficerPPO) {
-      // PPO with suspended partnership - show emergency partner option
-      return (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-7 bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
-              onClick={() => {
-                setEmergencyMode(true);
-                setOpen(true);
-              }}
-            >
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              Emergency Partner
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-                Emergency Partner Assignment
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-medium text-amber-800">PPO Officer:</p>
-                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                    <Shield className="h-3 w-3 mr-1" />
-                    PPO
-                  </Badge>
-                </div>
-                <p className="font-semibold text-lg">{officer.name}</p>
-                <p className="text-sm text-amber-700">
-                  Partnership suspended: {officer.partnershipSuspensionReason || 'Partner on PTO'}
-                </p>
-                {officer.partnerData?.partnerName && (
-                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm text-yellow-800 font-medium">Original Partner:</p>
-                    <p className="text-sm text-yellow-700">{officer.partnerData.partnerName} (on PTO)</p>
-                  </div>
-                )}
-                <div className="mt-2 text-xs text-amber-800 bg-amber-100 p-2 rounded">
-                  <p className="font-medium">⚠️ PPO Requirement:</p>
-                  <p>Probationary Officers must always be partnered and cannot work alone.</p>
-                </div>
+// 2. Suspended Partnership - Show different options for PPOs vs Regular Officers
+if (hasSuspendedPartnership) {
+  if (isOfficerPPO) {
+    // PPO with suspended partnership - show emergency partner option
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-7 bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
+            onClick={() => {
+              // CRITICAL: Make sure we're working with the PPO, not any other officer
+              console.log("🚨 Opening emergency partner dialog for PPO:", {
+                ppoName: officer.name,
+                ppoId: officer.officerId,
+                ppoRank: officer.rank,
+                isPPO: isOfficerPPO
+              });
+              setEmergencyMode(true);
+              setOpen(true);
+            }}
+          >
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Emergency Partner
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Emergency Partner Assignment
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium text-amber-800">PPO Officer:</p>
+                <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                  <Shield className="h-3 w-3 mr-1" />
+                  PPO
+                </Badge>
               </div>
-
-              <div>
-                <Label htmlFor="emergency-partner">Select Emergency Partner</Label>
-                <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                  <SelectTrigger id="emergency-partner">
-                    <SelectValue placeholder="Select available officer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {emergencyLoading ? (
-                      <div className="p-4 text-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-600 mx-auto mb-2"></div>
-                        <div className="text-sm text-muted-foreground">Loading available officers...</div>
-                      </div>
-                    ) : emergencyError ? (
-                      <div className="p-4 text-center">
-                        <AlertTriangle className="h-8 w-8 text-red-600 mx-auto mb-2" />
-                        <div className="text-sm text-red-600 font-medium">Error loading officers</div>
-                        <div className="text-xs text-red-500 mt-1">{emergencyError.message}</div>
-                      </div>
-                    ) : !emergencyPartners || emergencyPartners.length === 0 ? (
-                      <div className="p-4 text-center space-y-2">
-                        <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto" />
-                        <div className="text-sm font-medium">No available officers found</div>
-                        <div className="text-xs text-muted-foreground">
-                          All regular officers are either:
-                        </div>
-                        <ul className="text-xs text-left text-muted-foreground list-disc pl-4 space-y-1">
-                          <li>Already partnered</li>
-                          <li>On PTO</li>
-                          <li>Assigned to special duty</li>
-                          <li>PPOs (cannot partner with PPOs in emergencies)</li>
-                        </ul>
-                      </div>
-                    ) : (
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
-                          Select a regular officer (non-PPO) for temporary assignment
-                        </div>
-                        {emergencyPartners.map((partner) => (
-                          <SelectItem key={partner.id} value={partner.id}>
-                            <div className="flex flex-col py-2">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">{partner.name}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {partner.source}
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                                <div className="flex items-center gap-2">
-                                  <span>Badge: {partner.badge || 'N/A'}</span>
-                                  <span>•</span>
-                                  <span>{partner.rank || 'Officer'}</span>
-                                </div>
-                                {partner.isPPO && (
-                                  <span className="text-red-600">⚠️ Cannot select PPO</span>
-                                )}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <Button 
-                onClick={handleCreatePartnership}
-                disabled={!selectedPartner || emergencyLoading}
-                className="w-full bg-amber-600 hover:bg-amber-700"
-              >
-                <AlertTriangle className="h-4 w-4 mr-2" />
-                Assign Emergency Partner
-              </Button>
-
-              <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
-                <p className="font-medium mb-1">Emergency Partnership Details:</p>
-                <ul className="list-disc pl-4 space-y-1">
-                  <li>Temporary assignment for today only</li>
-                  <li>Original partnership will resume tomorrow</li>
-                  <li>Only regular officers (non-PPOs) available</li>
-                  <li>Positions/districts preserved</li>
-                </ul>
+              <p className="font-semibold text-lg">{officer.name}</p>
+              <p className="text-sm text-amber-700">
+                Partnership suspended: {officer.partnershipSuspensionReason || 'Trainer on special assignment'}
+              </p>
+              {officer.partnerData?.partnerName && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-800 font-medium">Original Trainer:</p>
+                  <p className="text-sm text-yellow-700">{officer.partnerData.partnerName}</p>
+                </div>
+              )}
+              <div className="mt-2 text-xs text-amber-800 bg-amber-100 p-2 rounded">
+                <p className="font-medium">⚠️ PPO Requirement:</p>
+                <p>Probationary Officers must always be partnered and cannot work alone.</p>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      );
+
+            <div>
+              <Label htmlFor="emergency-partner">Select Emergency Partner (Regular Officer)</Label>
+              <Select value={selectedPartner} onValueChange={setSelectedPartner}>
+                <SelectTrigger id="emergency-partner">
+                  <SelectValue placeholder="Select available officer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {emergencyLoading ? (
+                    <div className="p-4 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-600 mx-auto mb-2"></div>
+                      <div className="text-sm text-muted-foreground">Loading available officers...</div>
+                    </div>
+                  ) : emergencyError ? (
+                    <div className="p-4 text-center">
+                      <AlertTriangle className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                      <div className="text-sm text-red-600 font-medium">Error loading officers</div>
+                      <div className="text-xs text-red-500 mt-1">{emergencyError.message}</div>
+                    </div>
+                  ) : !emergencyPartners || emergencyPartners.length === 0 ? (
+                    <div className="p-4 text-center space-y-2">
+                      <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto" />
+                      <div className="text-sm font-medium">No available officers found</div>
+                      <div className="text-xs text-muted-foreground">
+                        All regular officers are either:
+                      </div>
+                      <ul className="text-xs text-left text-muted-foreground list-disc pl-4 space-y-1">
+                        <li>Already partnered</li>
+                        <li>On PTO</li>
+                        <li>Assigned to special duty</li>
+                        <li>PPOs (cannot partner with PPOs in emergencies)</li>
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
+                        Select a regular officer (non-PPO) for temporary assignment
+                      </div>
+                      {emergencyPartners.map((partner) => (
+                        <SelectItem key={partner.id} value={partner.id}>
+                          <div className="flex flex-col py-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{partner.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {partner.source}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+                              <div className="flex items-center gap-2">
+                                <span>Badge: {partner.badge || 'N/A'}</span>
+                                <span>•</span>
+                                <span>{partner.rank || 'Officer'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button 
+              onClick={handleCreatePartnership}
+              disabled={!selectedPartner || emergencyLoading}
+              className="w-full bg-amber-600 hover:bg-amber-700"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Assign Emergency Partner
+            </Button>
+
+            <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded border">
+              <p className="font-medium mb-1">Emergency Partnership Details:</p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>Temporary assignment for today only</li>
+                <li>Original partnership will resume when trainer returns</li>
+                <li>Only regular officers (non-PPOs) available</li>
+                <li>PPO keeps null position, emergency partner keeps their position</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
     } else {
       // Regular officer with suspended partnership - no emergency option needed
       return (

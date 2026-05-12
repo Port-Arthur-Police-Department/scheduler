@@ -12,6 +12,12 @@ export const PREDEFINED_POSITIONS = [
   "District 7/8",
   "District 9",
   "City-Wide",
+  "Dispatch-A",
+  "Dispatch-B",
+  "Dispatch Supervisor",
+  "Dispatch Radio",
+  "Dispatch Call Taker",
+  "Dispatch Data Entry",
   "Other (Custom)",
 ] as const;
 

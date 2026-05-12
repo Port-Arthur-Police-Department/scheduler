@@ -70,35 +70,42 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
   }
 };
 
-// Add this helper function with the other helper functions
-const getWeekOffset = (date: Date, startDate: Date): number => {
-  const diffTime = Math.abs(date.getTime() - startDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  const weeksPassed = Math.floor(diffDays / 7);
-  return weeksPassed % 4; // Returns 0, 1, 2, or 3 for 4-week cycle
-};
+    // Add helper function at the top of DailyScheduleView.tsx (around line 50-100)
+    const getWeekOffset = (date: Date, startDate: Date): number => {
+      // Calculate the difference in days
+      const diffTime = Math.abs(date.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Calculate which week of the 4-week cycle (0-indexed)
+      const weeksPassed = Math.floor(diffDays / 7);
+      const weekOffset = weeksPassed % 4;
+      
+      console.log(`Week calculation: Date=${date.toISOString()}, Start=${startDate.toISOString()}, Days diff=${diffDays}, Weeks passed=${weeksPassed}, Week offset=${weekOffset}`);
+      
+      return weekOffset;
+    };
 
-const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
-  if (!hireDate) return 0;
-  
-  try {
-    const hireDateObj = parseISO(hireDate);
-    const today = date;
-    
-    let years = today.getFullYear() - hireDateObj.getFullYear();
-    
-    // Adjust if anniversary hasn't occurred yet this year
-    if (today.getMonth() < hireDateObj.getMonth() || 
-        (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
-      years--;
-    }
-    
-    return Math.max(0, years);
-  } catch (error) {
-    console.error("Error calculating years of service:", hireDate, error);
-    return 0;
-  }
-};
+    const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+      if (!hireDate) return 0;
+      
+      try {
+        const hireDateObj = parseISO(hireDate);
+        const today = date;
+        
+        let years = today.getFullYear() - hireDateObj.getFullYear();
+        
+        // Adjust if anniversary hasn't occurred yet this year
+        if (today.getMonth() < hireDateObj.getMonth() || 
+            (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+          years--;
+        }
+        
+        return Math.max(0, years);
+      } catch (error) {
+        console.error("Error calculating years of service:", hireDate, error);
+        return 0;
+      }
+    };
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -1446,22 +1453,27 @@ if (minError) {
     recurringData
       ?.filter(r => r.shift_types?.id === shift.id)
       .forEach(r => {
-        // ADD THIS DATE RANGE VALIDATION
         const currentDate = parseISO(dateStr);
         const scheduleStartDate = parseISO(r.start_date);
         const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
         
-        // Validate date range
         if (currentDate < scheduleStartDate) return;
         if (scheduleEndDate && currentDate > scheduleEndDate) return;
         
-        // ADD THIS WEEK OFFSET CHECK RIGHT HERE:
+        // CORRECTED WEEK OFFSET CHECK
+        // If week_offset is NULL, treat as "every week" (no filtering)
+        // If week_offset has a value (0,1,2,3), only include if it matches the calculated week
         const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
-        if (r.week_offset !== null && r.week_offset !== undefined && r.week_offset !== weekOffset) {
-          console.log(`Skipping officer ${r.officer_id}: Week offset ${weekOffset} doesn't match schedule offset ${r.week_offset}`);
-          return; // Skip if week offset doesn't match
-        }
         
+        // r.week_offset could be null, undefined, or a number (0,1,2,3)
+        // If it's null or undefined, include for ALL weeks (backward compatibility)
+        if (r.week_offset !== null && r.week_offset !== undefined) {
+          // Only include if the schedule's week_offset matches the current week
+          if (r.week_offset !== weekOffset) {
+            console.log(`Skipping officer ${r.officer_id}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+            return;
+          }
+        }        
         const officerKey = `${r.officer_id}-${shift.id}`;
         
         // ONLY look for PTO exceptions if the date is within the schedule range

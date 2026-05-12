@@ -9,6 +9,7 @@ import { Edit2, Save, X, Clock, Trash2, Users, Cake, Award } from "lucide-react"
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useState } from "react";
 import { PartnershipManager } from "./PartnershipManager";
+import { getPositionsForShift } from "@/utils/positionUtils";
 
 interface OfficerCardProps {
   officer: any;
@@ -22,7 +23,8 @@ interface OfficerCardProps {
   isUpdating: boolean;
   sectionType?: "regular" | "special" | "pto";
   backgroundColor?: string;
-  showSpecialOccasions?: boolean; // ADD THIS LINE
+  showSpecialOccasions?: boolean;
+  shiftName?: string; // ADD THIS
 }
 
 export const OfficerCard = ({
@@ -308,13 +310,13 @@ export const OfficerCard = ({
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Select position" />
                 </SelectTrigger>
-                <SelectContent>
-                  {PREDEFINED_POSITIONS.map((pos) => (
-                    <SelectItem key={pos} value={pos}>
-                      {pos}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+              <SelectContent>
+                {getPositionsForShift(officer.shift?.name).map((pos) => (
+                  <SelectItem key={pos} value={pos}>
+                    {pos}
+                  </SelectItem>
+                ))}
+              </SelectContent>
               </Select>
               {editPosition === "Other (Custom)" && (
                 <Input

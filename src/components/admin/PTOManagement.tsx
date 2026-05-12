@@ -62,11 +62,17 @@ export const PTOManagement = () => {
   // Helper function to get seniority label based on rank and promotion dates
   const getSeniorityLabel = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
-    
+
     if (rank.includes('lieutenant') || rank.includes('lt')) {
       return 'Seniority at Lieutenant';
     } else if (rank.includes('sergeant') || rank.includes('sgt')) {
       return 'Seniority at Sergeant';
+    } else if (rank === 'secretary') {
+      return 'Seniority as Secretary';
+    } else if (rank === 'coordinator for support services') {
+      return 'Seniority as Coordinator';
+    } else if (rank === 'dispatcher') {
+      return 'Service Credit';
     } else {
       return 'Service Credit';
     }
@@ -76,52 +82,55 @@ export const PTOManagement = () => {
   const getSeniorityDetails = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
     const items = [];
-    
+
+    // Always show hire date
     if (officer.hire_date) {
       items.push(
         <div key="hire" className="flex items-center gap-1 text-muted-foreground">
-          <CalendarIcon className="h-2.5 w-2.5" />
+          <CalendarIcon className="h-2 w-2" />
           <span>Hire: {format(new Date(officer.hire_date), "MMM yyyy")}</span>
         </div>
       );
     }
-    
-    // Show "Since" for current rank's promotion date
+
+    // Skip promotion logic for non-traditional ranks
+    const nonTraditionalRanks = ['dispatcher', 'secretary', 'coordinator for support services'];
+    if (nonTraditionalRanks.includes(rank)) {
+      return items; // Only show hire date
+    }
+
+    // Rest of your existing promotion logic...
     if ((rank.includes('lieutenant') || rank.includes('lt')) && officer.promotion_date_lieutenant) {
       items.push(
         <div key="lt-since" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
-          <TrendingUp className="h-2.5 w-2.5" />
+          <TrendingUp className="h-2 w-2" />
           <span>Since: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
         </div>
       );
     } else if ((rank.includes('sergeant') || rank.includes('sgt')) && officer.promotion_date_sergeant) {
       items.push(
         <div key="sgt-since" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-          <TrendingUp className="h-2.5 w-2.5" />
+          <TrendingUp className="h-2 w-2" />
           <span>Since: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
         </div>
       );
     }
-    
+
     // Show promotion history (previous ranks)
     if (rank.includes('lieutenant') || rank.includes('lt')) {
-      // If Lieutenant, show Sergeant promotion if exists
       if (officer.promotion_date_sergeant) {
         items.push(
           <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-            <TrendingUp className="h-2.5 w-2.5" />
+            <TrendingUp className="h-2 w-2" />
             <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
           </div>
         );
       }
-    }
-    // If Sergeant, Lieutenant promotion shouldn't exist (they'd be Lieutenant rank)
-    // If Officer, show both if they exist (historical promotions)
-    else if (!rank.includes('sergeant') && !rank.includes('sgt')) {
+    } else if (!rank.includes('sergeant') && !rank.includes('sgt') && !nonTraditionalRanks.includes(rank)) {
       if (officer.promotion_date_sergeant) {
         items.push(
           <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
-            <TrendingUp className="h-2.5 w-2.5" />
+            <TrendingUp className="h-2 w-2" />
             <span>Sgt: {format(new Date(officer.promotion_date_sergeant), "MMM yyyy")}</span>
           </div>
         );
@@ -129,13 +138,13 @@ export const PTOManagement = () => {
       if (officer.promotion_date_lieutenant) {
         items.push(
           <div key="lt-promo" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
-            <TrendingUp className="h-2.5 w-2.5" />
+            <TrendingUp className="h-2 w-2" />
             <span>LT: {format(new Date(officer.promotion_date_lieutenant), "MMM yyyy")}</span>
           </div>
         );
       }
     }
-    
+
     return items;
   };
 
@@ -173,16 +182,16 @@ export const PTOManagement = () => {
       if (error) throw error;
 
       // AUDIT LOGGING: Log PTO adjustment
-    if (currentUser) {
-      await auditLogger.logPTOAssignment(
-        selectedOfficer,
-        ptoType,
-        new Date().toISOString(),
-        hoursValue,
-        operation,
-        currentUser.id,
-        currentUser.email
-      );
+      if (currentUser) {
+        await auditLogger.logPTOAssignment(
+          selectedOfficer,
+          ptoType,
+          new Date().toISOString(),
+          hoursValue,
+          operation,
+          currentUser.id,
+          currentUser.email
+        );
       }
     },
     onSuccess: () => {
@@ -287,16 +296,16 @@ export const PTOManagement = () => {
               <Settings className="h-4 w-4 mr-2" />
               Accrual Rules
             </Button>
-            <Button 
-              onClick={() => accrueAllSickTimeMutation.mutate()} 
-              variant="outline" 
+            <Button
+              onClick={() => accrueAllSickTimeMutation.mutate()}
+              variant="outline"
               size="sm"
               disabled={!settings?.show_pto_balances}
             >
               Accrue Sick Time (All)
             </Button>
-            <Button 
-              onClick={() => setDialogOpen(true)} 
+            <Button
+              onClick={() => setDialogOpen(true)}
               size="sm"
               disabled={!settings?.show_pto_balances}
             >
@@ -363,12 +372,12 @@ export const PTOManagement = () => {
                   </p>
                   <div className="space-y-0.5">
                     <p className="text-lg font-semibold">{officer.service_credit?.toFixed(1) || 0} yrs</p>
-                    
+
                     {/* Seniority Details */}
                     <div className="space-y-0.5 text-xs">
                       {getSeniorityDetails(officer)}
                     </div>
-                    
+
                     {officer.service_credit_override !== null && (
                       <p className="text-xs text-amber-600 dark:text-amber-500">
                         (Adjusted {officer.service_credit_override > 0 ? '+' : ''}{officer.service_credit_override.toFixed(1)} yrs)
@@ -515,9 +524,9 @@ export const PTOManagement = () => {
                       {editingRule?.id === holidayRule.id && (
                         <Button
                           size="sm"
-                          onClick={() => updateAccrualRuleMutation.mutate({ 
-                            id: holidayRule.id, 
-                            hours: Number(editingRule.hours) 
+                          onClick={() => updateAccrualRuleMutation.mutate({
+                            id: holidayRule.id,
+                            hours: Number(editingRule.hours)
                           })}
                           disabled={updateAccrualRuleMutation.isPending}
                         >
@@ -535,10 +544,10 @@ export const PTOManagement = () => {
                   </p>
                   <div className="space-y-3">
                     {vacationRules.map((rule) => {
-                      const tierLabel = rule.service_credit_max 
+                      const tierLabel = rule.service_credit_max
                         ? `${rule.service_credit_min}-${Math.floor(rule.service_credit_max)} years`
                         : `${rule.service_credit_min}+ years`;
-                      
+
                       return (
                         <div key={rule.id} className="flex items-center gap-2 p-3 border rounded-lg">
                           <span className="text-sm font-medium w-32">{tierLabel}</span>
@@ -553,9 +562,9 @@ export const PTOManagement = () => {
                           {editingRule?.id === rule.id && (
                             <Button
                               size="sm"
-                              onClick={() => updateAccrualRuleMutation.mutate({ 
-                                id: rule.id, 
-                                hours: Number(editingRule.hours) 
+                              onClick={() => updateAccrualRuleMutation.mutate({
+                                id: rule.id,
+                                hours: Number(editingRule.hours)
                               })}
                               disabled={updateAccrualRuleMutation.isPending}
                             >

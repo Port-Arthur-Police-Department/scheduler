@@ -1470,7 +1470,7 @@ if (minError) {
         const defaultAssignment = getDefaultAssignment(r.officer_id);
 
         const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
-        const isProbationary = officerRank?.toLowerCase().includes('probationary');
+        const isProbationary = officerRank?.toLowerCase() === 'probationary';
 
         let customTime = undefined;
         if (ptoException?.custom_start_time && ptoException?.custom_end_time) {
@@ -1608,7 +1608,7 @@ const finalData = workingException ? {
         );
 
         const officerRank = e.profiles?.rank;
-        const isProbationary = officerRank?.toLowerCase().includes('probationary');
+        const isProbationary = officerRank?.toLowerCase() === 'probationary';
 
         const defaultAssignment = getDefaultAssignment(e.officer_id);
 

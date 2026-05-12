@@ -43,21 +43,21 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   const queryClient = useQueryClient();
   const isEditing = officer !== null;
   const [activeTab, setActiveTab] = useState("basic");
-  
+
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
-  
+
   // Helper function to parse dates without timezone issues
   const parseDateWithoutTimezone = (dateString: string | null): Date | undefined => {
     if (!dateString) return undefined;
-    
+
     try {
       // Split the date string and parse it manually to avoid timezone issues
       const [year, month, day] = dateString.split('-').map(Number);
-      
+
       // Create a date at local time (not UTC)
       const date = new Date(year, month - 1, day);
-      
+
       // Validate the date
       if (isValid(date)) {
         return date;
@@ -65,36 +65,36 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     } catch (error) {
       console.error("Error parsing date:", dateString, error);
     }
-    
+
     return undefined;
   };
 
   // Helper function to format date for input[type="date"]
   const formatDateForInput = (date: Date | undefined): string => {
     if (!date) return "";
-    
+
     // Format as YYYY-MM-DD without timezone adjustment
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    
+
     return `${year}-${month}-${day}`;
   };
 
   // Initialize state with defaults or existing officer data
   const [hireDate, setHireDate] = useState<Date | undefined>();
   const [hireDateInput, setHireDateInput] = useState<string>("");
-  
+
   const [promotionDateSergeant, setPromotionDateSergeant] = useState<Date | undefined>();
   const [promotionDateSergeantInput, setPromotionDateSergeantInput] = useState<string>("");
-  
+
   const [promotionDateLieutenant, setPromotionDateLieutenant] = useState<Date | undefined>();
   const [promotionDateLieutenantInput, setPromotionDateLieutenantInput] = useState<string>("");
-  
+
   // ADDED: Birthday state
   const [birthday, setBirthday] = useState<Date | undefined>();
   const [birthdayInput, setBirthdayInput] = useState<string>("");
-  
+
   const [serviceCreditOverride, setServiceCreditOverride] = useState<string>(
     officer?.service_credit_override?.toString() || ""
   );
@@ -120,20 +120,20 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       const parsedLieutenantDate = parseDateWithoutTimezone(officer?.promotion_date_lieutenant || null);
       // ADDED: Parse birthday
       const parsedBirthday = parseDateWithoutTimezone(officer?.birthday || null);
-      
+
       setHireDate(parsedHireDate);
       setHireDateInput(parsedHireDate ? formatDateForInput(parsedHireDate) : "");
-      
+
       setPromotionDateSergeant(parsedSergeantDate);
       setPromotionDateSergeantInput(parsedSergeantDate ? formatDateForInput(parsedSergeantDate) : "");
-      
+
       setPromotionDateLieutenant(parsedLieutenantDate);
       setPromotionDateLieutenantInput(parsedLieutenantDate ? formatDateForInput(parsedLieutenantDate) : "");
-      
+
       // ADDED: Set birthday state
       setBirthday(parsedBirthday);
       setBirthdayInput(parsedBirthday ? formatDateForInput(parsedBirthday) : "");
-      
+
       setServiceCreditOverride(officer?.service_credit_override?.toString() || "");
       setFormData({
         full_name: officer?.full_name || "",
@@ -146,7 +146,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         comp_hours: officer?.comp_hours?.toString() || "0",
         holiday_hours: officer?.holiday_hours?.toString() || "0",
       });
-      
+
       // Only fetch service credit for existing officers
       if (officer?.id) {
         fetchServiceCredit();
@@ -158,7 +158,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
 
   const fetchServiceCredit = async () => {
     if (!officer?.id) return;
-    
+
     const { data } = await supabase.rpc("get_service_credit", {
       profile_id: officer.id,
     });
@@ -168,10 +168,10 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   const updateProfileMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       if (!officer?.id) throw new Error("No officer ID provided");
-      
+
       // Get current user for audit logging
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
+
       // Get old data first for audit logging
       const { data: oldProfile } = await supabase
         .from("profiles")
@@ -195,20 +195,20 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       } else {
         profileData.hire_date = null;
       }
-      
+
       // ADDED: Add birthday
       if (birthdayInput) {
         profileData.birthday = birthdayInput;
       } else {
         profileData.birthday = null;
       }
-      
+
       if (promotionDateSergeantInput) {
         profileData.promotion_date_sergeant = promotionDateSergeantInput;
       } else {
         profileData.promotion_date_sergeant = null;
       }
-      
+
       if (promotionDateLieutenantInput) {
         profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
       } else {
@@ -240,20 +240,22 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
           profileData,
           currentUser.id,
           currentUser.email,
-        // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
+          // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
         );
       }
 
-      // Update user role based on new rank
       const getRoleFromRank = (rank: string): "admin" | "officer" | "supervisor" => {
         const rankLower = rank.toLowerCase();
         if (rankLower === 'chief' || rankLower === 'deputy chief') return 'admin';
-        if (rankLower === 'sergeant' || rankLower === 'lieutenant') return 'supervisor';
+        if (rankLower === 'sergeant' ||
+          rankLower === 'lieutenant' ||
+          rankLower === 'secretary' ||
+          rankLower === 'coordinator for support services') return 'supervisor';
         return 'officer';
       };
 
       const newRole = getRoleFromRank(data.rank);
-      
+
       // Update the user_roles table
       const { error: roleError } = await supabase
         .from('user_roles')
@@ -280,7 +282,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     mutationFn: async (data: typeof formData) => {
       // Get current user for audit logging
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
+
       // Prepare profile data
       const profileData: any = {
         email: data.email,
@@ -297,20 +299,20 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       } else {
         profileData.hire_date = null;
       }
-      
+
       // ADDED: Add birthday
       if (birthdayInput) {
         profileData.birthday = birthdayInput;
       } else {
         profileData.birthday = null;
       }
-      
+
       if (promotionDateSergeantInput) {
         profileData.promotion_date_sergeant = promotionDateSergeantInput;
       } else {
         profileData.promotion_date_sergeant = null;
       }
-      
+
       if (promotionDateLieutenantInput) {
         profileData.promotion_date_lieutenant = promotionDateLieutenantInput;
       } else {
@@ -334,11 +336,11 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       })
 
       const result = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to create user')
       }
-      
+
       // AUDIT LOGGING: Log profile creation
       if (currentUser) {
         await auditLogger.logProfileUpdate(
@@ -348,10 +350,10 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
           profileData,
           currentUser.id,
           currentUser.email,
-        //  `Created profile for ${data.full_name}`
+          //  `Created profile for ${data.full_name}`
         );
       }
-      
+
       return result;
     },
     onSuccess: (result) => {
@@ -418,7 +420,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       toast.error("Sergeant promotion date cannot be before hire date");
       return;
     }
-    
+
     if (promotionDateLieutenant) {
       if (hireDate && promotionDateLieutenant < hireDate) {
         toast.error("Lieutenant promotion date cannot be before hire date");
@@ -439,14 +441,14 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
 
   const getCreditBreakdown = () => {
     const now = new Date();
-    
+
     const calculateYears = (startDate: Date | undefined) => {
       if (!startDate) return 0;
-      
+
       const years = now.getFullYear() - startDate.getFullYear();
       const months = now.getMonth() - startDate.getMonth();
       const days = now.getDate() - startDate.getDate();
-      
+
       // Calculate decimal years more accurately
       let decimalYears = years + (months / 12) + (days / 365);
       return Math.max(0, decimalYears);
@@ -457,7 +459,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     const lieutenantYears = calculateYears(promotionDateLieutenant);
     const override = Number(serviceCreditOverride) || 0;
     const finalTotal = calculatedCredit;
-    
+
     return {
       totalHireYears: hireDateYears.toFixed(1),
       sergeantYears: sergeantYears.toFixed(1),
@@ -485,7 +487,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
             <TabsTrigger value="promotions">Promotions</TabsTrigger>
             <TabsTrigger value="pto">PTO</TabsTrigger>
           </TabsList>
-          
+
           <form onSubmit={handleSubmit}>
             <TabsContent value="basic" className="space-y-4">
               <div className="space-y-2">
@@ -544,6 +546,10 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
                     <SelectItem value="Lieutenant">Lieutenant</SelectItem>
                     <SelectItem value="Deputy Chief">Deputy Chief</SelectItem>
                     <SelectItem value="Chief">Chief</SelectItem>
+                    {/* New options */}
+                    <SelectItem value="Dispatcher">Dispatcher</SelectItem>
+                    <SelectItem value="Secretary">Secretary</SelectItem>
+                    <SelectItem value="Coordinator for Support Services">Coordinator for Support Services</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -699,7 +705,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
                             setPromotionDateSergeantInput("");
                           }
                         }}
-                        disabled={(date) => date > new Date() || 
+                        disabled={(date) => date > new Date() ||
                           (hireDate ? date < hireDate : false)}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
@@ -748,9 +754,9 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
                             setPromotionDateLieutenantInput("");
                           }
                         }}
-                        disabled={(date) => date > new Date() || 
-                          (promotionDateSergeant ? date < promotionDateSergeant : 
-                           hireDate ? date < hireDate : false)}
+                        disabled={(date) => date > new Date() ||
+                          (promotionDateSergeant ? date < promotionDateSergeant :
+                            hireDate ? date < hireDate : false)}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
                       />

@@ -67,6 +67,9 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const [assignedPosition, setAssignedPosition] = useState("none");
   const [shiftPositions, setShiftPositions] = useState<string[]>([]);
   const [editingSchedule, setEditingSchedule] = useState<any>(null);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
+  const [weekPattern, setWeekPattern] = useState<"all" | "odd" | "even" | "custom">("all");
+  const [customWeeks, setCustomWeeks] = useState<number[]>([0, 2]); // Week 1 and Week 3 (0-indexed)
   
   // New state for default assignments
   const [activeTab, setActiveTab] = useState("schedules");
@@ -223,17 +226,19 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-  // FIXED: Add schedule mutation (bulk insert multiple days)
-  const addScheduleMutation = useMutation({
-  mutationFn: async (data: { 
-    days: number[]; 
-    shiftId: string; 
-    start: string; 
-    end?: string;
-    unitNumber?: string;
-    assignedPosition?: string;
-  }) => {
-    // Get current user for audit logging
+// Update the add schedule mutation to include week_offset
+    const addScheduleMutation = useMutation({
+      mutationFn: async (data: { 
+        days: number[]; 
+        shiftId: string; 
+        start: string; 
+        end?: string;
+        unitNumber?: string;
+        assignedPosition?: string;
+        weekOffset?: number;
+        weekPattern?: string;
+        customWeeks?: number[];
+      }) => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     
     const startDate = new Date(data.start);
@@ -241,16 +246,59 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       throw new Error("End date cannot be before start date");
     }
 
-    // Create schedules array
-    const schedules = data.days.map(day => ({
-      officer_id: officer.id,
-      day_of_week: day,
-      shift_type_id: data.shiftId,
-      start_date: data.start,
-      end_date: data.end || null,
-      unit_number: data.unitNumber || null,
-      position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-    }));
+    // Create schedules array with week_offset
+    const schedules = data.days.map(day => {
+      // If using week pattern, create multiple schedules
+      if (data.weekPattern === "odd") {
+        // Create for weeks 1 and 3 (0 and 2)
+        return [0, 2].map(offset => ({
+          officer_id: officer.id,
+          day_of_week: day,
+          shift_type_id: data.shiftId,
+          start_date: data.start,
+          end_date: data.end || null,
+          unit_number: data.unitNumber || null,
+          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+          week_offset: offset
+        }));
+      } else if (data.weekPattern === "even") {
+        // Create for weeks 2 and 4 (1 and 3)
+        return [1, 3].map(offset => ({
+          officer_id: officer.id,
+          day_of_week: day,
+          shift_type_id: data.shiftId,
+          start_date: data.start,
+          end_date: data.end || null,
+          unit_number: data.unitNumber || null,
+          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+          week_offset: offset
+        }));
+      } else if (data.weekPattern === "custom" && data.customWeeks) {
+        // Create for specific weeks
+        return data.customWeeks.map(offset => ({
+          officer_id: officer.id,
+          day_of_week: day,
+          shift_type_id: data.shiftId,
+          start_date: data.start,
+          end_date: data.end || null,
+          unit_number: data.unitNumber || null,
+          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+          week_offset: offset
+        }));
+      } else {
+        // Single week (default)
+        return {
+          officer_id: officer.id,
+          day_of_week: day,
+          shift_type_id: data.shiftId,
+          start_date: data.start,
+          end_date: data.end || null,
+          unit_number: data.unitNumber || null,
+          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+          week_offset: data.weekOffset ?? 0
+        };
+      }
+    }).flat();
 
     console.log("Inserting schedules:", schedules); // Debug log
 

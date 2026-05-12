@@ -28,7 +28,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkPTOOfficer, setBulkPTOOfficer] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("officers");
-  
+
   const { data: settings } = useWebsiteSettings();
 
   const { data: officers, isLoading } = useQuery({
@@ -86,11 +86,17 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
   // Helper function to get seniority label based on rank and promotion dates
   const getSeniorityLabel = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
-    
+
     if (rank.includes('lieutenant') || rank.includes('lt')) {
       return 'Seniority at Lieutenant';
     } else if (rank.includes('sergeant') || rank.includes('sgt')) {
       return 'Seniority at Sergeant';
+    } else if (rank === 'secretary') {
+      return 'Seniority as Secretary';
+    } else if (rank === 'coordinator for support services') {
+      return 'Seniority as Coordinator';
+    } else if (rank === 'dispatcher') {
+      return 'Service Credit';
     } else {
       return 'Service Credit';
     }
@@ -100,7 +106,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
   const getSeniorityDetails = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
     const items = [];
-    
+
     // Always show hire date
     if (officer.hire_date) {
       items.push(
@@ -110,8 +116,14 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
         </div>
       );
     }
-    
-    // Show "Since" for current rank's promotion date
+
+    // Skip promotion logic for non-traditional ranks
+    const nonTraditionalRanks = ['dispatcher', 'secretary', 'coordinator for support services'];
+    if (nonTraditionalRanks.includes(rank)) {
+      return items; // Only show hire date
+    }
+
+    // Rest of your existing promotion logic...
     if ((rank.includes('lieutenant') || rank.includes('lt')) && officer.promotion_date_lieutenant) {
       items.push(
         <div key="lt-since" className="flex items-center gap-1 text-purple-600 dark:text-purple-500">
@@ -127,10 +139,9 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
         </div>
       );
     }
-    
+
     // Show promotion history (previous ranks)
     if (rank.includes('lieutenant') || rank.includes('lt')) {
-      // If Lieutenant, show Sergeant promotion if exists
       if (officer.promotion_date_sergeant) {
         items.push(
           <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
@@ -139,10 +150,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
           </div>
         );
       }
-    }
-    // If Sergeant, Lieutenant promotion shouldn't exist (they'd be Lieutenant rank)
-    // If Officer, show both if they exist (historical promotions)
-    else if (!rank.includes('sergeant') && !rank.includes('sgt')) {
+    } else if (!rank.includes('sergeant') && !rank.includes('sgt') && !nonTraditionalRanks.includes(rank)) {
       if (officer.promotion_date_sergeant) {
         items.push(
           <div key="sgt-promo" className="flex items-center gap-1 text-blue-600 dark:text-blue-500">
@@ -160,18 +168,18 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
         );
       }
     }
-    
+
     return items;
   };
 
   // Filter officers based on search query
   const filteredOfficers = useMemo(() => {
     if (!officers) return [];
-    
+
     if (!searchQuery.trim()) return officers;
 
     const query = searchQuery.toLowerCase().trim();
-    return officers.filter(officer => 
+    return officers.filter(officer =>
       officer.full_name?.toLowerCase().includes(query) ||
       officer.email?.toLowerCase().includes(query) ||
       officer.badge_number?.toLowerCase().includes(query) ||
@@ -192,7 +200,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
             <CardDescription>Manage officers, schedules, and partnerships</CardDescription>
           </div>
           {activeTab === "officers" && (
-            <Button 
+            <Button
               onClick={() => setCreatingNewOfficer(true)}
               className="flex items-center gap-2"
             >
@@ -202,7 +210,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
           )}
         </div>
       </CardHeader>
-      
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="px-6">
           <TabsList className="grid w-full grid-cols-3">
@@ -211,7 +219,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
             <TabsTrigger value="partnerships">Partnerships</TabsTrigger>
           </TabsList>
         </div>
-        
+
         <CardContent className="pt-6">
           {/* Officers Tab Content */}
           <TabsContent value="officers" className="mt-0 space-y-4">
@@ -232,7 +240,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                 </div>
               )}
             </div>
-            
+
             {isLoading ? (
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground">Loading officers...</p>
@@ -240,7 +248,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
             ) : !officers || officers.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground mb-4">No officers found.</p>
-                <Button 
+                <Button
                   onClick={() => setCreatingNewOfficer(true)}
                   className="flex items-center gap-2"
                 >
@@ -255,7 +263,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                     <p className="text-sm text-muted-foreground mb-2">
                       No officers found matching "{searchQuery}"
                     </p>
-                    <Button 
+                    <Button
                       variant="outline"
                       onClick={() => setSearchQuery("")}
                     >
@@ -278,7 +286,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                           {officer.rank && (
                             <p className="text-sm font-medium text-primary">Rank: {officer.rank}</p>
                           )}
-                          
+
                           {/* PTO Balances Section - Conditionally Rendered */}
                           {settings?.show_pto_balances && settings?.pto_balances_visible ? (
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-sm">
@@ -302,7 +310,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                                 <span className="text-muted-foreground">Holiday:</span>
                                 <span className="font-medium">{officer.holiday_hours || 0}h</span>
                               </div>
-                              
+
                               {/* Seniority Section */}
                               <div className="col-span-2 space-y-1 text-sm">
                                 <div className="flex items-center gap-1">
@@ -318,7 +326,7 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                                     </span>
                                   )}
                                 </div>
-                                
+
                                 {/* Seniority Details */}
                                 <div className="space-y-1 text-xs ml-4">
                                   {getSeniorityDetails(officer)}
@@ -334,12 +342,12 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
                                 <span>{getSeniorityLabel(officer)}:</span>
                                 <span className="font-medium ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
                               </div>
-                              
+
                               {/* Seniority Details */}
                               <div className="space-y-1 text-xs ml-4 mt-1">
                                 {getSeniorityDetails(officer)}
                               </div>
-                              
+
                               <div className="mt-1 text-xs text-muted-foreground italic">
                                 PTO balances are currently managed as indefinite
                               </div>
@@ -393,15 +401,15 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
               </div>
             )}
           </TabsContent>
-          
+
           {/* Schedules Tab Content - Now with OfficersManagement */}
           <TabsContent value="schedules" className="mt-0">
-            <OfficersManagement 
-              userId={userId} 
-              isAdminOrSupervisor={isAdminOrSupervisor} 
+            <OfficersManagement
+              userId={userId}
+              isAdminOrSupervisor={isAdminOrSupervisor}
             />
           </TabsContent>
-          
+
           {/* Partnerships Tab Content */}
           <TabsContent value="partnerships" className="mt-0">
             <PartnershipManagement />

@@ -69,7 +69,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const [editingSchedule, setEditingSchedule] = useState<any>(null);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
   const [weekPattern, setWeekPattern] = useState<"all" | "odd" | "even" | "custom">("all");
-  const [customWeeks, setCustomWeeks] = useState<number[]>([0, 2]); // Week 1 and Week 3 (0-indexed)
+const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 1 only (not [0,2])
   
   // New state for default assignments
   const [activeTab, setActiveTab] = useState("schedules");
@@ -226,7 +226,6 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-      // Update the add schedule mutation to include week_offset
       const addScheduleMutation = useMutation({
         mutationFn: async (data: { 
           days: number[]; 
@@ -250,6 +249,9 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
           let schedules: any[] = [];
           let weekOffsetsToCreate: number[] = [];
           
+          console.log("📅 Creating schedule with pattern:", data.weekPattern);
+          console.log("📅 Custom weeks:", data.customWeeks);
+          
           // Determine which week offsets to create based on pattern
           if (data.weekPattern === "odd") {
             // Weeks 1 and 3 (0 and 2)
@@ -268,6 +270,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
             weekOffsetsToCreate = [0];
           }
       
+          console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
+      
           // Create schedules for each selected day and each selected week offset
           for (const day of data.days) {
             for (const weekOffset of weekOffsetsToCreate) {
@@ -284,8 +288,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
             }
           }
       
-          console.log("Inserting schedules:", schedules); // Debug log
-          console.log(`Creating schedules for week offsets: ${weekOffsetsToCreate.join(', ')}`);
+          console.log("📅 Total schedules to insert:", schedules.length);
+          console.log("📅 Schedules:", schedules);
       
           // Use insert with select to get feedback
           const { data: insertedSchedules, error } = await supabase
@@ -340,7 +344,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
           toast.error(error.message || "Failed to add schedule");
         },
       });
-
+  
   // Update schedule mutation - now updates all fields
   const updateScheduleMutation = useMutation({
     mutationFn: async ({ 
@@ -526,35 +530,34 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-  // FIXED: Handle add schedule with proper validation
-  const handleAddSchedule = () => {
-    if (selectedDays.length === 0) {
-      toast.error("Please select at least one day");
-      return;
-    }
-    if (!shiftTypeId) {
-      toast.error("Please select a shift");
-      return;
-    }
-
-    // Validate end date if provided
-    if (endDate && endDate < startDate) {
-      toast.error("End date cannot be before start date");
-      return;
-    }
-
-    addScheduleMutation.mutate({
-      days: selectedDays,
-      shiftId: shiftTypeId,
-      start: format(startDate, "yyyy-MM-dd"),
-      end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
-      unitNumber: unitNumber || undefined,
-      assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
-      weekPattern: weekPattern,
-      customWeeks: customWeeks
-    });
-  };
-
+    // FIXED: Handle add schedule with proper validation
+    const handleAddSchedule = () => {
+      if (selectedDays.length === 0) {
+        toast.error("Please select at least one day");
+        return;
+      }
+      if (!shiftTypeId) {
+        toast.error("Please select a shift");
+        return;
+      }
+    
+      // Validate end date if provided
+      if (endDate && endDate < startDate) {
+        toast.error("End date cannot be before start date");
+        return;
+      }
+    
+      addScheduleMutation.mutate({
+        days: selectedDays,
+        shiftId: shiftTypeId,
+        start: format(startDate, "yyyy-MM-dd"),
+        end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
+        unitNumber: unitNumber || undefined,
+        assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
+        weekPattern: weekPattern,        // ADD THIS LINE
+        customWeeks: customWeeks         // ADD THIS LINE
+      });
+    };
   const handleEditSchedule = (schedule: any) => {
     setEditingSchedule(schedule);
     setSelectedDays([schedule.day_of_week]);
@@ -730,18 +733,18 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     }
   };
 
-  const resetForm = () => {
-    setShowAddForm(false);
-    setSelectedDays([]);
-    setShiftTypeId("");
-    setStartDate(new Date());
-    setEndDate(undefined);
-    setUnitNumber("");
-    setAssignedPosition("none");
-    setEditingSchedule(null);
-    setWeekPattern("all");
-    setCustomWeeks([0, 2]);
-  };
+    const resetForm = () => {
+      setShowAddForm(false);
+      setSelectedDays([]);
+      setShiftTypeId("");
+      setStartDate(new Date());
+      setEndDate(undefined);
+      setUnitNumber("");
+      setAssignedPosition("none");
+      setEditingSchedule(null);
+      setWeekPattern("all");        // Reset to "all"
+      setCustomWeeks([0]);          // Reset to just Week 1
+    };
 
   const resetDefaultAssignmentForm = () => {
     setShowDefaultAssignmentForm(false);

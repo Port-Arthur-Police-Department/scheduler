@@ -3,42 +3,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, X } from "lucide-react";
+import { getPositionsForShift } from "@/utils/positionUtils";
 
 interface PositionEditorProps {
   currentPosition: string;
   onSave: (positionName: string) => void;
   onCancel: () => void;
   isSaving?: boolean;
+  shiftName?: string; // Optional shift name for dynamic positions
 }
-
-const predefinedPositions = [
-  "Supervisor",
-  "District 1",
-  "District 1/2",
-  "District 2", 
-  "District 3",
-  "District 4",
-  "District 5",
-  "District 5/6",
-  "District 6",
-  "District 7/8",
-  "District 9",
-  "City-Wide",
-  "Other (Custom)",
-];
 
 export const PositionEditor = ({ 
   currentPosition, 
   onSave, 
   onCancel, 
-  isSaving = false 
+  isSaving = false,
+  shiftName 
 }: PositionEditorProps) => {
   const [editPosition, setEditPosition] = useState("");
   const [customPosition, setCustomPosition] = useState("");
 
+  // Get positions based on shift type (Dispatch shifts get special positions)
+  const availablePositions = getPositionsForShift(shiftName);
+
   // Initialize form when component mounts or currentPosition changes
   useEffect(() => {
-    const isCustomPosition = currentPosition && !predefinedPositions.includes(currentPosition);
+    const isCustomPosition = currentPosition && !availablePositions.includes(currentPosition);
     
     if (isCustomPosition) {
       setEditPosition("Other (Custom)");
@@ -47,7 +37,7 @@ export const PositionEditor = ({
       setEditPosition(currentPosition || "");
       setCustomPosition("");
     }
-  }, [currentPosition]);
+  }, [currentPosition, availablePositions]);
 
   const handleSave = () => {
     const finalPosition = editPosition === "Other (Custom)" ? customPosition : editPosition;
@@ -65,7 +55,7 @@ export const PositionEditor = ({
             <SelectValue placeholder="Select position" />
           </SelectTrigger>
           <SelectContent>
-            {predefinedPositions.map((pos) => (
+            {availablePositions.map((pos) => (
               <SelectItem key={pos} value={pos}>
                 {pos}
               </SelectItem>

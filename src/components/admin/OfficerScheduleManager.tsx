@@ -226,134 +226,159 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-// Update the add schedule mutation to include week_offset
-    const addScheduleMutation = useMutation({
-      mutationFn: async (data: { 
-        days: number[]; 
-        shiftId: string; 
-        start: string; 
-        end?: string;
-        unitNumber?: string;
-        assignedPosition?: string;
-        weekOffset?: number;
-        weekPattern?: string;
-        customWeeks?: number[];
-      }) => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    
-    const startDate = new Date(data.start);
-    if (data.end && new Date(data.end) < startDate) {
-      throw new Error("End date cannot be before start date");
-    }
-
-    // Create schedules array with week_offset
-    const schedules = data.days.map(day => {
-      // If using week pattern, create multiple schedules
-      if (data.weekPattern === "odd") {
-        // Create for weeks 1 and 3 (0 and 2)
-        return [0, 2].map(offset => ({
-          officer_id: officer.id,
-          day_of_week: day,
-          shift_type_id: data.shiftId,
-          start_date: data.start,
-          end_date: data.end || null,
-          unit_number: data.unitNumber || null,
-          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-          week_offset: offset
-        }));
-      } else if (data.weekPattern === "even") {
-        // Create for weeks 2 and 4 (1 and 3)
-        return [1, 3].map(offset => ({
-          officer_id: officer.id,
-          day_of_week: day,
-          shift_type_id: data.shiftId,
-          start_date: data.start,
-          end_date: data.end || null,
-          unit_number: data.unitNumber || null,
-          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-          week_offset: offset
-        }));
-      } else if (data.weekPattern === "custom" && data.customWeeks) {
-        // Create for specific weeks
-        return data.customWeeks.map(offset => ({
-          officer_id: officer.id,
-          day_of_week: day,
-          shift_type_id: data.shiftId,
-          start_date: data.start,
-          end_date: data.end || null,
-          unit_number: data.unitNumber || null,
-          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-          week_offset: offset
-        }));
-      } else {
-        // Single week (default)
-        return {
-          officer_id: officer.id,
-          day_of_week: day,
-          shift_type_id: data.shiftId,
-          start_date: data.start,
-          end_date: data.end || null,
-          unit_number: data.unitNumber || null,
-          position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-          week_offset: data.weekOffset ?? 0
-        };
+  // Update the add schedule mutation to include week_offset
+  const addScheduleMutation = useMutation({
+    mutationFn: async (data: { 
+      days: number[]; 
+      shiftId: string; 
+      start: string; 
+      end?: string;
+      unitNumber?: string;
+      assignedPosition?: string;
+      weekOffset?: number;
+      weekPattern?: string;
+      customWeeks?: number[];
+    }) => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      const startDate = new Date(data.start);
+      if (data.end && new Date(data.end) < startDate) {
+        throw new Error("End date cannot be before start date");
       }
-    }).flat();
 
-    console.log("Inserting schedules:", schedules); // Debug log
-
-    // Use insert with select to get feedback
-    const { data: insertedSchedules, error } = await supabase
-      .from("recurring_schedules")
-      .insert(schedules)
-      .select();
-
-    if (error) {
-      console.error("Insert error:", error);
-      throw error;
-    }
-
-    if (!insertedSchedules || insertedSchedules.length === 0) {
-      throw new Error("No schedules were created");
-    }
-
-    // AUDIT LOGGING: Log schedule creation
-    if (currentUser) {
-      for (const schedule of insertedSchedules) {
-        await auditLogger.logScheduleChange(
-          'Created',
-          schedule.id,
-          {
+      // Create schedules array with week_offset
+      let schedules: any[] = [];
+      
+      for (const day of data.days) {
+        // Determine week offsets based on pattern
+        if (data.weekPattern === "odd") {
+          // Create for weeks 1 and 3 (0 and 2)
+          schedules.push({
             officer_id: officer.id,
-            officer_name: officer.full_name,
-            day_of_week: schedule.day_of_week,
-            shift_type_id: schedule.shift_type_id,
-            start_date: schedule.start_date,
-            end_date: schedule.end_date,
-            unit_number: schedule.unit_number,
-            position_name: schedule.position_name
-          },
-          currentUser.id,
-          currentUser.email
-        );
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: 0
+          });
+          schedules.push({
+            officer_id: officer.id,
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: 2
+          });
+        } else if (data.weekPattern === "even") {
+          // Create for weeks 2 and 4 (1 and 3)
+          schedules.push({
+            officer_id: officer.id,
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: 1
+          });
+          schedules.push({
+            officer_id: officer.id,
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: 3
+          });
+        } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
+          // Create for specific weeks
+          for (const weekOffset of data.customWeeks) {
+            schedules.push({
+              officer_id: officer.id,
+              day_of_week: day,
+              shift_type_id: data.shiftId,
+              start_date: data.start,
+              end_date: data.end || null,
+              unit_number: data.unitNumber || null,
+              position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+              week_offset: weekOffset
+            });
+          }
+        } else {
+          // Single week (every week)
+          schedules.push({
+            officer_id: officer.id,
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: data.weekOffset ?? 0
+          });
+        }
       }
-    }
 
-    return insertedSchedules;
-  },
-  onSuccess: (insertedSchedules) => {
-    console.log("Successfully created schedules:", insertedSchedules);
-    toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
-    queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
-    queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
-    queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-    resetForm();
-  },
-  onError: (error: any) => {
-    console.error("Schedule creation error:", error);
-    toast.error(error.message || "Failed to add schedule");
-  },
-});
+      console.log("Inserting schedules:", schedules); // Debug log
+
+      // Use insert with select to get feedback
+      const { data: insertedSchedules, error } = await supabase
+        .from("recurring_schedules")
+        .insert(schedules)
+        .select();
+
+      if (error) {
+        console.error("Insert error:", error);
+        throw error;
+      }
+
+      if (!insertedSchedules || insertedSchedules.length === 0) {
+        throw new Error("No schedules were created");
+      }
+
+      // AUDIT LOGGING: Log schedule creation
+      if (currentUser) {
+        for (const schedule of insertedSchedules) {
+          await auditLogger.logScheduleChange(
+            'Created',
+            schedule.id,
+            {
+              officer_id: officer.id,
+              officer_name: officer.full_name,
+              day_of_week: schedule.day_of_week,
+              shift_type_id: schedule.shift_type_id,
+              start_date: schedule.start_date,
+              end_date: schedule.end_date,
+              unit_number: schedule.unit_number,
+              position_name: schedule.position_name,
+              week_offset: schedule.week_offset
+            },
+            currentUser.id,
+            currentUser.email
+          );
+        }
+      }
+
+      return insertedSchedules;
+    },
+    onSuccess: (insertedSchedules) => {
+      console.log("Successfully created schedules:", insertedSchedules);
+      toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
+      queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      resetForm();
+    },
+    onError: (error: any) => {
+      console.error("Schedule creation error:", error);
+      toast.error(error.message || "Failed to add schedule");
+    },
+  });
 
   // Update schedule mutation - now updates all fields
   const updateScheduleMutation = useMutation({
@@ -541,31 +566,33 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   });
 
   // FIXED: Handle add schedule with proper validation
-const handleAddSchedule = () => {
-  if (selectedDays.length === 0) {
-    toast.error("Please select at least one day");
-    return;
-  }
-  if (!shiftTypeId) {
-    toast.error("Please select a shift");
-    return;
-  }
+  const handleAddSchedule = () => {
+    if (selectedDays.length === 0) {
+      toast.error("Please select at least one day");
+      return;
+    }
+    if (!shiftTypeId) {
+      toast.error("Please select a shift");
+      return;
+    }
 
     // Validate end date if provided
     if (endDate && endDate < startDate) {
       toast.error("End date cannot be before start date");
       return;
-  }
+    }
 
-  addScheduleMutation.mutate({
-    days: selectedDays,
-    shiftId: shiftTypeId,
-    start: format(startDate, "yyyy-MM-dd"),
-    end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
-    unitNumber: unitNumber || undefined,
-    assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
-  });
-};
+    addScheduleMutation.mutate({
+      days: selectedDays,
+      shiftId: shiftTypeId,
+      start: format(startDate, "yyyy-MM-dd"),
+      end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
+      unitNumber: unitNumber || undefined,
+      assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
+      weekPattern: weekPattern,
+      customWeeks: customWeeks
+    });
+  };
 
   const handleEditSchedule = (schedule: any) => {
     setEditingSchedule(schedule);
@@ -751,6 +778,8 @@ const handleAddSchedule = () => {
     setUnitNumber("");
     setAssignedPosition("none");
     setEditingSchedule(null);
+    setWeekPattern("all");
+    setCustomWeeks([0, 2]);
   };
 
   const resetDefaultAssignmentForm = () => {
@@ -829,6 +858,12 @@ const handleAddSchedule = () => {
                         </Button>
                       </div>
                         {activeSchedules.map((schedule) => {
+                          // Display week offset info if present
+                          const weekOffset = schedule.week_offset;
+                          const weekDisplay = weekOffset !== undefined && weekOffset !== null && weekOffset !== 0 
+                            ? `Week ${weekOffset + 1}` 
+                            : (weekOffset === 0 ? "Every Week" : null);
+                          
                           return (
                             <div
                               key={schedule.id}
@@ -840,6 +875,11 @@ const handleAddSchedule = () => {
                                     {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
                                   </Badge>
                                   <span className="font-medium">{schedule.shift_types?.name}</span>
+                                  {weekDisplay && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {weekDisplay}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <p className="text-sm text-muted-foreground">
                                   {schedule.shift_types?.start_time} - {schedule.shift_types?.end_time}
@@ -899,6 +939,12 @@ const handleAddSchedule = () => {
                         {schedules
                           .filter(s => s.end_date && new Date(s.end_date) < new Date())
                           .map((schedule) => {
+                            // Display week offset info if present
+                            const weekOffset = schedule.week_offset;
+                            const weekDisplay = weekOffset !== undefined && weekOffset !== null && weekOffset !== 0 
+                              ? `Week ${weekOffset + 1}` 
+                              : (weekOffset === 0 ? "Every Week" : null);
+                            
                             return (
                               <div
                                 key={schedule.id}
@@ -910,6 +956,11 @@ const handleAddSchedule = () => {
                                       {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
                                     </Badge>
                                     <span className="font-medium">{schedule.shift_types?.name}</span>
+                                    {weekDisplay && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        {weekDisplay}
+                                      </Badge>
+                                    )}
                                     <Badge variant="secondary" className="text-xs">
                                       Ended
                                     </Badge>
@@ -1146,6 +1197,56 @@ const handleAddSchedule = () => {
                     </Select>
                   </div>
 
+                  {/* Week Pattern Selection - For multi-week rotations */}
+                  {!isEditing && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Week Pattern (4-Week Rotation)</Label>
+                      <Select 
+                        value={weekPattern} 
+                        onValueChange={(value: any) => setWeekPattern(value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select week pattern" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Every Week</SelectItem>
+                          <SelectItem value="odd">Odd Weeks (Week 1 & 3)</SelectItem>
+                          <SelectItem value="even">Even Weeks (Week 2 & 4)</SelectItem>
+                          <SelectItem value="custom">Custom Weeks</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {weekPattern === "custom" && (
+                        <div className="mt-2 p-3 border rounded-lg bg-muted/30">
+                          <Label className="text-xs mb-2 block">Select Weeks (Week 1 = first week of cycle)</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[0, 1, 2, 3].map(weekNum => (
+                              <div key={weekNum} className="flex items-center space-x-1">
+                                <Checkbox
+                                  id={`week-${weekNum}`}
+                                  checked={customWeeks.includes(weekNum)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setCustomWeeks([...customWeeks, weekNum]);
+                                    } else {
+                                      setCustomWeeks(customWeeks.filter(w => w !== weekNum));
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={`week-${weekNum}`} className="text-sm cursor-pointer">
+                                  Week {weekNum + 1}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Select which weeks of the 4-week cycle this schedule applies to
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Start Date *</Label>
@@ -1210,6 +1311,47 @@ const handleAddSchedule = () => {
                           Clear End Date
                         </Button>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Assignment Details Section */}
+                  <div className="space-y-4 p-4 border rounded-lg bg-blue-50/30">
+                    <h4 className="font-medium text-sm flex items-center gap-2">
+                      <Building className="h-4 w-4" />
+                      Assignment Details (Optional)
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="unit-number" className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          Unit Number
+                        </Label>
+                        <Input
+                          id="unit-number"
+                          placeholder="e.g., Unit 1, Patrol, Traffic"
+                          value={unitNumber}
+                          onChange={(e) => setUnitNumber(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="assigned-position">Assigned Position</Label>
+                        <Select
+                          value={assignedPosition}
+                          onValueChange={setAssignedPosition}
+                        >
+                          <SelectTrigger id="assigned-position">
+                            <SelectValue placeholder="Select position" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No position assigned</SelectItem>
+                            {shiftPositions.map((position) => (
+                              <SelectItem key={position} value={position}>
+                                {position}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
 

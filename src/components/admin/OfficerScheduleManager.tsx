@@ -1170,7 +1170,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           <SelectValue placeholder="Select week pattern" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Every Week</SelectItem>
+                          <SelectItem value="all">Every Week (Weeks 1, 2, 3, & 4)</SelectItem>
                           <SelectItem value="odd">Odd Weeks (Week 1 & 3)</SelectItem>
                           <SelectItem value="even">Even Weeks (Week 2 & 4)</SelectItem>
                           <SelectItem value="custom">Custom Weeks</SelectItem>
@@ -1179,7 +1179,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                       
                       {weekPattern === "custom" && (
                         <div className="mt-2 p-3 border rounded-lg bg-muted/30">
-                          <Label className="text-xs mb-2 block">Select Weeks (Week 1 = first week of cycle)</Label>
+                          <Label className="text-xs mb-2 block">Select which weeks of the 4-week cycle this schedule applies to</Label>
                           <div className="flex flex-wrap gap-2">
                             {[0, 1, 2, 3].map(weekNum => (
                               <div key={weekNum} className="flex items-center space-x-1">
@@ -1201,9 +1201,15 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                             ))}
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">
-                            Select which weeks of the 4-week cycle this schedule applies to
+                            Example: Select only "Week 1" to schedule on the first week of every 4-week cycle
                           </p>
                         </div>
+                      )}
+                      
+                      {weekPattern !== "all" && weekPattern !== "custom" && weekPattern !== "odd" && weekPattern !== "even" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Schedule will only apply to Week 1 of every 4-week cycle
+                        </p>
                       )}
                     </div>
                   )}

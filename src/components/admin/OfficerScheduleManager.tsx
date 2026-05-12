@@ -226,159 +226,120 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-  // Update the add schedule mutation to include week_offset
-  const addScheduleMutation = useMutation({
-    mutationFn: async (data: { 
-      days: number[]; 
-      shiftId: string; 
-      start: string; 
-      end?: string;
-      unitNumber?: string;
-      assignedPosition?: string;
-      weekOffset?: number;
-      weekPattern?: string;
-      customWeeks?: number[];
-    }) => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      const startDate = new Date(data.start);
-      if (data.end && new Date(data.end) < startDate) {
-        throw new Error("End date cannot be before start date");
-      }
-
-      // Create schedules array with week_offset
-      let schedules: any[] = [];
-      
-      for (const day of data.days) {
-        // Determine week offsets based on pattern
-        if (data.weekPattern === "odd") {
-          // Create for weeks 1 and 3 (0 and 2)
-          schedules.push({
-            officer_id: officer.id,
-            day_of_week: day,
-            shift_type_id: data.shiftId,
-            start_date: data.start,
-            end_date: data.end || null,
-            unit_number: data.unitNumber || null,
-            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-            week_offset: 0
-          });
-          schedules.push({
-            officer_id: officer.id,
-            day_of_week: day,
-            shift_type_id: data.shiftId,
-            start_date: data.start,
-            end_date: data.end || null,
-            unit_number: data.unitNumber || null,
-            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-            week_offset: 2
-          });
-        } else if (data.weekPattern === "even") {
-          // Create for weeks 2 and 4 (1 and 3)
-          schedules.push({
-            officer_id: officer.id,
-            day_of_week: day,
-            shift_type_id: data.shiftId,
-            start_date: data.start,
-            end_date: data.end || null,
-            unit_number: data.unitNumber || null,
-            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-            week_offset: 1
-          });
-          schedules.push({
-            officer_id: officer.id,
-            day_of_week: day,
-            shift_type_id: data.shiftId,
-            start_date: data.start,
-            end_date: data.end || null,
-            unit_number: data.unitNumber || null,
-            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-            week_offset: 3
-          });
-        } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
-          // Create for specific weeks
-          for (const weekOffset of data.customWeeks) {
-            schedules.push({
-              officer_id: officer.id,
-              day_of_week: day,
-              shift_type_id: data.shiftId,
-              start_date: data.start,
-              end_date: data.end || null,
-              unit_number: data.unitNumber || null,
-              position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-              week_offset: weekOffset
-            });
+      // Update the add schedule mutation to include week_offset
+      const addScheduleMutation = useMutation({
+        mutationFn: async (data: { 
+          days: number[]; 
+          shiftId: string; 
+          start: string; 
+          end?: string;
+          unitNumber?: string;
+          assignedPosition?: string;
+          weekOffset?: number;
+          weekPattern?: string;
+          customWeeks?: number[];
+        }) => {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          
+          const startDate = new Date(data.start);
+          if (data.end && new Date(data.end) < startDate) {
+            throw new Error("End date cannot be before start date");
           }
-        } else {
-          // Single week (every week)
-          schedules.push({
-            officer_id: officer.id,
-            day_of_week: day,
-            shift_type_id: data.shiftId,
-            start_date: data.start,
-            end_date: data.end || null,
-            unit_number: data.unitNumber || null,
-            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-            week_offset: data.weekOffset ?? 0
-          });
-        }
-      }
-
-      console.log("Inserting schedules:", schedules); // Debug log
-
-      // Use insert with select to get feedback
-      const { data: insertedSchedules, error } = await supabase
-        .from("recurring_schedules")
-        .insert(schedules)
-        .select();
-
-      if (error) {
-        console.error("Insert error:", error);
-        throw error;
-      }
-
-      if (!insertedSchedules || insertedSchedules.length === 0) {
-        throw new Error("No schedules were created");
-      }
-
-      // AUDIT LOGGING: Log schedule creation
-      if (currentUser) {
-        for (const schedule of insertedSchedules) {
-          await auditLogger.logScheduleChange(
-            'Created',
-            schedule.id,
-            {
-              officer_id: officer.id,
-              officer_name: officer.full_name,
-              day_of_week: schedule.day_of_week,
-              shift_type_id: schedule.shift_type_id,
-              start_date: schedule.start_date,
-              end_date: schedule.end_date,
-              unit_number: schedule.unit_number,
-              position_name: schedule.position_name,
-              week_offset: schedule.week_offset
-            },
-            currentUser.id,
-            currentUser.email
-          );
-        }
-      }
-
-      return insertedSchedules;
-    },
-    onSuccess: (insertedSchedules) => {
-      console.log("Successfully created schedules:", insertedSchedules);
-      toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
-      queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
-      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-      resetForm();
-    },
-    onError: (error: any) => {
-      console.error("Schedule creation error:", error);
-      toast.error(error.message || "Failed to add schedule");
-    },
-  });
+      
+          // Create schedules array with week_offset
+          let schedules: any[] = [];
+          let weekOffsetsToCreate: number[] = [];
+          
+          // Determine which week offsets to create based on pattern
+          if (data.weekPattern === "odd") {
+            // Weeks 1 and 3 (0 and 2)
+            weekOffsetsToCreate = [0, 2];
+          } else if (data.weekPattern === "even") {
+            // Weeks 2 and 4 (1 and 3)
+            weekOffsetsToCreate = [1, 3];
+          } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
+            // Custom weeks selected by user
+            weekOffsetsToCreate = [...data.customWeeks];
+          } else if (data.weekPattern === "all") {
+            // Every week - create a schedule for EACH week of the 4-week cycle
+            weekOffsetsToCreate = [0, 1, 2, 3];
+          } else {
+            // Default: only week 0 (first week of cycle)
+            weekOffsetsToCreate = [0];
+          }
+      
+          // Create schedules for each selected day and each selected week offset
+          for (const day of data.days) {
+            for (const weekOffset of weekOffsetsToCreate) {
+              schedules.push({
+                officer_id: officer.id,
+                day_of_week: day,
+                shift_type_id: data.shiftId,
+                start_date: data.start,
+                end_date: data.end || null,
+                unit_number: data.unitNumber || null,
+                position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+                week_offset: weekOffset
+              });
+            }
+          }
+      
+          console.log("Inserting schedules:", schedules); // Debug log
+          console.log(`Creating schedules for week offsets: ${weekOffsetsToCreate.join(', ')}`);
+      
+          // Use insert with select to get feedback
+          const { data: insertedSchedules, error } = await supabase
+            .from("recurring_schedules")
+            .insert(schedules)
+            .select();
+      
+          if (error) {
+            console.error("Insert error:", error);
+            throw error;
+          }
+      
+          if (!insertedSchedules || insertedSchedules.length === 0) {
+            throw new Error("No schedules were created");
+          }
+      
+          // AUDIT LOGGING: Log schedule creation
+          if (currentUser) {
+            for (const schedule of insertedSchedules) {
+              await auditLogger.logScheduleChange(
+                'Created',
+                schedule.id,
+                {
+                  officer_id: officer.id,
+                  officer_name: officer.full_name,
+                  day_of_week: schedule.day_of_week,
+                  shift_type_id: schedule.shift_type_id,
+                  start_date: schedule.start_date,
+                  end_date: schedule.end_date,
+                  unit_number: schedule.unit_number,
+                  position_name: schedule.position_name,
+                  week_offset: schedule.week_offset
+                },
+                currentUser.id,
+                currentUser.email
+              );
+            }
+          }
+      
+          return insertedSchedules;
+        },
+        onSuccess: (insertedSchedules) => {
+          console.log("Successfully created schedules:", insertedSchedules);
+          toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
+          queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
+          queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+          queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+          resetForm();
+        },
+        onError: (error: any) => {
+          console.error("Schedule creation error:", error);
+          toast.error(error.message || "Failed to add schedule");
+        },
+      });
 
   // Update schedule mutation - now updates all fields
   const updateScheduleMutation = useMutation({

@@ -35,9 +35,8 @@ import {
   getStaffingSeverity,
   formatStaffingCount 
 } from "@/utils/staffingUtils";
-import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog"; 
-
-// Add these helper functions RIGHT HERE - after all imports but before any components
+import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog";
+import { getPositionsForShift } from "@/utils/positionUtils";
 
 const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
   if (!birthday) return false;
@@ -1101,7 +1100,6 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
 </SelectContent>
         </Select>
       </div>
-
       <div className="space-y-2">
         <Label htmlFor="position">Position</Label>
         <Select value={position} onValueChange={setPosition}>
@@ -1109,12 +1107,11 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
             <SelectValue placeholder="Select position" />
           </SelectTrigger>
           <SelectContent>
-            {predefinedPositions.map((pos) => (
+            {getPositionsForShift(shift?.name).map((pos) => ( // CHANGE THIS LINE
               <SelectItem key={pos} value={pos}>
                 {pos}
               </SelectItem>
             ))}
-            <SelectItem value="Other (Custom)">Other (Custom)</SelectItem>
           </SelectContent>
         </Select>
         

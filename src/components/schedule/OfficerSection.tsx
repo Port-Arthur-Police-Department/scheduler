@@ -290,6 +290,7 @@ const handleConfirmSpecialAssignment = async () => {
                 sectionType={sectionType}
                 backgroundColor={backgroundColor}
                 showSpecialOccasions={showSpecialOccasions}
+                shiftName={officer.shift?.name} // ADD THIS LINE
               />
             ))
             .filter(Boolean)}

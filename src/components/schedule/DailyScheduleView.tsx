@@ -70,6 +70,14 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
   }
 };
 
+// Add this helper function with the other helper functions
+const getWeekOffset = (date: Date, startDate: Date): number => {
+  const diffTime = Math.abs(date.getTime() - startDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const weeksPassed = Math.floor(diffDays / 7);
+  return weeksPassed % 4; // Returns 0, 1, 2, or 3 for 4-week cycle
+};
+
 const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
   if (!hireDate) return 0;
   
@@ -1438,20 +1446,20 @@ if (minError) {
     recurringData
       ?.filter(r => r.shift_types?.id === shift.id)
       .forEach(r => {
-        // ADD DATE RANGE VALIDATION
+        // ADD THIS DATE RANGE VALIDATION
         const currentDate = parseISO(dateStr);
         const scheduleStartDate = parseISO(r.start_date);
         const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
         
-        // Validate that current date is within schedule date range
-        if (currentDate < scheduleStartDate) {
-          console.log(`Skipping officer ${r.officer_id}: Date ${dateStr} is before schedule start ${r.start_date}`);
-          return;
-        }
+        // Validate date range
+        if (currentDate < scheduleStartDate) return;
+        if (scheduleEndDate && currentDate > scheduleEndDate) return;
         
-        if (scheduleEndDate && currentDate > scheduleEndDate) {
-          console.log(`Skipping officer ${r.officer_id}: Date ${dateStr} is after schedule end ${r.end_date}`);
-          return;
+        // ADD THIS WEEK OFFSET CHECK RIGHT HERE:
+        const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
+        if (r.week_offset !== null && r.week_offset !== undefined && r.week_offset !== weekOffset) {
+          console.log(`Skipping officer ${r.officer_id}: Week offset ${weekOffset} doesn't match schedule offset ${r.week_offset}`);
+          return; // Skip if week offset doesn't match
         }
         
         const officerKey = `${r.officer_id}-${shift.id}`;

@@ -70,7 +70,7 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
   }
 };
 
-    // Add helper function at the top of DailyScheduleView.tsx (around line 50-100)
+    // Ensure this function is correctly calculating the week offset
     const getWeekOffset = (date: Date, startDate: Date): number => {
       // Calculate the difference in days
       const diffTime = Math.abs(date.getTime() - startDate.getTime());
@@ -80,7 +80,7 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
       const weeksPassed = Math.floor(diffDays / 7);
       const weekOffset = weeksPassed % 4;
       
-      console.log(`Week calculation: Date=${date.toISOString()}, Start=${startDate.toISOString()}, Days diff=${diffDays}, Weeks passed=${weeksPassed}, Week offset=${weekOffset}`);
+      console.log(`Week calculation: Date=${date.toISOString().split('T')[0]}, Start=${startDate.toISOString().split('T')[0]}, Days diff=${diffDays}, Weeks passed=${weeksPassed}, Week offset=${weekOffset}`);
       
       return weekOffset;
     };

@@ -245,7 +245,7 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
         }
     
         // Determine which week offsets to create based on pattern
-        let weekOffsetsToCreate: (number | null)[] = [];
+        let weekOffsetsToCreate: number[] = [];
         
         console.log("📅 Creating schedule with pattern:", data.weekPattern);
         console.log("📅 Custom weeks:", data.customWeeks);
@@ -269,7 +269,7 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     
         console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
     
-        // Create schedules array
+        // Create schedules array - NEVER use NULL
         const schedules: any[] = [];
         
         for (const day of data.days) {
@@ -282,13 +282,13 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
               end_date: data.end || null,
               unit_number: data.unitNumber || null,
               position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-              week_offset: weekOffset  // Can be 0,1,2,3 (never null for new schedules)
+              week_offset: weekOffset  // Always a number (0,1,2,3), NEVER null
             });
           }
         }
     
         console.log("📅 Total schedules to insert:", schedules.length);
-        console.log("📅 Schedules:", schedules);
+        console.log("📅 Sample schedule:", schedules[0]);
     
         // Insert all schedules
         const { data: insertedSchedules, error } = await supabase
@@ -304,6 +304,8 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
         if (!insertedSchedules || insertedSchedules.length === 0) {
           throw new Error("No schedules were created");
         }
+    
+        console.log("✅ Created schedules:", insertedSchedules.map(s => ({ id: s.id, week_offset: s.week_offset })));
     
         // Audit logging...
         if (currentUser) {
@@ -330,6 +332,7 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     
         return insertedSchedules;
       },
+  
       onSuccess: (insertedSchedules) => {
         console.log("Successfully created schedules:", insertedSchedules);
         toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
@@ -732,6 +735,7 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     }
   };
 
+    // In OfficerScheduleManager.tsx - Update resetForm
     const resetForm = () => {
       setShowAddForm(false);
       setSelectedDays([]);
@@ -741,8 +745,8 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
       setUnitNumber("");
       setAssignedPosition("none");
       setEditingSchedule(null);
-      setWeekPattern("all");        // Reset to "all"
-      setCustomWeeks([0]);          // Reset to just Week 1
+      setWeekPattern("all");        // Default to "all" (creates 4 entries)
+      setCustomWeeks([0]);          // Default to Week 1 only
     };
 
   const resetDefaultAssignmentForm = () => {

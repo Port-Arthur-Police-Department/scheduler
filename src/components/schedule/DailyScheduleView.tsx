@@ -70,17 +70,26 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
   }
 };
 
-    // Ensure this function is correctly calculating the week offset
+    // Add this helper function at the top of DailyScheduleView.tsx (around line 50)
     const getWeekOffset = (date: Date, startDate: Date): number => {
       // Calculate the difference in days
-      const diffTime = Math.abs(date.getTime() - startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = date.getTime() - startDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       
       // Calculate which week of the 4-week cycle (0-indexed)
+      // If diffDays is negative (date before startDate), return 0
+      if (diffDays < 0) return 0;
+      
       const weeksPassed = Math.floor(diffDays / 7);
       const weekOffset = weeksPassed % 4;
       
-      console.log(`Week calculation: Date=${date.toISOString().split('T')[0]}, Start=${startDate.toISOString().split('T')[0]}, Days diff=${diffDays}, Weeks passed=${weeksPassed}, Week offset=${weekOffset}`);
+      console.log(`📅 Week calculation:`, {
+        date: format(date, 'yyyy-MM-dd'),
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        diffDays,
+        weeksPassed,
+        weekOffset
+      });
       
       return weekOffset;
     };
@@ -1460,28 +1469,29 @@ if (minError) {
         if (currentDate < scheduleStartDate) return;
         if (scheduleEndDate && currentDate > scheduleEndDate) return;
         
-        // CRITICAL FIX: Week offset logic
+        // Calculate current week offset (0,1,2,3)
         const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
         
-        // r.week_offset can be:
-        // - NULL: Schedule applies to EVERY week (legacy/backward compatibility)
-        // - 0: Schedule applies ONLY to Week 1 of the 4-week cycle
-        // - 1: Schedule applies ONLY to Week 2
-        // - 2: Schedule applies ONLY to Week 3
-        // - 3: Schedule applies ONLY to Week 4
+        // CRITICAL FIX: Proper NULL handling
+        // - If week_offset is NULL: Schedule applies to EVERY week
+        // - If week_offset is 0,1,2,3: Schedule applies ONLY to that specific week
+        let shouldInclude = false;
         
-        if (r.week_offset !== null && r.week_offset !== undefined) {
-          // If week_offset has a specific value (0,1,2,3), only include if it matches the current week
-          if (r.week_offset !== weekOffset) {
-            console.log(`Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
-            return;
-          } else {
-            console.log(`Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
-          }
+        if (r.week_offset === null || r.week_offset === undefined) {
+          // NULL means every week - ALWAYS include
+          shouldInclude = true;
+          console.log(`✅ Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
+        } else if (r.week_offset === weekOffset) {
+          // Specific week match - include
+          shouldInclude = true;
+          console.log(`✅ Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
         } else {
-          // NULL means every week - always include
-          console.log(`Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
+          // Specific week mismatch - skip
+          shouldInclude = false;
+          console.log(`❌ Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
         }
+        
+        if (!shouldInclude) return;
         
         // Continue with creating officer data...
         const officerKey = `${r.officer_id}-${shift.id}`;

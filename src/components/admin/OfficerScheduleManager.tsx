@@ -226,111 +226,82 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     },
   });
 
-    const addScheduleMutation = useMutation({
-      mutationFn: async (data: { 
-        days: number[]; 
-        shiftId: string; 
-        start: string; 
-        end?: string;
-        unitNumber?: string;
-        assignedPosition?: string;
-        weekPattern?: string;
-        customWeeks?: number[];
-      }) => {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
-        const startDate = new Date(data.start);
-        if (data.end && new Date(data.end) < startDate) {
-          throw new Error("End date cannot be before start date");
-        }
-    
-        // Determine which week offsets to create based on pattern
-        let weekOffsetsToCreate: number[] = [];
-        
-        console.log("📅 Creating schedule with pattern:", data.weekPattern);
-        console.log("📅 Custom weeks:", data.customWeeks);
-        
-        if (data.weekPattern === "odd") {
-          // Weeks 1 and 3 (0 and 2)
-          weekOffsetsToCreate = [0, 2];
-        } else if (data.weekPattern === "even") {
-          // Weeks 2 and 4 (1 and 3)
-          weekOffsetsToCreate = [1, 3];
-        } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
-          // Custom weeks selected by user
-          weekOffsetsToCreate = [...data.customWeeks];
-        } else if (data.weekPattern === "all") {
-          // "Every Week" - create 4 separate schedules (one for each week)
-          weekOffsetsToCreate = [0, 1, 2, 3];
-        } else {
-          // Default: only week 0 (Week 1 only)
-          weekOffsetsToCreate = [0];
-        }
-    
-        console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
-    
-        // Create schedules array - NEVER use NULL
-        const schedules: any[] = [];
-        
-        for (const day of data.days) {
-          for (const weekOffset of weekOffsetsToCreate) {
-            schedules.push({
-              officer_id: officer.id,
-              day_of_week: day,
-              shift_type_id: data.shiftId,
-              start_date: data.start,
-              end_date: data.end || null,
-              unit_number: data.unitNumber || null,
-              position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-              week_offset: weekOffset  // Always a number (0,1,2,3), NEVER null
-            });
+      const addScheduleMutation = useMutation({
+        mutationFn: async (data: { 
+          days: number[]; 
+          shiftId: string; 
+          start: string; 
+          end?: string;
+          unitNumber?: string;
+          assignedPosition?: string;
+          weekPattern?: string;
+          customWeeks?: number[];
+        }) => {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          
+          const startDate = new Date(data.start);
+          if (data.end && new Date(data.end) < startDate) {
+            throw new Error("End date cannot be before start date");
           }
-        }
-    
-        console.log("📅 Total schedules to insert:", schedules.length);
-        console.log("📅 Sample schedule:", schedules[0]);
-    
-        // Insert all schedules
-        const { data: insertedSchedules, error } = await supabase
-          .from("recurring_schedules")
-          .insert(schedules)
-          .select();
-    
-        if (error) {
-          console.error("Insert error:", error);
-          throw error;
-        }
-    
-        if (!insertedSchedules || insertedSchedules.length === 0) {
-          throw new Error("No schedules were created");
-        }
-    
-        console.log("✅ Created schedules:", insertedSchedules.map(s => ({ id: s.id, week_offset: s.week_offset })));
-    
-        // Audit logging...
-        if (currentUser) {
-          for (const schedule of insertedSchedules) {
-            await auditLogger.logScheduleChange(
-              'Created',
-              schedule.id,
-              {
+      
+          // Determine which week offsets to create based on pattern
+          let weekOffsetsToCreate: (number | null)[] = [];
+          
+          console.log("📅 Creating schedule with pattern:", data.weekPattern);
+          console.log("📅 Custom weeks:", data.customWeeks);
+          
+          if (data.weekPattern === "odd") {
+            // Weeks 1 and 3 (0 and 2)
+            weekOffsetsToCreate = [0, 2];
+          } else if (data.weekPattern === "even") {
+            // Weeks 2 and 4 (1 and 3)
+            weekOffsetsToCreate = [1, 3];
+          } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
+            // Custom weeks selected by user
+            weekOffsetsToCreate = [...data.customWeeks];
+          } else if (data.weekPattern === "all") {
+            // "Every Week" - use NULL to indicate every week
+            weekOffsetsToCreate = [null];
+          } else {
+            // Default: only week 0 (Week 1 only)
+            weekOffsetsToCreate = [0];
+          }
+      
+          console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
+      
+          // Create schedules array
+          const schedules: any[] = [];
+          
+          for (const day of data.days) {
+            for (const weekOffset of weekOffsetsToCreate) {
+              schedules.push({
                 officer_id: officer.id,
-                officer_name: officer.full_name,
-                day_of_week: schedule.day_of_week,
-                shift_type_id: schedule.shift_type_id,
-                start_date: schedule.start_date,
-                end_date: schedule.end_date,
-                unit_number: schedule.unit_number,
-                position_name: schedule.position_name,
-                week_offset: schedule.week_offset
-              },
-              currentUser.id,
-              currentUser.email
-            );
+                day_of_week: day,
+                shift_type_id: data.shiftId,
+                start_date: data.start,
+                end_date: data.end || null,
+                unit_number: data.unitNumber || null,
+                position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+                week_offset: weekOffset  // Can be null (every week) or 0,1,2,3 (specific week)
+              });
+            }
           }
-        }
-    
-        return insertedSchedules;
+      
+          console.log("📅 Total schedules to insert:", schedules.length);
+          console.log("📅 Sample schedule:", schedules[0]);
+      
+          // Insert all schedules
+          const { data: insertedSchedules, error } = await supabase
+            .from("recurring_schedules")
+            .insert(schedules)
+            .select();
+      
+          if (error) {
+            console.error("Insert error:", error);
+            throw error;
+          }
+      
+          return insertedSchedules;
       },
   
       onSuccess: (insertedSchedules) => {
@@ -824,28 +795,34 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
                           Delete Schedule
                         </Button>
                       </div>
-                        {activeSchedules.map((schedule) => {
-                          // Display week offset info if present
-                          const weekOffset = schedule.week_offset;
-                          const weekDisplay = weekOffset !== undefined && weekOffset !== null && weekOffset !== 0 
-                            ? `Week ${weekOffset + 1}` 
-                            : (weekOffset === 0 ? "Every Week" : null);
-                          
-                          return (
-                            <div
-                              key={schedule.id}
-                              className="flex items-center justify-between p-3 border rounded-lg"
-                            >
-                              <div className="space-y-1 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant="outline">
-                                    {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
+                       {activeSchedules.map((schedule) => {
+                        // Handle week offset display
+                        const weekOffset = schedule.week_offset;
+                        let weekDisplay = "";
+                        
+                        if (weekOffset === null || weekOffset === undefined) {
+                          weekDisplay = "Every Week";
+                        } else {
+                          weekDisplay = `Week ${weekOffset + 1}`;
+                        }
+                        
+                        console.log(`Schedule: ${schedule.id}, week_offset: ${weekOffset}, display: ${weekDisplay}`);
+                        
+                        return (
+                          <div
+                            key={schedule.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline">
+                                  {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
+                                </Badge>
+                                <span className="font-medium">{schedule.shift_types?.name}</span>
+                                {weekDisplay && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {weekDisplay}
                                   </Badge>
-                                  <span className="font-medium">{schedule.shift_types?.name}</span>
-                                  {weekDisplay && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {weekDisplay}
-                                    </Badge>
                                   )}
                                 </div>
                                 <p className="text-sm text-muted-foreground">

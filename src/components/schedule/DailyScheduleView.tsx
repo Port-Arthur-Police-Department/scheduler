@@ -1460,20 +1460,30 @@ if (minError) {
         if (currentDate < scheduleStartDate) return;
         if (scheduleEndDate && currentDate > scheduleEndDate) return;
         
-        // CORRECTED WEEK OFFSET CHECK
-        // If week_offset is NULL, treat as "every week" (no filtering)
-        // If week_offset has a value (0,1,2,3), only include if it matches the calculated week
+        // CRITICAL FIX: Week offset logic
         const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
         
-        // r.week_offset could be null, undefined, or a number (0,1,2,3)
-        // If it's null or undefined, include for ALL weeks (backward compatibility)
+        // r.week_offset can be:
+        // - NULL: Schedule applies to EVERY week (legacy/backward compatibility)
+        // - 0: Schedule applies ONLY to Week 1 of the 4-week cycle
+        // - 1: Schedule applies ONLY to Week 2
+        // - 2: Schedule applies ONLY to Week 3
+        // - 3: Schedule applies ONLY to Week 4
+        
         if (r.week_offset !== null && r.week_offset !== undefined) {
-          // Only include if the schedule's week_offset matches the current week
+          // If week_offset has a specific value (0,1,2,3), only include if it matches the current week
           if (r.week_offset !== weekOffset) {
-            console.log(`Skipping officer ${r.officer_id}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+            console.log(`Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
             return;
+          } else {
+            console.log(`Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
           }
-        }        
+        } else {
+          // NULL means every week - always include
+          console.log(`Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
+        }
+        
+        // Continue with creating officer data...
         const officerKey = `${r.officer_id}-${shift.id}`;
         
         // ONLY look for PTO exceptions if the date is within the schedule range

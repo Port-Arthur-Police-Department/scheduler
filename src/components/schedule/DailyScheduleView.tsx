@@ -70,29 +70,29 @@ const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): bo
   }
 };
 
-    // Add this helper function at the top of DailyScheduleView.tsx (around line 50)
-    const getWeekOffset = (date: Date, startDate: Date): number => {
-      // Calculate the difference in days
-      const diffTime = date.getTime() - startDate.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      // Calculate which week of the 4-week cycle (0-indexed)
-      // If diffDays is negative (date before startDate), return 0
-      if (diffDays < 0) return 0;
-      
-      const weeksPassed = Math.floor(diffDays / 7);
-      const weekOffset = weeksPassed % 4;
-      
-      console.log(`📅 Week calculation:`, {
-        date: format(date, 'yyyy-MM-dd'),
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        diffDays,
-        weeksPassed,
-        weekOffset
-      });
-      
-      return weekOffset;
-    };
+      // Add or update this helper function at the top of DailyScheduleView.tsx
+      const getWeekOffset = (date: Date, startDate: Date): number => {
+        // Calculate the difference in days
+        const diffTime = date.getTime() - startDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        // If date is before start date, return 0 (first week)
+        if (diffDays < 0) return 0;
+        
+        // Calculate which week of the 4-week cycle (0-indexed)
+        const weeksPassed = Math.floor(diffDays / 7);
+        const weekOffset = weeksPassed % 4;
+        
+        console.log(`📅 Week calculation:`, {
+          date: format(date, 'yyyy-MM-dd'),
+          startDate: format(startDate, 'yyyy-MM-dd'),
+          diffDays,
+          weeksPassed,
+          weekOffset
+        });
+        
+        return weekOffset;
+      };
 
     const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
       if (!hireDate) return 0;
@@ -1458,173 +1458,167 @@ if (minError) {
     // Get ALL officers for this shift, avoiding duplicates
     const allOfficersMap = new Map();
 
-    // Process recurring officers for this shift
-    recurringData
-      ?.filter(r => r.shift_types?.id === shift.id)
-      .forEach(r => {
-        const currentDate = parseISO(dateStr);
-        const scheduleStartDate = parseISO(r.start_date);
-        const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
-        
-        if (currentDate < scheduleStartDate) return;
-        if (scheduleEndDate && currentDate > scheduleEndDate) return;
-        
-        // Calculate current week offset (0,1,2,3)
-        const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
-        
-        // CRITICAL FIX: Proper NULL handling
-        // - If week_offset is NULL: Schedule applies to EVERY week
-        // - If week_offset is 0,1,2,3: Schedule applies ONLY to that specific week
-        let shouldInclude = false;
-        
-        if (r.week_offset === null || r.week_offset === undefined) {
-          // NULL means every week - ALWAYS include
-          shouldInclude = true;
-          console.log(`✅ Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
-        } else if (r.week_offset === weekOffset) {
-          // Specific week match - include
-          shouldInclude = true;
-          console.log(`✅ Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
-        } else {
-          // Specific week mismatch - skip
-          shouldInclude = false;
-          console.log(`❌ Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
-        }
-        
-        if (!shouldInclude) return;
-        
-        // Continue with creating officer data...
-        const officerKey = `${r.officer_id}-${shift.id}`;
-        
-        // ONLY look for PTO exceptions if the date is within the schedule range
-        const ptoException = ptoExceptions?.find(e => 
-          e.officer_id === r.officer_id && 
-          e.shift_type_id === shift.id &&
-          e.date === dateStr
-        );
-
-        const workingException = workingExceptions?.find(e => 
-          e.officer_id === r.officer_id && e.shift_type_id === shift.id
-        );
-
-        const defaultAssignment = getDefaultAssignment(r.officer_id);
-
-        const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
-        const isProbationary = officerRank?.toLowerCase() === 'probationary';
-
-        let customTime = undefined;
-        if (ptoException?.custom_start_time && ptoException?.custom_end_time) {
-          const shiftStart = shift.start_time;
-          const shiftEnd = shift.end_time;
-          const ptoStart = ptoException.custom_start_time;
-          const ptoEnd = ptoException.custom_end_time;
+      // Process recurring officers for this shift
+      recurringData
+        ?.filter(r => r.shift_types?.id === shift.id)
+        .forEach(r => {
+          const currentDate = parseISO(dateStr);
+          const scheduleStartDate = parseISO(r.start_date);
+          const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
           
-          if (ptoStart === shiftStart && ptoEnd !== shiftEnd) {
-            customTime = `Working: ${ptoEnd} - ${shiftEnd}`;
-          } else if (ptoStart !== shiftStart && ptoEnd === shiftEnd) {
-            customTime = `Working: ${shiftStart} - ${ptoStart}`;
-          } else if (ptoStart !== shiftStart && ptoEnd !== shiftEnd) {
-            customTime = `Working: ${shiftStart}-${ptoStart} & ${ptoEnd}-${shiftEnd}`;
+          if (currentDate < scheduleStartDate) return;
+          if (scheduleEndDate && currentDate > scheduleEndDate) return;
+          
+          // Calculate current week offset (0,1,2,3)
+          const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
+          
+          // CRITICAL: Handle NULL as "every week"
+          let shouldInclude = false;
+          
+          if (r.week_offset === null || r.week_offset === undefined) {
+            // NULL means every week - ALWAYS include
+            shouldInclude = true;
+            console.log(`✅ Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
+          } else if (r.week_offset === weekOffset) {
+            // Specific week match - include
+            shouldInclude = true;
+            console.log(`✅ Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
           } else {
-            customTime = `Working: Check PTO`;
+            // Specific week mismatch - skip
+            shouldInclude = false;
+            console.log(`❌ Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
           }
-        } else if (workingException?.custom_start_time && workingException?.custom_end_time) {
-          customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
-        }
-
-// REPLACE this block starting at line 641:
-const finalData = workingException ? {
-  scheduleId: workingException.id,
-  officerId: r.officer_id,
-  name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
-  badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
-  rank: officerRank,
-  isPPO: isProbationary,
-  position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
-  unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
-  notes: workingException.notes,
-  type: "recurring" as const,
-  originalScheduleId: r.id,
-  customTime: customTime,
-  hasPTO: !!ptoException,
-  ptoData: ptoException ? {
-    id: ptoException.id,
-    ptoType: ptoException.reason,
-    startTime: ptoException.custom_start_time || shift.start_time,
-    endTime: ptoException.custom_end_time || shift.end_time,
-    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-  } : undefined,
-  isPartnership: workingException.is_partnership || r.is_partnership,
-  partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
-  partnershipSuspended: workingException.partnership_suspended || false,
-  shift: shift,
-  isExtraShift: false,
-  // Add for emergency partner functionality
-  date: dateStr,
-  dayOfWeek: dayOfWeek,
-  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE:
-  birthday: workingException.profiles?.birthday || r.profiles?.birthday,
-  hire_date: workingException.profiles?.hire_date || r.profiles?.hire_date,
-  isBirthdayToday: workingException.profiles?.birthday 
-    ? isBirthdayToday(workingException.profiles.birthday, selectedDate)
-    : r.profiles?.birthday 
-      ? isBirthdayToday(r.profiles.birthday, selectedDate)
-      : false,
-  isAnniversaryToday: workingException.profiles?.hire_date 
-    ? isAnniversaryToday(workingException.profiles.hire_date, selectedDate)
-    : r.profiles?.hire_date 
-      ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
-      : false,
-  yearsOfService: workingException.profiles?.hire_date 
-    ? calculateYearsOfService(workingException.profiles.hire_date, selectedDate)
-    : r.profiles?.hire_date 
-      ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
-      : 0
-} : {
-  scheduleId: r.id,
-  officerId: r.officer_id,
-  name: r.profiles?.full_name || "Unknown",
-  badge: r.profiles?.badge_number,
-  rank: officerRank,
-  isPPO: isProbationary,
-  position: r.position_name || defaultAssignment?.position_name,
-  unitNumber: r.unit_number || defaultAssignment?.unit_number,
-  notes: null,
-  type: "recurring" as const,
-  originalScheduleId: r.id,
-  customTime: customTime,
-  hasPTO: !!ptoException,
-  ptoData: ptoException ? {
-    id: ptoException.id,
-    ptoType: ptoException.reason,
-    startTime: ptoException.custom_start_time || shift.start_time,
-    endTime: ptoException.custom_end_time || shift.end_time,
-    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-  } : undefined,
-  isPartnership: r.is_partnership,
-  partnerOfficerId: r.partner_officer_id,
-  partnershipSuspended: r.partnership_suspended || false,
-  shift: shift,
-  isExtraShift: false,
-  // Add for emergency partner functionality
-  date: dateStr,
-  dayOfWeek: dayOfWeek,
-  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE FOR NON-EXCEPTION OFFICERS:
-  birthday: r.profiles?.birthday,
-  hire_date: r.profiles?.hire_date,
-  isBirthdayToday: r.profiles?.birthday 
-    ? isBirthdayToday(r.profiles.birthday, selectedDate)
-    : false,
-  isAnniversaryToday: r.profiles?.hire_date 
-    ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
-    : false,
-  yearsOfService: r.profiles?.hire_date 
-    ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
-    : 0
-};
-
-        allOfficersMap.set(officerKey, finalData);
-      });
+          
+          if (!shouldInclude) return;
+          
+          // Continue with existing officer creation logic...
+          const officerKey = `${r.officer_id}-${shift.id}`;
+          
+          // PTO check
+          const ptoException = ptoExceptions?.find(e => 
+            e.officer_id === r.officer_id && 
+            e.shift_type_id === shift.id &&
+            e.date === dateStr
+          );
+      
+          const workingException = workingExceptions?.find(e => 
+            e.officer_id === r.officer_id && e.shift_type_id === shift.id
+          );
+      
+          const defaultAssignment = getDefaultAssignment(r.officer_id);
+      
+          const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
+          const isProbationary = officerRank?.toLowerCase() === 'probationary';
+      
+          let customTime = undefined;
+          if (ptoException?.custom_start_time && ptoException?.custom_end_time) {
+            const shiftStart = shift.start_time;
+            const shiftEnd = shift.end_time;
+            const ptoStart = ptoException.custom_start_time;
+            const ptoEnd = ptoException.custom_end_time;
+            
+            if (ptoStart === shiftStart && ptoEnd !== shiftEnd) {
+              customTime = `Working: ${ptoEnd} - ${shiftEnd}`;
+            } else if (ptoStart !== shiftStart && ptoEnd === shiftEnd) {
+              customTime = `Working: ${shiftStart} - ${ptoStart}`;
+            } else if (ptoStart !== shiftStart && ptoEnd !== shiftEnd) {
+              customTime = `Working: ${shiftStart}-${ptoStart} & ${ptoEnd}-${shiftEnd}`;
+            } else {
+              customTime = `Working: Check PTO`;
+            }
+          } else if (workingException?.custom_start_time && workingException?.custom_end_time) {
+            customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
+          }
+      
+          // Create officer data based on whether there's a working exception
+          const finalData = workingException ? {
+            scheduleId: workingException.id,
+            officerId: r.officer_id,
+            name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
+            badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
+            rank: officerRank,
+            isPPO: isProbationary,
+            position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
+            unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
+            notes: workingException.notes,
+            type: "recurring" as const,
+            originalScheduleId: r.id,
+            customTime: customTime,
+            hasPTO: !!ptoException,
+            ptoData: ptoException ? {
+              id: ptoException.id,
+              ptoType: ptoException.reason,
+              startTime: ptoException.custom_start_time || shift.start_time,
+              endTime: ptoException.custom_end_time || shift.end_time,
+              isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+            } : undefined,
+            isPartnership: workingException.is_partnership || r.is_partnership,
+            partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
+            partnershipSuspended: workingException.partnership_suspended || false,
+            shift: shift,
+            isExtraShift: false,
+            date: dateStr,
+            dayOfWeek: dayOfWeek,
+            birthday: workingException.profiles?.birthday || r.profiles?.birthday,
+            hire_date: workingException.profiles?.hire_date || r.profiles?.hire_date,
+            isBirthdayToday: workingException.profiles?.birthday 
+              ? isBirthdayToday(workingException.profiles.birthday, selectedDate)
+              : r.profiles?.birthday 
+                ? isBirthdayToday(r.profiles.birthday, selectedDate)
+                : false,
+            isAnniversaryToday: workingException.profiles?.hire_date 
+              ? isAnniversaryToday(workingException.profiles.hire_date, selectedDate)
+              : r.profiles?.hire_date 
+                ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
+                : false,
+            yearsOfService: workingException.profiles?.hire_date 
+              ? calculateYearsOfService(workingException.profiles.hire_date, selectedDate)
+              : r.profiles?.hire_date 
+                ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
+                : 0
+          } : {
+            scheduleId: r.id,
+            officerId: r.officer_id,
+            name: r.profiles?.full_name || "Unknown",
+            badge: r.profiles?.badge_number,
+            rank: officerRank,
+            isPPO: isProbationary,
+            position: r.position_name || defaultAssignment?.position_name,
+            unitNumber: r.unit_number || defaultAssignment?.unit_number,
+            notes: null,
+            type: "recurring" as const,
+            originalScheduleId: r.id,
+            customTime: customTime,
+            hasPTO: !!ptoException,
+            ptoData: ptoException ? {
+              id: ptoException.id,
+              ptoType: ptoException.reason,
+              startTime: ptoException.custom_start_time || shift.start_time,
+              endTime: ptoException.custom_end_time || shift.end_time,
+              isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+            } : undefined,
+            isPartnership: r.is_partnership,
+            partnerOfficerId: r.partner_officer_id,
+            partnershipSuspended: r.partnership_suspended || false,
+            shift: shift,
+            isExtraShift: false,
+            date: dateStr,
+            dayOfWeek: dayOfWeek,
+            birthday: r.profiles?.birthday,
+            hire_date: r.profiles?.hire_date,
+            isBirthdayToday: r.profiles?.birthday 
+              ? isBirthdayToday(r.profiles.birthday, selectedDate)
+              : false,
+            isAnniversaryToday: r.profiles?.hire_date 
+              ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
+              : false,
+            yearsOfService: r.profiles?.hire_date 
+              ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
+              : 0
+          };
+      
+          allOfficersMap.set(officerKey, finalData);
+        });
 
     // Process additional officers from working exceptions
     workingExceptions

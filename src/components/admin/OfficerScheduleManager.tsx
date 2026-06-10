@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { auditLogger } from "@/lib/auditLogger";
+import { formatLocalDate, parseLocalDate, getLocalToday } from "@/utils/dateUtils";
 
 interface OfficerScheduleManagerProps {
   officer: {
@@ -59,7 +60,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [startDate, setStartDate] = useState<Date>(getLocalToday());
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [shiftTypeId, setShiftTypeId] = useState("");
   const [scheduleToDelete, setScheduleToDelete] = useState<string | null>(null);
@@ -517,23 +518,36 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
         return;
       }
     
+      // Use formatLocalDate to prevent timezone issues
+      const startDateStr = formatLocalDate(startDate);
+      const endDateStr = endDate ? formatLocalDate(endDate) : undefined;
+    
+      console.log("📅 Adding schedule with dates:", {
+        startDate: startDateStr,
+        endDate: endDateStr,
+        originalStartDate: startDate,
+        originalEndDate: endDate
+      });
+    
       addScheduleMutation.mutate({
         days: selectedDays,
         shiftId: shiftTypeId,
-        start: format(startDate, "yyyy-MM-dd"),
-        end: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
+        start: startDateStr,
+        end: endDateStr,
         unitNumber: unitNumber || undefined,
         assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
-        weekPattern: weekPattern,        // ADD THIS LINE
-        customWeeks: customWeeks         // ADD THIS LINE
+        weekPattern: weekPattern,
+        customWeeks: customWeeks
       });
     };
+  
   const handleEditSchedule = (schedule: any) => {
     setEditingSchedule(schedule);
     setSelectedDays([schedule.day_of_week]);
     setShiftTypeId(schedule.shift_type_id);
-    setStartDate(new Date((schedule as any).start_date));
-    setEndDate((schedule as any).end_date ? new Date((schedule as any).end_date) : undefined);
+    // Use parseLocalDate to prevent timezone issues
+    setStartDate(parseLocalDate((schedule as any).start_date));
+    setEndDate((schedule as any).end_date ? parseLocalDate((schedule as any).end_date) : undefined);
     setUnitNumber((schedule as any).unit_number || "");
     setAssignedPosition((schedule as any).position_name || "none");
   };
@@ -548,24 +562,30 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       toast.error("Please select at least one day");
       return;
     }
-
+  
     const dayOfWeek = selectedDays[0];
-
+  
+    // Use formatLocalDate to prevent timezone issues
     const updates = {
       day_of_week: dayOfWeek,
       shift_type_id: shiftTypeId,
-      start_date: format(startDate, "yyyy-MM-dd"),
-      end_date: endDate ? format(endDate, "yyyy-MM-dd") : null,
+      start_date: formatLocalDate(startDate),
+      end_date: endDate ? formatLocalDate(endDate) : null,
       unit_number: unitNumber || null,
       position_name: assignedPosition !== "none" ? assignedPosition : null,
     };
-
+  
+    console.log("📅 Saving edit with dates:", {
+      start_date: updates.start_date,
+      end_date: updates.end_date
+    });
+  
     updateScheduleMutation.mutate({
       scheduleId: editingSchedule.id,
       updates
     });
   };
-
+  
   const handleEndAllSchedules = () => {
     const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
     const today = format(new Date(), "yyyy-MM-dd");
@@ -707,7 +727,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     setShowAddForm(false);
     setSelectedDays([]);
     setShiftTypeId("");
-    setStartDate(new Date());
+    setStartDate(getLocalToday());
     setEndDate(undefined);
     setUnitNumber("");
     setAssignedPosition("none");
@@ -1242,7 +1262,11 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                             selected={endDate}
                             onSelect={setEndDate}
                             initialFocus
-                            disabled={(date) => date < startDate}
+                            disabled={(date) => {
+                              const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                              const compareStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                              return compareDate < compareStartDate;
+                            }}
                             className="pointer-events-auto"
                           />
                         </PopoverContent>

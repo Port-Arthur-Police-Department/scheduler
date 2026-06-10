@@ -56,6 +56,7 @@ import { BeatPreferencesView } from "./BeatPreferencesView";
 import { ScheduleExportDialog } from "./ScheduleExportDialog";
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 import { PTODialogMobile } from "./PTODialogMobile";
+import { filterRecurringSchedulesByWeekOffset, getCycleStartDate } from "@/utils/weekOffsetUtils";
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";
@@ -253,90 +254,115 @@ const TheBook = ({
     return serviceCredits;
   };
 
-  // Build the main schedule query key
-  const scheduleQueryKey = ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()];
+// Build the main schedule query key
+const scheduleQueryKey = ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()];
 
-  // Main schedule query - FIXED with default assignments support
-  const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
-    queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
-    queryFn: async () => {
-      if (!selectedShiftId) return null;
+// Main schedule query - FIXED with week offset filtering for Dispatch shifts
+const { data: schedules, isLoading: schedulesLoading, error } = useQuery({
+  queryKey: ['schedule-data', activeView, selectedShiftId, currentWeekStart.toISOString(), currentMonth.toISOString()],
+  queryFn: async () => {
+    if (!selectedShiftId) return null;
 
-      console.log('📱 [Desktop] Fetching schedule data...');
-      
-      const startStr = activeView === "weekly" 
-        ? format(currentWeekStart, "yyyy-MM-dd") 
-        : format(startOfMonth(currentMonth), "yyyy-MM-dd");
-      
-      const endStr = activeView === "weekly"
-        ? format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd")
-        : format(endOfMonth(currentMonth), "yyyy-MM-dd");
+    console.log('📱 [Desktop] Fetching schedule data...');
+    
+    const startStr = activeView === "weekly" 
+      ? format(currentWeekStart, "yyyy-MM-dd") 
+      : format(startOfMonth(currentMonth), "yyyy-MM-dd");
+    
+    const endStr = activeView === "weekly"
+      ? format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd")
+      : format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
-      console.log('📅 Desktop date range:', startStr, 'to', endStr);
+    console.log('📅 Desktop date range:', startStr, 'to', endStr);
 
-      try {
-        // Fetch schedule exceptions (including overtime)
-        const { data: exceptions, error: exceptionsError } = await supabase
-          .from("schedule_exceptions")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date,
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .gte("date", startStr)
-          .lte("date", endStr)
-          .order("date", { ascending: true });
+    try {
+      // Get shift type to check if it's Dispatch (for week offset filtering)
+      const { data: shiftType, error: shiftTypeError } = await supabase
+        .from("shift_types")
+        .select("name")
+        .eq("id", selectedShiftId)
+        .single();
 
-        if (exceptionsError) throw exceptionsError;
+      const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
+      console.log(`🔍 Shift ${selectedShiftId} is Dispatch: ${isDispatchShift}`);
 
-        // Fetch recurring schedules
-        const { data: recurringSchedules, error: recurringError } = await supabase
-          .from("recurring_schedules")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date,
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .or(`end_date.is.null,end_date.gte.${startStr}`);
+      // Fetch schedule exceptions (including overtime)
+      const { data: exceptions, error: exceptionsError } = await supabase
+        .from("schedule_exceptions")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date,
+            promotion_date_sergeant, promotion_date_lieutenant,
+            service_credit_override
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .gte("date", startStr)
+        .lte("date", endStr)
+        .order("date", { ascending: true });
 
-        if (recurringError) throw recurringError;
+      if (exceptionsError) throw exceptionsError;
 
-        // Fetch minimum staffing
-        const { data: minStaffingData, error: minStaffingError } = await supabase
-          .from("minimum_staffing")
-          .select("*")
-          .eq("shift_type_id", selectedShiftId);
+      // Fetch recurring schedules
+      let { data: recurringSchedules, error: recurringError } = await supabase
+        .from("recurring_schedules")
+        .select(`
+          *,
+          profiles:officer_id (
+            id, full_name, badge_number, rank, hire_date,
+            promotion_date_sergeant, promotion_date_lieutenant,
+            service_credit_override
+          )
+        `)
+        .eq("shift_type_id", selectedShiftId)
+        .or(`end_date.is.null,end_date.gte.${startStr}`);
 
-        if (minStaffingError) {
-          console.error("Error fetching minimum staffing:", minStaffingError);
+      if (recurringError) throw recurringError;
+
+      // APPLY WEEK OFFSET FILTERING FOR DISPATCH SHIFTS
+      if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0) {
+        const originalCount = recurringSchedules.length;
+        const startDate = activeView === "weekly" ? currentWeekStart : startOfMonth(currentMonth);
+        const endDate = activeView === "weekly" ? endOfWeek(currentWeekStart, { weekStartsOn: 0 }) : endOfMonth(currentMonth);
+        
+        recurringSchedules = filterRecurringSchedulesByWeekOffset(
+          recurringSchedules,
+          startDate,
+          endDate,
+          true
+        );
+        console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
+      }
+
+      // Fetch minimum staffing
+      const { data: minStaffingData, error: minStaffingError } = await supabase
+        .from("minimum_staffing")
+        .select("*")
+        .eq("shift_type_id", selectedShiftId);
+
+      if (minStaffingError) {
+        console.error("Error fetching minimum staffing:", minStaffingError);
+      }
+
+      // Create minimum staffing map
+      const minimumStaffing = new Map();
+      minStaffingData?.forEach(staffing => {
+        if (!minimumStaffing.has(staffing.day_of_week)) {
+          minimumStaffing.set(staffing.day_of_week, new Map());
         }
-
-        // Create minimum staffing map
-        const minimumStaffing = new Map();
-        minStaffingData?.forEach(staffing => {
-          if (!minimumStaffing.has(staffing.day_of_week)) {
-            minimumStaffing.set(staffing.day_of_week, new Map());
-          }
-          minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
-            minimumOfficers: staffing.minimum_officers || 0,
-            minimumSupervisors: staffing.minimum_supervisors || 0
-          });
+        minimumStaffing.get(staffing.day_of_week).set(staffing.shift_type_id, {
+          minimumOfficers: staffing.minimum_officers || 0,
+          minimumSupervisors: staffing.minimum_supervisors || 0
         });
+      });
 
-        // Generate dates array
-        const dates = activeView === "weekly"
-          ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
-              .map(date => format(date, "yyyy-MM-dd"))
-          : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
-              .map(date => format(date, "yyyy-MM-dd"));
+      // Generate dates array
+      const dates = activeView === "weekly"
+        ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
+            .map(date => format(date, "yyyy-MM-dd"))
+        : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
+            .map(date => format(date, "yyyy-MM-dd"));
 
         // Create a map to store all officers and their service credits
         const allOfficersMap = new Map();

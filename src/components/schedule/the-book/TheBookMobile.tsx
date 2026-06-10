@@ -25,6 +25,7 @@ import { BeatPreferencesViewMobile } from "./BeatPreferencesViewMobile";
 import { PTODialogMobile } from "./PTODialogMobile";
 // Import Assignment Edit Dialog
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
+import { filterRecurringSchedulesByWeekOffset } from "@/utils/weekOffsetUtils";
 
 interface TheBookMobileProps {
   userRole?: 'officer' | 'supervisor' | 'admin';

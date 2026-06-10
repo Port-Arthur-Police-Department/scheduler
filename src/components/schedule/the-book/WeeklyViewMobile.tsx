@@ -102,12 +102,12 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         console.log('❌ No shift ID selected');
         return null;
       }
-
+    
       const startStr = format(currentWeekStart, "yyyy-MM-dd");
       const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
-
+    
       console.log('📅 Fetching data for date range:', startStr, 'to', endStr);
-
+    
       try {
         // Fetch schedule exceptions (including overtime with is_extra_shift = true)
         console.log('🔄 Fetching exceptions...');
@@ -125,13 +125,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           .gte("date", startStr)
           .lte("date", endStr)
           .order("date", { ascending: true });
-
+    
         if (exceptionsError) throw exceptionsError;
         console.log('✅ Exceptions fetched:', exceptions?.length, 'records');
         
         // Fetch recurring schedules
         console.log('🔄 Fetching recurring schedules...');
-        const { data: recurringSchedules, error: recurringError } = await supabase
+        let { data: recurringSchedules, error: recurringError } = await supabase
           .from("recurring_schedules")
           .select(`
             *,
@@ -143,21 +143,83 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           `)
           .eq("shift_type_id", selectedShiftId)
           .or(`end_date.is.null,end_date.gte.${startStr}`);
-
+    
         if (recurringError) throw recurringError;
-        console.log('✅ Recurring fetched:', recurringSchedules?.length, 'records');
-
-        // NEW: Fetch all recurring schedules for primary shift determination
+        console.log('✅ Recurring fetched (pre-filter):', recurringSchedules?.length, 'records');
+    
+        // Get shift type to check if it's Dispatch (for week offset filtering)
+        const { data: shiftType, error: shiftTypeError } = await supabase
+          .from("shift_types")
+          .select("name")
+          .eq("id", selectedShiftId)
+          .single();
+    
+        const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
+        console.log(`🔍 Shift ${selectedShiftId} is Dispatch: ${isDispatchShift}`);
+    
+        // APPLY WEEK OFFSET FILTERING FOR DISPATCH SHIFTS
+        if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0) {
+          const originalCount = recurringSchedules.length;
+          
+          // Generate all dates in the week range
+          const datesInRange: Date[] = [];
+          let currentDate = new Date(startStr);
+          const endDateObj = new Date(endStr);
+          while (currentDate <= endDateObj) {
+            datesInRange.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          const filteredSchedules: any[] = [];
+          const cycleStartDate = new Date(2025, 0, 1); // CHANGE THIS TO YOUR CYCLE START DATE
+          
+          for (const schedule of recurringSchedules) {
+            // NULL week_offset means every week - always include
+            if (schedule.week_offset === null || schedule.week_offset === undefined) {
+              filteredSchedules.push(schedule);
+              continue;
+            }
+            
+            // Check if this schedule should be included for any date in the range
+            let shouldInclude = false;
+            for (const date of datesInRange) {
+              if (schedule.day_of_week === date.getDay()) {
+                // Calculate current week offset
+                const diffTime = date.getTime() - cycleStartDate.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                let currentWeekOffset = 0;
+                if (diffDays >= 0) {
+                  const weeksPassed = Math.floor(diffDays / 7);
+                  currentWeekOffset = weeksPassed % 4;
+                }
+                
+                if (schedule.week_offset === currentWeekOffset) {
+                  shouldInclude = true;
+                  break;
+                }
+              }
+            }
+            
+            if (shouldInclude) {
+              filteredSchedules.push(schedule);
+            }
+          }
+          
+          recurringSchedules = filteredSchedules;
+          console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
+        }
+    
+        // Fetch all recurring schedules for primary shift determination
         console.log('🔄 Fetching all recurring schedules for primary shift determination...');
         const { data: allRecurringSchedules, error: allRecurringError } = await supabase
           .from("recurring_schedules")
           .select("officer_id, shift_type_id, day_of_week")
           .order("officer_id");
-
+    
         if (allRecurringError) {
           console.error("Error fetching all recurring schedules:", allRecurringError);
         }
-
+    
         // Determine primary shifts from recurring schedules
         const primaryShifts = new Map();
         if (allRecurringSchedules) {

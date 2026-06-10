@@ -67,9 +67,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const [assignedPosition, setAssignedPosition] = useState("none");
   const [shiftPositions, setShiftPositions] = useState<string[]>([]);
   const [editingSchedule, setEditingSchedule] = useState<any>(null);
-  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
   const [weekPattern, setWeekPattern] = useState<"all" | "odd" | "even" | "custom">("all");
-const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 1 only (not [0,2])
+  const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 1 only
   
   // New state for default assignments
   const [activeTab, setActiveTab] = useState("schedules");
@@ -226,84 +225,82 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     },
   });
 
-      const addScheduleMutation = useMutation({
-        mutationFn: async (data: { 
-          days: number[]; 
-          shiftId: string; 
-          start: string; 
-          end?: string;
-          unitNumber?: string;
-          assignedPosition?: string;
-          weekPattern?: string;
-          customWeeks?: number[];
-        }) => {
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          
-          const startDate = new Date(data.start);
-          if (data.end && new Date(data.end) < startDate) {
-            throw new Error("End date cannot be before start date");
+    const addScheduleMutation = useMutation({
+      mutationFn: async (data: { 
+        days: number[]; 
+        shiftId: string; 
+        start: string; 
+        end?: string;
+        unitNumber?: string;
+        assignedPosition?: string;
+        weekPattern?: string;
+        customWeeks?: number[];
+      }) => {
+        const startDate = new Date(data.start);
+        if (data.end && new Date(data.end) < startDate) {
+          throw new Error("End date cannot be before start date");
+        }
+    
+        // Determine which week offsets to create based on pattern
+        let weekOffsetsToCreate: (number | null)[] = [];
+        
+        console.log("📅 Creating schedule with pattern:", data.weekPattern);
+        console.log("📅 Custom weeks:", data.customWeeks);
+        
+        if (data.weekPattern === "odd") {
+          // Weeks 1 and 3 (0 and 2)
+          weekOffsetsToCreate = [0, 2];
+        } else if (data.weekPattern === "even") {
+          // Weeks 2 and 4 (1 and 3)
+          weekOffsetsToCreate = [1, 3];
+        } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
+          // Custom weeks selected by user
+          weekOffsetsToCreate = [...data.customWeeks];
+        } else if (data.weekPattern === "all") {
+          // "Every Week" - use NULL to indicate every week
+          weekOffsetsToCreate = [null];
+        } else {
+          // Default: only week 0 (Week 1 only)
+          weekOffsetsToCreate = [0];
+        }
+    
+        console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
+    
+        // Create schedules array
+        const schedules: any[] = [];
+        
+        for (const day of data.days) {
+          for (const weekOffset of weekOffsetsToCreate) {
+            schedules.push({
+              officer_id: officer.id,
+              day_of_week: day,
+              shift_type_id: data.shiftId,
+              start_date: data.start,
+              end_date: data.end || null,
+              unit_number: data.unitNumber || null,
+              position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+              week_offset: weekOffset  // Can be null (every week) or 0,1,2,3 (specific week)
+            });
           }
-      
-          // Determine which week offsets to create based on pattern
-          let weekOffsetsToCreate: (number | null)[] = [];
-          
-          console.log("📅 Creating schedule with pattern:", data.weekPattern);
-          console.log("📅 Custom weeks:", data.customWeeks);
-          
-          if (data.weekPattern === "odd") {
-            // Weeks 1 and 3 (0 and 2)
-            weekOffsetsToCreate = [0, 2];
-          } else if (data.weekPattern === "even") {
-            // Weeks 2 and 4 (1 and 3)
-            weekOffsetsToCreate = [1, 3];
-          } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
-            // Custom weeks selected by user
-            weekOffsetsToCreate = [...data.customWeeks];
-          } else if (data.weekPattern === "all") {
-            // "Every Week" - use NULL to indicate every week
-            weekOffsetsToCreate = [null];
-          } else {
-            // Default: only week 0 (Week 1 only)
-            weekOffsetsToCreate = [0];
-          }
-      
-          console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
-      
-          // Create schedules array
-          const schedules: any[] = [];
-          
-          for (const day of data.days) {
-            for (const weekOffset of weekOffsetsToCreate) {
-              schedules.push({
-                officer_id: officer.id,
-                day_of_week: day,
-                shift_type_id: data.shiftId,
-                start_date: data.start,
-                end_date: data.end || null,
-                unit_number: data.unitNumber || null,
-                position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-                week_offset: weekOffset  // Can be null (every week) or 0,1,2,3 (specific week)
-              });
-            }
-          }
-      
-          console.log("📅 Total schedules to insert:", schedules.length);
-          console.log("📅 Sample schedule:", schedules[0]);
-      
-          // Insert all schedules
-          const { data: insertedSchedules, error } = await supabase
-            .from("recurring_schedules")
-            .insert(schedules)
-            .select();
-      
-          if (error) {
-            console.error("Insert error:", error);
-            throw error;
-          }
-      
-          return insertedSchedules;
+        }
+    
+        console.log("📅 Total schedules to insert:", schedules.length);
+        console.log("📅 Sample schedule:", schedules[0]);
+    
+        // Insert all schedules
+        const { data: insertedSchedules, error } = await supabase
+          .from("recurring_schedules")
+          .insert(schedules)
+          .select();
+    
+        if (error) {
+          console.error("Insert error:", error);
+          throw error;
+        }
+    
+        return insertedSchedules;
       },
-  
+    
       onSuccess: (insertedSchedules) => {
         console.log("Successfully created schedules:", insertedSchedules);
         toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
@@ -706,19 +703,18 @@ const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 
     }
   };
 
-    // In OfficerScheduleManager.tsx - Update resetForm
-    const resetForm = () => {
-      setShowAddForm(false);
-      setSelectedDays([]);
-      setShiftTypeId("");
-      setStartDate(new Date());
-      setEndDate(undefined);
-      setUnitNumber("");
-      setAssignedPosition("none");
-      setEditingSchedule(null);
-      setWeekPattern("all");        // Default to "all" (creates 4 entries)
-      setCustomWeeks([0]);          // Default to Week 1 only
-    };
+  const resetForm = () => {
+    setShowAddForm(false);
+    setSelectedDays([]);
+    setShiftTypeId("");
+    setStartDate(new Date());
+    setEndDate(undefined);
+    setUnitNumber("");
+    setAssignedPosition("none");
+    setEditingSchedule(null);
+    setWeekPattern("all");
+    setCustomWeeks([0]);
+  };
 
   const resetDefaultAssignmentForm = () => {
     setShowDefaultAssignmentForm(false);

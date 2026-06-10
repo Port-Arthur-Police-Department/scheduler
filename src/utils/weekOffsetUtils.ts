@@ -2,13 +2,12 @@
 
 /**
  * Get the cycle start date for 4-week rotation schedules
- * This should be stored in website_settings for consistency
+ * Adjust this date to match your department's 4-week cycle start
  */
 export const getCycleStartDate = (): Date => {
-  // You can modify this to fetch from settings or use a fixed date
-  // For now, use a fixed date - adjust to your department's cycle start
-  // Example: If your 4-week cycle started on Jan 1, 2025:
-  return new Date(2025, 0, 1); // Jan 1, 2025 - CHANGE THIS AS NEEDED
+  // IMPORTANT: Change this to your actual cycle start date
+  // Example: If your 4-week cycle started on January 1, 2025:
+  return new Date(2025, 0, 1); // Jan 1, 2025
 };
 
 /**
@@ -33,34 +32,21 @@ export const getWeekOffsetForDate = (date: Date): number => {
 
 /**
  * Check if a shift should be included for a given date based on its week_offset
- * @param weekOffset - The schedule's week_offset (0,1,2,3, or null for every week)
- * @param date - The date to check
- * @param isDispatchShift - Whether this is a Dispatch shift (4-week cycle)
- * @returns true if the schedule should be included for this date
  */
 export const shouldIncludeScheduleForDate = (
   weekOffset: number | null | undefined,
   date: Date,
   isDispatchShift: boolean
 ): boolean => {
-  // If not a Dispatch shift, always include (standard weekly schedule)
   if (!isDispatchShift) return true;
-  
-  // NULL week_offset means every week - always include
   if (weekOffset === null || weekOffset === undefined) return true;
   
-  // For Dispatch shifts, only include if the week_offset matches the current week
   const currentWeekOffset = getWeekOffsetForDate(date);
   return weekOffset === currentWeekOffset;
 };
 
 /**
  * Filter recurring schedules based on week offset for a given date range
- * @param recurringSchedules - Array of recurring schedules
- * @param startDate - Start of the date range
- * @param endDate - End of the date range
- * @param isDispatchShift - Whether this is a Dispatch shift
- * @returns Filtered recurring schedules
  */
 export const filterRecurringSchedulesByWeekOffset = (
   recurringSchedules: any[],
@@ -71,10 +57,6 @@ export const filterRecurringSchedulesByWeekOffset = (
   if (!isDispatchShift) return recurringSchedules;
   if (!recurringSchedules || recurringSchedules.length === 0) return [];
   
-  // For Dispatch shifts, we need to include schedules that match the week_offset
-  // for ANY day in the date range
-  const filteredSchedules: any[] = [];
-  
   // Generate all dates in the range
   const datesInRange: Date[] = [];
   let currentDate = new Date(startDate);
@@ -82,6 +64,8 @@ export const filterRecurringSchedulesByWeekOffset = (
     datesInRange.push(new Date(currentDate));
     currentDate.setDate(currentDate.getDate() + 1);
   }
+  
+  const filteredSchedules: any[] = [];
   
   for (const schedule of recurringSchedules) {
     // NULL week_offset means every week - always include

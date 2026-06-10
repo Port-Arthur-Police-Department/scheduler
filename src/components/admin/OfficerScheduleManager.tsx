@@ -1184,6 +1184,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           </p>
                         </div>
                       )}
+                    </div>
+                  )}
                       
                       {weekPattern !== "all" && weekPattern !== "custom" && weekPattern !== "odd" && weekPattern !== "even" && (
                         <p className="text-xs text-muted-foreground mt-1">

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Building, MapPin } from "lucide-react";
+import { Building, MapPin, CalendarDays } from "lucide-react";
 
 interface ScheduleManagementDialogProps {
   open: boolean;
@@ -24,6 +24,13 @@ const daysOfWeek = [
   { value: 6, label: "Saturday" },
 ];
 
+// Helper to check if a shift is a Dispatch shift (4-week cycle)
+const isDispatchShift = (shiftName: string | undefined): boolean => {
+  if (!shiftName) return false;
+  const nameLower = shiftName.toLowerCase();
+  return nameLower.includes('dispatch');
+};
+
 export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagementDialogProps) => {
   const queryClient = useQueryClient();
   const [selectedOfficer, setSelectedOfficer] = useState("");
@@ -31,7 +38,8 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
   const [selectedPosition, setSelectedPosition] = useState("none");
   const [selectedDay, setSelectedDay] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
-  const [updateOfficerShift, setUpdateOfficerShift] = useState(true); // New toggle
+  const [updateOfficerShift, setUpdateOfficerShift] = useState(true);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<string>("null");
 
   const { data: officers } = useQuery({
     queryKey: ["officers"],
@@ -69,15 +77,26 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
     },
   });
 
+  // Get the selected shift object
+  const selectedShiftObj = shiftTypes?.find(s => s.id === selectedShift);
+  const showWeekOffset = isDispatchShift(selectedShiftObj?.name);
+
   const createScheduleMutation = useMutation({
     mutationFn: async () => {
-      // Get the officer's name for logging
       const officer = officers?.find(o => o.id === selectedOfficer);
       const shift = shiftTypes?.find(s => s.id === selectedShift);
       
       console.log(`Creating schedule for officer: ${officer?.full_name}, shift: ${shift?.name}`);
       
-      // Create the recurring schedule
+      // Convert week_offset value: "null" string becomes null, otherwise parseInt
+      let weekOffsetValue = null;
+      if (selectedWeekOffset !== "null") {
+        weekOffsetValue = parseInt(selectedWeekOffset);
+      }
+      
+      console.log(`Week offset: ${weekOffsetValue === null ? 'NULL (every week)' : `Week ${weekOffsetValue + 1}`}`);
+      
+      // Create the recurring schedule with week_offset
       const { error: scheduleError } = await supabase
         .from("recurring_schedules")
         .insert({
@@ -87,7 +106,8 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
           unit_number: unitNumber || null,
           day_of_week: parseInt(selectedDay),
           start_date: new Date().toISOString().split("T")[0],
-          is_active: true
+          is_active: true,
+          week_offset: weekOffsetValue
         });
       
       if (scheduleError) throw scheduleError;
@@ -97,11 +117,15 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
       // Log to audit
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
+        const weekOffsetText = weekOffsetValue === null 
+          ? "every week" 
+          : `Week ${weekOffsetValue + 1} of 4-week cycle`;
+        
         await supabase.from('audit_logs').insert({
           user_email: currentUser.email,
           action_type: 'recurring_schedule_created',
           table_name: 'recurring_schedules',
-          description: `Created recurring schedule for ${officer?.full_name} on ${daysOfWeek.find(d => d.value === parseInt(selectedDay))?.label} shift (${shift?.name}).`
+          description: `Created recurring schedule for ${officer?.full_name} on ${daysOfWeek.find(d => d.value === parseInt(selectedDay))?.label} shift (${shift?.name}) - ${weekOffsetText}.`
         });
       }
     },
@@ -110,15 +134,17 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
       toast.success("Recurring schedule created successfully");
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-      queryClient.invalidateQueries({ queryKey: ["officers"] }); // Refresh officers list
-      queryClient.invalidateQueries({ queryKey: ["officers-for-alerts"] }); // Refresh for manual alerts
+      queryClient.invalidateQueries({ queryKey: ["officers"] });
+      queryClient.invalidateQueries({ queryKey: ["officers-for-alerts"] });
       onOpenChange(false);
+      // Reset all form fields
       setSelectedOfficer("");
       setSelectedShift("");
       setSelectedPosition("none");
       setSelectedDay("");
       setUnitNumber("");
-      setUpdateOfficerShift(true); // Reset to default
+      setUpdateOfficerShift(true);
+      setSelectedWeekOffset("null");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create schedule");
@@ -199,6 +225,32 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
               </SelectContent>
             </Select>
           </div>
+
+          {/* Week Offset Selection - Only show for Dispatch shifts (4-week cycle) */}
+          {showWeekOffset && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                4-Week Cycle Week
+              </Label>
+              <Select value={selectedWeekOffset} onValueChange={setSelectedWeekOffset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select which week of the 4-week cycle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Every Week (All weeks)</SelectItem>
+                  <SelectItem value="0">Week 1 (First week of cycle)</SelectItem>
+                  <SelectItem value="1">Week 2 (Second week of cycle)</SelectItem>
+                  <SelectItem value="2">Week 3 (Third week of cycle)</SelectItem>
+                  <SelectItem value="3">Week 4 (Fourth week of cycle)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                For Dispatch shifts that follow a 4-week rotation. Select which week this schedule applies to.
+                Leave as "Every Week" for standard weekly schedules.
+              </p>
+            </div>
+          )}
 
           {/* Assignment Details Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-blue-50/30">

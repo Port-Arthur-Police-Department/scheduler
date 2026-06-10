@@ -57,6 +57,7 @@ import { BeatPreferencesView } from "./BeatPreferencesView";
 import { ScheduleExportDialog } from "./ScheduleExportDialog";
 import { AssignmentEditDialogMobile } from "./AssignmentEditDialogMobile";
 import { PTODialogMobile } from "./PTODialogMobile";
+import { formatLocalDate, parseLocalDate } from "@/utils/dateUtils";
 
 // Import types and utils
 import type { TheBookProps, TheBookView, ScheduleData, ShiftInfo } from "./types";
@@ -680,15 +681,15 @@ const TheBook = ({
 
   const handleSavePTO = async (ptoData: any) => {
     console.log('💾 Saving PTO for:', selectedOfficerForPTO?.name);
-
+  
     if (!selectedOfficerForPTO || !selectedShiftId) {
       toast.error("Missing required information");
       return;
     }
-
+  
     try {
       toast.loading("Assigning PTO...");
-
+  
       const startTime = ptoData.isFullShift 
         ? (ptoData.startTime || "00:00") 
         : ptoData.startTime;
@@ -696,14 +697,17 @@ const TheBook = ({
       const endTime = ptoData.isFullShift 
         ? (ptoData.endTime || "23:59") 
         : ptoData.endTime;
-
+  
+      // Use formatLocalDate to prevent timezone issues
+      const dateStr = formatLocalDate(new Date(selectedOfficerForPTO.date));
+  
       const { data: existingExceptions } = await supabase
         .from("schedule_exceptions")
         .select("id")
         .eq("officer_id", selectedOfficerForPTO.id)
-        .eq("date", selectedOfficerForPTO.date)
+        .eq("date", dateStr)
         .eq("shift_type_id", selectedShiftId);
-
+  
       if (existingExceptions && existingExceptions.length > 0) {
         await supabase
           .from("schedule_exceptions")
@@ -719,7 +723,7 @@ const TheBook = ({
           .from("schedule_exceptions")
           .insert({
             officer_id: selectedOfficerForPTO.id,
-            date: selectedOfficerForPTO.date,
+            date: dateStr,
             shift_type_id: selectedShiftId,
             is_off: true,
             reason: ptoData.ptoType,
@@ -727,7 +731,7 @@ const TheBook = ({
             custom_end_time: ptoData.isFullShift ? null : endTime,
           });
       }
-
+  
       if (websiteSettings?.show_pto_balances) {
         const ptoColumn = getPTOColumn(ptoData.ptoType);
         if (ptoColumn) {
@@ -736,7 +740,7 @@ const TheBook = ({
             .select("*")
             .eq("id", selectedOfficerForPTO.id)
             .single();
-
+  
           if (profile) {
             let hoursUsed = 8;
             if (!ptoData.isFullShift) {
@@ -754,21 +758,21 @@ const TheBook = ({
           }
         }
       }
-
+  
       auditLogger.logPTOAssignment(
         selectedOfficerForPTO.id,
         ptoData.ptoType,
-        selectedOfficerForPTO.date,
+        dateStr,
         userEmail,
         `Assigned ${ptoData.ptoType} PTO`
       );
-
+  
       setPtoDialogOpen(false);
       setSelectedOfficerForPTO(null);
       invalidateScheduleQueries();
       
       toast.success(`${ptoData.ptoType} PTO assigned successfully`);
-
+  
     } catch (error: any) {
       toast.error(error.message || "Failed to assign PTO");
       console.error('PTO assignment error:', error);
@@ -784,7 +788,7 @@ const TheBook = ({
       toast.error("Cannot remove PTO: Missing PTO data");
       return;
     }
-
+  
     let officerName = "Unknown Officer";
     try {
       const daySchedule = schedules?.dailySchedules?.find(s => s.date === date);
@@ -795,17 +799,20 @@ const TheBook = ({
     } catch (error) {
       console.error("Error getting officer name:", error);
     }
-
+  
+    // Use parseLocalDate to ensure correct date
+    const formattedDate = date;
+  
     const ptoMutationData = {
       id: schedule.ptoData.id,
       officerId: officerId,
-      date: date,
+      date: formattedDate,
       shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
       ptoType: schedule.ptoData.ptoType || "PTO",
       startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
       endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
     };
-
+  
     safeRemovePTOMutation.mutate(ptoMutationData, {
       onSuccess: () => {
         invalidateScheduleQueries();
@@ -814,9 +821,9 @@ const TheBook = ({
           auditLogger.logPTORemoval(
             officerId,
             ptoMutationData.ptoType,
-            date,
+            formattedDate,
             userEmail,
-            `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${date}`
+            `Removed ${ptoMutationData.ptoType} PTO for ${officerName} on ${formattedDate}`
           );
         } catch (logError) {
           console.error('Failed to log PTO removal audit:', logError);

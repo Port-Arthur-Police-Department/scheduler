@@ -263,7 +263,7 @@ const TheBook = ({
     queryKey: scheduleQueryKey,
     queryFn: async () => {
       if (!selectedShiftId) return null;
-
+    
       console.log('📱 [Desktop] Fetching schedule data...');
       
       const startStr = activeView === "weekly" 
@@ -273,9 +273,9 @@ const TheBook = ({
       const endStr = activeView === "weekly"
         ? format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd")
         : format(endOfMonth(currentMonth), "yyyy-MM-dd");
-
+    
       console.log('📅 Desktop date range:', startStr, 'to', endStr);
-
+    
       try {
         // Get shift type to check if it's Dispatch
         const { data: shiftType, error: shiftTypeError } = await supabase
@@ -285,7 +285,42 @@ const TheBook = ({
           .single();
         
         const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
-        
+        console.log(`🔍 Desktop shift ${selectedShiftId} is Dispatch: ${isDispatchShift}`);
+    
+        // Fetch schedule exceptions (including overtime)
+        const { data: exceptions, error: exceptionsError } = await supabase
+          .from("schedule_exceptions")
+          .select(`
+            *,
+            profiles:officer_id (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("shift_type_id", selectedShiftId)
+          .gte("date", startStr)
+          .lte("date", endStr)
+          .order("date", { ascending: true });
+    
+        if (exceptionsError) throw exceptionsError;
+    
+        // Fetch recurring schedules
+        let { data: recurringSchedules, error: recurringError } = await supabase
+          .from("recurring_schedules")
+          .select(`
+            *,
+            profiles:officer_id (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("shift_type_id", selectedShiftId)
+          .or(`end_date.is.null,end_date.gte.${startStr}`);
+    
+        if (recurringError) throw recurringError;
+    
         // Get the cycle start date for this shift (only if Dispatch)
         let cycleStartDate: Date | null = null;
         if (isDispatchShift) {
@@ -301,35 +336,65 @@ const TheBook = ({
           if (!cycleStartError && cycleStartData) {
             const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
             cycleStartDate = new Date(year, month - 1, day);
-            console.log(`📅 Cycle start date for ${shiftType.name}: ${cycleStartDate.toDateString()}`);
+            console.log(`📅 Cycle start date for ${shiftType?.name}: ${cycleStartDate.toDateString()}`);
           }
         }
-        
-        // Then use cycleStartDate in filterRecurringSchedulesByWeekOffsetSync
+    
+        // APPLY WEEK OFFSET FILTERING FOR DISPATCH SHIFTS (using the utility)
         if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0 && cycleStartDate) {
           const originalCount = recurringSchedules.length;
           const startDate = activeView === "weekly" ? currentWeekStart : startOfMonth(currentMonth);
           const endDate = activeView === "weekly" ? endOfWeek(currentWeekStart, { weekStartsOn: 0 }) : endOfMonth(currentMonth);
           
-          recurringSchedules = filterRecurringSchedulesByWeekOffsetSync(
-            recurringSchedules,
-            startDate,
-            endDate,
-            cycleStartDate
-          );
+          // Import this from weekOffsetUtils or define it here
+          const filteredSchedules: any[] = [];
+          const datesInRange: Date[] = [];
+          let currentDate = new Date(startDate);
+          while (currentDate <= endDate) {
+            datesInRange.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          for (const schedule of recurringSchedules) {
+            if (schedule.week_offset === null || schedule.week_offset === undefined) {
+              filteredSchedules.push(schedule);
+              continue;
+            }
+            
+            let shouldInclude = false;
+            for (const date of datesInRange) {
+              if (schedule.day_of_week === date.getDay()) {
+                const diffTime = date.getTime() - cycleStartDate.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                let currentWeekOffset = 0;
+                if (diffDays >= 0) {
+                  const weeksPassed = Math.floor(diffDays / 7);
+                  currentWeekOffset = weeksPassed % 4;
+                }
+                if (schedule.week_offset === currentWeekOffset) {
+                  shouldInclude = true;
+                  break;
+                }
+              }
+            }
+            if (shouldInclude) {
+              filteredSchedules.push(schedule);
+            }
+          }
+          recurringSchedules = filteredSchedules;
           console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
         }
-
+    
         // Fetch minimum staffing
         const { data: minStaffingData, error: minStaffingError } = await supabase
           .from("minimum_staffing")
           .select("*")
           .eq("shift_type_id", selectedShiftId);
-
+    
         if (minStaffingError) {
           console.error("Error fetching minimum staffing:", minStaffingError);
         }
-
+    
         // Create minimum staffing map
         const minimumStaffing = new Map();
         minStaffingData?.forEach(staffing => {
@@ -341,14 +406,14 @@ const TheBook = ({
             minimumSupervisors: staffing.minimum_supervisors || 0
           });
         });
-
+    
         // Generate dates array
         const dates = activeView === "weekly"
           ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
               .map(date => format(date, "yyyy-MM-dd"))
           : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
               .map(date => format(date, "yyyy-MM-dd"));
-
+    
         // Create a map to store all officers and their service credits
         const allOfficersMap = new Map();
         
@@ -368,13 +433,13 @@ const TheBook = ({
             allOfficerIds.add(recurring.officer_id);
           }
         });
-
+    
         // Fetch service credits for all officers
         let serviceCreditsMap = new Map();
         if (allOfficerIds.size > 0) {
           serviceCreditsMap = await fetchServiceCredits(Array.from(allOfficerIds));
         }
-
+    
         // Organize data by day for WeeklyView/MonthlyView - WITH DEFAULT ASSIGNMENTS
         const dailySchedules = dates.map(dateStr => {
           const date = parseISO(dateStr);
@@ -441,7 +506,7 @@ const TheBook = ({
           // Process recurring schedules that weren't overridden by exceptions
           dayRecurring.forEach(recurring => {
             const officerId = recurring.officer_id;
-            if (processedOfficers.has(officerId)) return; // Skip if already processed
+            if (processedOfficers.has(officerId)) return;
             
             processedOfficers.add(officerId);
             
@@ -487,10 +552,8 @@ const TheBook = ({
             allDefaultAssignments.forEach(defaultAssignment => {
               const officerId = defaultAssignment.officer_id;
               
-              // Skip if officer already scheduled for this day
               if (processedOfficers.has(officerId)) return;
               
-              // Check if default assignment applies to this day of week
               if (defaultAssignment.day_of_week === dayOfWeek) {
                 processedOfficers.add(officerId);
                 
@@ -516,7 +579,6 @@ const TheBook = ({
                   }
                 };
                 
-                // Store officer in map
                 if (!allOfficersMap.has(officerId)) {
                   allOfficersMap.set(officerId, {
                     ...defaultOfficerData,
@@ -525,7 +587,6 @@ const TheBook = ({
                 }
                 
                 officers.push(defaultOfficerData);
-                console.log(`✅ Added default assignment for ${profile.full_name} on ${dateStr}`);
               }
             });
           }
@@ -537,7 +598,7 @@ const TheBook = ({
             isCurrentMonth: activeView === "monthly" ? isSameMonth(date, currentMonth) : true
           };
         });
-
+    
         console.log('✅ Desktop schedule data fetched:', {
           dates: dates.length,
           dailySchedules: dailySchedules.length,
@@ -547,7 +608,7 @@ const TheBook = ({
             sum + day.officers.filter((o: any) => o.isDefaultAssignment).length, 0
           )
         });
-
+    
         return {
           dailySchedules,
           dates,
@@ -559,7 +620,7 @@ const TheBook = ({
           officerProfiles: allOfficersMap,
           allOfficers: Array.from(allOfficersMap.values())
         };
-
+    
       } catch (error) {
         console.error('❌ Desktop schedule query error:', error);
         throw error;

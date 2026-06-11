@@ -15,9 +15,8 @@ export const PREDEFINED_POSITIONS = [
   "Dispatch-A",
   "Dispatch-B",
   "Dispatch Supervisor",
-  "Dispatch Radio",
   "Dispatch Call Taker",
-  "Dispatch Data Entry",
+  "Dispatch Fire",
   "Other (Custom)",
 ] as const;
 

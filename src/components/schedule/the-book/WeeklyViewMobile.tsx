@@ -147,65 +147,46 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         if (recurringError) throw recurringError;
         console.log('✅ Recurring fetched (pre-filter):', recurringSchedules?.length, 'records');
     
-        // Get shift type to check if it's Dispatch (for week offset filtering)
+        // Get shift type to check if it's Dispatch
         const { data: shiftType, error: shiftTypeError } = await supabase
           .from("shift_types")
           .select("name")
           .eq("id", selectedShiftId)
           .single();
-    
+        
         const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
-        console.log(`🔍 Shift ${selectedShiftId} is Dispatch: ${isDispatchShift}`);
-    
-        // APPLY WEEK OFFSET FILTERING FOR DISPATCH SHIFTS
-        if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0) {
+        
+        // Get the cycle start date for this shift (only if Dispatch)
+        let cycleStartDate: Date | null = null;
+        if (isDispatchShift) {
+          const { data: cycleStartData, error: cycleStartError } = await supabase
+            .from("recurring_schedules")
+            .select("start_date")
+            .eq("shift_type_id", selectedShiftId)
+            .eq("week_offset", 0)
+            .order("start_date", { ascending: true })
+            .limit(1)
+            .single();
+          
+          if (!cycleStartError && cycleStartData) {
+            const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
+            cycleStartDate = new Date(year, month - 1, day);
+            console.log(`📅 Cycle start date for ${shiftType.name}: ${cycleStartDate.toDateString()}`);
+          }
+        }
+        
+        // Then use cycleStartDate in filterRecurringSchedulesByWeekOffsetSync
+        if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0 && cycleStartDate) {
           const originalCount = recurringSchedules.length;
+          const startDate = activeView === "weekly" ? currentWeekStart : startOfMonth(currentMonth);
+          const endDate = activeView === "weekly" ? endOfWeek(currentWeekStart, { weekStartsOn: 0 }) : endOfMonth(currentMonth);
           
-          // Generate all dates in the week range
-          const datesInRange: Date[] = [];
-          let currentDate = new Date(startStr);
-          const endDateObj = new Date(endStr);
-          while (currentDate <= endDateObj) {
-            datesInRange.push(new Date(currentDate));
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-          
-          const filteredSchedules: any[] = [];
-          const cycleStartDate = new Date(2025, 0, 1); // CHANGE THIS TO YOUR CYCLE START DATE
-          
-          for (const schedule of recurringSchedules) {
-            // NULL week_offset means every week - always include
-            if (schedule.week_offset === null || schedule.week_offset === undefined) {
-              filteredSchedules.push(schedule);
-              continue;
-            }
-            
-            // Check if this schedule should be included for any date in the range
-            let shouldInclude = false;
-            for (const date of datesInRange) {
-              if (schedule.day_of_week === date.getDay()) {
-                // Calculate current week offset
-                const diffTime = date.getTime() - cycleStartDate.getTime();
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                let currentWeekOffset = 0;
-                if (diffDays >= 0) {
-                  const weeksPassed = Math.floor(diffDays / 7);
-                  currentWeekOffset = weeksPassed % 4;
-                }
-                
-                if (schedule.week_offset === currentWeekOffset) {
-                  shouldInclude = true;
-                  break;
-                }
-              }
-            }
-            
-            if (shouldInclude) {
-              filteredSchedules.push(schedule);
-            }
-          }
-          
-          recurringSchedules = filteredSchedules;
+          recurringSchedules = filterRecurringSchedulesByWeekOffsetSync(
+            recurringSchedules,
+            startDate,
+            endDate,
+            cycleStartDate
+          );
           console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
         }
     

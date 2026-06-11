@@ -12,6 +12,7 @@ import { Building, MapPin, CalendarDays } from "lucide-react";
 interface ScheduleManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onScheduleCreated?: () => void; // Add this prop
 }
 
 const daysOfWeek = [
@@ -31,7 +32,7 @@ const isDispatchShift = (shiftName: string | undefined): boolean => {
   return nameLower.includes('dispatch');
 };
 
-export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagementDialogProps) => {
+export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated }: ScheduleManagementDialogProps) => {
   const queryClient = useQueryClient();
   const [selectedOfficer, setSelectedOfficer] = useState("");
   const [selectedShift, setSelectedShift] = useState("");
@@ -132,10 +133,24 @@ export const ScheduleManagementDialog = ({ open, onOpenChange }: ScheduleManagem
 
     onSuccess: () => {
       toast.success("Recurring schedule created successfully");
+      
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["officers"] });
       queryClient.invalidateQueries({ queryKey: ["officers-for-alerts"] });
+      
+      // CRITICAL: Invalidate schedule queries for this specific officer
+      if (selectedOfficer) {
+        queryClient.invalidateQueries({ 
+          queryKey: ["schedule", selectedOfficer],
+          exact: false 
+        });
+      }
+      
+      // Call the callback to refresh the officers management view
+      onScheduleCreated?.();
+      
       onOpenChange(false);
       // Reset all form fields
       setSelectedOfficer("");

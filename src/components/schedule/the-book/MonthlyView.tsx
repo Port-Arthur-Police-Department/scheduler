@@ -1,5 +1,5 @@
 // MonthlyView.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, isSameMonth, isSameDay, parseISO, addMonths, startOfYear, endOfYear } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { ViewProps } from "./types";
 import { calculateStaffingCounts, getRankAbbreviation as getRankAbbreviationUtil } from "./utils";
 import { calculateDailyStaffing, getStaffingMinimums } from "@/utils/staffingCalculations";
-import { supabase } from "@/integrations/supabase/client";
-import { getCycleStartDateForShift, shouldIncludeScheduleForDateSync } from "@/utils/weekOffsetUtils";
+import TheBookMobile from "./TheBookMobile";
+
 
 // Define extended interface that includes onDateChange
 interface ExtendedViewProps extends ViewProps {
@@ -35,7 +35,6 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   // Add state hooks here
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthDate, setSelectedMonthDate] = useState(currentDate);
-  const [filteredDailySchedules, setFilteredDailySchedules] = useState(schedules?.dailySchedules || []);
 
   // Sync with parent when date changes
   useEffect(() => {
@@ -49,78 +48,12 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
     }
   }, []);
 
-  // Sync selected date when popover opens
+  // ADD THIS NEW USEEFFECT: Sync selected date when popover opens
   useEffect(() => {
     if (monthPickerOpen) {
       setSelectedMonthDate(currentDate);
     }
   }, [monthPickerOpen, currentDate]);
-
-  // Filter schedules by week_offset for the current month
-  useEffect(() => {
-    const filterSchedulesByWeekOffset = async () => {
-      if (!schedules?.dailySchedules || !selectedShiftId) {
-        setFilteredDailySchedules(schedules?.dailySchedules || []);
-        return;
-      }
-
-      // Get shift type name to check if it's Dispatch
-      const { data: shiftType } = await supabase
-        .from("shift_types")
-        .select("name")
-        .eq("id", selectedShiftId)
-        .single();
-
-      const isDispatchShift = shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
-      
-      if (!isDispatchShift) {
-        // Non-Dispatch shifts show all schedules
-        setFilteredDailySchedules(schedules.dailySchedules);
-        return;
-      }
-
-      // Get cycle start date for this shift
-      const cycleStartDate = await getCycleStartDateForShift(selectedShiftId);
-      
-      if (!cycleStartDate) {
-        setFilteredDailySchedules(schedules.dailySchedules);
-        return;
-      }
-
-      // Filter each day's officers based on week_offset
-      const filtered = schedules.dailySchedules.map(daySchedule => {
-        const date = parseISO(daySchedule.date);
-        
-        // Filter officers for this day
-        const filteredOfficers = daySchedule.officers?.filter((officer: any) => {
-          // If it's an exception or default assignment, always show
-          if (officer.scheduleType === 'exception' || officer.isDefaultAssignment) {
-            return true;
-          }
-          
-          // For recurring schedules, check week_offset
-          const weekOffset = officer.shiftInfo?.week_offset;
-          
-          // If no week_offset (every week), always show
-          if (weekOffset === null || weekOffset === undefined) {
-            return true;
-          }
-          
-          // Check if this schedule should be included for this date
-          return shouldIncludeScheduleForDateSync(weekOffset, date, cycleStartDate);
-        });
-        
-        return {
-          ...daySchedule,
-          officers: filteredOfficers
-        };
-      });
-      
-      setFilteredDailySchedules(filtered);
-    };
-    
-    filterSchedulesByWeekOffset();
-  }, [schedules, selectedShiftId]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -139,13 +72,7 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const allCalendarDays = [...previousMonthDays, ...monthDays, ...nextMonthDays];
 
-  // Create a wrapper schedules object with filtered dailySchedules
-  const filteredSchedules = schedules ? {
-    ...schedules,
-    dailySchedules: filteredDailySchedules
-  } : null;
-
-  if (!filteredSchedules) {
+  if (!schedules) {
     return <div className="text-center py-8 text-muted-foreground">No schedule data available</div>;
   }
 
@@ -263,13 +190,13 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
         {allCalendarDays.map((day) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const dayOfWeek = day.getDay();
-          const daySchedule = filteredSchedules.dailySchedules?.find(s => s.date === dateStr);
+          const daySchedule = schedules.dailySchedules?.find(s => s.date === dateStr);
           const isCurrentMonthDay = isSameMonth(day, currentDate);
           const isToday = isSameDay(day, new Date());
           
           // Get minimum staffing using shared utility
           const { minimumOfficers, minimumSupervisors } = getStaffingMinimums(
-            filteredSchedules.minimumStaffing, 
+            schedules.minimumStaffing, 
             dayOfWeek, 
             selectedShiftId
           );

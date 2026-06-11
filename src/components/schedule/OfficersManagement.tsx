@@ -45,7 +45,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<"weekly" | "monthly">("weekly");
-  const [refreshTrigger, setRefreshTrigger] = useState(0); // Add this for cache busting
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
 
@@ -96,14 +96,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const handleScheduleCreated = useCallback(() => {
     console.log("🔄 Schedule created, refreshing data...");
     setRefreshTrigger(prev => prev + 1);
-    // Also force refetch
-    setTimeout(() => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["schedule", selectedOfficerId],
-        exact: false 
-      });
-    }, 100);
-  }, [queryClient, selectedOfficerId]);
+  }, []);
 
   // Fetch all profiles for admin/supervisor selection
   const { data: profiles, isLoading: profilesLoading } = useQuery({
@@ -185,22 +178,22 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
                     "Days:", dates.length);
       }
 
-      // Get recurring schedules - filter by active schedules for the current period
+      // FIX: Get ALL recurring schedules for this officer (no date filtering)
+      // This ensures all schedules are returned for management view
       const { data: recurringData, error: recurringError } = await supabase
         .from("recurring_schedules")
         .select(`
           *,
           shift_types(name, start_time, end_time)
         `)
-        .eq("officer_id", targetUserId)
-        // Filter recurring schedules that are active during the current period
-        .lte("start_date", format(endDate, "yyyy-MM-dd"))
-        .or(`end_date.is.null,end_date.gte.${format(startDate, "yyyy-MM-dd")}`);
+        .eq("officer_id", targetUserId);
 
       if (recurringError) {
         console.error("Recurring error:", recurringError);
         throw recurringError;
       }
+
+      console.log(`📋 Found ${recurringData?.length || 0} recurring schedules for officer`);
 
       // Get cycle start dates for week_offset filtering
       const cycleStartDates = new Map();
@@ -379,83 +372,84 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
   // Add mutation for removing PTO
   const removePTOMutation = useMutation({
-  mutationFn: async (ptoData: { id: string; officerId: string; date: string; shiftTypeId: string; ptoType: string; startTime: string; endTime: string }) => {
-    // Get current user for audit logging
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    mutationFn: async (ptoData: { id: string; officerId: string; date: string; shiftTypeId: string; ptoType: string; startTime: string; endTime: string }) => {
+      // Get current user for audit logging
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-    // Calculate hours to restore
-    const calculateHours = (start: string, end: string) => {
-      const [startHour, startMin] = start.split(":").map(Number);
-      const [endHour, endMin] = end.split(":").map(Number);
-      const startMinutes = startHour * 60 + startMin;
-      const endMinutes = endHour * 60 + endMin;
-      return (endMinutes - startMinutes) / 60;
-    };
+      // Calculate hours to restore
+      const calculateHours = (start: string, end: string) => {
+        const [startHour, startMin] = start.split(":").map(Number);
+        const [endHour, endMin] = end.split(":").map(Number);
+        const startMinutes = startHour * 60 + startMin;
+        const endMinutes = endHour * 60 + endMin;
+        return (endMinutes - startMinutes) / 60;
+      };
 
-    const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
+      const hoursUsed = calculateHours(ptoData.startTime, ptoData.endTime);
 
-    // Restore PTO balance
-    const PTO_TYPES = [
-      { value: "vacation", label: "Vacation", column: "vacation_hours" },
-      { value: "holiday", label: "Holiday", column: "holiday_hours" },
-      { value: "sick", label: "Sick", column: "sick_hours" },
-      { value: "comp", label: "Comp", column: "comp_hours" },
-    ];
+      // Restore PTO balance
+      const PTO_TYPES = [
+        { value: "vacation", label: "Vacation", column: "vacation_hours" },
+        { value: "holiday", label: "Holiday", column: "holiday_hours" },
+        { value: "sick", label: "Sick", column: "sick_hours" },
+        { value: "comp", label: "Comp", column: "comp_hours" },
+      ];
 
-    const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
-    if (ptoColumn) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", ptoData.officerId)
-        .single();
+      const ptoColumn = PTO_TYPES.find((t) => t.value === ptoData.ptoType)?.column;
+      if (ptoColumn) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", ptoData.officerId)
+          .single();
 
-      if (profileError) throw profileError;
+        if (profileError) throw profileError;
 
-      const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-      
-      const { error: restoreError } = await supabase
-        .from("profiles")
-        .update({
-          [ptoColumn]: currentBalance + hoursUsed,
-        })
-        .eq("id", ptoData.officerId);
+        const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
+        
+        const { error: restoreError } = await supabase
+          .from("profiles")
+          .update({
+            [ptoColumn]: currentBalance + hoursUsed,
+          })
+          .eq("id", ptoData.officerId);
 
-      if (restoreError) throw restoreError;
-    }
+        if (restoreError) throw restoreError;
+      }
 
-    // Delete the PTO exception
-    const { error: deleteError } = await supabase
-      .from("schedule_exceptions")
-      .delete()
-      .eq("id", ptoData.id);
+      // Delete the PTO exception
+      const { error: deleteError } = await supabase
+        .from("schedule_exceptions")
+        .delete()
+        .eq("id", ptoData.id);
 
-    if (deleteError) throw deleteError;
+      if (deleteError) throw deleteError;
 
-    // AUDIT LOGGING: Log PTO removal
-    if (currentUser) {
-      await auditLogger.log({
-        user_id: currentUser.id,
-        user_email: currentUser.email!,
-        action_type: 'pto_removed',
-        table_name: 'schedule_exceptions',
-        record_id: ptoData.id,
-        description: `PTO removed for officer ${ptoData.officerId} on ${ptoData.date}: ${ptoData.ptoType} (${hoursUsed} hours restored)`,
-      });
-    }
+      // AUDIT LOGGING: Log PTO removal
+      if (currentUser) {
+        await auditLogger.log({
+          user_id: currentUser.id,
+          user_email: currentUser.email!,
+          action_type: 'pto_removed',
+          table_name: 'schedule_exceptions',
+          record_id: ptoData.id,
+          description: `PTO removed for officer ${ptoData.officerId} on ${ptoData.date}: ${ptoData.ptoType} (${hoursUsed} hours restored)`,
+        });
+      }
 
-    // Also delete any associated working time exception
-    await supabase
-      .from("schedule_exceptions")
-      .delete()
-      .eq("officer_id", ptoData.officerId)
-      .eq("date", ptoData.date)
-      .eq("shift_type_id", ptoData.shiftTypeId)
-      .eq("is_off", false);
-  },
+      // Also delete any associated working time exception
+      await supabase
+        .from("schedule_exceptions")
+        .delete()
+        .eq("officer_id", ptoData.officerId)
+        .eq("date", ptoData.date)
+        .eq("shift_type_id", ptoData.shiftTypeId)
+        .eq("is_off", false);
+    },
     onSuccess: () => {
       toast.success("PTO removed and balance restored");
       queryClient.invalidateQueries({ queryKey: ["schedule"] });
+      setRefreshTrigger(prev => prev + 1);
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to remove PTO");
@@ -472,6 +466,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
             queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView] 
           });
           setEditingSchedule(null);
+          setRefreshTrigger(prev => prev + 1);
         }
       }
     );
@@ -494,139 +489,140 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     setPtoDialogOpen(true);
   };
 
-const handleRemovePTO = async (schedule: any, date: string) => {
-  if (!schedule.hasPTO || !schedule.ptoData) {
-    console.error("❌ No PTO data found in schedule:", schedule);
-    return;
-  }
-
-  try {
-    console.log("🔄 handleRemovePTO called with:", { schedule, date });
-    
-    // DEBUG: Log the full schedule object to see what properties are available
-    console.log("🔍 Full schedule object:", schedule);
-    
-    // Try multiple ways to get the officer's name
-    let officerName = 'Unknown Officer';
-    
-    // STRATEGY 1: Check if we have the officer name directly in the schedule
-    if (schedule.name) {
-      officerName = schedule.name;
-      console.log("✅ Found officer name in schedule.name:", officerName);
-    } else if (schedule.officerName) {
-      officerName = schedule.officerName;
-      console.log("✅ Found officer name in schedule.officerName:", officerName);
-    } else if (schedule.profiles?.full_name) {
-      officerName = schedule.profiles.full_name;
-      console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
-    } else {
-      // STRATEGY 2: Fetch officer name from database using selectedOfficerId
-      console.log("🔍 No officer name in schedule, fetching from database...");
-      const { data: officerProfile, error } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", selectedOfficerId)
-        .single();
-
-      if (!error && officerProfile?.full_name) {
-        officerName = officerProfile.full_name;
-        console.log("✅ Found officer name from database:", officerName);
-      } else {
-        console.error("❌ Could not find officer name in database");
-      }
-    }
-
-    console.log("👤 Final officer name for audit:", officerName);
-    
-    // STRATEGY 1: Try to get shift ID from multiple possible sources
-    let shiftTypeId = schedule.shift?.id || 
-                     schedule.ptoData.shiftTypeId || 
-                     schedule.originalShiftId;
-    
-    // STRATEGY 2: If we still don't have a shift ID, try to infer it from the officer's schedule
-    if (!shiftTypeId) {
-      console.log("🔍 No direct shift ID found, inferring from officer's schedule...");
-      
-      // Get the officer's schedule for this date to find their shift
-      const { data: officerSchedule, error } = await supabase
-        .from("schedule_exceptions")
-        .select("shift_type_id")
-        .eq("officer_id", selectedOfficerId)
-        .eq("date", date)
-        .eq("is_off", false)
-        .single();
-
-      if (!error && officerSchedule?.shift_type_id) {
-        shiftTypeId = officerSchedule.shift_type_id;
-        console.log("📊 Found shift_type_id from working schedule:", shiftTypeId);
-      } else {
-        // STRATEGY 3: Try to get from recurring schedule
-        const dayOfWeek = parseISO(date).getDay();
-        const { data: recurringSchedule, error: recurringError } = await supabase
-          .from("recurring_schedules")
-          .select("shift_type_id")
-          .eq("officer_id", selectedOfficerId)
-          .eq("day_of_week", dayOfWeek)
-          .or(`end_date.is.null,end_date.gte.${date}`);
-
-        if (!recurringError && recurringSchedule?.length > 0) {
-          shiftTypeId = recurringSchedule[0]?.shift_type_id;
-          console.log("📊 Found shift_type_id from recurring schedule:", shiftTypeId);
-        }
-      }
-    }
-
-    if (!shiftTypeId) {
-      console.error("❌ No shift_type_id found after all attempts");
-      toast.error("Cannot remove PTO: Unable to determine shift");
+  const handleRemovePTO = async (schedule: any, date: string) => {
+    if (!schedule.hasPTO || !schedule.ptoData) {
+      console.error("❌ No PTO data found in schedule:", schedule);
       return;
     }
 
-    const ptoData = {
-      id: schedule.ptoData.id,
-      officerId: selectedOfficerId,
-      date: date,
-      shiftTypeId: shiftTypeId,
-      ptoType: schedule.ptoData.ptoType,
-      startTime: schedule.ptoData.startTime,
-      endTime: schedule.ptoData.endTime
-    };
+    try {
+      console.log("🔄 handleRemovePTO called with:", { schedule, date });
+      
+      // DEBUG: Log the full schedule object to see what properties are available
+      console.log("🔍 Full schedule object:", schedule);
+      
+      // Try multiple ways to get the officer's name
+      let officerName = 'Unknown Officer';
+      
+      // STRATEGY 1: Check if we have the officer name directly in the schedule
+      if (schedule.name) {
+        officerName = schedule.name;
+        console.log("✅ Found officer name in schedule.name:", officerName);
+      } else if (schedule.officerName) {
+        officerName = schedule.officerName;
+        console.log("✅ Found officer name in schedule.officerName:", officerName);
+      } else if (schedule.profiles?.full_name) {
+        officerName = schedule.profiles.full_name;
+        console.log("✅ Found officer name in schedule.profiles.full_name:", officerName);
+      } else {
+        // STRATEGY 2: Fetch officer name from database using selectedOfficerId
+        console.log("🔍 No officer name in schedule, fetching from database...");
+        const { data: officerProfile, error } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", selectedOfficerId)
+          .single();
 
-    console.log("✅ Calling removePTOMutation with:", ptoData);
-    
-    removePTOMutation.mutate(ptoData, {
-      onSuccess: () => {
-        console.log("✅ PTO removal successful, calling auditLogger...");
-        
-        // Log PTO removal to audit log - NOW WITH THE ACTUAL OFFICER NAME
-        auditLogger.logPTORemoval(
-          selectedOfficerId,
-          schedule.ptoData.ptoType,
-          date,
-          userEmail,
-          `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}`
-        ).then(() => {
-          console.log("📝 Audit log entry created successfully for officer:", officerName);
-        }).catch((error) => {
-          console.error("❌ Failed to create audit log entry:", error);
-        });
-      },
-      onError: (error) => {
-        console.error("❌ PTO removal mutation failed:", error);
+        if (!error && officerProfile?.full_name) {
+          officerName = officerProfile.full_name;
+          console.log("✅ Found officer name from database:", officerName);
+        } else {
+          console.error("❌ Could not find officer name in database");
+        }
       }
-    });
-    
-  } catch (error) {
-    console.error("❌ Error in handleRemovePTO:", error);
-    toast.error("Unexpected error while removing PTO");
-  }
-};
+
+      console.log("👤 Final officer name for audit:", officerName);
+      
+      // STRATEGY 1: Try to get shift ID from multiple possible sources
+      let shiftTypeId = schedule.shift?.id || 
+                       schedule.ptoData.shiftTypeId || 
+                       schedule.originalShiftId;
+      
+      // STRATEGY 2: If we still don't have a shift ID, try to infer it from the officer's schedule
+      if (!shiftTypeId) {
+        console.log("🔍 No direct shift ID found, inferring from officer's schedule...");
+        
+        // Get the officer's schedule for this date to find their shift
+        const { data: officerSchedule, error } = await supabase
+          .from("schedule_exceptions")
+          .select("shift_type_id")
+          .eq("officer_id", selectedOfficerId)
+          .eq("date", date)
+          .eq("is_off", false)
+          .single();
+
+        if (!error && officerSchedule?.shift_type_id) {
+          shiftTypeId = officerSchedule.shift_type_id;
+          console.log("📊 Found shift_type_id from working schedule:", shiftTypeId);
+        } else {
+          // STRATEGY 3: Try to get from recurring schedule
+          const dayOfWeek = parseISO(date).getDay();
+          const { data: recurringSchedule, error: recurringError } = await supabase
+            .from("recurring_schedules")
+            .select("shift_type_id")
+            .eq("officer_id", selectedOfficerId)
+            .eq("day_of_week", dayOfWeek)
+            .or(`end_date.is.null,end_date.gte.${date}`);
+
+          if (!recurringError && recurringSchedule?.length > 0) {
+            shiftTypeId = recurringSchedule[0]?.shift_type_id;
+            console.log("📊 Found shift_type_id from recurring schedule:", shiftTypeId);
+          }
+        }
+      }
+
+      if (!shiftTypeId) {
+        console.error("❌ No shift_type_id found after all attempts");
+        toast.error("Cannot remove PTO: Unable to determine shift");
+        return;
+      }
+
+      const ptoData = {
+        id: schedule.ptoData.id,
+        officerId: selectedOfficerId,
+        date: date,
+        shiftTypeId: shiftTypeId,
+        ptoType: schedule.ptoData.ptoType,
+        startTime: schedule.ptoData.startTime,
+        endTime: schedule.ptoData.endTime
+      };
+
+      console.log("✅ Calling removePTOMutation with:", ptoData);
+      
+      removePTOMutation.mutate(ptoData, {
+        onSuccess: () => {
+          console.log("✅ PTO removal successful, calling auditLogger...");
+          
+          // Log PTO removal to audit log - NOW WITH THE ACTUAL OFFICER NAME
+          auditLogger.logPTORemoval(
+            selectedOfficerId,
+            schedule.ptoData.ptoType,
+            date,
+            userEmail,
+            `Removed ${schedule.ptoData.ptoType} PTO from ${officerName}`
+          ).then(() => {
+            console.log("📝 Audit log entry created successfully for officer:", officerName);
+          }).catch((error) => {
+            console.error("❌ Failed to create audit log entry:", error);
+          });
+        },
+        onError: (error) => {
+          console.error("❌ PTO removal mutation failed:", error);
+        }
+      });
+      
+    } catch (error) {
+      console.error("❌ Error in handleRemovePTO:", error);
+      toast.error("Unexpected error while removing PTO");
+    }
+  };
 
   // Function to refresh the schedule data
   const refreshSchedule = () => {
     queryClient.invalidateQueries({ 
       queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView] 
     });
+    setRefreshTrigger(prev => prev + 1);
   };
 
   const isLoading = schedulesLoading || (isAdminOrSupervisor && profilesLoading) || !selectedOfficerId;

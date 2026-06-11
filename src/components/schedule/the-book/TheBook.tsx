@@ -277,63 +277,47 @@ const TheBook = ({
       console.log('📅 Desktop date range:', startStr, 'to', endStr);
 
       try {
-        // Get shift type to check if it's Dispatch (for week offset filtering) - DECLARED ONCE
+        // Get shift type to check if it's Dispatch
         const { data: shiftType, error: shiftTypeError } = await supabase
           .from("shift_types")
           .select("name")
           .eq("id", selectedShiftId)
           .single();
-
+        
         const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
-        console.log(`🔍 Desktop shift ${selectedShiftId} is Dispatch: ${isDispatchShift}`);
-
-        // Fetch schedule exceptions (including overtime)
-        const { data: exceptions, error: exceptionsError } = await supabase
-          .from("schedule_exceptions")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date,
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .gte("date", startStr)
-          .lte("date", endStr)
-          .order("date", { ascending: true });
-
-        if (exceptionsError) throw exceptionsError;
-
-        // Fetch recurring schedules
-        let { data: recurringSchedules, error: recurringError } = await supabase
-          .from("recurring_schedules")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date,
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .or(`end_date.is.null,end_date.gte.${startStr}`);
-
-        if (recurringError) throw recurringError;
-
-        // APPLY WEEK OFFSET FILTERING FOR DISPATCH SHIFTS
-        if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0) {
+        
+        // Get the cycle start date for this shift (only if Dispatch)
+        let cycleStartDate: Date | null = null;
+        if (isDispatchShift) {
+          const { data: cycleStartData, error: cycleStartError } = await supabase
+            .from("recurring_schedules")
+            .select("start_date")
+            .eq("shift_type_id", selectedShiftId)
+            .eq("week_offset", 0)
+            .order("start_date", { ascending: true })
+            .limit(1)
+            .single();
+          
+          if (!cycleStartError && cycleStartData) {
+            const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
+            cycleStartDate = new Date(year, month - 1, day);
+            console.log(`📅 Cycle start date for ${shiftType.name}: ${cycleStartDate.toDateString()}`);
+          }
+        }
+        
+        // Then use cycleStartDate in filterRecurringSchedulesByWeekOffsetSync
+        if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0 && cycleStartDate) {
           const originalCount = recurringSchedules.length;
           const startDate = activeView === "weekly" ? currentWeekStart : startOfMonth(currentMonth);
           const endDate = activeView === "weekly" ? endOfWeek(currentWeekStart, { weekStartsOn: 0 }) : endOfMonth(currentMonth);
           
-          recurringSchedules = filterRecurringSchedulesByWeekOffset(
+          recurringSchedules = filterRecurringSchedulesByWeekOffsetSync(
             recurringSchedules,
             startDate,
             endDate,
-            true
+            cycleStartDate
           );
-          console.log(`✅ Desktop Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
+          console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
         }
 
         // Fetch minimum staffing

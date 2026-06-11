@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { auditLogger } from "@/lib/auditLogger";
 import { formatLocalDate, parseLocalDate, getLocalToday } from "@/utils/dateUtils";
+import { getCycleStartDateForShift, shouldIncludeScheduleForDateSync } from "@/utils/weekOffsetUtils";
 
 interface OfficerScheduleManagerProps {
   officer: {
@@ -104,39 +105,81 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     }
   }, [open, officer?.id]);
 
-  // Fetch officer's recurring schedules - FIXED: Include schedules with future end dates
-  const { data: schedules, isLoading: schedulesLoading } = useQuery({
-    queryKey: ["officer-schedules", officer.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("recurring_schedules")
-        .select(`
-          *,
-          shift_types(id, name, start_time, end_time)
-        `)
-        .eq("officer_id", officer.id)
-        .order("start_date", { ascending: false });
-
-      if (error) throw error;
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // FIX: Include schedules that are either ongoing OR end in the future
-      const active = data.filter(s => {
-        const endDate = s.end_date ? new Date(s.end_date) : null;
-        return !endDate || endDate >= today;
-      });
-      
-      const ended = data.filter(s => {
-        const endDate = s.end_date ? new Date(s.end_date) : null;
-        return endDate && endDate < today;
-      });
-      
-      return [...active, ...ended];
-    },
-    enabled: open,
-  });
+    const { data: schedules, isLoading: schedulesLoading } = useQuery({
+      queryKey: ["officer-schedules", officer.id],
+      queryFn: async () => {
+        // First, get all schedules
+        const { data, error } = await supabase
+          .from("recurring_schedules")
+          .select(`
+            *,
+            shift_types(id, name, start_time, end_time)
+          `)
+          .eq("officer_id", officer.id)
+          .order("start_date", { ascending: false });
+    
+        if (error) throw error;
+        
+        if (!data || data.length === 0) return [];
+        
+        // Get unique shift types from the schedules
+        const shiftTypeIds = [...new Set(data.map(s => s.shift_type_id))];
+        
+        // Get cycle start dates for each shift type
+        const cycleStartDates = new Map();
+        for (const shiftTypeId of shiftTypeIds) {
+          try {
+            const cycleStartDate = await getCycleStartDateForShift(shiftTypeId);
+            if (cycleStartDate) {
+              cycleStartDates.set(shiftTypeId, cycleStartDate);
+            }
+          } catch (err) {
+            console.error(`Error getting cycle start for shift ${shiftTypeId}:`, err);
+          }
+        }
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Filter schedules based on week_offset
+        const filteredSchedules = data.filter(schedule => {
+          // If schedule is ended, always include it in the "ended" section
+          const endDate = schedule.end_date ? new Date(schedule.end_date) : null;
+          const isEnded = endDate && endDate < today;
+          
+          if (isEnded) return true;
+          
+          // For active schedules, check week_offset
+          const cycleStartDate = cycleStartDates.get(schedule.shift_type_id);
+          
+          // If no cycle start date found, include the schedule
+          if (!cycleStartDate) return true;
+          
+          // Check if schedule should be included for current date
+          return shouldIncludeScheduleForDateSync(
+            schedule.week_offset,
+            today,
+            cycleStartDate
+          );
+        });
+        
+        // Separate active and ended
+        const active = filteredSchedules.filter(s => {
+          const endDate = s.end_date ? new Date(s.end_date) : null;
+          return !endDate || endDate >= today;
+        });
+        
+        const ended = filteredSchedules.filter(s => {
+          const endDate = s.end_date ? new Date(s.end_date) : null;
+          return endDate && endDate < today;
+        });
+        
+        console.log(`📅 Officer ${officer.full_name}: Filtered from ${data.length} to ${filteredSchedules.length} active schedules`);
+        
+        return [...active, ...ended];
+      },
+      enabled: open,
+    });
 
   // Fetch officer's default assignments - FIXED: Include assignments with future end dates
   const { data: defaultAssignments, isLoading: defaultAssignmentsLoading } = useQuery({

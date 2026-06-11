@@ -1,4 +1,3 @@
-//this is the officer tab for officer weekly and monthly schedules
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +16,9 @@ import { usePositionMutation } from "@/hooks/usePositionMutation";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
+import { getCycleStartDateForShift, shouldIncludeScheduleForDateSync } from "@/utils/weekOffsetUtils";
+
+
 
 interface OfficersManagementProps {
   userId: string;
@@ -189,6 +191,32 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         throw recurringError;
       }
 
+      // Get cycle start dates for week_offset filtering
+      const cycleStartDates = new Map();
+      const shiftTypeIds = [...new Set(recurringData?.map(r => r.shift_type_id) || [])];
+
+      for (const shiftTypeId of shiftTypeIds) {
+        try {
+          const { data: cycleStartData } = await supabase
+            .from("recurring_schedules")
+            .select("start_date")
+            .eq("shift_type_id", shiftTypeId)
+            .eq("week_offset", 0)
+            .order("start_date", { ascending: true })
+            .limit(1)
+            .single();
+          
+          if (cycleStartData) {
+            const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
+            cycleStartDates.set(shiftTypeId, new Date(year, month - 1, day));
+            console.log(`📅 Cycle start date for shift ${shiftTypeId}: ${cycleStartDates.get(shiftTypeId).toDateString()}`);
+          }
+        } catch (err) {
+          // No cycle start date found for this shift
+          console.log(`⚠️ No cycle start date found for shift ${shiftTypeId}`);
+        }
+      }
+
       // Get exceptions for the specific period
       const { data: exceptionsData, error: exceptionsError } = await supabase
         .from("schedule_exceptions")
@@ -206,25 +234,56 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
       console.log("✅ Schedule data fetched successfully");
       
-      // Build schedule for each day
+      // Helper function to check if recurring schedule applies on a specific date with week_offset
+      const doesRecurringApplyOnDate = (recurring: any, date: Date): boolean => {
+        // Check date range first
+        const scheduleStartDate = parseISO(recurring.start_date);
+        const scheduleEndDate = recurring.end_date ? parseISO(recurring.end_date) : null;
+        
+        const isAfterStart = date >= scheduleStartDate;
+        const isBeforeEnd = !scheduleEndDate || date <= scheduleEndDate;
+        
+        if (!isAfterStart || !isBeforeEnd) return false;
+        
+        // Check week_offset
+        const weekOffset = recurring.week_offset;
+        
+        // NULL or undefined means every week
+        if (weekOffset === null || weekOffset === undefined) {
+          return true;
+        }
+        
+        // Get cycle start date for this shift
+        const cycleStartDate = cycleStartDates.get(recurring.shift_type_id);
+        if (!cycleStartDate) {
+          // No cycle start date found - include as fallback
+          return true;
+        }
+        
+        // Calculate current week offset for this date
+        const diffTime = date.getTime() - cycleStartDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        let currentWeekOffset = 0;
+        if (diffDays >= 0) {
+          const weeksPassed = Math.floor(diffDays / 7);
+          currentWeekOffset = weeksPassed % 4;
+        }
+        
+        // Only include if week_offset matches current week
+        return weekOffset === currentWeekOffset;
+      };
+
+      // Build schedule for each day with week_offset filtering
       const dailySchedules = dates.map((date, idx) => {
-        const currentDate = parseISO(date);        // parse ISO (yyyy-MM-dd) safely
+        const currentDate = parseISO(date);
         const dayOfWeek = currentDate.getDay();
         
         const exception = exceptionsData?.find(e => e.date === date);
         
-        // Find recurring schedule for this day of week that's active on this date
+        // Find recurring schedule for this day of week that applies on this date (with week_offset check)
         const recurring = recurringData?.find(r => {
           if (r.day_of_week !== dayOfWeek) return false;
-          
-          // Check if the recurring schedule is active on this specific date
-          const scheduleStartDate = parseISO(r.start_date);
-          const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
-          
-          const isAfterStart = currentDate >= scheduleStartDate;
-          const isBeforeEnd = !scheduleEndDate || currentDate <= scheduleEndDate;
-          
-          return isAfterStart && isBeforeEnd;
+          return doesRecurringApplyOnDate(r, currentDate);
         });
 
         let shiftInfo = null;

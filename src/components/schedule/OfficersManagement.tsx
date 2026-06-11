@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +16,6 @@ import { usePositionMutation } from "@/hooks/usePositionMutation";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
-import { getCycleStartDateForShift, shouldIncludeScheduleForDateSync } from "@/utils/weekOffsetUtils";
-
-
 
 interface OfficersManagementProps {
   userId: string;
@@ -48,6 +45,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<"weekly" | "monthly">("weekly");
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Add this for cache busting
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
 
@@ -94,6 +92,19 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     return names[names.length - 1] || fullName;
   };
 
+  // Callback to refresh schedule when new schedule is created
+  const handleScheduleCreated = useCallback(() => {
+    console.log("🔄 Schedule created, refreshing data...");
+    setRefreshTrigger(prev => prev + 1);
+    // Also force refetch
+    setTimeout(() => {
+      queryClient.invalidateQueries({ 
+        queryKey: ["schedule", selectedOfficerId],
+        exact: false 
+      });
+    }, 100);
+  }, [queryClient, selectedOfficerId]);
+
   // Fetch all profiles for admin/supervisor selection
   const { data: profiles, isLoading: profilesLoading } = useQuery({
     queryKey: ["profiles"],
@@ -126,7 +137,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
   // Enhanced query to fetch schedule data for both weekly and monthly views
   const { data: schedules, isLoading: schedulesLoading, error, refetch } = useQuery({
-    queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView],
+    queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView, refreshTrigger],
     queryFn: async () => {
       console.log("🔍 Fetching schedules for officer:", selectedOfficerId);
       
@@ -1016,7 +1027,11 @@ const handleRemovePTO = async (schedule: any, date: string) => {
 
       {isAdminOrSupervisor && (
         <>
-          <ScheduleManagementDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+          <ScheduleManagementDialog 
+            open={dialogOpen} 
+            onOpenChange={setDialogOpen}
+            onScheduleCreated={handleScheduleCreated}
+          />
           {selectedSchedule && (
             <PTOAssignmentDialog
               open={ptoDialogOpen}

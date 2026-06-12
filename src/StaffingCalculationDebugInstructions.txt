@@ -1,0 +1,36 @@
+📋 How to Use the Debug Flag
+To enable debug logging (when you need to troubleshoot):
+Open your browser's DevTools (F12)
+
+Go to the Console tab
+
+Type this command and press Enter:
+
+javascript
+localStorage.setItem('debugStaffing', 'true')
+Refresh the page - logs will appear
+
+To disable debug logging:
+javascript
+localStorage.setItem('debugStaffing', 'false')
+Or clear it:
+
+javascript
+localStorage.removeItem('debugStaffing')
+✅ What This Fix Does
+Production mode (when you build/deploy): No logs at all (fastest)
+
+Development mode without debug flag: No logs (clean console)
+
+Development mode with debug flag: Full logs (only when you need them)
+
+🚀 Quick Verification
+After replacing the file:
+
+Refresh your app - The console should be CLEAN (no counting logs)
+
+The Messages counter in DevTools should stop climbing
+
+If you need to debug - Just run localStorage.setItem('debugStaffing', 'true') in console
+
+The constant console spam will be completely gone now!

@@ -40,12 +40,12 @@ const calculateServiceCredit = (
   if (override && override > 0) {
     return override;
   }
-  
+
   let relevantDate: Date | null = null;
-  
+
   if (currentRank) {
     const rankLower = currentRank.toLowerCase();
-    
+
     if ((rankLower.includes('sergeant') || rankLower.includes('sgt')) && promotionDateSergeant) {
       relevantDate = new Date(promotionDateSergeant);
     } else if ((rankLower.includes('lieutenant') || rankLower.includes('lt')) && promotionDateLieutenant) {
@@ -54,13 +54,13 @@ const calculateServiceCredit = (
       relevantDate = new Date(promotionDateLieutenant);
     }
   }
-  
+
   if (!relevantDate && hireDate) {
     relevantDate = new Date(hireDate);
   }
-  
+
   if (!relevantDate) return 0;
-  
+
   try {
     const now = new Date();
     const years = now.getFullYear() - relevantDate.getFullYear();
@@ -93,17 +93,19 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         .eq("is_off", true)
         .eq("shift_type_id", selectedShiftId)
         .limit(100);
-      
+
       if (error) {
         console.error('Error fetching PTO types:', error);
         return [];
       }
-      
+
       const uniqueReasons = [...new Set(data.map(item => item.reason))];
       console.log('Available PTO types in database:', uniqueReasons);
       return uniqueReasons;
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   // Fetch vacation data
@@ -140,7 +142,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       if (error) throw error;
 
       console.log('Total PTO exceptions fetched:', ptoExceptions?.length);
-      console.log('PTO reason distribution:', 
+      console.log('PTO reason distribution:',
         ptoExceptions?.reduce((acc, pto) => {
           acc[pto.reason] = (acc[pto.reason] || 0) + 1;
           return acc;
@@ -151,10 +153,10 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       const vacationAndHolidayExceptions = ptoExceptions?.filter(pto => {
         if (!pto.reason) return false;
         const reason = pto.reason.toLowerCase();
-        return reason.includes('vacation') || 
-               reason.includes('holiday') ||
-               reason === 'vac' ||
-               reason === 'hol';
+        return reason.includes('vacation') ||
+          reason.includes('holiday') ||
+          reason === 'vac' ||
+          reason === 'hol';
       });
 
       console.log('Filtered vacation/holiday exceptions:', vacationAndHolidayExceptions?.length);
@@ -171,11 +173,11 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
       // Group PTO by officer and create vacation blocks
       const officersMap = new Map();
-      
+
       vacationAndHolidayExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
         const profile = profilesMap.get(officerId) || pto.profiles;
-        
+
         if (!officersMap.has(officerId)) {
           const serviceCredit = calculateServiceCredit(
             profile?.hire_date || null,
@@ -184,7 +186,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             profile?.promotion_date_lieutenant || null,
             profile?.rank || null
           );
-          
+
           officersMap.set(officerId, {
             officer: profile,
             serviceCredit,
@@ -192,10 +194,10 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             vacationBlocks: []
           });
         }
-        
+
         const officerData = officersMap.get(officerId);
         const date = parseISO(pto.date);
-        
+
         // Normalize PTO type
         let ptoType = pto.reason || 'Vacation';
         const ptoLower = ptoType.toLowerCase();
@@ -204,7 +206,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         } else if (ptoLower.includes('holiday') || ptoLower === 'hol') {
           ptoType = 'Holiday';
         }
-        
+
         officerData.vacationDays.push({
           date,
           ptoType
@@ -214,17 +216,17 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
       // Process each officer's vacation days to create blocks
       officersMap.forEach((officerData, officerId) => {
         officerData.vacationDays.sort((a, b) => a.date.getTime() - b.date.getTime());
-        
+
         const blocks: VacationBlock[] = [];
-        let currentBlock: {date: Date, type: string}[] = [];
-        
+        let currentBlock: { date: Date, type: string }[] = [];
+
         officerData.vacationDays.forEach((day, index) => {
           if (currentBlock.length === 0) {
             currentBlock.push(day);
           } else {
             const lastDate = currentBlock[currentBlock.length - 1].date;
             const diffInDays = Math.abs((day.date.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-            
+
             if (diffInDays === 1 && day.ptoType === currentBlock[0].ptoType) {
               currentBlock.push(day);
             } else {
@@ -241,7 +243,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             }
           }
         });
-        
+
         if (currentBlock.length > 0) {
           blocks.push({
             startDate: currentBlock[0].date,
@@ -251,7 +253,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             dates: currentBlock.map(item => item.date)
           });
         }
-        
+
         officerData.vacationBlocks = blocks;
         officerData.totalDays = officerData.vacationDays.length;
       });
@@ -264,57 +266,59 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
         summary: {
           totalOfficers: officersArray.length,
           totalDays: vacationAndHolidayExceptions?.length || 0,
-          averageDays: officersArray.length > 0 ? 
+          averageDays: officersArray.length > 0 ?
             (vacationAndHolidayExceptions?.length || 0) / officersArray.length : 0
         },
         rawData: vacationAndHolidayExceptions || []
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   // Filter and sort officers
   const filteredAndSortedOfficers = useMemo(() => {
-  if (!vacationData?.officers) return [];
-  
-  let officers = [...vacationData.officers];
-  
-  if (onlyRemaining) {
-    officers = officers.map(officer => {
-      const futureBlocks = officer.vacationBlocks.filter(block => 
-        isAfter(block.endDate, today)
-      );
-      
-      const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
-      
-      return {
-        ...officer,
-        vacationBlocks: futureBlocks,
-        totalDays: totalFutureDays
-      };
-    }).filter(officer => officer.totalDays > 0);
-  }
-  
-  // Convert to format for sorting
-  const officersForSorting = officers.map(officer => ({
-    id: officer.officer?.id,
-    full_name: officer.officer?.full_name,
-    badge_number: officer.officer?.badge_number,
-    badgeNumber: officer.officer?.badge_number, // For compatibility
-    rank: officer.officer?.rank,
-    service_credit: officer.serviceCredit,
-    serviceCredit: officer.serviceCredit // For compatibility
-  }));
-  
-  // Sort consistently
-  const sorted = sortOfficersConsistently(officersForSorting);
-  
-  // Map back to original structure
-  return sorted.map(sortedOfficer => {
-    const originalOfficer = officers.find(o => o.officer?.id === sortedOfficer.id);
-    return originalOfficer!;
-  });
-}, [vacationData?.officers, onlyRemaining, today]);
+    if (!vacationData?.officers) return [];
+
+    let officers = [...vacationData.officers];
+
+    if (onlyRemaining) {
+      officers = officers.map(officer => {
+        const futureBlocks = officer.vacationBlocks.filter(block =>
+          isAfter(block.endDate, today)
+        );
+
+        const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
+
+        return {
+          ...officer,
+          vacationBlocks: futureBlocks,
+          totalDays: totalFutureDays
+        };
+      }).filter(officer => officer.totalDays > 0);
+    }
+
+    // Convert to format for sorting
+    const officersForSorting = officers.map(officer => ({
+      id: officer.officer?.id,
+      full_name: officer.officer?.full_name,
+      badge_number: officer.officer?.badge_number,
+      badgeNumber: officer.officer?.badge_number, // For compatibility
+      rank: officer.officer?.rank,
+      service_credit: officer.serviceCredit,
+      serviceCredit: officer.serviceCredit // For compatibility
+    }));
+
+    // Sort consistently
+    const sorted = sortOfficersConsistently(officersForSorting);
+
+    // Map back to original structure
+    return sorted.map(sortedOfficer => {
+      const originalOfficer = officers.find(o => o.officer?.id === sortedOfficer.id);
+      return originalOfficer!;
+    });
+  }, [vacationData?.officers, onlyRemaining, today]);
 
   const handleExport = () => {
     toast.info("Export feature coming soon!");
@@ -340,24 +344,24 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
 
   const getOfficerTypeColor = (officer: any) => {
     if (!officer) return '';
-    
+
     const rank = officer.rank?.toLowerCase() || '';
-    
+
     if (isSupervisorByRank(officer)) {
       return 'bg-green-50 border-l-4 border-green-500';
     }
-    
+
     if (rank === 'probationary') {
       return 'bg-blue-50 border-l-4 border-blue-500';
     }
-    
+
     return 'border-l-4 border-gray-200';
   };
 
   const filteredSummary = useMemo(() => {
     const totalDays = filteredAndSortedOfficers.reduce((sum, officer) => sum + officer.totalDays, 0);
     const totalOfficers = filteredAndSortedOfficers.length;
-    
+
     return {
       totalOfficers,
       totalDays,
@@ -384,7 +388,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
               </Button>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             {/* Year Selector */}
             <div className="space-y-2">
@@ -398,7 +402,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <select 
+                <select
                   id="year-select"
                   value={selectedYear.toString()}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -435,8 +439,8 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 </span>
               </Label>
               <p className="text-xs text-muted-foreground pl-10">
-                {onlyRemaining 
-                  ? 'Showing only future vacation/holiday dates' 
+                {onlyRemaining
+                  ? 'Showing only future vacation/holiday dates'
                   : 'Showing all vacation/holiday dates for ' + selectedYear}
               </p>
             </div>
@@ -463,7 +467,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -477,7 +481,7 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-            
+
               {/* Header */}
               <div className="grid grid-cols-12 bg-muted/50 p-3 font-semibold border rounded-t-lg text-sm">
                 <div className="col-span-1">#</div>
@@ -486,12 +490,12 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                 <div className="col-span-1 text-center">Days</div>
                 <div className="col-span-5">Vacation/Holiday Periods</div>
               </div>
-              
+
               {/* Officers List */}
               <div className="max-h-[600px] overflow-y-auto border rounded-b-lg">
                 {filteredAndSortedOfficers.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
-                    {onlyRemaining 
+                    {onlyRemaining
                       ? 'No future vacation or holiday dates found for ' + selectedYear
                       : 'No vacation or holiday data found for ' + selectedYear}
                     <p className="text-xs mt-2">
@@ -500,15 +504,15 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                   </div>
                 ) : (
                   filteredAndSortedOfficers.map(({ officer, totalDays, vacationBlocks, serviceCredit }, index) => (
-                    <div 
-                      key={officer.id} 
+                    <div
+                      key={officer.id}
                       className={`grid grid-cols-12 p-3 border-b hover:bg-muted/30 items-center ${getOfficerTypeColor(officer)}`}
                     >
                       {/* Badge Number */}
                       <div className="col-span-1 font-mono text-sm">
                         {officer.badge_number || 'N/A'}
                       </div>
-                      
+
                       {/* Officer Name */}
                       <div className="col-span-3">
                         <div className="font-medium">{getLastName(officer.full_name)}</div>
@@ -518,27 +522,27 @@ export const VacationListView: React.FC<VacationListViewProps> = ({
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Rank */}
                       <div className="col-span-2">
                         <Badge variant="outline" className={isSupervisorByRank(officer) ? 'border-green-300' : ''}>
                           {getRankAbbreviation(officer.rank)}
                         </Badge>
                       </div>
-                      
+
                       {/* Total Days */}
                       <div className="col-span-1 text-center">
                         <div className="font-bold text-lg">{totalDays}</div>
                       </div>
-                      
+
                       {/* Vacation/Holiday Periods */}
                       <div className="col-span-5">
                         <div className="flex flex-col gap-2">
                           {vacationBlocks.map((block, blockIndex) => {
                             const isFuture = isAfter(block.endDate, today);
                             return (
-                              <div 
-                                key={blockIndex} 
+                              <div
+                                key={blockIndex}
                                 className={`flex items-center justify-between gap-2 p-2 border rounded ${!isFuture && !onlyRemaining ? 'opacity-60' : ''}`}
                               >
                                 <div className="flex items-center gap-2">

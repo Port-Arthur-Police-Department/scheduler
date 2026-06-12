@@ -44,6 +44,8 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
       if (error) throw error;
       return data;
     },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const updateRequestMutation = useMutation({
@@ -63,12 +65,12 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
       toast.success("Request updated successfully");
-      
+
       // Send notification based on status
       if (variables.status === 'approved' || variables.status === 'denied') {
         sendPTORequestNotification(
-          variables.id, 
-          userId, 
+          variables.id,
+          userId,
           variables.status === 'approved' ? 'approved' : 'denied'
         );
       }
@@ -112,7 +114,7 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
             </Button>
           )}
         </div>
-        
+
         {/* Add PTO status indicator */}
         {!isAdminOrSupervisor && !settings?.show_pto_balances && (
           <Alert className="mt-4 bg-blue-50 border-blue-200">
@@ -128,7 +130,7 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
           <Alert className="mt-4 bg-green-50 border-green-200">
             <Bell className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              {isAdminOrSupervisor 
+              {isAdminOrSupervisor
                 ? "You will be notified when officers submit new time off requests"
                 : "You will be notified when your time off requests are approved or denied"}
             </AlertDescription>
@@ -164,7 +166,7 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
                       {format(new Date(request.start_date), "MMM d, yyyy")} -{" "}
                       {format(new Date(request.end_date), "MMM d, yyyy")}
                     </p>
-                     <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       <span className="font-medium capitalize">{request.pto_type || 'vacation'}</span>
                       {request.hours_used > 0 && ` • ${request.hours_used} hours`}
                     </p>

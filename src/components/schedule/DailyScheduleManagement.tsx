@@ -15,7 +15,7 @@ interface DailyScheduleManagementProps {
   userCurrentShift?: string;
 }
 
-export const DailyScheduleManagement = ({ 
+export const DailyScheduleManagement = ({
   isAdminOrSupervisor,
   userCurrentShift = "all"
 }: DailyScheduleManagementProps) => {
@@ -48,6 +48,8 @@ export const DailyScheduleManagement = ({
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -104,7 +106,7 @@ export const DailyScheduleManagement = ({
                   ))}
                 </SelectContent>
               </Select>
-              
+
               {/* Date Navigation Section */}
               <div className="flex items-center gap-1 border rounded-lg p-1">
                 {/* Previous Day Button */}
@@ -177,7 +179,7 @@ export const DailyScheduleManagement = ({
               View and manage officer assignments by shift. Assign officers to specific positions
               and monitor staffing levels for each shift.
             </p>
-            
+
             {/* Quick Date Navigation Buttons */}
             <div className="flex items-center gap-2">
               <Button
@@ -193,7 +195,7 @@ export const DailyScheduleManagement = ({
               </div>
             </div>
           </div>
-          
+
           {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
             <div className="mt-2 p-2 bg-primary/10 rounded text-xs text-primary">
               📍 Showing your assigned shift by default. You can change the shift filter above.
@@ -202,9 +204,9 @@ export const DailyScheduleManagement = ({
         </CardContent>
       </Card>
 
-      <DailyScheduleView 
-        selectedDate={selectedDate} 
-        filterShiftId={selectedShiftId} 
+      <DailyScheduleView
+        selectedDate={selectedDate}
+        filterShiftId={selectedShiftId}
         key={`${selectedDate.toISOString()}-${selectedShiftId}`}
         isAdminOrSupervisor={isAdminOrSupervisor}
         userRole={isAdminOrSupervisor ? "admin" : "officer"}

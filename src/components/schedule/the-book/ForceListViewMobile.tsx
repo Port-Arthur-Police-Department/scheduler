@@ -10,9 +10,9 @@ import { Users, ChevronLeft, ChevronRight, CalendarIcon, Filter, Search } from "
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, startOfYear, endOfYear } from "date-fns";
 import { getLastName, getRankAbbreviation } from "./utils";
-import { 
+import {
   getBadgeNumberForSorting,
-  type OfficerForSorting 
+  type OfficerForSorting
 } from "@/utils/sortingUtils";
 
 interface ForceListViewMobileProps {
@@ -28,35 +28,35 @@ const sortForceListOfficers = (officers: any[]) => {
     // Primary: service credit (LEAST to most - ascending)
     const aCredit = a.service_credit || 0;
     const bCredit = b.service_credit || 0;
-    
+
     if (aCredit !== bCredit) {
       console.log(`Service credit sort: ${a.full_name} (${aCredit}) vs ${b.full_name} (${bCredit}) -> ${aCredit - bCredit}`);
       return aCredit - bCredit;
     }
-    
+
     // Secondary: badge number (DESCENDING - higher badge number = lower seniority = should be higher in force list)
     const getBadgeNumber = (officer: any): number => {
       const badgeNum = officer.badge_number || officer.badgeNumber;
       if (!badgeNum) return 9999;
-      
+
       const parsed = parseInt(badgeNum);
       return isNaN(parsed) ? 9999 : parsed;
     };
-    
+
     const aBadge = getBadgeNumber(a);
     const bBadge = getBadgeNumber(b);
     if (aBadge !== bBadge) {
       console.log(`Badge sort (equal credits): ${a.full_name} (${aBadge}) vs ${b.full_name} (${bBadge}) -> ${bBadge - aBadge} (DESCENDING)`);
       return bBadge - aBadge; // DESCENDING - higher badge number first
     }
-    
+
     // Tertiary: last name (A-Z)
     const getLastNameFromFullName = (name: string = ""): string => {
       if (!name) return "";
       const parts = name.trim().split(/\s+/);
       return parts[parts.length - 1] || "";
     };
-    
+
     const aLastName = getLastNameFromFullName(a.full_name);
     const bLastName = getLastNameFromFullName(b.full_name);
     const lastNameCompare = aLastName.localeCompare(bLastName);
@@ -69,14 +69,14 @@ const sortForceListOfficers = (officers: any[]) => {
 const shouldExcludeFromForceList = (rank: string): boolean => {
   if (!rank) return false;
   const rankLower = rank.toLowerCase();
-  
+
   // Exclude Lieutenants, Chiefs, Deputy Chiefs, and PPOs/Probationary officers
-  return rankLower.includes('lieutenant') || 
-         rankLower.includes('lt') || 
-         rankLower.includes('chief') || 
-         rankLower.includes('deputy') ||
-         rankLower.includes('probationary') ||
-         rankLower.includes('ppo');
+  return rankLower.includes('lieutenant') ||
+    rankLower.includes('lt') ||
+    rankLower.includes('chief') ||
+    rankLower.includes('deputy') ||
+    rankLower.includes('probationary') ||
+    rankLower.includes('ppo');
 };
 
 export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
@@ -138,7 +138,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
       // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs/PPOs
       const uniqueOfficersMap = new Map();
       const excludedOfficers: any[] = [];
-      
+
       recurringSchedules?.forEach(schedule => {
         if (schedule.profiles) {
           // Check if officer should be included (exclude Lieutenants/Chiefs/PPOs)
@@ -154,12 +154,12 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
           }
         }
       });
-      
+
       const officers = Array.from(uniqueOfficersMap.values());
 
       // Log excluded officers for debugging
       if (excludedOfficers.length > 0) {
-        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):', 
+        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):',
           excludedOfficers
         );
       }
@@ -173,7 +173,7 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
           try {
             const { data: creditData, error: creditError } = await supabase
               .rpc('get_service_credit', { profile_id: officer.id });
-            
+
             if (creditError) {
               console.error(`Error fetching service credit for ${officer.full_name}:`, creditError);
               return {
@@ -182,10 +182,10 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
                 forceCount: forcedDates?.filter(fd => fd.officer_id === officer.id).length || 0
               };
             }
-            
+
             const serviceCredit = parseFloat(creditData) || 0;
             console.log(`Officer ${officer.full_name} - Service Credit: ${serviceCredit}`);
-            
+
             return {
               ...officer,
               service_credit: serviceCredit,
@@ -216,12 +216,14 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Filter officers based on search
   const filteredOfficers = forceData?.officers?.filter(officer => {
     if (!searchQuery) return true;
-    
+
     const searchLower = searchQuery.toLowerCase();
     return (
       officer.full_name.toLowerCase().includes(searchLower) ||
@@ -234,18 +236,18 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
   const supervisors = filteredOfficers.filter(officer => {
     const rank = officer.rank?.toLowerCase() || '';
     // Only include Sergeants, NOT Lieutenants or Chiefs
-    return (rank.includes('sergeant') || rank.includes('sgt')) && 
-           !rank.includes('lieutenant') && 
-           !rank.includes('lt') && 
-           !rank.includes('chief') && 
-           !rank.includes('deputy');
+    return (rank.includes('sergeant') || rank.includes('sgt')) &&
+      !rank.includes('lieutenant') &&
+      !rank.includes('lt') &&
+      !rank.includes('chief') &&
+      !rank.includes('deputy');
   });
 
   const regularOfficers = filteredOfficers.filter(officer => {
     const rank = officer.rank?.toLowerCase() || '';
     // Check if it's a sergeant
     const isSergeant = rank.includes('sergeant') || rank.includes('sgt');
-    
+
     // Include only if NOT a sergeant (all others are regular officers)
     return !isSergeant;
   });
@@ -257,13 +259,13 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
       console.log(`Total included: ${forceData.officers.length}`);
       console.log(`Sergeants: ${supervisors.length}`);
       console.log(`Regular Officers: ${regularOfficers.length}`);
-      
+
       // Show first 15 officers
       console.log('📋 Force List Officers (first 15):');
       forceData.officers.slice(0, 15).forEach((officer, index) => {
         console.log(`${index + 1}. ${officer.full_name} - Rank: ${officer.rank} - SC: ${officer.service_credit?.toFixed(1)} - Badge: ${officer.badge_number} - Force Count: ${officer.forceCount}`);
       });
-      
+
       // Log any officers with service credit override
       const officersWithOverride = forceData.officers.filter(o => o.service_credit_override && o.service_credit_override > 0);
       if (officersWithOverride.length > 0) {
@@ -293,8 +295,8 @@ export const ForceListViewMobile: React.FC<ForceListViewMobileProps> = ({
         <CardContent className="p-4">
           <div className="space-y-3">
             <Label>Select Year</Label>
-            <Select 
-              value={selectedYear.toString()} 
+            <Select
+              value={selectedYear.toString()}
               onValueChange={(value) => setSelectedYear(parseInt(value))}
             >
               <SelectTrigger>

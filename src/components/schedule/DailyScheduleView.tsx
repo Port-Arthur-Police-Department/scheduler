@@ -23,31 +23,31 @@ import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment"; 
+import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
 import { isSpecialAssignment } from "@/utils/scheduleUtils";
 import { sortOfficersByLastName } from "@/utils/sortingUtils";
-import { 
-  isShiftUnderstaffed, 
+import {
+  isShiftUnderstaffed,
   getStaffingDescription,
   getRequirementsSummary,
   getStaffingSeverity,
-  formatStaffingCount 
+  formatStaffingCount
 } from "@/utils/staffingUtils";
 import { SpecialAssignmentWarningDialog } from "./SpecialAssignmentWarningDialog";
 import { getPositionsForShift } from "@/utils/positionUtils";
 
 const isBirthdayToday = (birthday: string | null | undefined, date: Date): boolean => {
   if (!birthday) return false;
-  
+
   try {
     const birthDate = parseISO(birthday);
     const today = date;
-    
+
     // Compare month and day only
-    return birthDate.getMonth() === today.getMonth() && 
-           birthDate.getDate() === today.getDate();
+    return birthDate.getMonth() === today.getMonth() &&
+      birthDate.getDate() === today.getDate();
   } catch (error) {
     console.error("Error parsing birthday:", birthday, error);
     return false;
@@ -56,65 +56,65 @@ const isBirthdayToday = (birthday: string | null | undefined, date: Date): boole
 
 const isAnniversaryToday = (hireDate: string | null | undefined, date: Date): boolean => {
   if (!hireDate) return false;
-  
+
   try {
     const anniversaryDate = parseISO(hireDate);
     const today = date;
-    
+
     // Compare month and day only
-    return anniversaryDate.getMonth() === today.getMonth() && 
-           anniversaryDate.getDate() === today.getDate();
+    return anniversaryDate.getMonth() === today.getMonth() &&
+      anniversaryDate.getDate() === today.getDate();
   } catch (error) {
     console.error("Error parsing hire date:", hireDate, error);
     return false;
   }
 };
 
-      // Add or update this helper function at the top of DailyScheduleView.tsx
-      const getWeekOffset = (date: Date, startDate: Date): number => {
-        // Calculate the difference in days
-        const diffTime = date.getTime() - startDate.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        
-        // If date is before start date, return 0 (first week)
-        if (diffDays < 0) return 0;
-        
-        // Calculate which week of the 4-week cycle (0-indexed)
-        const weeksPassed = Math.floor(diffDays / 7);
-        const weekOffset = weeksPassed % 4;
-        
-        console.log(`📅 Week calculation:`, {
-          date: format(date, 'yyyy-MM-dd'),
-          startDate: format(startDate, 'yyyy-MM-dd'),
-          diffDays,
-          weeksPassed,
-          weekOffset
-        });
-        
-        return weekOffset;
-      };
+// Add or update this helper function at the top of DailyScheduleView.tsx
+const getWeekOffset = (date: Date, startDate: Date): number => {
+  // Calculate the difference in days
+  const diffTime = date.getTime() - startDate.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
-      if (!hireDate) return 0;
-      
-      try {
-        const hireDateObj = parseISO(hireDate);
-        const today = date;
-        
-        let years = today.getFullYear() - hireDateObj.getFullYear();
-        
-        // Adjust if anniversary hasn't occurred yet this year
-        if (today.getMonth() < hireDateObj.getMonth() || 
-            (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
-          years--;
-        }
-        
-        return Math.max(0, years);
-      } catch (error) {
-        console.error("Error calculating years of service:", hireDate, error);
-        return 0;
-      }
-    };
+  // If date is before start date, return 0 (first week)
+  if (diffDays < 0) return 0;
+
+  // Calculate which week of the 4-week cycle (0-indexed)
+  const weeksPassed = Math.floor(diffDays / 7);
+  const weekOffset = weeksPassed % 4;
+
+  console.log(`📅 Week calculation:`, {
+    date: format(date, 'yyyy-MM-dd'),
+    startDate: format(startDate, 'yyyy-MM-dd'),
+    diffDays,
+    weeksPassed,
+    weekOffset
+  });
+
+  return weekOffset;
+};
+
+const calculateYearsOfService = (hireDate: string | null | undefined, date: Date): number => {
+  if (!hireDate) return 0;
+
+  try {
+    const hireDateObj = parseISO(hireDate);
+    const today = date;
+
+    let years = today.getFullYear() - hireDateObj.getFullYear();
+
+    // Adjust if anniversary hasn't occurred yet this year
+    if (today.getMonth() < hireDateObj.getMonth() ||
+      (today.getMonth() === hireDateObj.getMonth() && today.getDate() < hireDateObj.getDate())) {
+      years--;
+    }
+
+    return Math.max(0, years);
+  } catch (error) {
+    console.error("Error calculating years of service:", hireDate, error);
+    return 0;
+  }
+};
 
 interface DailyScheduleViewProps {
   selectedDate: Date;
@@ -124,16 +124,16 @@ interface DailyScheduleViewProps {
   userId?: string;
 }
 
-export const DailyScheduleView = ({ 
-  selectedDate, 
-  filterShiftId = "all", 
+export const DailyScheduleView = ({
+  selectedDate,
+  filterShiftId = "all",
   isAdminOrSupervisor = false,
   userRole = 'officer'
 }: DailyScheduleViewProps) => {
   console.log("🔄 DailyScheduleView RENDERED - User Role:", userRole, "Filter Shift:", filterShiftId);
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
-  
+
   const { data: websiteSettings } = useWebsiteSettings();
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editPosition, setEditPosition] = useState("");
@@ -190,11 +190,11 @@ export const DailyScheduleView = ({
   } = useScheduleMutations(dateStr);
 
   // UPDATED with claude to stop the constant data pulling
-    const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
-        queryKey: ["daily-schedule", dateStr, filterShiftId],
-        queryFn: () => getScheduleData(selectedDate, filterShiftId),
-        staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes, stops constant background polling
-      });
+  const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
+    queryKey: ["daily-schedule", dateStr, filterShiftId],
+    queryFn: () => getScheduleData(selectedDate, filterShiftId),
+    staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes, stops constant background polling
+  });
 
   // FIXED: Updated handlers to work with the new callback signatures
   const handleSavePosition = async (officer: any, position: string) => {
@@ -203,8 +203,8 @@ export const DailyScheduleView = ({
       return;
     }
 
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
+    updateScheduleMutation.mutate({
+      scheduleId: officer.scheduleId,
       type: officer.type,
       positionName: position,
       date: dateStr,
@@ -229,10 +229,10 @@ export const DailyScheduleView = ({
       }
     });
   };
-  
+
   const handleSaveUnitNumber = async (officer: any, unitNumber: string) => {
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
+    updateScheduleMutation.mutate({
+      scheduleId: officer.scheduleId,
       type: officer.type,
       positionName: officer.position,
       date: dateStr,
@@ -259,8 +259,8 @@ export const DailyScheduleView = ({
   };
 
   const handleSaveNotes = async (officer: any, notes: string) => {
-    updateScheduleMutation.mutate({ 
-      scheduleId: officer.scheduleId, 
+    updateScheduleMutation.mutate({
+      scheduleId: officer.scheduleId,
       type: officer.type,
       positionName: officer.position,
       date: dateStr,
@@ -284,62 +284,180 @@ export const DailyScheduleView = ({
     });
   };
 
-// NEW: Handle creating partnerships
-const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
-  console.log("🔄 Creating partnership:", { 
-    officer: officer.officerId, 
-    officerName: officer.name,
-    officerPosition: officer.position,
-    officerIsPPO: isPPOByRank(officer.rank),
-    partnerOfficerId: partnerOfficerId,
-    scheduleId: officer.scheduleId,
-    type: officer.type,
-    isEmergency: !!officer.emergencyPartner
-  });
-  
-  if (!officer?.scheduleId || !officer?.officerId || !partnerOfficerId) {
-    toast.error("Invalid data for partnership creation");
-    return;
-  }
+  // NEW: Handle creating partnerships
+  const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
+    console.log("🔄 Creating partnership:", {
+      officer: officer.officerId,
+      officerName: officer.name,
+      officerPosition: officer.position,
+      officerIsPPO: isPPOByRank(officer.rank),
+      partnerOfficerId: partnerOfficerId,
+      scheduleId: officer.scheduleId,
+      type: officer.type,
+      isEmergency: !!officer.emergencyPartner
+    });
 
-  // Check if this is an emergency partnership (PPO needing partner)
-  const isEmergency = officer.isEmergencyPartnership || false;
-  const isOfficerPPO = isPPOByRank(officer.rank);
-  
-  // Prepare officer data based on partnership type
-  let officerData = { ...officer };
-  
-  if (isEmergency && isOfficerPPO) {
-    // This is a PPO getting an emergency partner
-    // The PPO should take the partner's position with "Riding with" prefix
-    console.log("🚨 Setting PPO position based on emergency partner");
-    
-    // We need to find the partner's data to get their position
-    // This will be handled in the mutation by fetching the partner's info
-    officerData = {
-      ...officer,
-      // We'll update these in the mutation after fetching partner data
-      needsPositionUpdate: true,
-      isEmergencyPartnership: true
-    };
-  } else if (!isOfficerPPO) {
-    // This is a regular officer (trainer) getting a PPO partner
-    // The regular officer keeps their position, the PPO will take it
-    console.log("👨‍🏫 Regular officer training PPO - preserving position:", officer.position);
-    officerData = {
-      ...officer,
-      isTrainingPPO: true
-    };
-  }
+    if (!officer?.scheduleId || !officer?.officerId || !partnerOfficerId) {
+      toast.error("Invalid data for partnership creation");
+      return;
+    }
 
-  updatePartnershipMutation.mutate({
-    officer: officerData,
-    partnerOfficerId: partnerOfficerId,
-    action: 'create',
-    isEmergency: isEmergency,
-    isOfficerPPO: isOfficerPPO
-  }, {
-    onSuccess: () => {
+    // Check if this is an emergency partnership (PPO needing partner)
+    const isEmergency = officer.isEmergencyPartnership || false;
+    const isOfficerPPO = isPPOByRank(officer.rank);
+
+    // Prepare officer data based on partnership type
+    let officerData = { ...officer };
+
+    if (isEmergency && isOfficerPPO) {
+      // This is a PPO getting an emergency partner
+      // The PPO should take the partner's position with "Riding with" prefix
+      console.log("🚨 Setting PPO position based on emergency partner");
+
+      // We need to find the partner's data to get their position
+      // This will be handled in the mutation by fetching the partner's info
+      officerData = {
+        ...officer,
+        // We'll update these in the mutation after fetching partner data
+        needsPositionUpdate: true,
+        isEmergencyPartnership: true
+      };
+    } else if (!isOfficerPPO) {
+      // This is a regular officer (trainer) getting a PPO partner
+      // The regular officer keeps their position, the PPO will take it
+      console.log("👨‍🏫 Regular officer training PPO - preserving position:", officer.position);
+      officerData = {
+        ...officer,
+        isTrainingPPO: true
+      };
+    }
+
+    updatePartnershipMutation.mutate({
+      officer: officerData,
+      partnerOfficerId: partnerOfficerId,
+      action: 'create',
+      isEmergency: isEmergency,
+      isOfficerPPO: isOfficerPPO
+    }, {
+      onSuccess: () => {
+        // Log partnership creation
+        auditLogger.logPartnershipChange(
+          officer.officerId,
+          officer.name,
+          partnerOfficerId,
+          'created',
+          userEmail,
+          isEmergency
+            ? `Created EMERGENCY partnership for PPO ${officer.name}`
+            : `Created partnership between ${officer.name} and partner`
+        );
+
+        // Show appropriate toast
+        if (isEmergency) {
+          toast.success(`Emergency partner assigned to PPO ${officer.name}`);
+        } else {
+          toast.success(`Partnership created successfully`);
+        }
+
+        // Refresh the schedule after partnership creation
+        refetchSchedule();
+      }
+    });
+  };
+  const handleRemovePartnership = (officer: any) => {
+    console.log("🔄 Removing partnership:", {
+      officer: officer.officerId,
+      officerName: officer.name,
+      officerData: officer,
+      partnerData: officer.partnerData,
+      partnerOfficerId: officer.partnerOfficerId,
+      suspensionReason: officer.suspensionReason
+    });
+
+    if (!officer?.scheduleId || !officer?.officerId) {
+      toast.error("Invalid officer data for partnership removal");
+      return;
+    }
+
+    // Try multiple ways to find the partner officer ID
+    let partnerIdToRemove = null;
+
+    // Method 1: Check partnerData first
+    if (officer.partnerData?.partnerOfficerId) {
+      partnerIdToRemove = officer.partnerData.partnerOfficerId;
+      console.log("Found partner ID in partnerData:", partnerIdToRemove);
+    }
+    // Method 2: Check direct partnerOfficerId field
+    else if (officer.partnerOfficerId) {
+      partnerIdToRemove = officer.partnerOfficerId;
+      console.log("Found partner ID in partnerOfficerId field:", partnerIdToRemove);
+    }
+    // Method 3: If this is a combined partnership, check the original data
+    else if (officer.isCombinedPartnership && officer.originalPartnerOfficerId) {
+      partnerIdToRemove = officer.originalPartnerOfficerId;
+      console.log("Found partner ID in originalPartnerOfficerId:", partnerIdToRemove);
+    }
+
+    if (!partnerIdToRemove) {
+      console.error("❌ No partner officer ID found for removal. Officer data:", officer);
+      toast.error("Could not find partner information. Please refresh the page and try again.");
+      return;
+    }
+
+    console.log("✅ Removing partnership with partner ID:", partnerIdToRemove);
+
+    // Determine if this is a special assignment suspension
+    const isSpecialAssignmentSuspension = officer.suspensionReason === 'special_assignment';
+    const partnerIsPPO = officer.partnerData?.partnerIsPPO || false;
+
+    updatePartnershipMutation.mutate({
+      officer: {
+        ...officer,
+        date: officer.date || dateStr,
+        dayOfWeek: officer.dayOfWeek || dayOfWeek,
+        scheduleId: officer.scheduleId,
+        officerId: officer.officerId,
+        type: officer.type,
+        shift: officer.shift,
+        partnerOfficerId: partnerIdToRemove,
+        partnerData: officer.partnerData,
+        suspensionReason: officer.suspensionReason
+      },
+      partnerOfficerId: partnerIdToRemove,
+      action: 'remove'
+    }, {
+      onSuccess: () => {
+        console.log("✅ Partnership removal successful");
+
+        // Show appropriate toast message
+        if (isSpecialAssignmentSuspension && partnerIsPPO) {
+          toast.info(
+            `Partnership suspended. ${officer.partnerData?.partnerName} (PPO) now needs an emergency partner.`,
+            { duration: 6000 }
+          );
+        } else if (isSpecialAssignmentSuspension) {
+          toast.info(
+            `Partnership suspended. ${officer.name} assigned to special duty.`,
+            { duration: 4000 }
+          );
+        }
+
+        // Refresh the schedule after partnership removal
+        refetchSchedule();
+      },
+      onError: (error) => {
+        console.error("❌ Partnership removal failed:", error);
+        toast.error("Failed to remove partnership");
+      }
+    });
+  };
+
+  // Combined handler that routes to the correct function
+  const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
+    if (partnerOfficerId) {
+      // This is a create operation
+      handleCreatePartnership(officer, partnerOfficerId);
+
       // Log partnership creation
       auditLogger.logPartnershipChange(
         officer.officerId,
@@ -347,151 +465,33 @@ const handleCreatePartnership = (officer: any, partnerOfficerId: string) => {
         partnerOfficerId,
         'created',
         userEmail,
-        isEmergency 
-          ? `Created EMERGENCY partnership for PPO ${officer.name}`
-          : `Created partnership between ${officer.name} and partner`
+        `Created partnership between ${officer.name} and partner`
       );
-      
-      // Show appropriate toast
-      if (isEmergency) {
-        toast.success(`Emergency partner assigned to PPO ${officer.name}`);
-      } else {
-        toast.success(`Partnership created successfully`);
-      }
-      
-      // Refresh the schedule after partnership creation
-      refetchSchedule();
-    }
-  });
-};
-const handleRemovePartnership = (officer: any) => {
-  console.log("🔄 Removing partnership:", { 
-    officer: officer.officerId, 
-    officerName: officer.name,
-    officerData: officer,
-    partnerData: officer.partnerData,
-    partnerOfficerId: officer.partnerOfficerId,
-    suspensionReason: officer.suspensionReason
-  });
-  
-  if (!officer?.scheduleId || !officer?.officerId) {
-    toast.error("Invalid officer data for partnership removal");
-    return;
-  }
+    } else {
+      // This is a remove/suspend operation  
+      handleRemovePartnership(officer);
 
-  // Try multiple ways to find the partner officer ID
-  let partnerIdToRemove = null;
+      // Log partnership removal/suspension
+      auditLogger.logPartnershipChange(
+        officer.officerId,
+        officer.name,
+        officer.partnerOfficerId,
+        'removed',
+        userEmail,
+        officer.partnerData?.partnerIsPPO
+          ? `Suspended partnership - PPO ${officer.partnerData.partnerName} needs emergency partner`
+          : `Removed partnership for ${officer.name}`
+      );
 
-  // Method 1: Check partnerData first
-  if (officer.partnerData?.partnerOfficerId) {
-    partnerIdToRemove = officer.partnerData.partnerOfficerId;
-    console.log("Found partner ID in partnerData:", partnerIdToRemove);
-  }
-  // Method 2: Check direct partnerOfficerId field
-  else if (officer.partnerOfficerId) {
-    partnerIdToRemove = officer.partnerOfficerId;
-    console.log("Found partner ID in partnerOfficerId field:", partnerIdToRemove);
-  }
-  // Method 3: If this is a combined partnership, check the original data
-  else if (officer.isCombinedPartnership && officer.originalPartnerOfficerId) {
-    partnerIdToRemove = officer.originalPartnerOfficerId;
-    console.log("Found partner ID in originalPartnerOfficerId:", partnerIdToRemove);
-  }
-
-  if (!partnerIdToRemove) {
-    console.error("❌ No partner officer ID found for removal. Officer data:", officer);
-    toast.error("Could not find partner information. Please refresh the page and try again.");
-    return;
-  }
-
-  console.log("✅ Removing partnership with partner ID:", partnerIdToRemove);
-
-  // Determine if this is a special assignment suspension
-  const isSpecialAssignmentSuspension = officer.suspensionReason === 'special_assignment';
-  const partnerIsPPO = officer.partnerData?.partnerIsPPO || false;
-
-  updatePartnershipMutation.mutate({
-    officer: {
-      ...officer,
-      date: officer.date || dateStr,
-      dayOfWeek: officer.dayOfWeek || dayOfWeek,
-      scheduleId: officer.scheduleId,
-      officerId: officer.officerId,
-      type: officer.type,
-      shift: officer.shift,
-      partnerOfficerId: partnerIdToRemove,
-      partnerData: officer.partnerData,
-      suspensionReason: officer.suspensionReason
-    },
-    partnerOfficerId: partnerIdToRemove,
-    action: 'remove'
-  }, {
-    onSuccess: () => {
-      console.log("✅ Partnership removal successful");
-      
-      // Show appropriate toast message
-      if (isSpecialAssignmentSuspension && partnerIsPPO) {
-        toast.info(
-          `Partnership suspended. ${officer.partnerData?.partnerName} (PPO) now needs an emergency partner.`,
-          { duration: 6000 }
-        );
-      } else if (isSpecialAssignmentSuspension) {
-        toast.info(
-          `Partnership suspended. ${officer.name} assigned to special duty.`,
-          { duration: 4000 }
+      // Show a toast to remind about emergency partner for PPO
+      if (officer.partnerData?.partnerIsPPO) {
+        toast.warning(
+          `The PPO ${officer.partnerData.partnerName} now needs an emergency partner. Please assign one immediately.`,
+          { duration: 8000 }
         );
       }
-      
-      // Refresh the schedule after partnership removal
-      refetchSchedule();
-    },
-    onError: (error) => {
-      console.error("❌ Partnership removal failed:", error);
-      toast.error("Failed to remove partnership");
     }
-  });
-};
-
-// Combined handler that routes to the correct function
-const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) => {
-  if (partnerOfficerId) {
-    // This is a create operation
-    handleCreatePartnership(officer, partnerOfficerId);
-    
-    // Log partnership creation
-    auditLogger.logPartnershipChange(
-      officer.officerId,
-      officer.name,
-      partnerOfficerId,
-      'created',
-      userEmail,
-      `Created partnership between ${officer.name} and partner`
-    );
-  } else {
-    // This is a remove/suspend operation  
-    handleRemovePartnership(officer);
-    
-    // Log partnership removal/suspension
-    auditLogger.logPartnershipChange(
-      officer.officerId,
-      officer.name,
-      officer.partnerOfficerId,
-      'removed',
-      userEmail,
-      officer.partnerData?.partnerIsPPO 
-        ? `Suspended partnership - PPO ${officer.partnerData.partnerName} needs emergency partner`
-        : `Removed partnership for ${officer.name}`
-    );
-    
-    // Show a toast to remind about emergency partner for PPO
-    if (officer.partnerData?.partnerIsPPO) {
-      toast.warning(
-        `The PPO ${officer.partnerData.partnerName} now needs an emergency partner. Please assign one immediately.`,
-        { duration: 8000 }
-      );
-    }
-  }
-};
+  };
 
   // FIXED: Handlers for PTO
   const handleSavePTOUnitNumber = (ptoRecord: any, unitNumber: string) => {
@@ -538,7 +538,7 @@ const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) 
 
   const handleEditPTO = (ptoRecord: any) => {
     if (!canEdit) return;
-    
+
     setSelectedOfficer({
       officerId: ptoRecord.officerId,
       name: ptoRecord.name, // Ensure name is passed
@@ -576,60 +576,60 @@ const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) 
 
   // In DailyScheduleView.tsx, update the handleExportShiftToPDF function:
   const handleExportShiftToPDF = async (shiftData: any) => {
-  try {
-    toast.info("Generating PDF...");
-    
-    // Get layout settings from website settings with fallback
-    let layoutSettings = websiteSettings?.pdf_layout_settings;
-    
-    // If layoutSettings is undefined or malformed, use defaults
-    if (!layoutSettings || typeof layoutSettings !== 'object') {
-      console.warn("⚠️ No valid layout settings found, using defaults");
-      layoutSettings = DEFAULT_LAYOUT_SETTINGS;
-    } else {
-      // Ensure all required properties exist
-      layoutSettings = {
-        ...DEFAULT_LAYOUT_SETTINGS,
-        ...layoutSettings,
-        fontSizes: {
-          ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
-          ...(layoutSettings.fontSizes || {})
-        },
-        sections: {
-          ...DEFAULT_LAYOUT_SETTINGS.sections,
-          ...(layoutSettings.sections || {})
-        },
-        tableSettings: {
-          ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
-          ...(layoutSettings.tableSettings || {})
-        },
-        colorSettings: {
-          ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
-          ...(layoutSettings.colorSettings || {})
-        }
-      };
-    }
+    try {
+      toast.info("Generating PDF...");
 
-    const result = await exportToPDF({
-      selectedDate: selectedDate,
-      shiftName: shiftData.shift.name,
-      shiftData: shiftData,
-      layoutSettings: layoutSettings
-    });
+      // Get layout settings from website settings with fallback
+      let layoutSettings = websiteSettings?.pdf_layout_settings;
 
-    // FIX THIS PART - Check the result properly
-    if (result && result.success === true) {
-      toast.success("PDF exported successfully");
-    } else {
-      console.error("PDF export failed:", result?.error);
-      toast.error("Failed to export PDF");
+      // If layoutSettings is undefined or malformed, use defaults
+      if (!layoutSettings || typeof layoutSettings !== 'object') {
+        console.warn("⚠️ No valid layout settings found, using defaults");
+        layoutSettings = DEFAULT_LAYOUT_SETTINGS;
+      } else {
+        // Ensure all required properties exist
+        layoutSettings = {
+          ...DEFAULT_LAYOUT_SETTINGS,
+          ...layoutSettings,
+          fontSizes: {
+            ...DEFAULT_LAYOUT_SETTINGS.fontSizes,
+            ...(layoutSettings.fontSizes || {})
+          },
+          sections: {
+            ...DEFAULT_LAYOUT_SETTINGS.sections,
+            ...(layoutSettings.sections || {})
+          },
+          tableSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.tableSettings,
+            ...(layoutSettings.tableSettings || {})
+          },
+          colorSettings: {
+            ...DEFAULT_LAYOUT_SETTINGS.colorSettings,
+            ...(layoutSettings.colorSettings || {})
+          }
+        };
+      }
+
+      const result = await exportToPDF({
+        selectedDate: selectedDate,
+        shiftName: shiftData.shift.name,
+        shiftData: shiftData,
+        layoutSettings: layoutSettings
+      });
+
+      // FIX THIS PART - Check the result properly
+      if (result && result.success === true) {
+        toast.success("PDF exported successfully");
+      } else {
+        console.error("PDF export failed:", result?.error);
+        toast.error("Failed to export PDF");
+      }
+    } catch (error) {
+      console.error("PDF Export error:", error);
+      toast.error(`Error generating PDF: ${error.message}`);
     }
-  } catch (error) {
-    console.error("PDF Export error:", error);
-    toast.error(`Error generating PDF: ${error.message}`);
-  }
-};
-  
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -656,15 +656,15 @@ const handlePartnershipChange = async (officer: any, partnerOfficerId?: string) 
       </CardHeader>
       <CardContent className="space-y-6">
         {scheduleData?.map((shiftData) => {
-const isAnyUnderstaffed = isShiftUnderstaffed(
-  shiftData.currentSupervisors,
-  shiftData.minSupervisors,
-  shiftData.currentOfficers,
-  shiftData.minOfficers
-);
-const supervisorsUnderstaffed = shiftData.minSupervisors > 0 && shiftData.currentSupervisors < shiftData.minSupervisors;
-const officersUnderstaffed = shiftData.minOfficers > 0 && shiftData.currentOfficers < shiftData.minOfficers;
-const isFullyStaffed = !isAnyUnderstaffed;
+          const isAnyUnderstaffed = isShiftUnderstaffed(
+            shiftData.currentSupervisors,
+            shiftData.minSupervisors,
+            shiftData.currentOfficers,
+            shiftData.minOfficers
+          );
+          const supervisorsUnderstaffed = shiftData.minSupervisors > 0 && shiftData.currentSupervisors < shiftData.minSupervisors;
+          const officersUnderstaffed = shiftData.minOfficers > 0 && shiftData.currentOfficers < shiftData.minOfficers;
+          const isFullyStaffed = !isAnyUnderstaffed;
 
           return (
             <div key={shiftData.shift.id} id={`shift-card-${shiftData.shift.id}`} className="border rounded-lg p-4 space-y-4">
@@ -711,146 +711,146 @@ const isFullyStaffed = !isAnyUnderstaffed;
                 </div>
               </div>
 
-{/* Supervisor Section */}
-<OfficerSection
-  title={`Supervisors (${formatStaffingCount(shiftData.currentSupervisors, shiftData.minSupervisors, '')})`}
-  officers={shiftData.supervisors}
-  minCount={shiftData.minSupervisors}
-  currentCount={shiftData.currentSupervisors}
-  isUnderstaffed={supervisorsUnderstaffed}
-  canEdit={canEdit}
-  onSavePosition={handleSavePosition}
-  onSaveUnitNumber={handleSaveUnitNumber}
-  onSaveNotes={handleSaveNotes}
-  onAssignPTO={(officer) => {
-    setSelectedOfficer({
-      officerId: officer.officerId,
-      name: officer.name,
-      scheduleId: officer.scheduleId,
-      type: officer.type,
-    });
-    setSelectedShift(officer.shift);
-    setPtoDialogOpen(true);
-  }}
-  onRemoveOfficer={removeOfficerMutation.mutate}
-  onPartnershipChange={handlePartnershipChange}
-  onEmergencyPartner={handleEmergencyPartner}
-  isUpdating={updateScheduleMutation.isPending}
-  sectionType="regular"
-  colorSettings={websiteSettings?.color_settings}
-  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
-/>
+              {/* Supervisor Section */}
+              <OfficerSection
+                title={`Supervisors (${formatStaffingCount(shiftData.currentSupervisors, shiftData.minSupervisors, '')})`}
+                officers={shiftData.supervisors}
+                minCount={shiftData.minSupervisors}
+                currentCount={shiftData.currentSupervisors}
+                isUnderstaffed={supervisorsUnderstaffed}
+                canEdit={canEdit}
+                onSavePosition={handleSavePosition}
+                onSaveUnitNumber={handleSaveUnitNumber}
+                onSaveNotes={handleSaveNotes}
+                onAssignPTO={(officer) => {
+                  setSelectedOfficer({
+                    officerId: officer.officerId,
+                    name: officer.name,
+                    scheduleId: officer.scheduleId,
+                    type: officer.type,
+                  });
+                  setSelectedShift(officer.shift);
+                  setPtoDialogOpen(true);
+                }}
+                onRemoveOfficer={removeOfficerMutation.mutate}
+                onPartnershipChange={handlePartnershipChange}
+                onEmergencyPartner={handleEmergencyPartner}
+                isUpdating={updateScheduleMutation.isPending}
+                sectionType="regular"
+                colorSettings={websiteSettings?.color_settings}
+                showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
+              />
 
-{/* Officer Section */}
-<OfficerSection
-  title={`Officers (${formatStaffingCount(shiftData.currentOfficers, shiftData.minOfficers, '')})`}
-  officers={shiftData.officers}
-  minCount={shiftData.minOfficers}
-  currentCount={shiftData.currentOfficers}
-  isUnderstaffed={officersUnderstaffed}
-  canEdit={canEdit}
-  onSavePosition={handleSavePosition}
-  onSaveUnitNumber={handleSaveUnitNumber}
-  onSaveNotes={handleSaveNotes}
-  onAssignPTO={(officer) => {
-    setSelectedOfficer({
-      officerId: officer.officerId,
-      name: officer.name,
-      scheduleId: officer.scheduleId,
-      type: officer.type,
-    });
-    setSelectedShift(officer.shift);
-    setPtoDialogOpen(true);
-  }}
-  onRemoveOfficer={removeOfficerMutation.mutate}
-  onPartnershipChange={handlePartnershipChange}
-  onEmergencyPartner={handleEmergencyPartner}
-  isUpdating={updateScheduleMutation.isPending}
-  sectionType="regular"
-  colorSettings={websiteSettings?.color_settings}
-  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
-/>
+              {/* Officer Section */}
+              <OfficerSection
+                title={`Officers (${formatStaffingCount(shiftData.currentOfficers, shiftData.minOfficers, '')})`}
+                officers={shiftData.officers}
+                minCount={shiftData.minOfficers}
+                currentCount={shiftData.currentOfficers}
+                isUnderstaffed={officersUnderstaffed}
+                canEdit={canEdit}
+                onSavePosition={handleSavePosition}
+                onSaveUnitNumber={handleSaveUnitNumber}
+                onSaveNotes={handleSaveNotes}
+                onAssignPTO={(officer) => {
+                  setSelectedOfficer({
+                    officerId: officer.officerId,
+                    name: officer.name,
+                    scheduleId: officer.scheduleId,
+                    type: officer.type,
+                  });
+                  setSelectedShift(officer.shift);
+                  setPtoDialogOpen(true);
+                }}
+                onRemoveOfficer={removeOfficerMutation.mutate}
+                onPartnershipChange={handlePartnershipChange}
+                onEmergencyPartner={handleEmergencyPartner}
+                isUpdating={updateScheduleMutation.isPending}
+                sectionType="regular"
+                colorSettings={websiteSettings?.color_settings}
+                showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS
+              />
 
-{/* Suspended Partnerships Section */}
-{shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
-  <OfficerSection
-    title="Partnerships (Suspended)"
-    officers={shiftData.suspendedPartnershipOfficers}
-    minCount={0}
-    currentCount={shiftData.suspendedPartnershipOfficers.length}
-    isUnderstaffed={false}
-    canEdit={canEdit}
-    onSavePosition={handleSavePosition}
-    onSaveUnitNumber={handleSaveUnitNumber}
-    onSaveNotes={handleSaveNotes}
-    onAssignPTO={(officer) => {
-      setSelectedOfficer({
-        officerId: officer.officerId,
-        name: officer.name,
-        scheduleId: officer.scheduleId,
-        type: officer.type,
-      });
-      setSelectedShift(officer.shift);
-      setPtoDialogOpen(true);
-    }}
-    onRemoveOfficer={removeOfficerMutation.mutate}
-    onPartnershipChange={handlePartnershipChange}
-    onEmergencyPartner={handleEmergencyPartner}
-    isUpdating={updateScheduleMutation.isPending}
-    sectionType="suspendedPartnership"
-    colorSettings={websiteSettings?.color_settings}
-    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
-  />
-)}
+              {/* Suspended Partnerships Section */}
+              {shiftData.suspendedPartnershipOfficers && shiftData.suspendedPartnershipOfficers.length > 0 && (
+                <OfficerSection
+                  title="Partnerships (Suspended)"
+                  officers={shiftData.suspendedPartnershipOfficers}
+                  minCount={0}
+                  currentCount={shiftData.suspendedPartnershipOfficers.length}
+                  isUnderstaffed={false}
+                  canEdit={canEdit}
+                  onSavePosition={handleSavePosition}
+                  onSaveUnitNumber={handleSaveUnitNumber}
+                  onSaveNotes={handleSaveNotes}
+                  onAssignPTO={(officer) => {
+                    setSelectedOfficer({
+                      officerId: officer.officerId,
+                      name: officer.name,
+                      scheduleId: officer.scheduleId,
+                      type: officer.type,
+                    });
+                    setSelectedShift(officer.shift);
+                    setPtoDialogOpen(true);
+                  }}
+                  onRemoveOfficer={removeOfficerMutation.mutate}
+                  onPartnershipChange={handlePartnershipChange}
+                  onEmergencyPartner={handleEmergencyPartner}
+                  isUpdating={updateScheduleMutation.isPending}
+                  sectionType="suspendedPartnership"
+                  colorSettings={websiteSettings?.color_settings}
+                  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+                />
+              )}
 
-{/* Special Assignment Section */}
-{shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
-  <OfficerSection
-    title="Special Assignments"
-    officers={shiftData.specialAssignmentOfficers}
-    minCount={0}
-    currentCount={shiftData.specialAssignmentOfficers.length}
-    isUnderstaffed={false}
-    canEdit={canEdit}
-    onSavePosition={handleSavePosition}
-    onSaveUnitNumber={handleSaveUnitNumber}
-    onSaveNotes={handleSaveNotes}
-    onAssignPTO={(officer) => {
-      setSelectedOfficer({
-        officerId: officer.officerId,
-        name: officer.name,
-        scheduleId: officer.scheduleId,
-        type: officer.type,
-      });
-      setSelectedShift(officer.shift);
-      setPtoDialogOpen(true);
-    }}
-    onRemoveOfficer={removeOfficerMutation.mutate}
-    onPartnershipChange={handlePartnershipChange}
-    onEmergencyPartner={handleEmergencyPartner}
-    isUpdating={updateScheduleMutation.isPending}
-    sectionType="special"
-    colorSettings={websiteSettings?.color_settings}
-    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
-  />
-)}
+              {/* Special Assignment Section */}
+              {shiftData.specialAssignmentOfficers && shiftData.specialAssignmentOfficers.length > 0 && (
+                <OfficerSection
+                  title="Special Assignments"
+                  officers={shiftData.specialAssignmentOfficers}
+                  minCount={0}
+                  currentCount={shiftData.specialAssignmentOfficers.length}
+                  isUnderstaffed={false}
+                  canEdit={canEdit}
+                  onSavePosition={handleSavePosition}
+                  onSaveUnitNumber={handleSaveUnitNumber}
+                  onSaveNotes={handleSaveNotes}
+                  onAssignPTO={(officer) => {
+                    setSelectedOfficer({
+                      officerId: officer.officerId,
+                      name: officer.name,
+                      scheduleId: officer.scheduleId,
+                      type: officer.type,
+                    });
+                    setSelectedShift(officer.shift);
+                    setPtoDialogOpen(true);
+                  }}
+                  onRemoveOfficer={removeOfficerMutation.mutate}
+                  onPartnershipChange={handlePartnershipChange}
+                  onEmergencyPartner={handleEmergencyPartner}
+                  isUpdating={updateScheduleMutation.isPending}
+                  sectionType="special"
+                  colorSettings={websiteSettings?.color_settings}
+                  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false}
+                />
+              )}
 
-{/* PTO Section */}
-{shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
-  <OfficerSection
-    title="Time Off"
-    ptoRecords={shiftData.ptoRecords}
-    canEdit={canEdit}
-    onSaveUnitNumber={handleSavePTOUnitNumber}
-    onSaveNotes={handleSavePTONotes}
-    onEditPTO={handleEditPTO}
-    onRemovePTO={removePTOMutation.mutate}
-    isUpdating={updatePTODetailsMutation.isPending}
-    sectionType="pto"
-    colorSettings={websiteSettings?.color_settings}
-    showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS LINE
-  />
-)}
+              {/* PTO Section */}
+              {shiftData.ptoRecords && shiftData.ptoRecords.length > 0 && (
+                <OfficerSection
+                  title="Time Off"
+                  ptoRecords={shiftData.ptoRecords}
+                  canEdit={canEdit}
+                  onSaveUnitNumber={handleSavePTOUnitNumber}
+                  onSaveNotes={handleSavePTONotes}
+                  onEditPTO={handleEditPTO}
+                  onRemovePTO={removePTOMutation.mutate}
+                  isUpdating={updatePTODetailsMutation.isPending}
+                  sectionType="pto"
+                  colorSettings={websiteSettings?.color_settings}
+                  showSpecialOccasions={websiteSettings?.show_special_occasions_in_schedule !== false} // ADD THIS LINE
+                />
+              )}
             </div>
           );
         })}
@@ -950,6 +950,8 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
       if (error) throw error;
       return profiles;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
 
@@ -973,48 +975,48 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
   const calculateHours = (start: string, end: string) => {
     const [startHour, startMin] = start.split(":").map(Number);
     const [endHour, endMin] = end.split(":").map(Number);
-    
+
     // Convert to minutes from start of day
     const startMinutes = startHour * 60 + startMin;
     let endMinutes = endHour * 60 + endMin;
-    
+
     // If end time is less than start time, it crosses midnight (add 24 hours)
     if (endMinutes < startMinutes) {
       endMinutes += 24 * 60; // Add 24 hours in minutes
     }
-    
+
     return (endMinutes - startMinutes) / 60;
   };
 
   const addOfficerMutation = useMutation({
     mutationFn: async () => {
       const finalPosition = position === "Other (Custom)" ? customPosition : position;
-      
+
       if (!finalPosition) {
         throw new Error("Please select or enter a position");
       }
-      
+
       // Validate custom times if partial shift
       if (isPartialShift) {
         if (!customStartTime || !customEndTime) {
           throw new Error("Please enter both start and end times for partial shift");
         }
-        
+
         // Check if shift crosses midnight
         const shiftCrossesMidnight = doesShiftCrossMidnight(shift.start_time, shift.end_time);
         const customCrossesMidnight = doesShiftCrossMidnight(customStartTime, customEndTime);
-        
+
         // For shifts that don't cross midnight, end must be after start
         if (!shiftCrossesMidnight && !customCrossesMidnight && customStartTime >= customEndTime) {
           throw new Error("End time must be after start time");
         }
-        
+
         // If original shift crosses midnight but custom doesn't, warn but allow
         if (shiftCrossesMidnight && !customCrossesMidnight) {
           console.log("⚠️ Original shift crosses midnight but custom times don't");
         }
       }
-      
+
       // Check if officer already has a schedule exception for this date and shift
       const { data: existingExceptions, error: checkError } = await supabase
         .from("schedule_exceptions")
@@ -1024,7 +1026,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
         .eq("shift_type_id", shiftId);
 
       if (checkError) throw checkError;
-      
+
       if (existingExceptions && existingExceptions.length > 0) {
         throw new Error("Officer already has a schedule for this date and shift");
       }
@@ -1056,7 +1058,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
         .single();
 
       if (error) throw error;
-      
+
       // Log to audit
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
@@ -1067,17 +1069,17 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
           description: `Added ${isPartialShift ? 'partial' : 'full'} extra shift (${hoursWorked} hours)`
         });
       }
-      
+
       return data;
     },
     onSuccess: () => {
       toast.success("Officer added to schedule successfully");
-      
+
       // Call the refetch function to update the UI immediately
       if (refetchSchedule) {
         refetchSchedule();
       }
-      
+
       onSuccess();
     },
     onError: (error: any) => {
@@ -1117,12 +1119,12 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
             <SelectValue placeholder="Choose an officer" />
           </SelectTrigger>
           <SelectContent>
-  {sortOfficersByLastName(officers || []).map((officer) => (
-    <SelectItem key={officer.id} value={officer.id}>
-      {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
-    </SelectItem>
-  ))}
-</SelectContent>
+            {sortOfficersByLastName(officers || []).map((officer) => (
+              <SelectItem key={officer.id} value={officer.id}>
+                {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
@@ -1139,7 +1141,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
             ))}
           </SelectContent>
         </Select>
-        
+
         {position === "Other (Custom)" && (
           <Input
             placeholder="Enter custom position"
@@ -1169,7 +1171,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
               Full Shift {formatShiftDisplay(shift?.start_time || '??:??', shift?.end_time || '??:??')}
             </Label>
           </div>
-          
+
           {/* Partial Shift Option */}
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -1183,7 +1185,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
               Partial/Custom Hours
             </Label>
           </div>
-          
+
           {/* Warning for midnight-crossing shifts */}
           {isPartialShift && shift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
             <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 ml-6">
@@ -1191,7 +1193,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
               Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
             </div>
           )}
-          
+
           {isPartialShift && (
             <div className="grid grid-cols-2 gap-4 ml-6">
               <div className="space-y-2">
@@ -1226,7 +1228,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
               </div>
             </div>
           )}
-          
+
           {/* Display calculated hours */}
           {isPartialShift && customStartTime && customEndTime && (
             <div className="text-sm text-muted-foreground ml-6">
@@ -1306,15 +1308,15 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
   if (shiftError) throw shiftError;
 
   // Get minimum staffing
-const { data: minimumStaffing, error: minError } = await supabase
-  .from("minimum_staffing")
-  .select("minimum_officers, minimum_supervisors, shift_type_id")
-  .eq("day_of_week", dayOfWeek);
-if (minError) {
-  console.error("Minimum staffing error:", minError);
-  // Use empty array as fallback - components will handle no rules gracefully
-  minimumStaffing = [];
-}
+  const { data: minimumStaffing, error: minError } = await supabase
+    .from("minimum_staffing")
+    .select("minimum_officers, minimum_supervisors, shift_type_id")
+    .eq("day_of_week", dayOfWeek);
+  if (minError) {
+    console.error("Minimum staffing error:", minError);
+    // Use empty array as fallback - components will handle no rules gracefully
+    minimumStaffing = [];
+  }
 
   // Get default assignments for all officers for this date
   const { data: allDefaultAssignments, error: defaultAssignmentsError } = await supabase
@@ -1330,10 +1332,10 @@ if (minError) {
   // Helper function to get default assignment for an officer
   const getDefaultAssignment = (officerId: string) => {
     if (!allDefaultAssignments) return null;
-    
+
     const currentDate = parseISO(dateStr);
-    
-    return allDefaultAssignments.find(da => 
+
+    return allDefaultAssignments.find(da =>
       da.officer_id === officerId &&
       parseISO(da.start_date) <= currentDate &&
       (!da.end_date || parseISO(da.end_date) >= currentDate)
@@ -1389,7 +1391,7 @@ if (minError) {
       .from("profiles")
       .select("id, full_name, badge_number, rank, birthday, hire_date") // ADDED birthday and hire_date
       .in("id", officerIds);
-    
+
     if (profilesError) {
       console.error("❌ Profiles error:", profilesError);
     } else {
@@ -1426,7 +1428,7 @@ if (minError) {
       .from("shift_types")
       .select("id, name, start_time, end_time")
       .in("id", shiftTypeIds);
-    
+
     if (shiftTypesError) {
       console.error("❌ Shift types error:", shiftTypesError);
     } else {
@@ -1459,186 +1461,186 @@ if (minError) {
     // Get ALL officers for this shift, avoiding duplicates
     const allOfficersMap = new Map();
 
-      // Process recurring officers for this shift
-      recurringData
-        ?.filter(r => r.shift_types?.id === shift.id)
-        .forEach(r => {
-          const currentDate = parseISO(dateStr);
-          const scheduleStartDate = parseISO(r.start_date);
-          const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
-          
-          if (currentDate < scheduleStartDate) return;
-          if (scheduleEndDate && currentDate > scheduleEndDate) return;
-          
-          // Calculate current week offset (0,1,2,3)
-          const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
-          
-          // CRITICAL: Handle NULL as "every week"
-          let shouldInclude = false;
-          
-          if (r.week_offset === null || r.week_offset === undefined) {
-            // NULL means every week - ALWAYS include
-            shouldInclude = true;
-            console.log(`✅ Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
-          } else if (r.week_offset === weekOffset) {
-            // Specific week match - include
-            shouldInclude = true;
-            console.log(`✅ Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+    // Process recurring officers for this shift
+    recurringData
+      ?.filter(r => r.shift_types?.id === shift.id)
+      .forEach(r => {
+        const currentDate = parseISO(dateStr);
+        const scheduleStartDate = parseISO(r.start_date);
+        const scheduleEndDate = r.end_date ? parseISO(r.end_date) : null;
+
+        if (currentDate < scheduleStartDate) return;
+        if (scheduleEndDate && currentDate > scheduleEndDate) return;
+
+        // Calculate current week offset (0,1,2,3)
+        const weekOffset = getWeekOffset(currentDate, scheduleStartDate);
+
+        // CRITICAL: Handle NULL as "every week"
+        let shouldInclude = false;
+
+        if (r.week_offset === null || r.week_offset === undefined) {
+          // NULL means every week - ALWAYS include
+          shouldInclude = true;
+          console.log(`✅ Including ${r.profiles?.full_name}: NULL week_offset (every week)`);
+        } else if (r.week_offset === weekOffset) {
+          // Specific week match - include
+          shouldInclude = true;
+          console.log(`✅ Including ${r.profiles?.full_name}: Week offset match. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+        } else {
+          // Specific week mismatch - skip
+          shouldInclude = false;
+          console.log(`❌ Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+        }
+
+        if (!shouldInclude) return;
+
+        // Continue with existing officer creation logic...
+        const officerKey = `${r.officer_id}-${shift.id}`;
+
+        // PTO check
+        const ptoException = ptoExceptions?.find(e =>
+          e.officer_id === r.officer_id &&
+          e.shift_type_id === shift.id &&
+          e.date === dateStr
+        );
+
+        const workingException = workingExceptions?.find(e =>
+          e.officer_id === r.officer_id && e.shift_type_id === shift.id
+        );
+
+        const defaultAssignment = getDefaultAssignment(r.officer_id);
+
+        const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
+        const isProbationary = officerRank?.toLowerCase() === 'probationary';
+
+        let customTime = undefined;
+        if (ptoException?.custom_start_time && ptoException?.custom_end_time) {
+          const shiftStart = shift.start_time;
+          const shiftEnd = shift.end_time;
+          const ptoStart = ptoException.custom_start_time;
+          const ptoEnd = ptoException.custom_end_time;
+
+          if (ptoStart === shiftStart && ptoEnd !== shiftEnd) {
+            customTime = `Working: ${ptoEnd} - ${shiftEnd}`;
+          } else if (ptoStart !== shiftStart && ptoEnd === shiftEnd) {
+            customTime = `Working: ${shiftStart} - ${ptoStart}`;
+          } else if (ptoStart !== shiftStart && ptoEnd !== shiftEnd) {
+            customTime = `Working: ${shiftStart}-${ptoStart} & ${ptoEnd}-${shiftEnd}`;
           } else {
-            // Specific week mismatch - skip
-            shouldInclude = false;
-            console.log(`❌ Skipping ${r.profiles?.full_name}: Week offset mismatch. Schedule week: ${r.week_offset}, Current week: ${weekOffset}`);
+            customTime = `Working: Check PTO`;
           }
-          
-          if (!shouldInclude) return;
-          
-          // Continue with existing officer creation logic...
-          const officerKey = `${r.officer_id}-${shift.id}`;
-          
-          // PTO check
-          const ptoException = ptoExceptions?.find(e => 
-            e.officer_id === r.officer_id && 
-            e.shift_type_id === shift.id &&
-            e.date === dateStr
-          );
-      
-          const workingException = workingExceptions?.find(e => 
-            e.officer_id === r.officer_id && e.shift_type_id === shift.id
-          );
-      
-          const defaultAssignment = getDefaultAssignment(r.officer_id);
-      
-          const officerRank = workingException?.profiles?.rank || r.profiles?.rank;
-          const isProbationary = officerRank?.toLowerCase() === 'probationary';
-      
-          let customTime = undefined;
-          if (ptoException?.custom_start_time && ptoException?.custom_end_time) {
-            const shiftStart = shift.start_time;
-            const shiftEnd = shift.end_time;
-            const ptoStart = ptoException.custom_start_time;
-            const ptoEnd = ptoException.custom_end_time;
-            
-            if (ptoStart === shiftStart && ptoEnd !== shiftEnd) {
-              customTime = `Working: ${ptoEnd} - ${shiftEnd}`;
-            } else if (ptoStart !== shiftStart && ptoEnd === shiftEnd) {
-              customTime = `Working: ${shiftStart} - ${ptoStart}`;
-            } else if (ptoStart !== shiftStart && ptoEnd !== shiftEnd) {
-              customTime = `Working: ${shiftStart}-${ptoStart} & ${ptoEnd}-${shiftEnd}`;
-            } else {
-              customTime = `Working: Check PTO`;
-            }
-          } else if (workingException?.custom_start_time && workingException?.custom_end_time) {
-            customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
-          }
-      
-          // Create officer data based on whether there's a working exception
-          const finalData = workingException ? {
-            scheduleId: workingException.id,
-            officerId: r.officer_id,
-            name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
-            badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
-            rank: officerRank,
-            isPPO: isProbationary,
-            position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
-            unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
-            notes: workingException.notes,
-            type: "recurring" as const,
-            originalScheduleId: r.id,
-            customTime: customTime,
-            hasPTO: !!ptoException,
-            ptoData: ptoException ? {
-              id: ptoException.id,
-              ptoType: ptoException.reason,
-              startTime: ptoException.custom_start_time || shift.start_time,
-              endTime: ptoException.custom_end_time || shift.end_time,
-              isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-            } : undefined,
-            isPartnership: workingException.is_partnership || r.is_partnership,
-            partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
-            partnershipSuspended: workingException.partnership_suspended || false,
-            shift: shift,
-            isExtraShift: false,
-            date: dateStr,
-            dayOfWeek: dayOfWeek,
-            birthday: workingException.profiles?.birthday || r.profiles?.birthday,
-            hire_date: workingException.profiles?.hire_date || r.profiles?.hire_date,
-            isBirthdayToday: workingException.profiles?.birthday 
-              ? isBirthdayToday(workingException.profiles.birthday, selectedDate)
-              : r.profiles?.birthday 
-                ? isBirthdayToday(r.profiles.birthday, selectedDate)
-                : false,
-            isAnniversaryToday: workingException.profiles?.hire_date 
-              ? isAnniversaryToday(workingException.profiles.hire_date, selectedDate)
-              : r.profiles?.hire_date 
-                ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
-                : false,
-            yearsOfService: workingException.profiles?.hire_date 
-              ? calculateYearsOfService(workingException.profiles.hire_date, selectedDate)
-              : r.profiles?.hire_date 
-                ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
-                : 0
-          } : {
-            scheduleId: r.id,
-            officerId: r.officer_id,
-            name: r.profiles?.full_name || "Unknown",
-            badge: r.profiles?.badge_number,
-            rank: officerRank,
-            isPPO: isProbationary,
-            position: r.position_name || defaultAssignment?.position_name,
-            unitNumber: r.unit_number || defaultAssignment?.unit_number,
-            notes: null,
-            type: "recurring" as const,
-            originalScheduleId: r.id,
-            customTime: customTime,
-            hasPTO: !!ptoException,
-            ptoData: ptoException ? {
-              id: ptoException.id,
-              ptoType: ptoException.reason,
-              startTime: ptoException.custom_start_time || shift.start_time,
-              endTime: ptoException.custom_end_time || shift.end_time,
-              isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-            } : undefined,
-            isPartnership: r.is_partnership,
-            partnerOfficerId: r.partner_officer_id,
-            partnershipSuspended: r.partnership_suspended || false,
-            shift: shift,
-            isExtraShift: false,
-            date: dateStr,
-            dayOfWeek: dayOfWeek,
-            birthday: r.profiles?.birthday,
-            hire_date: r.profiles?.hire_date,
-            isBirthdayToday: r.profiles?.birthday 
+        } else if (workingException?.custom_start_time && workingException?.custom_end_time) {
+          customTime = `${workingException.custom_start_time} - ${workingException.custom_end_time}`;
+        }
+
+        // Create officer data based on whether there's a working exception
+        const finalData = workingException ? {
+          scheduleId: workingException.id,
+          officerId: r.officer_id,
+          name: workingException.profiles?.full_name || r.profiles?.full_name || "Unknown",
+          badge: workingException.profiles?.badge_number || r.profiles?.badge_number,
+          rank: officerRank,
+          isPPO: isProbationary,
+          position: workingException.position_name || r.position_name || defaultAssignment?.position_name,
+          unitNumber: workingException.unit_number || r.unit_number || defaultAssignment?.unit_number,
+          notes: workingException.notes,
+          type: "recurring" as const,
+          originalScheduleId: r.id,
+          customTime: customTime,
+          hasPTO: !!ptoException,
+          ptoData: ptoException ? {
+            id: ptoException.id,
+            ptoType: ptoException.reason,
+            startTime: ptoException.custom_start_time || shift.start_time,
+            endTime: ptoException.custom_end_time || shift.end_time,
+            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+          } : undefined,
+          isPartnership: workingException.is_partnership || r.is_partnership,
+          partnerOfficerId: workingException.partner_officer_id || r.partner_officer_id,
+          partnershipSuspended: workingException.partnership_suspended || false,
+          shift: shift,
+          isExtraShift: false,
+          date: dateStr,
+          dayOfWeek: dayOfWeek,
+          birthday: workingException.profiles?.birthday || r.profiles?.birthday,
+          hire_date: workingException.profiles?.hire_date || r.profiles?.hire_date,
+          isBirthdayToday: workingException.profiles?.birthday
+            ? isBirthdayToday(workingException.profiles.birthday, selectedDate)
+            : r.profiles?.birthday
               ? isBirthdayToday(r.profiles.birthday, selectedDate)
               : false,
-            isAnniversaryToday: r.profiles?.hire_date 
+          isAnniversaryToday: workingException.profiles?.hire_date
+            ? isAnniversaryToday(workingException.profiles.hire_date, selectedDate)
+            : r.profiles?.hire_date
               ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
               : false,
-            yearsOfService: r.profiles?.hire_date 
+          yearsOfService: workingException.profiles?.hire_date
+            ? calculateYearsOfService(workingException.profiles.hire_date, selectedDate)
+            : r.profiles?.hire_date
               ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
               : 0
-          };
-      
-          allOfficersMap.set(officerKey, finalData);
-        });
+        } : {
+          scheduleId: r.id,
+          officerId: r.officer_id,
+          name: r.profiles?.full_name || "Unknown",
+          badge: r.profiles?.badge_number,
+          rank: officerRank,
+          isPPO: isProbationary,
+          position: r.position_name || defaultAssignment?.position_name,
+          unitNumber: r.unit_number || defaultAssignment?.unit_number,
+          notes: null,
+          type: "recurring" as const,
+          originalScheduleId: r.id,
+          customTime: customTime,
+          hasPTO: !!ptoException,
+          ptoData: ptoException ? {
+            id: ptoException.id,
+            ptoType: ptoException.reason,
+            startTime: ptoException.custom_start_time || shift.start_time,
+            endTime: ptoException.custom_end_time || shift.end_time,
+            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+          } : undefined,
+          isPartnership: r.is_partnership,
+          partnerOfficerId: r.partner_officer_id,
+          partnershipSuspended: r.partnership_suspended || false,
+          shift: shift,
+          isExtraShift: false,
+          date: dateStr,
+          dayOfWeek: dayOfWeek,
+          birthday: r.profiles?.birthday,
+          hire_date: r.profiles?.hire_date,
+          isBirthdayToday: r.profiles?.birthday
+            ? isBirthdayToday(r.profiles.birthday, selectedDate)
+            : false,
+          isAnniversaryToday: r.profiles?.hire_date
+            ? isAnniversaryToday(r.profiles.hire_date, selectedDate)
+            : false,
+          yearsOfService: r.profiles?.hire_date
+            ? calculateYearsOfService(r.profiles.hire_date, selectedDate)
+            : 0
+        };
+
+        allOfficersMap.set(officerKey, finalData);
+      });
 
     // Process additional officers from working exceptions
     workingExceptions
       ?.filter(e => e.shift_type_id === shift.id)
       .forEach(e => {
         const officerKey = `${e.officer_id}-${shift.id}`;
-        
+
         if (allOfficersMap.has(officerKey)) {
           console.log("🔄 Skipping duplicate officer (already in recurring):", e.profiles?.full_name);
           return;
         }
 
-        const isRegularRecurring = recurringData?.some(r => 
-          r.officer_id === e.officer_id && 
+        const isRegularRecurring = recurringData?.some(r =>
+          r.officer_id === e.officer_id &&
           r.shift_types?.id === shift.id &&
           r.day_of_week === dayOfWeek
         );
 
-        const ptoException = ptoExceptions?.find(p => 
+        const ptoException = ptoExceptions?.find(p =>
           p.officer_id === e.officer_id && p.shift_type_id === shift.id
         );
 
@@ -1653,7 +1655,7 @@ if (minError) {
           const shiftEnd = shift.end_time;
           const ptoStart = ptoException.custom_start_time;
           const ptoEnd = ptoException.custom_end_time;
-          
+
           if (ptoStart === shiftStart && ptoEnd !== shiftEnd) {
             customTime = `Working: ${ptoEnd} - ${shiftEnd}`;
           } else if (ptoStart !== shiftStart && ptoEnd === shiftEnd) {
@@ -1667,550 +1669,550 @@ if (minError) {
           customTime = `${e.custom_start_time} - ${e.custom_end_time}`;
         }
 
-// REPLACE this block starting at line 751:
-const officerData = {
-  scheduleId: e.id,
-  officerId: e.officer_id,
-  name: e.profiles?.full_name || "Unknown",
-  badge: e.profiles?.badge_number,
-  rank: officerRank,
-  isPPO: isProbationary,
-  position: e.position_name || defaultAssignment?.position_name,
-  unitNumber: e.unit_number || defaultAssignment?.unit_number,
-  notes: e.notes,
-  type: isRegularRecurring ? "recurring" : "exception" as const,
-  originalScheduleId: null,
-  customTime: customTime,
-  hasPTO: !!ptoException,
-  ptoData: ptoException ? {
-    id: ptoException.id,
-    ptoType: ptoException.reason,
-    startTime: ptoException.custom_start_time || shift.start_time,
-    endTime: ptoException.custom_end_time || shift.end_time,
-    isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
-  } : undefined,
-  isPartnership: e.is_partnership,
-  partnerOfficerId: e.partner_officer_id,
-  partnershipSuspended: e.partnership_suspended || false,
-  shift: shift,
-  isExtraShift: !isRegularRecurring,
-  // Add for emergency partner functionality
-  date: dateStr,
-  dayOfWeek: dayOfWeek,
-  // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
-  custom_start_time: e.custom_start_time,
-  custom_end_time: e.custom_end_time,
-  hours_worked: e.hours_worked,
-  is_partial_shift: e.is_partial_shift,
-  // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE:
-  birthday: e.profiles?.birthday,
-  hire_date: e.profiles?.hire_date,
-  isBirthdayToday: e.profiles?.birthday 
-    ? isBirthdayToday(e.profiles.birthday, selectedDate)
-    : false,
-  isAnniversaryToday: e.profiles?.hire_date 
-    ? isAnniversaryToday(e.profiles.hire_date, selectedDate)
-    : false,
-  yearsOfService: e.profiles?.hire_date 
-    ? calculateYearsOfService(e.profiles.hire_date, selectedDate)
-    : 0
-};
+        // REPLACE this block starting at line 751:
+        const officerData = {
+          scheduleId: e.id,
+          officerId: e.officer_id,
+          name: e.profiles?.full_name || "Unknown",
+          badge: e.profiles?.badge_number,
+          rank: officerRank,
+          isPPO: isProbationary,
+          position: e.position_name || defaultAssignment?.position_name,
+          unitNumber: e.unit_number || defaultAssignment?.unit_number,
+          notes: e.notes,
+          type: isRegularRecurring ? "recurring" : "exception" as const,
+          originalScheduleId: null,
+          customTime: customTime,
+          hasPTO: !!ptoException,
+          ptoData: ptoException ? {
+            id: ptoException.id,
+            ptoType: ptoException.reason,
+            startTime: ptoException.custom_start_time || shift.start_time,
+            endTime: ptoException.custom_end_time || shift.end_time,
+            isFullShift: !ptoException.custom_start_time && !ptoException.custom_end_time
+          } : undefined,
+          isPartnership: e.is_partnership,
+          partnerOfficerId: e.partner_officer_id,
+          partnershipSuspended: e.partnership_suspended || false,
+          shift: shift,
+          isExtraShift: !isRegularRecurring,
+          // Add for emergency partner functionality
+          date: dateStr,
+          dayOfWeek: dayOfWeek,
+          // ADD THESE LINES FOR PARTIAL SHIFT SUPPORT:
+          custom_start_time: e.custom_start_time,
+          custom_end_time: e.custom_end_time,
+          hours_worked: e.hours_worked,
+          is_partial_shift: e.is_partial_shift,
+          // 🎂🎖️ ADD BIRTHDAY/ANNIVERSARY FIELDS HERE:
+          birthday: e.profiles?.birthday,
+          hire_date: e.profiles?.hire_date,
+          isBirthdayToday: e.profiles?.birthday
+            ? isBirthdayToday(e.profiles.birthday, selectedDate)
+            : false,
+          isAnniversaryToday: e.profiles?.hire_date
+            ? isAnniversaryToday(e.profiles.hire_date, selectedDate)
+            : false,
+          yearsOfService: e.profiles?.hire_date
+            ? calculateYearsOfService(e.profiles.hire_date, selectedDate)
+            : 0
+        };
 
         allOfficersMap.set(officerKey, officerData);
       });
 
     const allOfficers = Array.from(allOfficersMap.values());
 
-// Process partnerships with proper handling
-const processedOfficers = [];
-const processedOfficerIds = new Set();
-const partnershipMap = new Map();
+    // Process partnerships with proper handling
+    const processedOfficers = [];
+    const processedOfficerIds = new Set();
+    const partnershipMap = new Map();
 
-// First pass: Build partnership map
-for (const officer of allOfficers) {
-  if (officer.isPartnership && officer.partnerOfficerId) {
-    const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
-    
-    if (partnerOfficer) {
-      partnershipMap.set(officer.officerId, officer.partnerOfficerId);
-      partnershipMap.set(officer.partnerOfficerId, officer.officerId);
+    // First pass: Build partnership map
+    for (const officer of allOfficers) {
+      if (officer.isPartnership && officer.partnerOfficerId) {
+        const partnerOfficer = allOfficers.find(o => o.officerId === officer.partnerOfficerId);
+
+        if (partnerOfficer) {
+          partnershipMap.set(officer.officerId, officer.partnerOfficerId);
+          partnershipMap.set(officer.partnerOfficerId, officer.officerId);
+        }
+      }
     }
-  }
-}
 
-// Second pass: Process ALL officers
-for (const officer of allOfficers) {
-  // Skip if already processed
-  if (processedOfficerIds.has(officer.officerId)) {
-    continue;
-  }
-
-  const partnerOfficerId = partnershipMap.get(officer.officerId);
-  
-  // Check if this is a valid reciprocal partnership
-  if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
-    const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
-    
-    if (partnerOfficer) {
-      // Mark BOTH officers as processed immediately
-      processedOfficerIds.add(officer.officerId);
-      processedOfficerIds.add(partnerOfficer.officerId);
-      
-      // Check if either officer is on full-day PTO
-      const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
-      const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
-      
-      // NEW: Check if either officer has a special assignment position (using imported function)
-      const officerHasSpecialAssignment = isSpecialAssignment(officer.position);
-      const partnerHasSpecialAssignment = isSpecialAssignment(partnerOfficer.position);
-      
-      // Handle PTO cases (existing logic)
-      if (officerOnPTO && partnerOnPTO) {
-        // Both on PTO - don't add to processedOfficers (they'll be in PTO section)
+    // Second pass: Process ALL officers
+    for (const officer of allOfficers) {
+      // Skip if already processed
+      if (processedOfficerIds.has(officer.officerId)) {
         continue;
-      } else if (officerOnPTO || partnerOnPTO) {
-        // One on PTO, one working
-        const workingOfficer = officerOnPTO ? partnerOfficer : officer;
-        const ptoOfficer = officerOnPTO ? officer : partnerOfficer;
-        
-        const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
-        const isPtoOfficerPPO = isPPOByRank(ptoOfficer.rank);
-        
-        console.log("🔍 Partnership Suspension Check (PTO):", {
-          workingOfficer: workingOfficer.name,
-          workingIsPPO: isWorkingOfficerPPO,
-          ptoOfficer: ptoOfficer.name,
-          ptoIsPPO: isPtoOfficerPPO
-        });
-        
-        if (isWorkingOfficerPPO) {
-          // Working officer is a PPO - needs emergency partner button
-          console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${ptoOfficer.name} on PTO)`);
-          const suspendedOfficer = {
-            ...workingOfficer,
-            isPartnership: true,
-            partnerOfficerId: ptoOfficer.officerId,
-            partnershipSuspended: true,
-            partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
-            partnerData: {
-              partnerOfficerId: ptoOfficer.officerId,
-              partnerName: ptoOfficer.name,
-              partnerBadge: ptoOfficer.badge,
-              partnerRank: ptoOfficer.rank,
-              partnerIsPPO: isPtoOfficerPPO
-            },
-            hasPTO: false,
-            ptoData: undefined,
-            _suspendedPartnership: true,
-            _processed: true
-          };
-          
-          processedOfficers.push(suspendedOfficer);
-        } else if (isPtoOfficerPPO) {
-          // Working officer is regular, PPO is on PTO
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${ptoOfficer.name} on PTO)`);
-          processedOfficers.push({
-            ...workingOfficer,
-            isPartnership: false,
-            partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
-          });
+      }
+
+      const partnerOfficerId = partnershipMap.get(officer.officerId);
+
+      // Check if this is a valid reciprocal partnership
+      if (partnerOfficerId && partnershipMap.get(partnerOfficerId) === officer.officerId) {
+        const partnerOfficer = allOfficers.find(o => o.officerId === partnerOfficerId);
+
+        if (partnerOfficer) {
+          // Mark BOTH officers as processed immediately
+          processedOfficerIds.add(officer.officerId);
+          processedOfficerIds.add(partnerOfficer.officerId);
+
+          // Check if either officer is on full-day PTO
+          const officerOnPTO = officer.hasPTO && officer.ptoData?.isFullShift;
+          const partnerOnPTO = partnerOfficer.hasPTO && partnerOfficer.ptoData?.isFullShift;
+
+          // NEW: Check if either officer has a special assignment position (using imported function)
+          const officerHasSpecialAssignment = isSpecialAssignment(officer.position);
+          const partnerHasSpecialAssignment = isSpecialAssignment(partnerOfficer.position);
+
+          // Handle PTO cases (existing logic)
+          if (officerOnPTO && partnerOnPTO) {
+            // Both on PTO - don't add to processedOfficers (they'll be in PTO section)
+            continue;
+          } else if (officerOnPTO || partnerOnPTO) {
+            // One on PTO, one working
+            const workingOfficer = officerOnPTO ? partnerOfficer : officer;
+            const ptoOfficer = officerOnPTO ? officer : partnerOfficer;
+
+            const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
+            const isPtoOfficerPPO = isPPOByRank(ptoOfficer.rank);
+
+            console.log("🔍 Partnership Suspension Check (PTO):", {
+              workingOfficer: workingOfficer.name,
+              workingIsPPO: isWorkingOfficerPPO,
+              ptoOfficer: ptoOfficer.name,
+              ptoIsPPO: isPtoOfficerPPO
+            });
+
+            if (isWorkingOfficerPPO) {
+              // Working officer is a PPO - needs emergency partner button
+              console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${ptoOfficer.name} on PTO)`);
+              const suspendedOfficer = {
+                ...workingOfficer,
+                isPartnership: true,
+                partnerOfficerId: ptoOfficer.officerId,
+                partnershipSuspended: true,
+                partnershipSuspensionReason: `${ptoOfficer.name} on PTO`,
+                partnerData: {
+                  partnerOfficerId: ptoOfficer.officerId,
+                  partnerName: ptoOfficer.name,
+                  partnerBadge: ptoOfficer.badge,
+                  partnerRank: ptoOfficer.rank,
+                  partnerIsPPO: isPtoOfficerPPO
+                },
+                hasPTO: false,
+                ptoData: undefined,
+                _suspendedPartnership: true,
+                _processed: true
+              };
+
+              processedOfficers.push(suspendedOfficer);
+            } else if (isPtoOfficerPPO) {
+              // Working officer is regular, PPO is on PTO
+              console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${ptoOfficer.name} on PTO)`);
+              processedOfficers.push({
+                ...workingOfficer,
+                isPartnership: false,
+                partnerOfficerId: null,
+                partnershipSuspended: false,
+                partnerData: undefined,
+                _suspendedPartnership: false,
+                _processed: true
+              });
+            } else {
+              // Both are regular officers, one on PTO
+              console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on PTO)`);
+              processedOfficers.push({
+                ...workingOfficer,
+                isPartnership: false,
+                partnerOfficerId: null,
+                partnershipSuspended: false,
+                partnerData: undefined,
+                _suspendedPartnership: false,
+                _processed: true
+              });
+            }
+          }
+          // NEW: Handle Special Assignment cases (exactly like PTO case)
+          else if (officerHasSpecialAssignment || partnerHasSpecialAssignment) {
+            // One on special assignment, one working regular
+            const workingOfficer = officerHasSpecialAssignment ? partnerOfficer : officer;
+            const specialAssignmentOfficer = officerHasSpecialAssignment ? officer : partnerOfficer;
+
+            const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
+            const isSpecialAssignmentOfficerPPO = isPPOByRank(specialAssignmentOfficer.rank);
+
+            console.log("🔍 Partnership Suspension Check (Special Assignment):", {
+              workingOfficer: workingOfficer.name,
+              workingIsPPO: isWorkingOfficerPPO,
+              specialAssignmentOfficer: specialAssignmentOfficer.name,
+              specialAssignmentIsPPO: isSpecialAssignmentOfficerPPO,
+              specialAssignmentPosition: specialAssignmentOfficer.position
+            });
+
+            // ALWAYS add the special assignment officer to processedOfficers
+            // They will be picked up by the specialAssignmentOfficers filter
+            const specialAssignmentProcessed = {
+              ...specialAssignmentOfficer,
+              // Clear partnership flags so they don't get picked up elsewhere
+              isPartnership: false,
+              partnerOfficerId: null,
+              partnershipSuspended: false,
+              partnerData: undefined,
+              _processed: true
+            };
+            processedOfficers.push(specialAssignmentProcessed);
+            console.log(`✅ Added special assignment officer to list: ${specialAssignmentOfficer.name} with position ${specialAssignmentOfficer.position}`);
+
+            if (isWorkingOfficerPPO) {
+              // Working officer is a PPO - needs emergency partner button
+              console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${specialAssignmentOfficer.name} on Special Assignment)`);
+
+              // Add the suspended PPO (will go to Partnerships Suspended section)
+              const suspendedOfficer = {
+                ...workingOfficer,
+                isPartnership: true,
+                partnerOfficerId: specialAssignmentOfficer.officerId,
+                partnershipSuspended: true,
+                partnershipSuspensionReason: `${specialAssignmentOfficer.name} on Special Assignment`,
+                partnerData: {
+                  partnerOfficerId: specialAssignmentOfficer.officerId,
+                  partnerName: specialAssignmentOfficer.name,
+                  partnerBadge: specialAssignmentOfficer.badge,
+                  partnerRank: specialAssignmentOfficer.rank,
+                  partnerIsPPO: isSpecialAssignmentOfficerPPO
+                },
+                hasPTO: false,
+                ptoData: undefined,
+                _suspendedPartnership: true,
+                _processed: true
+              };
+              processedOfficers.push(suspendedOfficer);
+
+            } else if (isSpecialAssignmentOfficerPPO) {
+              // Working officer is regular, PPO is on special assignment
+              console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${specialAssignmentOfficer.name} on Special Assignment)`);
+              processedOfficers.push({
+                ...workingOfficer,
+                isPartnership: false,
+                partnerOfficerId: null,
+                partnershipSuspended: false,
+                partnerData: undefined,
+                _suspendedPartnership: false,
+                _processed: true
+              });
+            } else {
+              // Both are regular officers, one on special assignment
+              console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
+              processedOfficers.push({
+                ...workingOfficer,
+                isPartnership: false,
+                partnerOfficerId: null,
+                partnershipSuspended: false,
+                partnerData: undefined,
+                _suspendedPartnership: false,
+                _processed: true
+              });
+            }
+          }
+          else {
+            // Normal active partnership - combine them
+            console.log(`🤝 Active partnership: ${officer.name} + ${partnerOfficer.name}`);
+
+            // Determine primary officer (regular officers should be primary)
+            let primaryOfficer = officer;
+            let secondaryOfficer = partnerOfficer;
+
+            if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
+              // Officer is PPO, partner is regular - make regular officer primary
+              primaryOfficer = partnerOfficer;
+              secondaryOfficer = officer;
+            } else if (isPPOByRank(partnerOfficer.rank) && !isPPOByRank(officer.rank)) {
+              // Partner is PPO, officer is regular - already correct
+            } else {
+              // Both same type, sort by name for consistency
+              primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
+              secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
+            }
+
+            const combinedOfficer = {
+              ...primaryOfficer,
+              isCombinedPartnership: true,
+              partnerData: {
+                partnerOfficerId: secondaryOfficer.officerId,
+                partnerName: secondaryOfficer.name,
+                partnerBadge: secondaryOfficer.badge,
+                partnerRank: secondaryOfficer.rank,
+                partnerIsPPO: isPPOByRank(secondaryOfficer.rank),
+                partnerPosition: secondaryOfficer.position,
+                partnerUnitNumber: secondaryOfficer.unitNumber,
+                partnerScheduleId: secondaryOfficer.scheduleId,
+                partnerType: secondaryOfficer.type
+              },
+              partnerOfficerId: secondaryOfficer.officerId,
+              originalPartnerOfficerId: secondaryOfficer.officerId,
+              position: primaryOfficer.position || secondaryOfficer.position,
+              unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
+              notes: primaryOfficer.notes || secondaryOfficer.notes ?
+                `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim()
+                : null,
+              isPartnership: true,
+              partnershipSuspended: false,
+              hasPTO: false,
+              ptoData: undefined,
+              _suspendedPartnership: false,
+              _processed: true
+            };
+
+            console.log(`✅ Combined partnership created: ${combinedOfficer.name} + ${combinedOfficer.partnerData.partnerName}`);
+            processedOfficers.push(combinedOfficer);
+          }
         } else {
-          // Both are regular officers, one on PTO
-          console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on PTO)`);
+          // Partner not found - treat as regular officer
           processedOfficers.push({
-            ...workingOfficer,
+            ...officer,
             isPartnership: false,
             partnerOfficerId: null,
-            partnershipSuspended: false,
-            partnerData: undefined,
-            _suspendedPartnership: false,
-            _processed: true
+            partnershipSuspended: false
           });
+          processedOfficerIds.add(officer.officerId);
         }
-      } 
-// NEW: Handle Special Assignment cases (exactly like PTO case)
-else if (officerHasSpecialAssignment || partnerHasSpecialAssignment) {
-  // One on special assignment, one working regular
-  const workingOfficer = officerHasSpecialAssignment ? partnerOfficer : officer;
-  const specialAssignmentOfficer = officerHasSpecialAssignment ? officer : partnerOfficer;
-  
-  const isWorkingOfficerPPO = isPPOByRank(workingOfficer.rank);
-  const isSpecialAssignmentOfficerPPO = isPPOByRank(specialAssignmentOfficer.rank);
-  
-  console.log("🔍 Partnership Suspension Check (Special Assignment):", {
-    workingOfficer: workingOfficer.name,
-    workingIsPPO: isWorkingOfficerPPO,
-    specialAssignmentOfficer: specialAssignmentOfficer.name,
-    specialAssignmentIsPPO: isSpecialAssignmentOfficerPPO,
-    specialAssignmentPosition: specialAssignmentOfficer.position
-  });
-  
-  // ALWAYS add the special assignment officer to processedOfficers
-  // They will be picked up by the specialAssignmentOfficers filter
-  const specialAssignmentProcessed = {
-    ...specialAssignmentOfficer,
-    // Clear partnership flags so they don't get picked up elsewhere
-    isPartnership: false,
-    partnerOfficerId: null,
-    partnershipSuspended: false,
-    partnerData: undefined,
-    _processed: true
-  };
-  processedOfficers.push(specialAssignmentProcessed);
-  console.log(`✅ Added special assignment officer to list: ${specialAssignmentOfficer.name} with position ${specialAssignmentOfficer.position}`);
-  
-  if (isWorkingOfficerPPO) {
-    // Working officer is a PPO - needs emergency partner button
-    console.log(`⚠️ PPO ${workingOfficer.name} needs emergency partner (${specialAssignmentOfficer.name} on Special Assignment)`);
-    
-    // Add the suspended PPO (will go to Partnerships Suspended section)
-    const suspendedOfficer = {
-      ...workingOfficer,
-      isPartnership: true,
-      partnerOfficerId: specialAssignmentOfficer.officerId,
-      partnershipSuspended: true,
-      partnershipSuspensionReason: `${specialAssignmentOfficer.name} on Special Assignment`,
-      partnerData: {
-        partnerOfficerId: specialAssignmentOfficer.officerId,
-        partnerName: specialAssignmentOfficer.name,
-        partnerBadge: specialAssignmentOfficer.badge,
-        partnerRank: specialAssignmentOfficer.rank,
-        partnerIsPPO: isSpecialAssignmentOfficerPPO
-      },
-      hasPTO: false,
-      ptoData: undefined,
-      _suspendedPartnership: true,
-      _processed: true
+      } else {
+        // No valid partnership - process as individual officer
+        // Check if officer is on full-day PTO
+        if (officer.hasPTO && officer.ptoData?.isFullShift) {
+          // Don't add to processedOfficers - they'll appear in PTO section
+          processedOfficerIds.add(officer.officerId);
+        } else {
+          // Regular officer (no partnership or invalid partnership)
+          const finalOfficer = { ...officer };
+          // Clear any orphaned partnership flags
+          if (finalOfficer.isPartnership && !finalOfficer.partnerOfficerId) {
+            finalOfficer.isPartnership = false;
+            finalOfficer.partnershipSuspended = false;
+          }
+          processedOfficers.push(finalOfficer);
+          processedOfficerIds.add(officer.officerId);
+        }
+      }
+    }
+
+    // FIXED: FIRST: Get all officers with full day PTO for the PTO section
+    // REPLACE this block starting at line 810:
+    const shiftPTORecords = ptoExceptions?.filter(e =>
+      e.shift_type_id === shift.id
+    ).map(e => {
+      // Get the officer's profile
+      const profile = getOfficerProfile(e.officer_id);
+
+      return {
+        id: e.id,
+        officerId: e.officer_id,
+        name: profile?.full_name || "Unknown",
+        badge: profile?.badge_number,
+        rank: profile?.rank,
+        ptoType: e.reason || "PTO",
+        startTime: e.custom_start_time || shift.start_time,
+        endTime: e.custom_end_time || shift.end_time,
+        isFullShift: !e.custom_start_time && !e.custom_end_time,
+        shiftTypeId: shift.id,
+        unitNumber: e.unit_number,
+        notes: e.notes,
+        // 🎂🎖️ FIXED: Properly add birthday/anniversary fields for PTO records - ADD RAW DATE FIELDS
+        birthday: profile?.birthday,  // ADD THIS LINE - CRITICAL FOR PDF EXPORT
+        hire_date: profile?.hire_date, // ADD THIS LINE - CRITICAL FOR PDF EXPORT
+        isBirthdayToday: profile?.birthday
+          ? isBirthdayToday(profile.birthday, selectedDate)
+          : false,
+        isAnniversaryToday: profile?.hire_date
+          ? isAnniversaryToday(profile.hire_date, selectedDate)
+          : false,
+        yearsOfService: profile?.hire_date
+          ? calculateYearsOfService(profile.hire_date, selectedDate)
+          : 0
+      };
+    }) || [];
+
+    // Function to check if officer is in a partnership
+    const isInPartnership = (officer: any) => {
+      return officer.isPartnership;
     };
-    processedOfficers.push(suspendedOfficer);
-    
-  } else if (isSpecialAssignmentOfficerPPO) {
-    // Working officer is regular, PPO is on special assignment
-    console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (PPO ${specialAssignmentOfficer.name} on Special Assignment)`);
-    processedOfficers.push({
-      ...workingOfficer,
-      isPartnership: false,
-      partnerOfficerId: null,
-      partnershipSuspended: false,
-      partnerData: undefined,
-      _suspendedPartnership: false,
-      _processed: true
-    });
-  } else {
-    // Both are regular officers, one on special assignment
-    console.log(`✅ Regular officer ${workingOfficer.name} returns to regular list (regular partner on Special Assignment)`);
-    processedOfficers.push({
-      ...workingOfficer,
-      isPartnership: false,
-      partnerOfficerId: null,
-      partnershipSuspended: false,
-      partnerData: undefined,
-      _suspendedPartnership: false,
-      _processed: true
-    });
-  }
-}
-      else {
-        // Normal active partnership - combine them
-        console.log(`🤝 Active partnership: ${officer.name} + ${partnerOfficer.name}`);
-        
-        // Determine primary officer (regular officers should be primary)
-        let primaryOfficer = officer;
-        let secondaryOfficer = partnerOfficer;
-        
-        if (isPPOByRank(officer.rank) && !isPPOByRank(partnerOfficer.rank)) {
-          // Officer is PPO, partner is regular - make regular officer primary
-          primaryOfficer = partnerOfficer;
-          secondaryOfficer = officer;
-        } else if (isPPOByRank(partnerOfficer.rank) && !isPPOByRank(officer.rank)) {
-          // Partner is PPO, officer is regular - already correct
-        } else {
-          // Both same type, sort by name for consistency
-          primaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? officer : partnerOfficer;
-          secondaryOfficer = officer.name.localeCompare(partnerOfficer.name) < 0 ? partnerOfficer : officer;
+
+    // Function to check if partnership is active (not suspended)
+    const isActivePartnership = (officer: any) => {
+      return officer.isPartnership && !officer.partnershipSuspended;
+    };
+
+    // Function to check if position is "Riding with partner" or similar
+    const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
+      if (!position) return false;
+      const positionLower = position.toLowerCase();
+      return (
+        positionLower.includes('riding with') ||
+        positionLower.includes('riding partner') ||
+        positionLower.includes('emergency partner') ||
+        positionLower === 'other'
+      );
+    };
+
+    // SECOND: Identify special assignment officers (including those whose partnerships were just suspended)
+    const specialAssignmentOfficers = processedOfficers.filter(officer => {
+      // Use the imported function to check if this is a special assignment
+      const hasSpecialAssignment = isSpecialAssignment(officer.position);
+
+      // Include if they have a special assignment, regardless of partnership status
+      // The partnership processing above has already cleared their partnership flags
+      if (hasSpecialAssignment) {
+        console.log(`📋 Including in special assignments: ${officer.name}`, {
+          position: officer.position,
+          isPartnership: officer.isPartnership,
+          partnershipSuspended: officer.partnershipSuspended,
+          hasPartnerData: !!officer.partnerData
+        });
+        return true;
+      }
+
+      return false;
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // THIRD: Identify supervisors (excluding those with special assignments or partnerships)
+    const supervisors = sortSupervisorsByRank(
+      processedOfficers.filter(o => {
+        // Skip special assignment officers
+        const position = o.position?.toLowerCase() || '';
+        const isSpecialAssignment = position.includes('other') ||
+          (o.position && !PREDEFINED_POSITIONS.includes(o.position));
+        if (isSpecialAssignment) return false;
+
+        // Skip officers in ANY partnership
+        if (isInPartnership(o)) return false;
+
+        // Check by position OR by rank
+        const hasSupervisorPosition = position.includes('supervisor');
+        const hasSupervisorRank = isSupervisorByRank(o.rank);
+
+        return hasSupervisorPosition || hasSupervisorRank;
+      })
+    );
+
+    // FOURTH: Regular officers (everyone else who's not in the above categories)
+    const regularOfficers = processedOfficers.filter(o => {
+      // Skip officers with full day PTO
+      if (o.hasPTO && o.ptoData?.isFullShift) return false;
+
+      // Skip special assignment officers (EXCEPT "Riding with partner" positions)
+      const position = o.position?.toLowerCase() || '';
+      const isSpecialAssignment = (position.includes('other') && !isRidingWithPartnerPosition(o.position)) ||
+        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
+      if (isSpecialAssignment) return false;
+
+      // Skip supervisors
+      const hasSupervisorPosition = position.includes('supervisor');
+      const hasSupervisorRank = isSupervisorByRank(o.rank);
+      if (hasSupervisorPosition || hasSupervisorRank) return false;
+
+      // CRITICAL FIX: Include active partnerships in regular officers
+      // Only exclude suspended partnerships
+      if (o.partnershipSuspended) {
+        console.log(`❌ Excluding from regular officers (suspended partnership): ${o.name}`);
+        return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      // Function to normalize position for sorting
+      const normalizePosition = (position: string) => {
+        if (!position) return { sortKey: '9999', display: position };
+
+        const positionLower = position.toLowerCase();
+
+        // City-Wide should be first
+        if (positionLower.includes('city-wide') || positionLower.includes('citywide')) {
+          return { sortKey: '0000', display: position };
         }
 
-        const combinedOfficer = {
-          ...primaryOfficer,
-          isCombinedPartnership: true,
-          partnerData: {
-            partnerOfficerId: secondaryOfficer.officerId,
-            partnerName: secondaryOfficer.name,
-            partnerBadge: secondaryOfficer.badge,
-            partnerRank: secondaryOfficer.rank,
-            partnerIsPPO: isPPOByRank(secondaryOfficer.rank),
-            partnerPosition: secondaryOfficer.position,
-            partnerUnitNumber: secondaryOfficer.unitNumber,
-            partnerScheduleId: secondaryOfficer.scheduleId,
-            partnerType: secondaryOfficer.type
-          },
-          partnerOfficerId: secondaryOfficer.officerId,
-          originalPartnerOfficerId: secondaryOfficer.officerId,
-          position: primaryOfficer.position || secondaryOfficer.position,
-          unitNumber: primaryOfficer.unitNumber || secondaryOfficer.unitNumber,
-          notes: primaryOfficer.notes || secondaryOfficer.notes ? 
-            `${primaryOfficer.notes || ''}${primaryOfficer.notes && secondaryOfficer.notes ? ' / ' : ''}${secondaryOfficer.notes || ''}`.trim() 
-            : null,
-          isPartnership: true,
-          partnershipSuspended: false,
-          hasPTO: false,
-          ptoData: undefined,
-          _suspendedPartnership: false,
-          _processed: true
-        };
+        // Extract numbers from position
+        const numbers = position.match(/\d+/g) || [];
 
-        console.log(`✅ Combined partnership created: ${combinedOfficer.name} + ${combinedOfficer.partnerData.partnerName}`);
-        processedOfficers.push(combinedOfficer);
+        if (numbers.length === 0) {
+          // No numbers found - use position string for sorting
+          return { sortKey: '9999' + positionLower, display: position };
+        }
+
+        // Create a sortable key from numbers
+        // For single districts: pad to 4 digits (e.g., 1 -> 0001)
+        // For combined districts: pad each and separate (e.g., 1/2 -> 0001.0002)
+        const paddedNumbers = numbers.map(num =>
+          num.padStart(4, '0')
+        ).join('.');
+
+        return { sortKey: paddedNumbers, display: position };
+      };
+
+      const aNorm = normalizePosition(a.position);
+      const bNorm = normalizePosition(b.position);
+
+      // Compare the sort keys
+      const keyComparison = aNorm.sortKey.localeCompare(bNorm.sortKey);
+      if (keyComparison !== 0) {
+        return keyComparison;
       }
-    } else {
-      // Partner not found - treat as regular officer
-      processedOfficers.push({
-        ...officer,
-        isPartnership: false,
-        partnerOfficerId: null,
-        partnershipSuspended: false
-      });
-      processedOfficerIds.add(officer.officerId);
-    }
-  } else {
-    // No valid partnership - process as individual officer
-    // Check if officer is on full-day PTO
-    if (officer.hasPTO && officer.ptoData?.isFullShift) {
-      // Don't add to processedOfficers - they'll appear in PTO section
-      processedOfficerIds.add(officer.officerId);
-    } else {
-      // Regular officer (no partnership or invalid partnership)
-      const finalOfficer = { ...officer };
-      // Clear any orphaned partnership flags
-      if (finalOfficer.isPartnership && !finalOfficer.partnerOfficerId) {
-        finalOfficer.isPartnership = false;
-        finalOfficer.partnershipSuspended = false;
+
+      // If sort keys are the same, fall back to alphabetical by position
+      return (a.position || '').localeCompare(b.position || '');
+    });
+
+    // FIFTH: Suspended partnerships - PPOs whose trainers are on special assignment or PTO
+    const suspendedPartnershipOfficers = processedOfficers.filter(o => {
+      const shouldBeSuspended = o.partnershipSuspended === true || o.needsEmergencyPartner === true;
+
+      if (shouldBeSuspended) {
+        console.log(`✅ Adding to suspended partnerships: ${o.name}`, {
+          reason: o.partnershipSuspensionReason || 'Trainer on special assignment',
+          needsEmergencyPartner: o.needsEmergencyPartner
+        });
       }
-      processedOfficers.push(finalOfficer);
-      processedOfficerIds.add(officer.officerId);
-    }
-  }
-}
 
-// FIXED: FIRST: Get all officers with full day PTO for the PTO section
-// REPLACE this block starting at line 810:
-const shiftPTORecords = ptoExceptions?.filter(e => 
-  e.shift_type_id === shift.id
-).map(e => {
-  // Get the officer's profile
-  const profile = getOfficerProfile(e.officer_id);
-  
-  return {
-    id: e.id,
-    officerId: e.officer_id,
-    name: profile?.full_name || "Unknown",
-    badge: profile?.badge_number,
-    rank: profile?.rank,
-    ptoType: e.reason || "PTO",
-    startTime: e.custom_start_time || shift.start_time,
-    endTime: e.custom_end_time || shift.end_time,
-    isFullShift: !e.custom_start_time && !e.custom_end_time,
-    shiftTypeId: shift.id,
-    unitNumber: e.unit_number,
-    notes: e.notes,
-    // 🎂🎖️ FIXED: Properly add birthday/anniversary fields for PTO records - ADD RAW DATE FIELDS
-    birthday: profile?.birthday,  // ADD THIS LINE - CRITICAL FOR PDF EXPORT
-    hire_date: profile?.hire_date, // ADD THIS LINE - CRITICAL FOR PDF EXPORT
-    isBirthdayToday: profile?.birthday 
-      ? isBirthdayToday(profile.birthday, selectedDate)
-      : false,
-    isAnniversaryToday: profile?.hire_date 
-      ? isAnniversaryToday(profile.hire_date, selectedDate)
-      : false,
-    yearsOfService: profile?.hire_date 
-      ? calculateYearsOfService(profile.hire_date, selectedDate)
-      : 0
-  };
-}) || [];
-
-// Function to check if officer is in a partnership
-const isInPartnership = (officer: any) => {
-  return officer.isPartnership;
-};
-
-// Function to check if partnership is active (not suspended)
-const isActivePartnership = (officer: any) => {
-  return officer.isPartnership && !officer.partnershipSuspended;
-};
-
-// Function to check if position is "Riding with partner" or similar
-const isRidingWithPartnerPosition = (position: string | undefined | null): boolean => {
-  if (!position) return false;
-  const positionLower = position.toLowerCase();
-  return (
-    positionLower.includes('riding with') ||
-    positionLower.includes('riding partner') ||
-    positionLower.includes('emergency partner') ||
-    positionLower === 'other'
-  );
-};
-
-// SECOND: Identify special assignment officers (including those whose partnerships were just suspended)
-const specialAssignmentOfficers = processedOfficers.filter(officer => {
-  // Use the imported function to check if this is a special assignment
-  const hasSpecialAssignment = isSpecialAssignment(officer.position);
-  
-  // Include if they have a special assignment, regardless of partnership status
-  // The partnership processing above has already cleared their partnership flags
-  if (hasSpecialAssignment) {
-    console.log(`📋 Including in special assignments: ${officer.name}`, {
-      position: officer.position,
-      isPartnership: officer.isPartnership,
-      partnershipSuspended: officer.partnershipSuspended,
-      hasPartnerData: !!officer.partnerData
+      return shouldBeSuspended;
     });
-    return true;
-  }
-  
-  return false;
-}).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-// THIRD: Identify supervisors (excluding those with special assignments or partnerships)
-const supervisors = sortSupervisorsByRank(
-  processedOfficers.filter(o => {
-    // Skip special assignment officers
-    const position = o.position?.toLowerCase() || '';
-    const isSpecialAssignment = position.includes('other') || 
-          (o.position && !PREDEFINED_POSITIONS.includes(o.position));
-    if (isSpecialAssignment) return false;
-    
-    // Skip officers in ANY partnership
-    if (isInPartnership(o)) return false;
-    
-    // Check by position OR by rank
-    const hasSupervisorPosition = position.includes('supervisor');
-    const hasSupervisorRank = isSupervisorByRank(o.rank);
-    
-    return hasSupervisorPosition || hasSupervisorRank;
-  })
-);
-
-// FOURTH: Regular officers (everyone else who's not in the above categories)
-const regularOfficers = processedOfficers.filter(o => {
-  // Skip officers with full day PTO
-  if (o.hasPTO && o.ptoData?.isFullShift) return false;
-  
-  // Skip special assignment officers (EXCEPT "Riding with partner" positions)
-  const position = o.position?.toLowerCase() || '';
-  const isSpecialAssignment = (position.includes('other') && !isRidingWithPartnerPosition(o.position)) || 
-        (o.position && !PREDEFINED_POSITIONS.includes(o.position) && !isRidingWithPartnerPosition(o.position));
-  if (isSpecialAssignment) return false;
-  
-  // Skip supervisors
-  const hasSupervisorPosition = position.includes('supervisor');
-  const hasSupervisorRank = isSupervisorByRank(o.rank);
-  if (hasSupervisorPosition || hasSupervisorRank) return false;
-  
-  // CRITICAL FIX: Include active partnerships in regular officers
-  // Only exclude suspended partnerships
-  if (o.partnershipSuspended) {
-    console.log(`❌ Excluding from regular officers (suspended partnership): ${o.name}`);
-    return false;
-  }
-  
-  return true;
-}).sort((a, b) => {
-  // Function to normalize position for sorting
-  const normalizePosition = (position: string) => {
-    if (!position) return { sortKey: '9999', display: position };
-    
-    const positionLower = position.toLowerCase();
-    
-    // City-Wide should be first
-    if (positionLower.includes('city-wide') || positionLower.includes('citywide')) {
-      return { sortKey: '0000', display: position };
-    }
-    
-    // Extract numbers from position
-    const numbers = position.match(/\d+/g) || [];
-    
-    if (numbers.length === 0) {
-      // No numbers found - use position string for sorting
-      return { sortKey: '9999' + positionLower, display: position };
-    }
-    
-    // Create a sortable key from numbers
-    // For single districts: pad to 4 digits (e.g., 1 -> 0001)
-    // For combined districts: pad each and separate (e.g., 1/2 -> 0001.0002)
-    const paddedNumbers = numbers.map(num => 
-      num.padStart(4, '0')
-    ).join('.');
-    
-    return { sortKey: paddedNumbers, display: position };
-  };
-  
-  const aNorm = normalizePosition(a.position);
-  const bNorm = normalizePosition(b.position);
-  
-  // Compare the sort keys
-  const keyComparison = aNorm.sortKey.localeCompare(bNorm.sortKey);
-  if (keyComparison !== 0) {
-    return keyComparison;
-  }
-  
-  // If sort keys are the same, fall back to alphabetical by position
-  return (a.position || '').localeCompare(b.position || '');
-});
-
-// FIFTH: Suspended partnerships - PPOs whose trainers are on special assignment or PTO
-const suspendedPartnershipOfficers = processedOfficers.filter(o => {
-  const shouldBeSuspended = o.partnershipSuspended === true || o.needsEmergencyPartner === true;
-  
-  if (shouldBeSuspended) {
-    console.log(`✅ Adding to suspended partnerships: ${o.name}`, {
-      reason: o.partnershipSuspensionReason || 'Trainer on special assignment',
-      needsEmergencyPartner: o.needsEmergencyPartner
+    // Calculate staffing counts (exclude PPOs from officer count)
+    const countedSupervisors = supervisors.filter(supervisor => {
+      const hasFullDayPTO = supervisor.hasPTO && supervisor.ptoData?.isFullShift;
+      return !hasFullDayPTO;
     });
-  }
-  
-  return shouldBeSuspended;
-});
 
-// Calculate staffing counts (exclude PPOs from officer count)
-const countedSupervisors = supervisors.filter(supervisor => {
-  const hasFullDayPTO = supervisor.hasPTO && supervisor.ptoData?.isFullShift;
-  return !hasFullDayPTO;
-});
+    const countedOfficers = regularOfficers.filter(officer => {
+      const isPPO = officer.isPPO;
+      const hasFullDayPTO = officer.hasPTO && officer.ptoData?.isFullShift;
+      return !isPPO && !hasFullDayPTO;
+    });
 
-const countedOfficers = regularOfficers.filter(officer => {
-  const isPPO = officer.isPPO;
-  const hasFullDayPTO = officer.hasPTO && officer.ptoData?.isFullShift;
-  return !isPPO && !hasFullDayPTO;
-});
+    console.log(`📊 Staffing counts for ${shift.name}:`, {
+      totalSupervisors: supervisors.length,
+      countedSupervisors: countedSupervisors.length,
+      totalOfficers: regularOfficers.length,
+      countedOfficers: countedOfficers.length,
+      ppos: regularOfficers.filter(o => o.isPPO).length,
+      fullDayPTOs: shiftPTORecords.filter(p => p.isFullShift).length,
+      // activePartnerships: 0, // Hardcode 0 since we're not tracking this
+      suspendedPartnerships: suspendedPartnershipOfficers.length,
+      specialAssignments: specialAssignmentOfficers.length
+    });
 
-console.log(`📊 Staffing counts for ${shift.name}:`, {
-  totalSupervisors: supervisors.length,
-  countedSupervisors: countedSupervisors.length,
-  totalOfficers: regularOfficers.length,
-  countedOfficers: countedOfficers.length,
-  ppos: regularOfficers.filter(o => o.isPPO).length,
-  fullDayPTOs: shiftPTORecords.filter(p => p.isFullShift).length,
-  // activePartnerships: 0, // Hardcode 0 since we're not tracking this
-  suspendedPartnerships: suspendedPartnershipOfficers.length,
-  specialAssignments: specialAssignmentOfficers.length
-});
-
-return {
-  shift,
-  minSupervisors: minStaff?.minimum_supervisors || 0,  // Changed from 1 to 0
-  minOfficers: minStaff?.minimum_officers || 0,       // Changed from 0 to explicit 0
-  currentSupervisors: countedSupervisors.length,
-  currentOfficers: countedOfficers.length,
-  supervisors,
-  officers: regularOfficers,
-  suspendedPartnershipOfficers,
-  specialAssignmentOfficers,
-  ptoRecords: shiftPTORecords,
-};
+    return {
+      shift,
+      minSupervisors: minStaff?.minimum_supervisors || 0,  // Changed from 1 to 0
+      minOfficers: minStaff?.minimum_officers || 0,       // Changed from 0 to explicit 0
+      currentSupervisors: countedSupervisors.length,
+      currentOfficers: countedOfficers.length,
+      supervisors,
+      officers: regularOfficers,
+      suspendedPartnershipOfficers,
+      specialAssignmentOfficers,
+      ptoRecords: shiftPTORecords,
+    };
   });
 
   // Filter by shift if needed
@@ -2219,7 +2221,7 @@ return {
     filteredSchedule = scheduleByShift?.filter(
       shiftData => shiftData.shift.id === filterShiftId
     ) || [];
-    
+
     console.log("🎯 Filtered schedule:", {
       beforeFilter: scheduleByShift?.length,
       afterFilter: filteredSchedule?.length,

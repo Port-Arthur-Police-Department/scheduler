@@ -28,7 +28,7 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
 }) => {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  
+
   const startDay = monthStart.getDay();
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
@@ -123,6 +123,8 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
       return scheduleByDate;
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Calculate monthly totals
@@ -159,7 +161,7 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
             <Button variant="outline" size="icon" onClick={onPreviousMonth}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            
+
             <div className="text-center">
               <div className="font-semibold text-lg">
                 {format(currentMonth, "MMMM yyyy")}
@@ -168,7 +170,7 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
                 Today
               </Button>
             </div>
-            
+
             <Button variant="outline" size="icon" onClick={onNextMonth}>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -194,21 +196,21 @@ export const MonthlyViewMobile: React.FC<MonthlyViewMobileProps> = ({
             {Array.from({ length: startDay }).map((_, index) => (
               <div key={`empty-${index}`} className="h-10" />
             ))}
-            
+
             {days.map((day) => {
               const dateStr = format(day, "yyyy-MM-dd");
               const dayData = scheduleData?.[dateStr];
               const isCurrentDay = isToday(day);
               const isCurrentMonthDay = isSameMonth(day, currentMonth);
               const totalCount = dayData ? dayData.officerCount : 0;
-              
+
               return (
                 <div
                   key={dateStr}
                   className={`
                     h-10 flex flex-col items-center justify-center rounded-lg text-sm
-                    ${isCurrentDay 
-                      ? 'bg-primary text-primary-foreground font-semibold' 
+                    ${isCurrentDay
+                      ? 'bg-primary text-primary-foreground font-semibold'
                       : 'bg-background hover:bg-muted'
                     }
                     ${!isCurrentMonthDay ? 'opacity-30' : ''}

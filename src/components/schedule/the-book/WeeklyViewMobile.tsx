@@ -11,14 +11,14 @@ import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleCellMobile } from "./ScheduleCellMobile";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
-import { 
-  sortOfficersConsistently, 
-  type OfficerForSorting 
+import {
+  sortOfficersConsistently,
+  type OfficerForSorting
 } from "@/utils/sortingUtils";
-import { 
+import {
   isShiftUnderstaffed,
   hasMinimumRequirements,
-  formatStaffingCount 
+  formatStaffingCount
 } from "@/utils/staffingUtils";
 
 interface WeeklyViewMobileProps {
@@ -70,13 +70,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   // Helper function to check if an officer is working overtime - MATCHES DESKTOP LOGIC
   const isOfficerOvertime = (officer: any): boolean => {
     if (!officer) return false;
-    
+
     // DESKTOP USES: is_extra_shift = true
     // Mobile should use the same logic
-    const isOvertime = 
+    const isOvertime =
       officer.shiftInfo?.is_extra_shift === true ||
       officer.is_extra_shift === true;
-    
+
     // Don't use primary shift comparison - that's a different concept
     return isOvertime;
   };
@@ -85,29 +85,29 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
   const isSupervisorPosition = (position: string) => {
     if (!position) return false;
     const positionLower = position.toLowerCase();
-    return positionLower.includes('supervisor') || 
-           positionLower.includes('sgt') ||
-           positionLower.includes('sergeant') ||
-           positionLower.includes('lieutenant') ||
-           positionLower.includes('chief') ||
-           positionLower.includes('captain');
+    return positionLower.includes('supervisor') ||
+      positionLower.includes('sgt') ||
+      positionLower.includes('sergeant') ||
+      positionLower.includes('lieutenant') ||
+      positionLower.includes('chief') ||
+      positionLower.includes('captain');
   };
 
   const { data: scheduleData, isLoading, error } = useQuery({
     queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()],
     queryFn: async () => {
       console.log('🔍 Mobile query started for shift:', selectedShiftId, 'week:', format(currentWeekStart, 'yyyy-MM-dd'));
-      
+
       if (!selectedShiftId) {
         console.log('❌ No shift ID selected');
         return null;
       }
-    
+
       const startStr = format(currentWeekStart, "yyyy-MM-dd");
       const endStr = format(endOfWeek(currentWeekStart, { weekStartsOn: 0 }), "yyyy-MM-dd");
-    
+
       console.log('📅 Fetching data for date range:', startStr, 'to', endStr);
-    
+
       try {
         // Fetch schedule exceptions (including overtime with is_extra_shift = true)
         console.log('🔄 Fetching exceptions...');
@@ -125,10 +125,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           .gte("date", startStr)
           .lte("date", endStr)
           .order("date", { ascending: true });
-    
+
         if (exceptionsError) throw exceptionsError;
         console.log('✅ Exceptions fetched:', exceptions?.length, 'records');
-        
+
         // Fetch recurring schedules
         console.log('🔄 Fetching recurring schedules...');
         let { data: recurringSchedules, error: recurringError } = await supabase
@@ -143,19 +143,19 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           `)
           .eq("shift_type_id", selectedShiftId)
           .or(`end_date.is.null,end_date.gte.${startStr}`);
-    
+
         if (recurringError) throw recurringError;
         console.log('✅ Recurring fetched (pre-filter):', recurringSchedules?.length, 'records');
-    
+
         // Get shift type to check if it's Dispatch
         const { data: shiftType, error: shiftTypeError } = await supabase
           .from("shift_types")
           .select("name")
           .eq("id", selectedShiftId)
           .single();
-        
+
         const isDispatchShift = !shiftTypeError && shiftType?.name?.toLowerCase()?.includes('dispatch') || false;
-        
+
         // Get the cycle start date for this shift (only if Dispatch)
         let cycleStartDate: Date | null = null;
         if (isDispatchShift) {
@@ -167,20 +167,20 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             .order("start_date", { ascending: true })
             .limit(1)
             .single();
-          
+
           if (!cycleStartError && cycleStartData) {
             const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
             cycleStartDate = new Date(year, month - 1, day);
             console.log(`📅 Cycle start date for ${shiftType.name}: ${cycleStartDate.toDateString()}`);
           }
         }
-        
+
         // Then use cycleStartDate in filterRecurringSchedulesByWeekOffsetSync
         if (isDispatchShift && recurringSchedules && recurringSchedules.length > 0 && cycleStartDate) {
           const originalCount = recurringSchedules.length;
           const startDate = activeView === "weekly" ? currentWeekStart : startOfMonth(currentMonth);
           const endDate = activeView === "weekly" ? endOfWeek(currentWeekStart, { weekStartsOn: 0 }) : endOfMonth(currentMonth);
-          
+
           recurringSchedules = filterRecurringSchedulesByWeekOffsetSync(
             recurringSchedules,
             startDate,
@@ -189,46 +189,46 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           );
           console.log(`✅ Dispatch shift - Filtered recurring schedules: ${originalCount} → ${recurringSchedules.length}`);
         }
-    
+
         // Fetch all recurring schedules for primary shift determination
         console.log('🔄 Fetching all recurring schedules for primary shift determination...');
         const { data: allRecurringSchedules, error: allRecurringError } = await supabase
           .from("recurring_schedules")
           .select("officer_id, shift_type_id, day_of_week")
           .order("officer_id");
-    
+
         if (allRecurringError) {
           console.error("Error fetching all recurring schedules:", allRecurringError);
         }
-    
+
         // Determine primary shifts from recurring schedules
         const primaryShifts = new Map();
         if (allRecurringSchedules) {
           const shiftCountsByOfficer = new Map();
-          
+
           allRecurringSchedules.forEach(schedule => {
             const officerId = schedule.officer_id;
             const shiftId = schedule.shift_type_id;
-            
+
             if (!shiftCountsByOfficer.has(officerId)) {
               shiftCountsByOfficer.set(officerId, new Map());
             }
-            
+
             const officerShifts = shiftCountsByOfficer.get(officerId);
             officerShifts.set(shiftId, (officerShifts.get(shiftId) || 0) + 1);
           });
-          
+
           shiftCountsByOfficer.forEach((shiftCounts, officerId) => {
             let maxCount = 0;
             let primaryShiftId = null;
-            
+
             shiftCounts.forEach((count, shiftId) => {
               if (count > maxCount) {
                 maxCount = count;
                 primaryShiftId = shiftId;
               }
             });
-            
+
             if (primaryShiftId) {
               primaryShifts.set(officerId, primaryShiftId);
             }
@@ -281,13 +281,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
 
         // Helper function to get relevant promotion date
         const getRelevantPromotionDate = (
-          rank: string | undefined, 
-          sergeantDate: string | null, 
+          rank: string | undefined,
+          sergeantDate: string | null,
           lieutenantDate: string | null
         ): string | null => {
           if (!rank) return null;
           const rankLower = rank.toLowerCase();
-          
+
           if (rankLower.includes('lieutenant') || rankLower.includes('chief')) {
             return lieutenantDate || sergeantDate || null;
           }
@@ -304,15 +304,15 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         weekDays.forEach(day => {
           const dayExceptions = exceptions?.filter(e => e.date === day.dateStr) || [];
           const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === day.dayOfWeek) || [];
-          
+
           // Prioritize exceptions over recurring
           const processedOfficers = new Set();
-          
+
           // First, process exceptions
           dayExceptions.forEach(item => {
             const officerId = item.officer_id;
             processedOfficers.add(officerId);
-            
+
             // ✅ FIXED: Add null checks for profiles
             const profile = item.profiles || {};
             const hireDate = profile.hire_date;
@@ -322,10 +322,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             const badgeNumber = profile.badge_number || '9999';
             const officerName = profile.full_name || "Unknown";
             const rank = profile.rank || "Officer";
-            
+
             // MATCH DESKTOP LOGIC: Use is_extra_shift flag from database
             const isExtraShift = item.is_extra_shift === true;
-            
+
             console.log('MOBILE OVERTIME CHECK for officer:', {
               officerName: profile.full_name,
               isExtraShift: item.is_extra_shift,
@@ -333,17 +333,17 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               date: day.dateStr,
               assignedToTargetMap: isExtraShift ? 'overtime' : 'regular'
             });
-            
+
             // Determine which map to use based on whether this is overtime
             const targetMap = isExtraShift ? overtimeOfficersMap : regularOfficersMap;
-            
+
             if (!targetMap.has(officerId)) {
               const relevantPromotionDate = getRelevantPromotionDate(
                 rank,
                 promotionDateSergeant,
                 promotionDateLieutenant
               );
-              
+
               targetMap.set(officerId, {
                 officerId: officerId,
                 officerName: officerName,
@@ -361,7 +361,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 isExtraShift: isExtraShift
               });
             }
-            
+
             // CRITICAL: Properly set PTO data
             const hasPTO = item.is_off === true && !!item.reason;
             const daySchedule = {
@@ -392,13 +392,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 custom_end_time: item.custom_end_time
               }
             };
-            
+
             if (hasPTO) {
               console.log('🎯 PTO Found for', officerName, 'on', day.dateStr, ':', {
                 ptoType: item.reason
               });
             }
-            
+
             // ✅ FIXED: Add null check before setting property
             const officerData = targetMap.get(officerId);
             if (officerData) {
@@ -408,16 +408,16 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               console.error(`❌ Item causing error:`, item);
             }
           });
-          
+
           // Then, process recurring ONLY if no exception exists
           dayRecurring.forEach(item => {
             const officerId = item.officer_id;
-            
+
             // Skip if we already processed an exception for this officer on this day
             if (processedOfficers.has(officerId)) {
               return;
             }
-            
+
             // ✅ FIXED: Add null checks for profiles
             const profile = item.profiles || {};
             const hireDate = profile.hire_date;
@@ -427,20 +427,20 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             const badgeNumber = profile.badge_number || '9999';
             const officerName = profile.full_name || "Unknown";
             const rank = profile.rank || "Officer";
-            
+
             // MATCH DESKTOP LOGIC: Regular recurring schedules are NEVER overtime
             const isExtraShift = false;
-            
+
             // Determine which map to use
             const targetMap = regularOfficersMap; // Recurring always goes to regular
-            
+
             if (!targetMap.has(officerId)) {
               const relevantPromotionDate = getRelevantPromotionDate(
                 rank,
                 promotionDateSergeant,
                 promotionDateLieutenant
               );
-              
+
               targetMap.set(officerId, {
                 officerId: officerId,
                 officerName: officerName,
@@ -458,7 +458,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 isExtraShift: isExtraShift
               });
             }
-            
+
             const daySchedule = {
               officerId: officerId,
               officerName: officerName,
@@ -482,7 +482,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 is_extra_shift: false // Regular recurring is never overtime
               }
             };
-            
+
             // ✅ FIXED: Add null check before setting property
             const officerData = targetMap.get(officerId);
             if (officerData) {
@@ -514,7 +514,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             try {
               const { data, error } = await supabase
                 .rpc('get_service_credit', { profile_id: officerId });
-              
+
               if (!error && data !== null) {
                 const creditValue = parseFloat(data);
                 serviceCreditsMap.set(officerId, isNaN(creditValue) ? 0 : creditValue);
@@ -581,8 +581,8 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
           .filter(Boolean);
 
         const regularOfficers = sortedOfficers
-          .filter(officer => 
-            !isSupervisorByRank({ rank: officer.rank }) && 
+          .filter(officer =>
+            !isSupervisorByRank({ rank: officer.rank }) &&
             officer.rank?.toLowerCase() !== 'probationary'
           )
           .map(officer => {
@@ -610,7 +610,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         weekDays.forEach(day => {
           overtimeByDate[day.dateStr] = [];
         });
-        
+
         overtimeOfficersArray.forEach(officer => {
           Object.entries(officer.weeklySchedule || {}).forEach(([dateStr, schedule]: [string, any]) => {
             if (schedule?.is_extra_shift === true && overtimeByDate[dateStr]) {
@@ -656,9 +656,10 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
       }
     },
     enabled: !!selectedShiftId,
-        retry: 1,
-        staleTime: 2 * 60 * 1000,   // ← ADD THIS
-      });
+    retry: 1,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
   const isSpecialAssignment = (position: string) => {
     return position && (
@@ -677,7 +678,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
     if (!scheduleData?.minimumStaffing) {
       return { minimumOfficers: 0, minimumSupervisors: 0 };
     }
-    
+
     // Handle Map structure
     if (scheduleData.minimumStaffing instanceof Map) {
       const dayStaffing = scheduleData.minimumStaffing.get(dayOfWeek);
@@ -686,14 +687,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
         return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
       }
     }
-    
+
     // Handle object structure (fallback)
     const dayStaffing = scheduleData.minimumStaffing[dayOfWeek];
     if (dayStaffing && typeof dayStaffing === 'object') {
       const shiftStaffing = dayStaffing[selectedShiftId];
       return shiftStaffing || { minimumOfficers: 0, minimumSupervisors: 0 };
     }
-    
+
     return { minimumOfficers: 0, minimumSupervisors: 0 };
   };
 
@@ -749,7 +750,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
             <Button variant="outline" size="icon" onClick={onPreviousWeek}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            
+
             <div className="text-center">
               <div className="font-semibold">
                 {format(currentWeekStart, "MMM d")} - {format(addDays(currentWeekStart, 6), "MMM d")}
@@ -758,12 +759,12 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 {format(currentWeekStart, "yyyy")}
               </div>
             </div>
-            
+
             <Button variant="outline" size="icon" onClick={onNextWeek}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          
+
           <div className="flex justify-center">
             <Button variant="outline" size="sm" onClick={onToday}>
               Today
@@ -784,17 +785,17 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const minStaffing = getMinimumStaffing(dayOfWeek);
               const minimumSupervisors = minStaffing.minimumSupervisors || 0;
               const minimumOfficers = minStaffing.minimumOfficers || 0;
-              
+
               // Calculate the actual counts
               const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
-              
+
               // Calculate supervisor count
               const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
               const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
                 const position = officer.shiftInfo?.position || "";
                 return isSupervisorPosition(position);
               }).length || 0;
-              
+
               const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
                 const isSupervisor = isSupervisorByRank(officer);
                 const hasFullDayPTO = officer.shiftInfo?.hasPTO && officer.shiftInfo?.ptoData?.isFullShift;
@@ -803,15 +804,15 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
                 return isSupervisor && isScheduled && !isOvertime;
               }).length || 0;
-              
+
               const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-              
+
               // Calculate officer count
               const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
                 const position = officer.shiftInfo?.position || "";
                 return !isSupervisorPosition(position) && !isSpecialAssignment(position);
               }).length || 0;
-              
+
               const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
                 const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
@@ -821,29 +822,29 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
                 return isOfficer && isNotPPO && isScheduled && !isOvertime;
               }).length || 0;
-              
+
               const officerCount = regularOfficerCount + overtimeOfficerCount;
-              
+
               // Use utility functions
               const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < minimumSupervisors;
               const isOfficersUnderstaffed = minimumOfficers > 0 && officerCount < minimumOfficers;
               const hasRequirements = hasMinimumRequirements(minimumSupervisors, minimumOfficers);
-              
+
               return (
                 <div key={dateStr} className={`p-2 text-center font-semibold border-r text-sm ${isToday ? 'bg-primary/10' : ''}`}>
                   <div>{dayName}</div>
                   <div className="text-xs text-muted-foreground mb-1">{formattedDate}</div>
-                  
+
                   {hasRequirements ? (
                     <>
-                      <Badge 
-                        variant={isSupervisorsUnderstaffed ? "destructive" : "outline"} 
+                      <Badge
+                        variant={isSupervisorsUnderstaffed ? "destructive" : "outline"}
                         className="text-xs mb-1"
                       >
                         {supervisorCount} / {minimumSupervisors} Sup
                       </Badge>
-                      <Badge 
-                        variant={isOfficersUnderstaffed ? "destructive" : "outline"} 
+                      <Badge
+                        variant={isOfficersUnderstaffed ? "destructive" : "outline"}
                         className="text-xs"
                       >
                         {officerCount} / {minimumOfficers} Ofc
@@ -867,14 +868,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
               const minStaffing = getMinimumStaffing(dayOfWeek);
               const minimumSupervisors = minStaffing.minimumSupervisors || 0;
-              
+
               // Get overtime supervisors for this day
               const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
               const overtimeSupervisorCount = overtimeForDay.filter((officer: any) => {
                 const position = officer.shiftInfo?.position || "";
                 return isSupervisorPosition(position);
               }).length || 0;
-              
+
               // Count regular supervisors (excluding overtime and special assignments)
               const regularSupervisorCount = daySchedule?.officers?.filter((officer: any) => {
                 const isSupervisor = isSupervisorByRank(officer);
@@ -884,12 +885,12 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
                 return isSupervisor && isScheduled && !isOvertime;
               }).length || 0;
-              
+
               const supervisorCount = regularSupervisorCount + overtimeSupervisorCount;
-              
+
               // Add understaffing check using utility function
               const isSupervisorsUnderstaffed = minimumSupervisors > 0 && supervisorCount < minimumSupervisors;
-              
+
               return (
                 <div key={dateStr} className="p-2 text-center border-r text-sm bg-gray-100">
                   <div className={`font-medium ${isSupervisorsUnderstaffed ? 'text-red-600' : ''}`}>
@@ -910,13 +911,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const dayOfficer = officer.weeklySchedule[dateStr];
               return dayOfficer?.is_extra_shift === true || dayOfficer?.shiftInfo?.is_extra_shift === true;
             });
-            
+
             // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
             if (hasOvertimeInSchedule) {
               console.log('Skipping supervisor officer with overtime shifts from regular rows:', officer.officerName);
               return null;
             }
-            
+
             return (
               <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30">
                 <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -961,14 +962,14 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const daySchedule = scheduleData.dailySchedules?.find(s => s.date === dateStr);
               const minStaffing = getMinimumStaffing(dayOfWeek);
               const minimumOfficers = minStaffing.minimumOfficers || 0;
-              
+
               // Get overtime officers for this day
               const overtimeForDay = scheduleData.overtimeByDate?.[dateStr] || [];
               const overtimeOfficerCount = overtimeForDay.filter((officer: any) => {
                 const position = officer.shiftInfo?.position || "";
                 return !isSupervisorPosition(position) && !isSpecialAssignment(position);
               }).length || 0;
-              
+
               // Count regular officers (excluding overtime, supervisors, PPOs, and special assignments)
               const regularOfficerCount = daySchedule?.officers?.filter((officer: any) => {
                 const isOfficer = !isSupervisorByRank(officer);
@@ -979,12 +980,12 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
                 return isOfficer && isNotPPO && isScheduled && !isOvertime;
               }).length || 0;
-              
+
               const officerCount = regularOfficerCount + overtimeOfficerCount;
-              
+
               // Add understaffing check using utility function
               const isOfficersUnderstaffed = minimumOfficers > 0 && officerCount < minimumOfficers;
-              
+
               return (
                 <div key={dateStr} className="p-2 text-center border-r text-sm font-medium bg-gray-200">
                   <div className={`font-medium ${isOfficersUnderstaffed ? 'text-red-600' : ''}`}>
@@ -1005,13 +1006,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
               const dayOfficer = officer.weeklySchedule[dateStr];
               return dayOfficer?.is_extra_shift === true || dayOfficer?.shiftInfo?.is_extra_shift === true;
             });
-            
+
             // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
             if (hasOvertimeInSchedule) {
               console.log('Skipping officer with overtime shifts from regular rows:', officer.officerName);
               return null;
             }
-            
+
             return (
               <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-muted/30">
                 <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -1064,7 +1065,7 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                     const isOvertime = officer.shiftInfo?.is_extra_shift === true || officer.is_extra_shift === true;
                     return isOfficer && isPPO && isScheduled && !isOvertime;
                   }).length || 0;
-                  
+
                   return (
                     <div key={dateStr} className="p-2 text-center border-r text-sm font-medium bg-blue-50">
                       {ppoCount}
@@ -1080,13 +1081,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                   const dayOfficer = officer.weeklySchedule[dateStr];
                   return dayOfficer?.is_extra_shift === true || dayOfficer?.shiftInfo?.is_extra_shift === true;
                 });
-                
+
                 // If officer has ANY overtime shifts, DO NOT RENDER them in regular rows
                 if (hasOvertimeInSchedule) {
                   console.log('Skipping PPO officer with overtime shifts from regular rows:', officer.officerName);
                   return null;
                 }
-                
+
                 return (
                   <div key={officer.officerId} className="grid grid-cols-9 border-b hover:bg-blue-50/50 bg-blue-50/30">
                     <div className="p-2 border-r text-sm font-mono">{officer.badgeNumber}</div>
@@ -1152,13 +1153,13 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
                 </div>
                 {weekDays.map(({ dateStr }) => {
                   const overtimeOfficers = scheduleData.overtimeByDate?.[dateStr] || [];
-                  
+
                   return (
                     <div key={dateStr} className="p-2 border-r">
                       {overtimeOfficers.length > 0 ? (
                         <div className="space-y-1 max-h-32 overflow-y-auto">
                           {overtimeOfficers.map((officer: any) => (
-                            <div key={`${officer.officerId}-${dateStr}`} 
+                            <div key={`${officer.officerId}-${dateStr}`}
                               className="text-xs p-1 bg-orange-100 rounded border border-orange-200">
                               <div className="font-medium truncate">
                                 {getLastName(officer.officerName || '')}

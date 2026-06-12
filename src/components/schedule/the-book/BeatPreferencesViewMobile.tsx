@@ -12,9 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { getLastName, getRankAbbreviation, isSupervisorByRank, toOfficerForSorting } from "./utils";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 // Import sorting utilities
-import { 
-  sortOfficersConsistently, 
-  type OfficerForSorting 
+import {
+  sortOfficersConsistently,
+  type OfficerForSorting
 } from "@/utils/sortingUtils";
 
 interface BeatPreferencesViewMobileProps {
@@ -81,14 +81,14 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
           uniqueOfficersMap.set(schedule.profiles.id, schedule.profiles);
         }
       });
-      
+
       const officers = Array.from(uniqueOfficersMap.values());
-      
+
       // Filter out supervisors and PPOs
-      const nonSupervisorOfficers = officers.filter(officer => 
+      const nonSupervisorOfficers = officers.filter(officer =>
         !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
       );
-      
+
       // Fetch service credits for officers
       const officersWithCredits = await Promise.all(
         nonSupervisorOfficers.map(async (officer) => {
@@ -111,7 +111,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
       );
 
       // Convert to OfficerForSorting format
-      const officersForSorting: OfficerForSorting[] = officersWithCredits.map(officer => 
+      const officersForSorting: OfficerForSorting[] = officersWithCredits.map(officer =>
         toOfficerForSorting(officer)
       );
 
@@ -122,7 +122,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
       const sortedOfficersWithData = sortedOfficers.map(sortedOfficer => {
         const originalOfficer = officersWithCredits.find(o => o.id === sortedOfficer.id);
         const prefs = preferences?.find(p => p.officer_id === sortedOfficer.id);
-        
+
         return {
           ...originalOfficer,
           service_credit: sortedOfficer.service_credit, // Use sorted service credit
@@ -143,10 +143,12 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Get beat positions (filter out Supervisor and Other)
-  const beatPositions = PREDEFINED_POSITIONS.filter(pos => 
+  const beatPositions = PREDEFINED_POSITIONS.filter(pos =>
     pos !== "Supervisor" && pos !== "Other (Custom)"
   );
 
@@ -274,7 +276,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
               {beatData.officers.slice(0, 10).map((officer: any) => {
                 const prefs = getOfficerPreferences(officer.id);
                 const hasPrefs = prefs && (prefs.first_choice || prefs.second_choice || prefs.third_choice);
-                
+
                 return (
                   <Card key={officer.id}>
                     <CardContent className="p-4">
@@ -358,12 +360,12 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
                   Edit Preferences for {editingPrefs ? getLastName(editingPrefs.officer.full_name) : ''}
                 </DialogTitle>
               </DialogHeader>
-              
+
               {editingPrefs && (
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <Label className="text-sm">1st Choice</Label>
-                    <Select 
+                    <Select
                       value={editingPrefs.preferences.first_choice}
                       onValueChange={(value) => setEditingPrefs({
                         ...editingPrefs,
@@ -388,7 +390,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
 
                   <div className="space-y-2">
                     <Label className="text-sm">2nd Choice</Label>
-                    <Select 
+                    <Select
                       value={editingPrefs.preferences.second_choice}
                       onValueChange={(value) => setEditingPrefs({
                         ...editingPrefs,
@@ -413,7 +415,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
 
                   <div className="space-y-2">
                     <Label className="text-sm">3rd Choice</Label>
-                    <Select 
+                    <Select
                       value={editingPrefs.preferences.third_choice}
                       onValueChange={(value) => setEditingPrefs({
                         ...editingPrefs,
@@ -453,8 +455,8 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
                   </div>
 
                   <div className="flex gap-2 pt-4">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="flex-1"
                       onClick={() => {
                         setShowEditDialog(false);
@@ -464,7 +466,7 @@ export const BeatPreferencesViewMobile: React.FC<BeatPreferencesViewMobileProps>
                     >
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       className="flex-1"
                       onClick={handleSavePreferences}
                     >

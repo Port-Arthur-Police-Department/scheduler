@@ -13,11 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { OfficerSectionMobile, PTOSectionMobile } from "./OfficerSectionMobile";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
   Select,
@@ -36,12 +36,12 @@ import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
-import { 
+import {
   isShiftUnderstaffed,
   getStaffingDescription,
   getStaffingSeverity,
   formatStaffingCount,
-  hasMinimumRequirements 
+  hasMinimumRequirements
 } from "@/utils/staffingUtils";
 
 // Add Popover and Calendar imports
@@ -56,8 +56,8 @@ interface DailyScheduleViewMobileProps {
   userCurrentShift?: string;
 }
 
-export const DailyScheduleViewMobile = ({ 
-  filterShiftId = "all", 
+export const DailyScheduleViewMobile = ({
+  filterShiftId = "all",
   isAdminOrSupervisor = false,
   userRole = 'officer',
   userCurrentShift = "all"
@@ -78,16 +78,16 @@ export const DailyScheduleViewMobile = ({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const { exportToPDF } = usePDFExport();
   const canEdit = userRole === 'supervisor' || userRole === 'admin';
-  
+
   // This should now use the LOCAL selectedDate state
   const dateStr = format(selectedDate, "yyyy-MM-dd");
-  
+
   // Add website settings hook
   const { data: websiteSettings } = useWebsiteSettings();
-  
+
   // Check if we should show special occasions
   const showSpecialOccasions = websiteSettings?.show_special_occasions_in_schedule !== false;
-  
+
   // Add useEffect to update selectedShiftId when userCurrentShift changes
   useEffect(() => {
     if (userCurrentShift && userCurrentShift !== selectedShiftId) {
@@ -104,9 +104,9 @@ export const DailyScheduleViewMobile = ({
         .from("shift_types")
         .select("*")
         .order("start_time");
-      
+
       if (error) throw error;
-      
+
       if (data && data.length > 0) {
         if (userCurrentShift && userCurrentShift !== "all") {
           const userShiftExists = data.some(shift => shift.id === userCurrentShift);
@@ -120,9 +120,11 @@ export const DailyScheduleViewMobile = ({
           setSelectedShiftId(data[0].id);
         }
       }
-      
+
       return data || [];
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Fetch schedule data only for the selected shift
@@ -130,9 +132,11 @@ export const DailyScheduleViewMobile = ({
     queryKey: ["daily-schedule-mobile", dateStr, selectedShiftId],
     queryFn: () => {
       if (!selectedShiftId) return Promise.resolve([]);
-      return getScheduleData(selectedDate, selectedShiftId); 
+      return getScheduleData(selectedDate, selectedShiftId);
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const { updateScheduleMutation, removeOfficerMutation, removePTOMutation } = useScheduleMutations(dateStr);
@@ -204,7 +208,7 @@ export const DailyScheduleViewMobile = ({
   // Handle officer action
   const handleOfficerAction = (officer: any, action: string) => {
     setSelectedOfficer(officer);
-    
+
     switch (action) {
       case 'edit':
         setEditSheetOpen(true);
@@ -323,7 +327,7 @@ export const DailyScheduleViewMobile = ({
     try {
       toast.info("Generating PDF...");
       const result = await exportToPDF({
-        selectedDate: selectedDate, 
+        selectedDate: selectedDate,
         shiftName: shiftData.shift.name,
         shiftData: shiftData,
         layoutSettings: DEFAULT_LAYOUT_SETTINGS
@@ -377,7 +381,7 @@ export const DailyScheduleViewMobile = ({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            
+
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -386,14 +390,14 @@ export const DailyScheduleViewMobile = ({
                 >
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="min-w-[140px] text-center">
-                    {formatDateDisplay(selectedDate)} 
+                    {formatDateDisplay(selectedDate)}
                   </span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="center">
                 <CalendarComponent
                   mode="single"
-                  selected={selectedDate} 
+                  selected={selectedDate}
                   onSelect={handleDateSelect}
                   initialFocus
                   className="rounded-md border"
@@ -404,14 +408,14 @@ export const DailyScheduleViewMobile = ({
                     variant="outline"
                     className="w-full"
                     onClick={goToToday}
-                    disabled={isToday(selectedDate)} 
+                    disabled={isToday(selectedDate)}
                   >
                     Go to Today
                   </Button>
                 </div>
               </PopoverContent>
             </Popover>
-            
+
             <Button
               variant="ghost"
               size="icon"
@@ -422,10 +426,10 @@ export const DailyScheduleViewMobile = ({
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          
+
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              {format(selectedDate, "EEEE, MMMM d, yyyy")} 
+              {format(selectedDate, "EEEE, MMMM d, yyyy")}
             </p>
           </div>
         </div>
@@ -435,7 +439,7 @@ export const DailyScheduleViewMobile = ({
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
             <Calendar className="h-5 w-5 inline mr-2" />
-            Schedule for {format(selectedDate, "MMM d, yyyy")} 
+            Schedule for {format(selectedDate, "MMM d, yyyy")}
             {userCurrentShift !== "all" && selectedShiftId === userCurrentShift && (
               <Badge variant="outline" className="ml-2 text-xs bg-primary/10">
                 Your Shift
@@ -511,7 +515,7 @@ export const DailyScheduleViewMobile = ({
             return (
               <div key={shiftId} className="border rounded-lg overflow-hidden">
                 {/* Shift Header - Always visible */}
-                <div 
+                <div
                   className="p-4 bg-muted/50 flex items-center justify-between active:bg-muted/70 transition-colors"
                   onClick={() => toggleShift(shiftId)}
                 >
@@ -542,11 +546,11 @@ export const DailyScheduleViewMobile = ({
                       <Badge variant="outline">
                         {formatStaffingCount(shiftData.currentOfficers, shiftData.minOfficers, 'Off')}
                       </Badge>
-                      
+
                       {/* ADD THIS LINE - Description tooltip */}
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {shiftData.minSupervisors === 0 && shiftData.minOfficers === 0 ? 
-                          "No minimum requirements set" : 
+                        {shiftData.minSupervisors === 0 && shiftData.minOfficers === 0 ?
+                          "No minimum requirements set" :
                           isAnyUnderstaffed ? "Staffing below minimum" : "Meeting minimum requirements"
                         }
                       </div>
@@ -559,9 +563,9 @@ export const DailyScheduleViewMobile = ({
                     {/* Shift Actions */}
                     <div className="flex gap-2 pt-2">
                       {canEdit && (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
+                        <Button
+                          size="sm"
+                          variant="outline"
                           className="flex-1"
                           onClick={() => handleAddOfficerClick(shiftData)}
                         >
@@ -569,9 +573,9 @@ export const DailyScheduleViewMobile = ({
                           Add Officer
                         </Button>
                       )}
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="flex-1"
                         onClick={() => handleExportShiftToPDF(shiftData)}
                       >
@@ -728,7 +732,7 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
     } else if (field === 'notes') {
       value = notes;
     }
-    
+
     onSave(field, value);
   };
 
@@ -738,13 +742,13 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
         <SheetHeader className="text-left">
           <SheetTitle>Edit {officer.name}</SheetTitle>
         </SheetHeader>
-        
+
         <ScrollArea className="h-full pr-4">
           <div className="space-y-6 py-4">
             {/* Position Section */}
             <div className="space-y-3">
               <h3 className="font-medium">Position</h3>
-              <select 
+              <select
                 className="w-full p-3 border rounded-lg"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
@@ -755,7 +759,7 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
                 ))}
                 <option value="Other (Custom)">Other (Custom)</option>
               </select>
-              
+
               {position === "Other (Custom)" && (
                 <input
                   type="text"
@@ -765,9 +769,9 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
                   className="w-full p-3 border rounded-lg"
                 />
               )}
-              
-              <Button 
-                className="w-full" 
+
+              <Button
+                className="w-full"
                 onClick={() => handleSubmit('position')}
                 disabled={isLoading}
               >
@@ -785,8 +789,8 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
                 onChange={(e) => setUnitNumber(e.target.value)}
                 className="w-full p-3 border rounded-lg"
               />
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 onClick={() => handleSubmit('unit')}
                 disabled={isLoading}
               >
@@ -803,8 +807,8 @@ const EditOfficerSheet = ({ open, onOpenChange, officer, onSave, isLoading, allS
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full p-3 border rounded-lg min-h-[100px]"
               />
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 onClick={() => handleSubmit('notes')}
                 disabled={isLoading}
               >
@@ -870,6 +874,8 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
       return data;
     },
     enabled: open && !!shift,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Set default times when dialog opens
@@ -906,53 +912,53 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
   const calculateHours = (start: string, end: string) => {
     const [startHour, startMin] = start.split(":").map(Number);
     const [endHour, endMin] = end.split(":").map(Number);
-    
+
     const startMinutes = startHour * 60 + startMin;
     let endMinutes = endHour * 60 + endMin;
-    
+
     // Handle shifts crossing midnight
     if (endMinutes < startMinutes) {
       endMinutes += 24 * 60;
     }
-    
+
     return (endMinutes - startMinutes) / 60;
   };
 
   const addOfficerMutation = useMutation({
     mutationFn: async () => {
       if (!shift) throw new Error("No shift selected");
-      
+
       const finalPosition = position === "Other (Custom)" ? customPosition : position;
-      
+
       if (!finalPosition) {
         throw new Error("Please select or enter a position");
       }
-      
+
       if (!selectedOfficerId) {
         throw new Error("Please select an officer");
       }
-      
+
       // Validate custom times if partial shift
       if (isPartialShift) {
         if (!customStartTime || !customEndTime) {
           throw new Error("Please enter both start and end times");
         }
-        
+
         // Check if shift crosses midnight
         const shiftCrossesMidnight = doesShiftCrossMidnight(shift.start_time, shift.end_time);
         const customCrossesMidnight = doesShiftCrossMidnight(customStartTime, customEndTime);
-        
+
         // For shifts that don't cross midnight, end must be after start
         if (!shiftCrossesMidnight && !customCrossesMidnight && customStartTime >= customEndTime) {
           throw new Error("End time must be after start time");
         }
-        
+
         // If original shift crosses midnight but custom doesn't, warn but allow
         if (shiftCrossesMidnight && !customCrossesMidnight) {
           console.log("⚠️ Original shift crosses midnight but custom times don't");
         }
       }
-      
+
       // Check for existing schedule
       const { data: existingExceptions } = await supabase
         .from("schedule_exceptions")
@@ -1059,7 +1065,7 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                 <SelectItem value="Other (Custom)">Other (Custom)</SelectItem>
               </SelectContent>
             </Select>
-            
+
             {position === "Other (Custom)" && (
               <Input
                 placeholder="Enter custom position"
@@ -1089,7 +1095,7 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                   Full Shift {formatShiftDisplay(shift.start_time, shift.end_time)}
                 </Label>
               </div>
-              
+
               {/* Partial Shift Option */}
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -1103,7 +1109,7 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                   Partial/Custom Hours
                 </Label>
               </div>
-              
+
               {/* Warning for midnight-crossing shifts */}
               {isPartialShift && doesShiftCrossMidnight(shift.start_time, shift.end_time) && (
                 <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 ml-6">
@@ -1111,7 +1117,7 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                   Example: Working 21:30 - 02:30 should be entered as 21:30 - 02:30 (it will calculate as 5 hours).
                 </div>
               )}
-              
+
               {isPartialShift && (
                 <div className="grid grid-cols-2 gap-4 ml-6">
                   <div className="space-y-2">
@@ -1146,7 +1152,7 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                   </div>
                 </div>
               )}
-              
+
               {/* Display calculated hours */}
               {isPartialShift && customStartTime && customEndTime && (
                 <div className="text-sm text-muted-foreground ml-6">
@@ -1180,16 +1186,16 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
-            <Button 
-              variant="outline" 
-              className="flex-1" 
+            <Button
+              variant="outline"
+              className="flex-1"
               onClick={() => onOpenChange(false)}
               disabled={addOfficerMutation.isPending}
             >
               Cancel
             </Button>
-            <Button 
-              className="flex-1" 
+            <Button
+              className="flex-1"
               onClick={() => addOfficerMutation.mutate()}
               disabled={!selectedOfficerId || !position || addOfficerMutation.isPending}
             >

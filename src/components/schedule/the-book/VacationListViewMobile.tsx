@@ -13,10 +13,10 @@ import { format, parseISO, isSameDay, isAfter, startOfDay } from "date-fns";
 import { getLastName, getRankAbbreviation, isSupervisorByRank } from "./utils";
 import { Separator } from "@/components/ui/separator";
 // Import sorting utilities
-import { 
-  sortOfficersConsistently, 
+import {
+  sortOfficersConsistently,
   getServiceCreditForSorting,
-  type OfficerForSorting 
+  type OfficerForSorting
 } from "@/utils/sortingUtils";
 
 interface VacationListViewMobileProps {
@@ -81,10 +81,10 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
       const vacationAndHolidayExceptions = ptoExceptions?.filter(pto => {
         if (!pto.reason) return false;
         const reason = pto.reason.toLowerCase();
-        return reason.includes('vacation') || 
-               reason.includes('holiday') ||
-               reason === 'vac' ||
-               reason === 'hol';
+        return reason.includes('vacation') ||
+          reason.includes('holiday') ||
+          reason === 'vac' ||
+          reason === 'hol';
       });
 
       console.log('Mobile - Filtered vacation/holiday:', vacationAndHolidayExceptions?.length);
@@ -101,11 +101,11 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
 
       // Group PTO by officer and create vacation blocks
       const officersMap = new Map();
-      
+
       vacationAndHolidayExceptions?.forEach(pto => {
         const officerId = pto.officer_id;
         const profile = profilesMap.get(officerId) || pto.profiles;
-        
+
         if (!officersMap.has(officerId)) {
           // Use the utility function to get service credit
           const serviceCredit = getServiceCreditForSorting({
@@ -118,7 +118,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
             promotion_date_sergeant: profile?.promotion_date_sergeant,
             promotion_date_lieutenant: profile?.promotion_date_lieutenant
           });
-          
+
           officersMap.set(officerId, {
             officer: profile,
             serviceCredit,
@@ -126,10 +126,10 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
             vacationBlocks: []
           });
         }
-        
+
         const officerData = officersMap.get(officerId);
         const date = parseISO(pto.date);
-        
+
         // Normalize PTO type
         let ptoType = pto.reason || 'Vacation';
         const ptoLower = ptoType.toLowerCase();
@@ -138,7 +138,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
         } else if (ptoLower.includes('holiday') || ptoLower === 'hol') {
           ptoType = 'Holiday';
         }
-        
+
         officerData.vacationDays.push({
           date,
           ptoType
@@ -148,17 +148,17 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
       // Process each officer's vacation days to create blocks
       officersMap.forEach((officerData, officerId) => {
         officerData.vacationDays.sort((a, b) => a.date.getTime() - b.date.getTime());
-        
+
         const blocks: VacationBlock[] = [];
-        let currentBlock: {date: Date, type: string}[] = [];
-        
+        let currentBlock: { date: Date, type: string }[] = [];
+
         officerData.vacationDays.forEach((day, index) => {
           if (currentBlock.length === 0) {
             currentBlock.push(day);
           } else {
             const lastDate = currentBlock[currentBlock.length - 1].date;
             const diffInDays = Math.abs((day.date.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-            
+
             if (diffInDays === 1 && day.ptoType === currentBlock[0].ptoType) {
               currentBlock.push(day);
             } else {
@@ -175,7 +175,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
             }
           }
         });
-        
+
         if (currentBlock.length > 0) {
           blocks.push({
             startDate: currentBlock[0].date,
@@ -185,7 +185,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
             dates: currentBlock.map(item => item.date)
           });
         }
-        
+
         officerData.vacationBlocks = blocks;
         officerData.totalDays = officerData.vacationDays.length;
       });
@@ -225,29 +225,31 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
         summary: {
           totalOfficers: sortedOfficerData.length,
           totalDays: vacationAndHolidayExceptions?.length || 0,
-          averageDays: sortedOfficerData.length > 0 ? 
+          averageDays: sortedOfficerData.length > 0 ?
             (vacationAndHolidayExceptions?.length || 0) / sortedOfficerData.length : 0
         },
         rawData: vacationAndHolidayExceptions || []
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   // Apply "Only Remaining" filter
   const filteredOfficers = React.useMemo(() => {
     if (!vacationData?.officers) return [];
-    
+
     if (!onlyRemaining) return vacationData.officers;
-    
+
     return vacationData.officers
       .map(officer => {
-        const futureBlocks = officer.vacationBlocks.filter(block => 
+        const futureBlocks = officer.vacationBlocks.filter(block =>
           isAfter(block.endDate, today)
         );
-        
+
         const totalFutureDays = futureBlocks.reduce((sum, block) => sum + block.daysCount, 0);
-        
+
         return {
           ...officer,
           vacationBlocks: futureBlocks,
@@ -282,17 +284,17 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
 
   const getOfficerTypeColor = (officer: any) => {
     if (!officer) return '';
-    
+
     const rank = officer.rank?.toLowerCase() || '';
-    
+
     if (isSupervisorByRank(officer)) {
       return 'border-l-4 border-green-500';
     }
-    
+
     if (rank === 'probationary') {
       return 'border-l-4 border-blue-500';
     }
-    
+
     return 'border-l-4 border-gray-300';
   };
 
@@ -300,7 +302,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
   const filteredSummary = React.useMemo(() => {
     const totalDays = filteredOfficers.reduce((sum, officer) => sum + officer.totalDays, 0);
     const totalOfficers = filteredOfficers.length;
-    
+
     return {
       totalOfficers,
       totalDays,
@@ -326,8 +328,8 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
         <CardContent className="p-4">
           <div className="space-y-3">
             <Label>Select Year</Label>
-            <Select 
-              value={selectedYear.toString()} 
+            <Select
+              value={selectedYear.toString()}
               onValueChange={(value) => setSelectedYear(parseInt(value))}
             >
               <SelectTrigger>
@@ -403,7 +405,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
             {filteredOfficers.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-center text-muted-foreground">
-                  {onlyRemaining 
+                  {onlyRemaining
                     ? 'No future vacation or holiday dates found'
                     : 'No vacation or holiday data found for ' + selectedYear}
                 </CardContent>
@@ -442,8 +444,8 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
                         {vacationBlocks.map((block, index) => {
                           const isFuture = isAfter(block.endDate, today);
                           return (
-                            <div 
-                              key={index} 
+                            <div
+                              key={index}
                               className={`p-3 border rounded ${!isFuture && !onlyRemaining ? 'opacity-60 bg-gray-50' : ''}`}
                             >
                               <div className="flex items-center justify-between mb-2">
@@ -507,7 +509,7 @@ export const VacationListViewMobile: React.FC<VacationListViewMobileProps> = ({
                 </div>
                 <Separator className="my-2" />
                 <p className="text-xs text-muted-foreground">
-                  {onlyRemaining 
+                  {onlyRemaining
                     ? 'Showing only future vacation/holiday dates'
                     : 'Showing all vacation/holiday dates for ' + selectedYear}
                 </p>

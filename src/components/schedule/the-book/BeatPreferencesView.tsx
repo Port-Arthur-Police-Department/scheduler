@@ -43,11 +43,11 @@ interface Props {
   shiftTypes: any[];
 }
 
-export const BeatPreferencesView: React.FC<Props> = ({ 
+export const BeatPreferencesView: React.FC<Props> = ({
   isAdminOrSupervisor,
   selectedShiftId,
   setSelectedShiftId,
-  shiftTypes 
+  shiftTypes
 }) => {
   const [showAllBeats, setShowAllBeats] = useState<boolean>(true);
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export const BeatPreferencesView: React.FC<Props> = ({
   const [sortedOfficers, setSortedOfficers] = useState<OfficerWithCredit[]>([]);
 
   // Filter out "Supervisor" and "Other (Custom)" from beat positions
-  const beatPositions = PREDEFINED_POSITIONS.filter(pos => 
+  const beatPositions = PREDEFINED_POSITIONS.filter(pos =>
     pos !== "Supervisor" && pos !== "Other (Custom)"
   );
 
@@ -104,12 +104,12 @@ export const BeatPreferencesView: React.FC<Props> = ({
       }
 
       const officers = recurringSchedules?.map(schedule => schedule.profiles) || [];
-      
+
       // FILTER OUT SUPERVISORS - only include non-supervisors
-      const nonSupervisorOfficers = officers.filter(officer => 
+      const nonSupervisorOfficers = officers.filter(officer =>
         !isSupervisorByRank(officer) && officer.rank?.toLowerCase() !== 'probationary'
       );
-      
+
       const uniqueOfficers = Array.from(
         new Map(nonSupervisorOfficers.map(officer => [officer.id, officer])).values()
       );
@@ -133,61 +133,63 @@ export const BeatPreferencesView: React.FC<Props> = ({
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
-useEffect(() => {
-  if (beatData?.officers) {
-    // Convert officers to the expected format
-    const officersForSorting = beatData.officers.map(officer => ({
-      id: officer.id,
-      full_name: officer.full_name,
-      badge_number: officer.badge_number,
-      rank: officer.rank,
-      service_credit: officer.service_credit
-    }));
-    
-    const sorted = sortOfficersConsistently(officersForSorting);
-    setSortedOfficers(sorted as OfficerWithCredit[]);
-  } else {
-    setSortedOfficers([]);
-  }
-}, [beatData]);
+  useEffect(() => {
+    if (beatData?.officers) {
+      // Convert officers to the expected format
+      const officersForSorting = beatData.officers.map(officer => ({
+        id: officer.id,
+        full_name: officer.full_name,
+        badge_number: officer.badge_number,
+        rank: officer.rank,
+        service_credit: officer.service_credit
+      }));
+
+      const sorted = sortOfficersConsistently(officersForSorting);
+      setSortedOfficers(sorted as OfficerWithCredit[]);
+    } else {
+      setSortedOfficers([]);
+    }
+  }, [beatData]);
 
   const handleExportPDF = async () => {
-  try {
-    if (!selectedShiftId || !beatData) {
-      toast.error("No data available for export");
-      return;
-    }
+    try {
+      if (!selectedShiftId || !beatData) {
+        toast.error("No data available for export");
+        return;
+      }
 
-    const result = await exportBeatPreferencesPDF({
-      selectedDate: new Date(), // Or your selected date
-      shiftName: shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Shift",
-      beatData: {
-        officers: sortedOfficers,
-        preferences: beatData.preferences || []
-      },
-      shiftTypes,
-      selectedShiftId
-    });
+      const result = await exportBeatPreferencesPDF({
+        selectedDate: new Date(), // Or your selected date
+        shiftName: shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Shift",
+        beatData: {
+          officers: sortedOfficers,
+          preferences: beatData.preferences || []
+        },
+        shiftTypes,
+        selectedShiftId
+      });
 
-    if (result.success) {
-      toast.success("PDF exported successfully");
-    } else {
-      throw result.error;
+      if (result.success) {
+        toast.success("PDF exported successfully");
+      } else {
+        throw result.error;
+      }
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Error exporting PDF");
     }
-  } catch (error) {
-    console.error("PDF export error:", error);
-    toast.error("Error exporting PDF");
-  }
-};
+  };
 
   const handleEditPreferences = (officerId: string) => {
     const officer = beatData?.officers.find(o => o.id === officerId);
     if (!officer) return;
 
     const existingPrefs = beatData?.preferences.find(p => p.officer_id === officerId);
-    
+
     if (existingPrefs) {
       setBeatPreferences({
         [officerId]: {
@@ -209,7 +211,7 @@ useEffect(() => {
         }
       });
     }
-    
+
     setEditingOfficerId(officerId);
   };
 
@@ -231,7 +233,7 @@ useEffect(() => {
     }
 
     // Check if unavailable beats conflict with choices
-    const conflicts = choices.filter(choice => 
+    const conflicts = choices.filter(choice =>
       (prefs.unavailable_beats || []).includes(choice)
     );
     if (conflicts.length > 0) {
@@ -296,7 +298,7 @@ useEffect(() => {
       const current = prev[officerId];
       const unavailable = [...(current.unavailable_beats || [])];
       const index = unavailable.indexOf(beat);
-      
+
       if (index > -1) {
         unavailable.splice(index, 1);
       } else {
@@ -321,7 +323,7 @@ useEffect(() => {
         </div>
       );
     }
-    
+
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
@@ -368,9 +370,9 @@ useEffect(() => {
               <div className="text-sm font-medium text-muted-foreground">
                 Shift: {shiftTypes?.find(s => s.id === selectedShiftId)?.name || "Not selected"}
               </div>
-              <Button 
-                onClick={handleExportPDF} 
-                size="sm" 
+              <Button
+                onClick={handleExportPDF}
+                size="sm"
                 variant="outline"
                 disabled={!selectedShiftId || isLoading}
               >
@@ -379,7 +381,7 @@ useEffect(() => {
               </Button>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-2">
               <Switch
@@ -389,7 +391,7 @@ useEffect(() => {
               />
               <Label>Show All Beats</Label>
             </div>
-            
+
             {!isAdminOrSupervisor ? (
               <div className="text-sm text-muted-foreground">
                 View-only mode. Only supervisors and admins can edit beat preferences.
@@ -401,7 +403,7 @@ useEffect(() => {
             )}
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -458,7 +460,7 @@ useEffect(() => {
                     sortedOfficers.map((officer) => {
                       const existingPrefs = beatData?.preferences.find(p => p.officer_id === officer.id);
                       const isEditing = editingOfficerId === officer.id;
-                      
+
                       return (
                         <Card key={officer.id}>
                           <CardContent className="p-4">
@@ -527,7 +529,7 @@ useEffect(() => {
                                         ))}
                                       </select>
                                     </div>
-                                    
+
                                     <div className="space-y-1">
                                       <Label htmlFor={`second-${officer.id}`} className="text-xs">2nd Choice</Label>
                                       <select
@@ -544,7 +546,7 @@ useEffect(() => {
                                         ))}
                                       </select>
                                     </div>
-                                    
+
                                     <div className="space-y-1">
                                       <Label htmlFor={`third-${officer.id}`} className="text-xs">3rd Choice</Label>
                                       <select
@@ -575,7 +577,7 @@ useEffect(() => {
                                         beatPreferences[officer.id]?.second_choice,
                                         beatPreferences[officer.id]?.third_choice
                                       ].includes(beat);
-                                      
+
                                       return (
                                         <button
                                           key={beat}

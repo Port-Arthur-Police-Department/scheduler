@@ -52,6 +52,8 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const { data: shiftTypes } = useQuery({
@@ -64,6 +66,8 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const { data: positions } = useQuery({
@@ -76,6 +80,8 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Get the selected shift object
@@ -86,17 +92,17 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
     mutationFn: async () => {
       const officer = officers?.find(o => o.id === selectedOfficer);
       const shift = shiftTypes?.find(s => s.id === selectedShift);
-      
+
       console.log(`Creating schedule for officer: ${officer?.full_name}, shift: ${shift?.name}`);
-      
+
       // Convert week_offset value: "null" string becomes null, otherwise parseInt
       let weekOffsetValue = null;
       if (selectedWeekOffset !== "null") {
         weekOffsetValue = parseInt(selectedWeekOffset);
       }
-      
+
       console.log(`Week offset: ${weekOffsetValue === null ? 'NULL (every week)' : `Week ${weekOffsetValue + 1}`}`);
-      
+
       // Create the recurring schedule with week_offset
       const { error: scheduleError } = await supabase
         .from("recurring_schedules")
@@ -110,18 +116,18 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
           is_active: true,
           week_offset: weekOffsetValue
         });
-      
+
       if (scheduleError) throw scheduleError;
-      
+
       console.log('Schedule created successfully');
-      
+
       // Log to audit
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
-        const weekOffsetText = weekOffsetValue === null 
-          ? "every week" 
+        const weekOffsetText = weekOffsetValue === null
+          ? "every week"
           : `Week ${weekOffsetValue + 1} of 4-week cycle`;
-        
+
         await supabase.from('audit_logs').insert({
           user_email: currentUser.email,
           action_type: 'recurring_schedule_created',
@@ -133,24 +139,24 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
 
     onSuccess: () => {
       toast.success("Recurring schedule created successfully");
-      
+
       // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
       queryClient.invalidateQueries({ queryKey: ["officers"] });
       queryClient.invalidateQueries({ queryKey: ["officers-for-alerts"] });
-      
+
       // CRITICAL: Invalidate schedule queries for this specific officer
       if (selectedOfficer) {
-        queryClient.invalidateQueries({ 
+        queryClient.invalidateQueries({
           queryKey: ["schedule", selectedOfficer],
-          exact: false 
+          exact: false
         });
       }
-      
+
       // Call the callback to refresh the officers management view
       onScheduleCreated?.();
-      
+
       onOpenChange(false);
       // Reset all form fields
       setSelectedOfficer("");
@@ -169,10 +175,10 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
   // Get current officer's assigned shift for display
   const getCurrentOfficerShift = () => {
     if (!selectedOfficer || !officers || !shiftTypes) return null;
-    
+
     const officer = officers.find(o => o.id === selectedOfficer);
     if (!officer?.shift_type_id) return null;
-    
+
     return shiftTypes.find(s => s.id === officer.shift_type_id);
   };
 
@@ -200,7 +206,7 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
                 ))}
               </SelectContent>
             </Select>
-            
+
             {/* Show current assigned shift if officer has one */}
             {currentOfficerShift && (
               <div className="text-sm text-muted-foreground p-2 bg-blue-50 rounded">

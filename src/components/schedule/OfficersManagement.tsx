@@ -24,7 +24,7 @@ interface OfficersManagementProps {
 
 export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersManagementProps) => {
   console.log("🔍 OfficersManagement props:", { userId, isAdminOrSupervisor });
-  
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [selectedOfficerId, setSelectedOfficerId] = useState<string>("");
@@ -52,7 +52,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   // Initialize selectedOfficerId when component mounts or props change
   useEffect(() => {
     console.log("🔍 useEffect - Initializing officer ID:", { userId, isAdminOrSupervisor, selectedOfficerId });
-    
+
     if (!isAdminOrSupervisor && userId && selectedOfficerId === "") {
       // For regular officers, use their own ID
       console.log("👮 Setting officer ID to user ID:", userId);
@@ -108,7 +108,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         .select("id, full_name, badge_number")
         .order("full_name");
       if (error) throw error;
-      
+
       // Sort by last name alphabetically
       return data.sort((a, b) => {
         const lastNameA = getLastName(a.full_name || "").toLowerCase();
@@ -117,6 +117,8 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       });
     },
     enabled: isAdminOrSupervisor,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Set default officer for admins when profiles load
@@ -133,12 +135,12 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView, refreshTrigger],
     queryFn: async () => {
       console.log("🔍 Fetching schedules for officer:", selectedOfficerId);
-      
+
       // Don't fetch if no officer is selected
       if (!selectedOfficerId) {
         console.log("❌ No officer selected, skipping schedule fetch");
-        return { 
-          dailySchedules: [], 
+        return {
+          dailySchedules: [],
           dates: [],
           recurring: [],
           exceptions: [],
@@ -149,7 +151,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
       const targetUserId = isAdminOrSupervisor ? selectedOfficerId : userId;
       console.log("🎯 Target user ID:", targetUserId);
-      
+
       // Determine date range based on active view
       let startDate: Date;
       let endDate: Date;
@@ -160,22 +162,22 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         const weekStart = startOfWeek(currentWeekStart, { weekStartsOn: 0 });
         startDate = weekStart;
         endDate = addDays(weekStart, 6);
-        dates = Array.from({ length: 7 }, (_, i) => 
+        dates = Array.from({ length: 7 }, (_, i) =>
           format(addDays(weekStart, i), "yyyy-MM-dd")
         );
-        
-        console.log("📅 WEEKLY - Start:", format(startDate, "EEE yyyy-MM-dd"), 
-                    "End:", format(endDate, "EEE yyyy-MM-dd"));
+
+        console.log("📅 WEEKLY - Start:", format(startDate, "EEE yyyy-MM-dd"),
+          "End:", format(endDate, "EEE yyyy-MM-dd"));
       } else {
         // Monthly view
         startDate = startOfMonth(currentMonth);
         endDate = endOfMonth(currentMonth);
         const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
         dates = monthDays.map(day => format(day, "yyyy-MM-dd"));
-        
-        console.log("📅 MONTHLY - Start:", format(startDate, "EEE yyyy-MM-dd"), 
-                    "End:", format(endDate, "EEE yyyy-MM-dd"),
-                    "Days:", dates.length);
+
+        console.log("📅 MONTHLY - Start:", format(startDate, "EEE yyyy-MM-dd"),
+          "End:", format(endDate, "EEE yyyy-MM-dd"),
+          "Days:", dates.length);
       }
 
       // FIX: Get ALL recurring schedules for this officer (no date filtering)
@@ -209,7 +211,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
             .order("start_date", { ascending: true })
             .limit(1)
             .single();
-          
+
           if (cycleStartData) {
             const [year, month, day] = cycleStartData.start_date.split('-').map(Number);
             cycleStartDates.set(shiftTypeId, new Date(year, month - 1, day));
@@ -237,33 +239,33 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       }
 
       console.log("✅ Schedule data fetched successfully");
-      
+
       // Helper function to check if recurring schedule applies on a specific date with week_offset
       const doesRecurringApplyOnDate = (recurring: any, date: Date): boolean => {
         // Check date range first
         const scheduleStartDate = parseISO(recurring.start_date);
         const scheduleEndDate = recurring.end_date ? parseISO(recurring.end_date) : null;
-        
+
         const isAfterStart = date >= scheduleStartDate;
         const isBeforeEnd = !scheduleEndDate || date <= scheduleEndDate;
-        
+
         if (!isAfterStart || !isBeforeEnd) return false;
-        
+
         // Check week_offset
         const weekOffset = recurring.week_offset;
-        
+
         // NULL or undefined means every week
         if (weekOffset === null || weekOffset === undefined) {
           return true;
         }
-        
+
         // Get cycle start date for this shift
         const cycleStartDate = cycleStartDates.get(recurring.shift_type_id);
         if (!cycleStartDate) {
           // No cycle start date found - include as fallback
           return true;
         }
-        
+
         // Calculate current week offset for this date
         const diffTime = date.getTime() - cycleStartDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -272,7 +274,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
           const weeksPassed = Math.floor(diffDays / 7);
           currentWeekOffset = weeksPassed % 4;
         }
-        
+
         // Only include if week_offset matches current week
         return weekOffset === currentWeekOffset;
       };
@@ -281,9 +283,9 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       const dailySchedules = dates.map((date, idx) => {
         const currentDate = parseISO(date);
         const dayOfWeek = currentDate.getDay();
-        
+
         const exception = exceptionsData?.find(e => e.date === date);
-        
+
         // Find recurring schedule for this day of week that applies on this date (with week_offset check)
         const recurring = recurringData?.find(r => {
           if (r.day_of_week !== dayOfWeek) return false;
@@ -291,7 +293,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         });
 
         let shiftInfo = null;
-        
+
         if (exception) {
           shiftInfo = {
             type: exception.is_off ? "Off" : (exception.shift_types?.name || "Custom"),
@@ -319,12 +321,12 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
           };
         } else if (recurring) {
           // For recurring schedules, check if there's a PTO exception for this date
-          const ptoException = exceptionsData?.find(e => 
-            e.officer_id === targetUserId && 
-            e.date === date && 
+          const ptoException = exceptionsData?.find(e =>
+            e.officer_id === targetUserId &&
+            e.date === date &&
             e.is_off
           );
-          
+
           shiftInfo = {
             type: recurring.shift_types?.name,
             time: `${recurring.shift_types?.start_time} - ${recurring.shift_types?.end_time}`,
@@ -355,8 +357,8 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         };
       });
 
-      return { 
-        dailySchedules, 
+      return {
+        dailySchedules,
         dates,
         recurring: recurringData,
         exceptions: exceptionsData,
@@ -364,7 +366,9 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         endDate: format(endDate, "yyyy-MM-dd")
       };
     },
-    enabled: !!selectedOfficerId, // Only fetch when we have a valid officer ID
+    enabled: !!selectedOfficerId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Rest of the component remains the same...
@@ -406,7 +410,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
         if (profileError) throw profileError;
 
         const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-        
+
         const { error: restoreError } = await supabase
           .from("profiles")
           .update({
@@ -462,8 +466,8 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       {
         onSuccess: () => {
           // Force refresh the schedule data
-          queryClient.invalidateQueries({ 
-            queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView] 
+          queryClient.invalidateQueries({
+            queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView]
           });
           setEditingSchedule(null);
           setRefreshTrigger(prev => prev + 1);
@@ -497,13 +501,13 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
     try {
       console.log("🔄 handleRemovePTO called with:", { schedule, date });
-      
+
       // DEBUG: Log the full schedule object to see what properties are available
       console.log("🔍 Full schedule object:", schedule);
-      
+
       // Try multiple ways to get the officer's name
       let officerName = 'Unknown Officer';
-      
+
       // STRATEGY 1: Check if we have the officer name directly in the schedule
       if (schedule.name) {
         officerName = schedule.name;
@@ -532,16 +536,16 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       }
 
       console.log("👤 Final officer name for audit:", officerName);
-      
+
       // STRATEGY 1: Try to get shift ID from multiple possible sources
-      let shiftTypeId = schedule.shift?.id || 
-                       schedule.ptoData.shiftTypeId || 
-                       schedule.originalShiftId;
-      
+      let shiftTypeId = schedule.shift?.id ||
+        schedule.ptoData.shiftTypeId ||
+        schedule.originalShiftId;
+
       // STRATEGY 2: If we still don't have a shift ID, try to infer it from the officer's schedule
       if (!shiftTypeId) {
         console.log("🔍 No direct shift ID found, inferring from officer's schedule...");
-        
+
         // Get the officer's schedule for this date to find their shift
         const { data: officerSchedule, error } = await supabase
           .from("schedule_exceptions")
@@ -588,11 +592,11 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
       };
 
       console.log("✅ Calling removePTOMutation with:", ptoData);
-      
+
       removePTOMutation.mutate(ptoData, {
         onSuccess: () => {
           console.log("✅ PTO removal successful, calling auditLogger...");
-          
+
           // Log PTO removal to audit log - NOW WITH THE ACTUAL OFFICER NAME
           auditLogger.logPTORemoval(
             selectedOfficerId,
@@ -610,7 +614,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
           console.error("❌ PTO removal mutation failed:", error);
         }
       });
-      
+
     } catch (error) {
       console.error("❌ Error in handleRemovePTO:", error);
       toast.error("Unexpected error while removing PTO");
@@ -619,21 +623,21 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
   // Function to refresh the schedule data
   const refreshSchedule = () => {
-    queryClient.invalidateQueries({ 
-      queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView] 
+    queryClient.invalidateQueries({
+      queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView]
     });
     setRefreshTrigger(prev => prev + 1);
   };
 
   const isLoading = schedulesLoading || (isAdminOrSupervisor && profilesLoading) || !selectedOfficerId;
 
-  console.log("🔍 Component state:", { 
-    isLoading, 
-    schedulesLoading, 
-    profilesLoading, 
+  console.log("🔍 Component state:", {
+    isLoading,
+    schedulesLoading,
+    profilesLoading,
     selectedOfficerId,
     hasSchedules: !!schedules,
-    error 
+    error
   });
 
   if (isLoading) {
@@ -684,16 +688,16 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  
+
   // Get days from previous and next month to fill the calendar grid
   const startDay = monthStart.getDay(); // 0 = Sunday
   const endDay = monthEnd.getDay(); // 0 = Sunday
-  
-  const previousMonthDays = Array.from({ length: startDay }, (_, i) => 
+
+  const previousMonthDays = Array.from({ length: startDay }, (_, i) =>
     addDays(monthStart, -startDay + i)
   );
-  
-  const nextMonthDays = Array.from({ length: 6 - endDay }, (_, i) => 
+
+  const nextMonthDays = Array.from({ length: 6 - endDay }, (_, i) =>
     addDays(monthEnd, i + 1)
   );
 
@@ -711,7 +715,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
             <p className="font-medium">{daysOfWeek[dayOfWeek]}</p>
             <p className="text-sm text-muted-foreground">{format(parseISO(date), "MMM d")}</p>
           </div>
-          
+
           {shiftInfo ? (
             <div className="flex items-center gap-4">
               {editingSchedule === `${shiftInfo.scheduleId}-${shiftInfo.scheduleType}` ? (
@@ -737,7 +741,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
                       </Badge>
                     )}
                   </div>
-                  
+
                   {isAdminOrSupervisor && (
                     <div className="flex items-center gap-2">
                       {!shiftInfo.isOff && (
@@ -815,7 +819,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
           </div>
         ))}
       </div>
-      
+
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
         {allCalendarDays.map((day, index) => {
@@ -823,7 +827,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
           const daySchedule = schedules?.dailySchedules?.find(s => s.date === dateStr);
           const isCurrentMonthDay = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
-          
+
           return (
             <div
               key={day.toISOString()}
@@ -890,7 +894,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
                   </div>
                 )}
               </div>
-              
+
               {daySchedule?.shiftInfo && (
                 <div className="space-y-1 text-xs">
                   <div className="font-medium truncate">{daySchedule.shiftInfo.type}</div>
@@ -927,8 +931,8 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
             </CardTitle>
             {isAdminOrSupervisor && (
               <div className="flex items-center gap-3">
-                <Select 
-                  value={selectedOfficerId} 
+                <Select
+                  value={selectedOfficerId}
                   onValueChange={(value) => setSelectedOfficerId(value)}
                 >
                   <SelectTrigger className="w-64">
@@ -949,7 +953,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
               </div>
             )}
           </div>
-          
+
           <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "weekly" | "monthly")}>
             <TabsList className="grid w-full max-w-xs grid-cols-2">
               <TabsTrigger value="weekly" className="flex items-center gap-2">
@@ -962,7 +966,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          
+
           {/* Navigation */}
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-2">
@@ -974,22 +978,22 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              
+
               <div className="text-center">
                 <h3 className="text-lg font-semibold">
-                  {activeView === "weekly" 
+                  {activeView === "weekly"
                     ? `${format(currentWeekStart, "MMM d")} - ${format(weekEnd, "MMM d, yyyy")}`
                     : format(currentMonth, "MMMM yyyy")
                   }
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {activeView === "weekly" 
+                  {activeView === "weekly"
                     ? `Week of ${format(currentWeekStart, "MMMM d, yyyy")}`
                     : `Month of ${format(currentMonth, "MMMM yyyy")}`
                   }
                 </p>
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -999,7 +1003,7 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            
+
             <Button
               variant={(activeView === "weekly" && isCurrentWeek) || (activeView === "monthly" && isCurrentMonth) ? "outline" : "default"}
               size="sm"
@@ -1023,8 +1027,8 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
       {isAdminOrSupervisor && (
         <>
-          <ScheduleManagementDialog 
-            open={dialogOpen} 
+          <ScheduleManagementDialog
+            open={dialogOpen}
             onOpenChange={setDialogOpen}
             onScheduleCreated={handleScheduleCreated}
           />

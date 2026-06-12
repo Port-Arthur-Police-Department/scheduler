@@ -42,7 +42,7 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, user
   // Dialog states
   const [ptoDialogOpen, setPtoDialogOpen] = useState(false);
   const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
-  
+
   const [selectedOfficer, setSelectedOfficer] = useState<{
     id: string;
     name: string;
@@ -74,62 +74,64 @@ const TheBookMobile = ({ userRole = 'officer', isAdminOrSupervisor = false, user
       if (error) throw error;
       return data;
     },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
-// Auto-select user's assigned shift if they have one
-useEffect(() => {
-  if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
-    // Only auto-select if user has a specific assigned shift (not "all")
-    if (userCurrentShift && userCurrentShift !== "all") {
-      // Check if userCurrentShift exists in available shifts
-      const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
-      if (userShiftExists) {
-        console.log("📱 Mobile: Setting user's assigned shift:", userCurrentShift);
-        setSelectedShiftId(userCurrentShift);
-      } else {
-        console.log("⚠️ Mobile: User's assigned shift not found. No auto-selection.");
-        // Don't auto-select anything - user must choose
+  // Auto-select user's assigned shift if they have one
+  useEffect(() => {
+    if (shiftTypes && shiftTypes.length > 0 && !selectedShiftId) {
+      // Only auto-select if user has a specific assigned shift (not "all")
+      if (userCurrentShift && userCurrentShift !== "all") {
+        // Check if userCurrentShift exists in available shifts
+        const userShiftExists = shiftTypes.some(shift => shift.id === userCurrentShift);
+        if (userShiftExists) {
+          console.log("📱 Mobile: Setting user's assigned shift:", userCurrentShift);
+          setSelectedShiftId(userCurrentShift);
+        } else {
+          console.log("⚠️ Mobile: User's assigned shift not found. No auto-selection.");
+          // Don't auto-select anything - user must choose
+        }
       }
+      // If userCurrentShift is "all" or undefined, don't auto-select
     }
-    // If userCurrentShift is "all" or undefined, don't auto-select
-  }
-}, [shiftTypes, userCurrentShift, selectedShiftId]);
+  }, [shiftTypes, userCurrentShift, selectedShiftId]);
 
-// Setup mutations
-const mutationsResult = useWeeklyScheduleMutations(
-  currentWeekStart,
-  currentMonth,
-  activeView,
-  selectedShiftId
-);
+  // Setup mutations
+  const mutationsResult = useWeeklyScheduleMutations(
+    currentWeekStart,
+    currentMonth,
+    activeView,
+    selectedShiftId
+  );
 
-// Add a separate query for overtime data in TheBookMobile
-const { data: overtimeExceptions } = useQuery({
-  queryKey: ['overtime-exceptions-mobile', selectedShiftId, currentWeekStart.toISOString()],
-  queryFn: async () => {
-    if (!selectedShiftId) return [];
-    
-    const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
-    const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
-    
-    const { data: exceptions, error } = await supabase
-      .from('schedule_exceptions')
-      .select('*')
-      .eq('is_extra_shift', true)
-      .eq('shift_type_id', selectedShiftId)
-      .gte('date', weekStart)
-      .lte('date', weekEnd)
-      .order('date');
-    
-    if (error) {
-      console.error('Error fetching overtime exceptions:', error);
-      return [];
-    }
-    
-    return exceptions || [];
-  },
-  enabled: !!selectedShiftId && activeView === "weekly",
-  staleTime: 2 * 60 * 1000,   // ← ADD THIS
+  // Add a separate query for overtime data in TheBookMobile
+  const { data: overtimeExceptions } = useQuery({
+    queryKey: ['overtime-exceptions-mobile', selectedShiftId, currentWeekStart.toISOString()],
+    queryFn: async () => {
+      if (!selectedShiftId) return [];
+
+      const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      const weekEnd = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
+
+      const { data: exceptions, error } = await supabase
+        .from('schedule_exceptions')
+        .select('*')
+        .eq('is_extra_shift', true)
+        .eq('shift_type_id', selectedShiftId)
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .order('date');
+
+      if (error) {
+        console.error('Error fetching overtime exceptions:', error);
+        return [];
+      }
+
+      return exceptions || [];
+    },
+    enabled: !!selectedShiftId && activeView === "weekly",
+    staleTime: 2 * 60 * 1000,   // ← ADD THIS
   });
 
   // Get query client
@@ -175,12 +177,12 @@ const { data: overtimeExceptions } = useQuery({
       console.log('🎯 Assigning PTO on mobile:', ptoData);
 
       // For full day PTO, we should use the shift times or 00:00-23:59
-      const startTime = ptoData.isFullShift 
-        ? (ptoData.startTime || "00:00") 
+      const startTime = ptoData.isFullShift
+        ? (ptoData.startTime || "00:00")
         : ptoData.startTime;
-      
-      const endTime = ptoData.isFullShift 
-        ? (ptoData.endTime || "23:59") 
+
+      const endTime = ptoData.isFullShift
+        ? (ptoData.endTime || "23:59")
         : ptoData.endTime;
 
       // Check if there's already a schedule exception for this officer on this date
@@ -260,9 +262,9 @@ const { data: overtimeExceptions } = useQuery({
           } else {
             hoursUsed = calculateHoursUsed(startTime, endTime);
           }
-          
+
           const currentBalance = profile[ptoColumn as keyof typeof profile] as number;
-          
+
           const { error: updateBalanceError } = await supabase
             .from("profiles")
             .update({
@@ -302,12 +304,12 @@ const { data: overtimeExceptions } = useQuery({
   // Event handlers for mobile
   const handleAssignPTO = (schedule: any, date: string, officerId: string, officerName: string) => {
     console.log('📱 Opening PTO dialog for:', officerName, date);
-    
+
     // Get the current shift times
     const currentShift = shiftTypes?.find(shift => shift.id === selectedShiftId);
     const shiftStartTime = currentShift?.start_time || "08:00";
     const shiftEndTime = currentShift?.end_time || "17:00";
-    
+
     setSelectedOfficer({
       id: officerId,
       name: officerName,
@@ -347,7 +349,7 @@ const { data: overtimeExceptions } = useQuery({
         } catch (logError) {
           console.error('Failed to log PTO audit:', logError);
         }
-        
+
         // Close dialog
         setPtoDialogOpen(false);
         setSelectedOfficer(null);
@@ -371,7 +373,7 @@ const { data: overtimeExceptions } = useQuery({
     // Try multiple ways to find PTO data
     let ptoId = schedule?.id || schedule?.ptoData?.id;
     let ptoType = schedule?.reason || schedule?.ptoData?.ptoType || "PTO";
-    
+
     // If we don't have an ID but have PTO, we need to find it in the database
     if (!ptoId && (schedule?.hasPTO || schedule?.reason)) {
       console.log('🔄 Searching for PTO record in database...');
@@ -467,7 +469,7 @@ const { data: overtimeExceptions } = useQuery({
         } catch (logError) {
           console.error('Failed to log PTO removal audit:', logError);
         }
-        
+
         toast.success(`PTO removed successfully`);
         // Force refresh the weekly schedule query
         queryClient.invalidateQueries({ queryKey: ['weekly-schedule-mobile', selectedShiftId, currentWeekStart.toISOString()] });
@@ -481,7 +483,7 @@ const { data: overtimeExceptions } = useQuery({
 
   const handleEditAssignment = (officer: any, dateStr: string) => {
     console.log('📱 Opening assignment editor for:', officer.officerName, dateStr);
-    
+
     setEditingAssignment({
       officer: officer,
       dateStr: dateStr,
@@ -494,7 +496,7 @@ const { data: overtimeExceptions } = useQuery({
 
   const onRemoveOfficer = (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => {
     console.log('📱 Removing officer on mobile:', { scheduleId, type, officerData });
-    
+
     removeOfficerMutation.mutate({
       scheduleId,
       type,
@@ -514,7 +516,7 @@ const { data: overtimeExceptions } = useQuery({
 
   const handleSaveAssignment = (assignmentData: any) => {
     console.log('💾 Saving assignment:', assignmentData);
-    
+
     updatePositionMutation.mutate(assignmentData, {
       onSuccess: () => {
         // Log audit trail
@@ -530,7 +532,7 @@ const { data: overtimeExceptions } = useQuery({
         } catch (logError) {
           console.error('Failed to log assignment audit:', logError);
         }
-        
+
         toast.success("Assignment updated successfully");
         setAssignmentDialogOpen(false);
         setEditingAssignment(null);
@@ -562,13 +564,13 @@ const { data: overtimeExceptions } = useQuery({
             onEditAssignment={handleEditAssignment}
             onRemoveOfficer={onRemoveOfficer}
             isUpdating={
-              assignPTOMutation.isPending || 
+              assignPTOMutation.isPending ||
               updatePositionMutation.isPending
             }
             overtimeExceptions={overtimeExceptions || []} // Pass overtime data
           />
         );
-      
+
       case "monthly":
         return (
           <MonthlyViewMobile
@@ -580,7 +582,7 @@ const { data: overtimeExceptions } = useQuery({
             onToday={goToToday}
           />
         );
-      
+
       case "force-list":
         return (
           <ForceListViewMobile
@@ -590,7 +592,7 @@ const { data: overtimeExceptions } = useQuery({
             isAdminOrSupervisor={isAdminOrSupervisor}
           />
         );
-      
+
       case "vacation-list":
         return (
           <VacationListViewMobile
@@ -599,7 +601,7 @@ const { data: overtimeExceptions } = useQuery({
             shiftTypes={shiftTypes || []}
           />
         );
-      
+
       case "beat-preferences":
         return (
           <BeatPreferencesViewMobile
@@ -609,7 +611,7 @@ const { data: overtimeExceptions } = useQuery({
             shiftTypes={shiftTypes || []}
           />
         );
-      
+
       default:
         return <div>Select a view</div>;
     }
@@ -643,7 +645,7 @@ const { data: overtimeExceptions } = useQuery({
               </Button>
             )}
           </div>
-          
+
           <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
             <SelectTrigger>
               <SelectValue placeholder="Select Shift" />
@@ -685,7 +687,7 @@ const { data: overtimeExceptions } = useQuery({
                 Beats
               </TabsTrigger>
             </TabsList>
-            
+
             <div className="p-4">
               {selectedShiftId ? (
                 renderView()

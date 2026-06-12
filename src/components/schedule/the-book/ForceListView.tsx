@@ -36,14 +36,14 @@ interface ForceListViewProps {
 const shouldExcludeFromForceList = (rank: string): boolean => {
   if (!rank) return false;
   const rankLower = rank.toLowerCase();
-  
+
   // Exclude Lieutenants, Chiefs, Deputy Chiefs, and PPOs/Probationary officers
-  return rankLower.includes('lieutenant') || 
-         rankLower.includes('lt') || 
-         rankLower.includes('chief') || 
-         rankLower.includes('deputy') ||
-         rankLower.includes('probationary') ||
-         rankLower.includes('ppo');
+  return rankLower.includes('lieutenant') ||
+    rankLower.includes('lt') ||
+    rankLower.includes('chief') ||
+    rankLower.includes('deputy') ||
+    rankLower.includes('probationary') ||
+    rankLower.includes('ppo');
 };
 
 // Custom sort function for Force List
@@ -52,33 +52,33 @@ const sortForceListOfficers = (officers: any[], getForceCount: (officerId: strin
     // Primary: service credit (LEAST to most - ascending)
     const aCredit = a.service_credit || 0;
     const bCredit = b.service_credit || 0;
-    
+
     if (aCredit !== bCredit) {
       return aCredit - bCredit;
     }
-    
+
     // Secondary: badge number (DESCENDING - higher badge number = lower seniority = should be higher in force list)
     const getBadgeNumber = (officer: any): number => {
       const badgeNum = officer.badge_number || officer.badgeNumber;
       if (!badgeNum) return 9999;
-      
+
       const parsed = parseInt(badgeNum);
       return isNaN(parsed) ? 9999 : parsed;
     };
-    
+
     const aBadge = getBadgeNumber(a);
     const bBadge = getBadgeNumber(b);
     if (aBadge !== bBadge) {
       return bBadge - aBadge; // DESCENDING - higher badge number first
     }
-    
+
     // Tertiary: last name (A-Z)
     const getLastNameFromFullName = (name: string = ""): string => {
       if (!name) return "";
       const parts = name.trim().split(/\s+/);
       return parts[parts.length - 1] || "";
     };
-    
+
     const aLastName = getLastNameFromFullName(a.full_name);
     const bLastName = getLastNameFromFullName(b.full_name);
     return aLastName.localeCompare(bLastName);
@@ -123,6 +123,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       }
       return data as ForcedDate[];
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Mutation to add/update forced date
@@ -157,7 +159,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         variables,
         `Forced date added for officer ${variables.officerId}`
       );
-      
+
       toast.success("Forced date saved");
       queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
       setEditingForcedDate(null);
@@ -188,7 +190,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
         undefined,
         `Forced date removed`
       );
-      
+
       toast.success("Forced date removed");
       queryClient.invalidateQueries({ queryKey: ['forced-dates'] });
     },
@@ -238,7 +240,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       // Process officers - get unique officers and EXCLUDE Lieutenants/Chiefs/PPOs
       const uniqueOfficersMap = new Map();
       const excludedOfficers: any[] = [];
-      
+
       recurringSchedules?.forEach(schedule => {
         if (schedule.profiles) {
           // Check if officer should be included (exclude Lieutenants/Chiefs/PPOs)
@@ -254,12 +256,12 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
           }
         }
       });
-      
+
       const officers = Array.from(uniqueOfficersMap.values());
 
       // Log excluded officers for debugging
       if (excludedOfficers.length > 0) {
-        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):', 
+        console.log('🚫 Officers excluded from force list (Lieutenants/Chiefs/PPOs):',
           excludedOfficers
         );
       }
@@ -273,7 +275,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
           try {
             const { data: creditData, error: creditError } = await supabase
               .rpc('get_service_credit', { profile_id: officer.id });
-            
+
             if (creditError) {
               console.error(`Error fetching service credit for ${officer.full_name}:`, creditError);
               return {
@@ -281,10 +283,10 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                 service_credit: 0
               };
             }
-            
+
             const serviceCredit = parseFloat(creditData) || 0;
             console.log(`Officer ${officer.full_name} - Service Credit: ${serviceCredit}`);
-            
+
             return {
               ...officer,
               service_credit: serviceCredit
@@ -305,6 +307,8 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
       };
     },
     enabled: !!selectedShiftId,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Get forced dates for each officer
@@ -321,7 +325,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   const getMostRecentForcedDate = (officerId: string) => {
     const dates = getOfficerForcedDates(officerId);
     if (dates.length === 0) return null;
-    
+
     return dates.reduce((mostRecent, current) => {
       const mostRecentDate = parseISO(mostRecent.forced_date);
       const currentDate = parseISO(current.forced_date);
@@ -345,18 +349,18 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
   // Now categorize the sorted officers
   const sortedSupervisors = sortedOfficers.filter(officer => {
     const rank = officer?.rank?.toLowerCase() || '';
-    return (rank.includes('sergeant') || rank.includes('sgt')) && 
-           !rank.includes('lieutenant') && 
-           !rank.includes('lt') && 
-           !rank.includes('chief') && 
-           !rank.includes('deputy');
+    return (rank.includes('sergeant') || rank.includes('sgt')) &&
+      !rank.includes('lieutenant') &&
+      !rank.includes('lt') &&
+      !rank.includes('chief') &&
+      !rank.includes('deputy');
   });
 
   const sortedRegularOfficers = sortedOfficers.filter(officer => {
     const rank = officer?.rank?.toLowerCase() || '';
     // Check if it's a sergeant
     const isSergeant = rank.includes('sergeant') || rank.includes('sgt');
-    
+
     // Include only if NOT a sergeant (all others are regular officers)
     return !isSergeant;
   });
@@ -431,7 +435,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
               </div>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             {/* Date Range Selector */}
             <div className="space-y-2">
@@ -464,9 +468,9 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                     />
                   </PopoverContent>
                 </Popover>
-                
+
                 <span className="text-muted-foreground">to</span>
-                
+
                 <Popover open={calendarOpen === "end"} onOpenChange={(open) => setCalendarOpen(open ? "end" : null)}>
                   <PopoverTrigger asChild>
                     <Button
@@ -521,7 +525,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
             </div>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {!selectedShiftId ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -558,7 +562,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                       const forcedDates = getOfficerForcedDates(officer.id);
                       const forceCount = getForceCount(officer.id);
                       const mostRecent = getMostRecentForcedDate(officer.id);
-                      
+
                       return (
                         <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
                           <div className="col-span-2">
@@ -583,7 +587,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
-                            <Badge 
+                            <Badge
                               variant={forceCount === 0 ? "outline" : "default"}
                               className={forceCount === 0 ? "" : "bg-blue-600"}
                             >
@@ -593,7 +597,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                           <div className="col-span-2">
                             <div className="flex flex-wrap gap-1">
                               {forcedDates.map((forcedDate) => (
-                                <Badge 
+                                <Badge
                                   key={forcedDate.id}
                                   variant="outline"
                                   className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
@@ -653,7 +657,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                       const forcedDates = getOfficerForcedDates(officer.id);
                       const forceCount = getForceCount(officer.id);
                       const mostRecent = getMostRecentForcedDate(officer.id);
-                      
+
                       return (
                         <div key={officer.id} className="grid grid-cols-10 p-3 border rounded-lg hover:bg-muted/30 items-center">
                           <div className="col-span-2">
@@ -673,7 +677,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             </Badge>
                           </div>
                           <div className="col-span-1 text-center">
-                            <Badge 
+                            <Badge
                               variant={forceCount === 0 ? "outline" : "default"}
                               className={forceCount === 0 ? "" : "bg-blue-600"}
                             >
@@ -683,7 +687,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                           <div className="col-span-2">
                             <div className="flex flex-wrap gap-1">
                               {forcedDates.map((forcedDate) => (
-                                <Badge 
+                                <Badge
                                   key={forcedDate.id}
                                   variant="outline"
                                   className={`text-xs ${forcedDate.is_red ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
@@ -762,7 +766,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                               selected={editingForcedDate.date || undefined}
                               onSelect={(date) => {
                                 if (date) {
-                                  setEditingForcedDate(prev => prev ? {...prev, date} : null);
+                                  setEditingForcedDate(prev => prev ? { ...prev, date } : null);
                                 }
                               }}
                               initialFocus
@@ -777,7 +781,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             type="button"
                             variant={editingForcedDate.isRed ? "default" : "outline"}
                             className={editingForcedDate.isRed ? "bg-red-600 hover:bg-red-700" : ""}
-                            onClick={() => setEditingForcedDate(prev => prev ? {...prev, isRed: true} : null)}
+                            onClick={() => setEditingForcedDate(prev => prev ? { ...prev, isRed: true } : null)}
                           >
                             Red
                           </Button>
@@ -785,13 +789,13 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                             type="button"
                             variant={!editingForcedDate.isRed ? "default" : "outline"}
                             className={!editingForcedDate.isRed ? "bg-gray-800 hover:bg-gray-900" : ""}
-                            onClick={() => setEditingForcedDate(prev => prev ? {...prev, isRed: false} : null)}
+                            onClick={() => setEditingForcedDate(prev => prev ? { ...prev, isRed: false } : null)}
                           >
                             Black
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Red: Special/emergency forced shift<br/>
+                          Red: Special/emergency forced shift<br />
                           Black: Regular forced shift
                         </p>
                       </div>
@@ -800,7 +804,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                         <Input
                           id="notes"
                           value={editingForcedDate.notes}
-                          onChange={(e) => setEditingForcedDate(prev => prev ? {...prev, notes: e.target.value} : null)}
+                          onChange={(e) => setEditingForcedDate(prev => prev ? { ...prev, notes: e.target.value } : null)}
                           placeholder="Any notes about this forced shift"
                         />
                       </div>
@@ -808,7 +812,7 @@ export const ForceListView: React.FC<ForceListViewProps> = ({
                         <Button variant="outline" onClick={() => setEditingForcedDate(null)}>
                           Cancel
                         </Button>
-                        <Button 
+                        <Button
                           onClick={handleSaveForcedDate}
                           disabled={!editingForcedDate.date || addForcedDateMutation.isPending}
                         >

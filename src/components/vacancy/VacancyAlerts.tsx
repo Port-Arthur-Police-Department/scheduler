@@ -32,6 +32,8 @@ export const VacancyAlerts = ({ userId, isAdminOrSupervisor }: VacancyAlertsProp
       if (error) throw error;
       return data;
     },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch user responses - include rejection_reason
@@ -47,6 +49,8 @@ export const VacancyAlerts = ({ userId, isAdminOrSupervisor }: VacancyAlertsProp
       return data;
     },
     enabled: !!userId && !isAdminOrSupervisor,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch notifications for the current user
@@ -71,13 +75,15 @@ export const VacancyAlerts = ({ userId, isAdminOrSupervisor }: VacancyAlertsProp
       return data;
     },
     enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Mutation for responding to vacancies - with better state management
   const respondMutation = useMutation({
     mutationFn: async ({ alertId, status }: { alertId: string; status: string }) => {
       console.log("Submitting response for alert:", alertId, "status:", status);
-      
+
       const { error } = await supabase.from("vacancy_responses").insert({
         vacancy_alert_id: alertId,
         officer_id: userId,
@@ -93,15 +99,15 @@ export const VacancyAlerts = ({ userId, isAdminOrSupervisor }: VacancyAlertsProp
       // Invalidate and refetch the specific queries
       queryClient.invalidateQueries({ queryKey: ["vacancy-responses", userId] });
       queryClient.invalidateQueries({ queryKey: ["vacancy-responses-admin"] });
-      
+
       // Also refetch the current data to ensure UI updates
       refetchResponses?.();
-      
+
       toast.success("Response submitted successfully");
     },
     onError: (error: any) => {
       console.error("Response error:", error);
-      
+
       if (error.code === '23505') {
         toast.error("You have already submitted a response for this vacancy alert");
       } else {
@@ -193,117 +199,117 @@ export const VacancyAlerts = ({ userId, isAdminOrSupervisor }: VacancyAlertsProp
             <p className="text-sm text-muted-foreground">No open vacancies at this time.</p>
           ) : (
             <div className="space-y-4">
-{alerts.map((alert) => {
-  const userResponse = getUserResponse(alert.id);
-  const isStaffed = alert.current_staffing >= alert.minimum_required;
+              {alerts.map((alert) => {
+                const userResponse = getUserResponse(alert.id);
+                const isStaffed = alert.current_staffing >= alert.minimum_required;
 
-  return (
-    <div
-      key={alert.id}
-      className={cn(
-        "p-4 border rounded-lg space-y-3",
-        userResponse?.status === "accepted" 
-          ? "bg-green-50 border-green-200" 
-          : userResponse?.status === "rejected"
-          ? "bg-gray-50 border-gray-200"
-          : isStaffed 
-          ? "bg-green-50 border-green-200" 
-          : "bg-red-50 border-red-200"
-      )}
-    >
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <p className="font-medium">{alert.shift_types?.name}</p>
-          <p className="text-sm text-muted-foreground">
-            {format(new Date(alert.date), "EEEE, MMM d, yyyy")}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {alert.shift_types?.start_time} - {alert.shift_types?.end_time}
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge 
-              variant={isStaffed ? "outline" : "destructive"}
-              className={isStaffed ? "bg-green-100" : ""}
-            >
-              {alert.current_staffing} / {alert.minimum_required} staffed
-            </Badge>
-            {isStaffed && (
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            )}
-          </div>
-          
-          {/* ADD POSITION TYPE DISPLAY HERE */}
-          {alert.position_type && (
-            <div className="mt-2">
-              <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                {alert.position_type} needed
-              </Badge>
-            </div>
-          )}
-          
-          {/* Show custom message if exists */}
-          {alert.custom_message && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-sm text-blue-800">{alert.custom_message}</p>
-            </div>
-          )}
-        </div>
-      </div>
+                return (
+                  <div
+                    key={alert.id}
+                    className={cn(
+                      "p-4 border rounded-lg space-y-3",
+                      userResponse?.status === "accepted"
+                        ? "bg-green-50 border-green-200"
+                        : userResponse?.status === "rejected"
+                          ? "bg-gray-50 border-gray-200"
+                          : isStaffed
+                            ? "bg-green-50 border-green-200"
+                            : "bg-red-50 border-red-200"
+                    )}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <p className="font-medium">{alert.shift_types?.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(alert.date), "EEEE, MMM d, yyyy")}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {alert.shift_types?.start_time} - {alert.shift_types?.end_time}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge
+                            variant={isStaffed ? "outline" : "destructive"}
+                            className={isStaffed ? "bg-green-100" : ""}
+                          >
+                            {alert.current_staffing} / {alert.minimum_required} staffed
+                          </Badge>
+                          {isStaffed && (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          )}
+                        </div>
+
+                        {/* ADD POSITION TYPE DISPLAY HERE */}
+                        {alert.position_type && (
+                          <div className="mt-2">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                              {alert.position_type} needed
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Show custom message if exists */}
+                        {alert.custom_message && (
+                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                            <p className="text-sm text-blue-800">{alert.custom_message}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     // In VacancyAlerts.tsx - update the button rendering section
-{!isAdminOrSupervisor && (
-  <div className="flex gap-2">
-    {userResponse ? (
-      <div className="space-y-2 w-full">
-        <Badge 
-          variant={
-            userResponse.status === "accepted" ? "default" :
-            userResponse.status === "rejected" ? "destructive" : "outline"
-          }
-          className="capitalize"
-        >
-          {userResponse.status === "accepted" ? "Approved" :
-          userResponse.status === "rejected" ? "Not Approved" :
-          "Pending Review"}
-        </Badge>
-        
-        {/* Show approval message when approved */}
-        {userResponse.status === "accepted" && (
-          <div className="p-2 bg-green-50 border border-green-200 rounded text-sm">
-            <p className="text-green-800 font-medium">✓ Your request has been approved</p>
-            <p className="text-green-700 mt-1">
-              Your request for {alert.shift_types?.name} on {format(new Date(alert.date), "MMM d, yyyy")} has been approved. 
-              Please report for duty as scheduled.
-            </p>
-          </div>
-        )}
-        
-        {/* Show rejection message when denied */}
-        {userResponse.status === "rejected" && userResponse.rejection_reason && (
-          <div className="p-2 bg-red-50 border border-red-200 rounded text-sm">
-            <p className="text-red-800 font-medium">✗ Your request was not approved</p>
-            <p className="text-red-700 mt-1">
-              {userResponse.rejection_reason}
-            </p>
-          </div>
-        )}
-      </div>
-    ) : (
-      <Button
-        size="sm"
-        onClick={() =>
-          respondMutation.mutate({
-            alertId: alert.id,
-            status: "interested",
-          })
-        }
-        disabled={respondMutation.isPending || isStaffed || !!userResponse}
-      >
-        {respondMutation.isPending ? "Submitting..." : "Request Shift"}
-      </Button>
-    )}
-  </div>
-)}
+                    {!isAdminOrSupervisor && (
+                      <div className="flex gap-2">
+                        {userResponse ? (
+                          <div className="space-y-2 w-full">
+                            <Badge
+                              variant={
+                                userResponse.status === "accepted" ? "default" :
+                                  userResponse.status === "rejected" ? "destructive" : "outline"
+                              }
+                              className="capitalize"
+                            >
+                              {userResponse.status === "accepted" ? "Approved" :
+                                userResponse.status === "rejected" ? "Not Approved" :
+                                  "Pending Review"}
+                            </Badge>
+
+                            {/* Show approval message when approved */}
+                            {userResponse.status === "accepted" && (
+                              <div className="p-2 bg-green-50 border border-green-200 rounded text-sm">
+                                <p className="text-green-800 font-medium">✓ Your request has been approved</p>
+                                <p className="text-green-700 mt-1">
+                                  Your request for {alert.shift_types?.name} on {format(new Date(alert.date), "MMM d, yyyy")} has been approved.
+                                  Please report for duty as scheduled.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Show rejection message when denied */}
+                            {userResponse.status === "rejected" && userResponse.rejection_reason && (
+                              <div className="p-2 bg-red-50 border border-red-200 rounded text-sm">
+                                <p className="text-red-800 font-medium">✗ Your request was not approved</p>
+                                <p className="text-red-700 mt-1">
+                                  {userResponse.rejection_reason}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              respondMutation.mutate({
+                                alertId: alert.id,
+                                status: "interested",
+                              })
+                            }
+                            disabled={respondMutation.isPending || isStaffed || !!userResponse}
+                          >
+                            {respondMutation.isPending ? "Submitting..." : "Request Shift"}
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

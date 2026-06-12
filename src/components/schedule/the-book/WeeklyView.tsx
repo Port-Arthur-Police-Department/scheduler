@@ -119,8 +119,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return result;
     },
     enabled: !!selectedShiftId,
-        staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes
-      });
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
 
   const { data: fetchedOfficerProfiles, isLoading: isLoadingProfiles } = useQuery({
@@ -150,7 +151,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     enabled: !officerProfiles,
     staleTime: 5 * 60 * 1000,   // ← ADD: cache 5 minutes
     gcTime: 10 * 60 * 1000,     // ← ADD: keep in memory 10 minutes
-      });
+  });
 
   const effectiveOfficerProfiles = React.useMemo(() => {
     return officerProfiles || fetchedOfficerProfiles || new Map();

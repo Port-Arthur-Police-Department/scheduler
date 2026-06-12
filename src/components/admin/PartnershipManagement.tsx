@@ -316,8 +316,6 @@ export const PartnershipManagement = () => {
 
       return profiles?.filter(p => !isPPO(p)) || [];
     }
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
   });
 
   // Fetch available PPO officers for new partnerships

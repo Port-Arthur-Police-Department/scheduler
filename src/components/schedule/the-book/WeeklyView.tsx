@@ -119,7 +119,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return result;
     },
     enabled: !!selectedShiftId,
-  });
+        staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes
+      });
 
   useEffect(() => {
     if (schedules) {
@@ -152,7 +153,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return profilesMap;
     },
     enabled: !officerProfiles,
-  });
+        staleTime: 5 * 60 * 1000,   // ← ADD: cache 5 minutes
+        gcTime: 10 * 60 * 1000,     // ← ADD: keep in memory 10 minutes
+      });
 
   const effectiveOfficerProfiles = React.useMemo(() => {
     return officerProfiles || fetchedOfficerProfiles || new Map();
@@ -209,32 +212,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       
       await onEventHandlers.onAssignPTO(schedule, date, officerId, officerName);
       
-      console.log('🔄 [WeeklyView] Invalidating queries...');
-      await queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId],
-        refetchType: 'all'
-      });
-      
-      await queryClient.invalidateQueries({ 
-        queryKey: ['schedule-data', 'weekly', selectedShiftId, currentWeekStart.toISOString()],
-        refetchType: 'all'
-      });
-      
-      console.log('🔄 [WeeklyView] Refetching data...');
-      await queryClient.refetchQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId],
-        type: 'active'
-      });
-      
       if (refetchScheduleData) {
-        console.log('🔄 [WeeklyView] Calling parent refetch function...');
-        await refetchScheduleData();
-      }
-      
-      await queryClient.refetchQueries({ 
-        queryKey: ['schedule-data', 'weekly', selectedShiftId, currentWeekStart.toISOString()],
-        type: 'active'
-      });
+              await refetchScheduleData();   // ← parent handles the refetch once
+            }
       
       console.log('✅ [WeeklyView] PTO assignment completed, cache refreshed');
       toast.success("PTO assigned successfully");

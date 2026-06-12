@@ -46,10 +46,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   queryKey = ['weekly-schedule', selectedShiftId],
   refetchScheduleData,
 }) => {
-  const [currentWeekStart, setCurrentWeekStart] = useState(initialDate);
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
   const [localSchedules, setLocalSchedules] = useState(schedules);
+  const currentWeekStart = initialDate; 
   
   const [serviceCreditsMap, setServiceCreditsMap] = useState<Map<string, number>>(new Map());
   const [isLoadingServiceCredits, setIsLoadingServiceCredits] = useState(false);
@@ -158,16 +158,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     return officerProfiles || fetchedOfficerProfiles || new Map();
   }, [officerProfiles, fetchedOfficerProfiles]);
 
-  useEffect(() => {
-    setCurrentWeekStart(initialDate);
-    setSelectedWeekDate(initialDate);
-  }, [initialDate]);
-
-  useEffect(() => {
-    if (onDateChange) {
-      onDateChange(currentWeekStart);
-    }
-  }, [currentWeekStart, onDateChange]);
 
   useEffect(() => {
     if (weekPickerOpen) {
@@ -355,14 +345,13 @@ const isOfficerOvertime = (officer: any): boolean => {
            positionLower.includes('chief') ||
            positionLower.includes('captain');
   };
-
+  
   const handleJumpToWeek = (date: Date) => {
     const weekStart = startOfWeek(date, { weekStartsOn: 0 });
-    setCurrentWeekStart(weekStart);
     setSelectedWeekDate(weekStart);
     setWeekPickerOpen(false);
     if (onDateChange) {
-      onDateChange(weekStart);
+      onDateChange(weekStart);  // ✅ only fires on user action
     }
   };
 

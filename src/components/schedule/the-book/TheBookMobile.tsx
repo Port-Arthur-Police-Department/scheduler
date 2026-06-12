@@ -129,7 +129,7 @@ const { data: overtimeExceptions } = useQuery({
     return exceptions || [];
   },
   enabled: !!selectedShiftId && activeView === "weekly",
-    staleTime: 2 * 60 * 1000,   // ← ADD THIS
+  staleTime: 2 * 60 * 1000,   // ← ADD THIS
   });
 
   // Get query client

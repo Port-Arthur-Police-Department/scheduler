@@ -34,3 +34,22 @@ The Messages counter in DevTools should stop climbing
 If you need to debug - Just run localStorage.setItem('debugStaffing', 'true') in console
 
 The constant console spam will be completely gone now!
+
+SortingUtils debug:
+🎯 How to Enable Debug Logging (When Needed)
+To see the sorting logs again for debugging:
+
+javascript
+localStorage.setItem('debugSorting', 'true')
+To disable:
+
+javascript
+localStorage.setItem('debugSorting', 'false')
+✅ Summary of Changes Made to sortingUtils.ts
+Added debug flag at the top
+
+Created debugLog() helper that only logs when flag is enabled
+
+Wrapped ALL console.log statements with debugLog()
+
+Kept console.error for actual errors (these are fine to keep)

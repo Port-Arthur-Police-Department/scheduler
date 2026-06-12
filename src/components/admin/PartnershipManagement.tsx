@@ -329,8 +329,6 @@ export const PartnershipManagement = () => {
 
       return profiles?.filter(p => isPPO(p)) || [];
     }
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
   });
 
   // Fetch all shifts
@@ -343,8 +341,6 @@ export const PartnershipManagement = () => {
         .order("start_time");
       return data || [];
     }
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
   });
 
   // Mutation to create partnership

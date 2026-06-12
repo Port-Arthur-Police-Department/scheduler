@@ -656,8 +656,9 @@ export const WeeklyViewMobile: React.FC<WeeklyViewMobileProps> = ({
       }
     },
     enabled: !!selectedShiftId,
-    retry: 1,
-  });
+        retry: 1,
+        staleTime: 2 * 60 * 1000,   // ← ADD THIS
+      });
 
   const isSpecialAssignment = (position: string) => {
     return position && (

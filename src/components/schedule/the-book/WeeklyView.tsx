@@ -48,7 +48,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 }) => {
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(initialDate);
-  const [localSchedules, setLocalSchedules] = useState(schedules);
+  const localSchedules = useMemo(() => schedules, [schedules]);
   const currentWeekStart = initialDate; 
   
   const [serviceCreditsMap, setServiceCreditsMap] = useState<Map<string, number>>(new Map());
@@ -122,11 +122,6 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes
       });
 
-  useEffect(() => {
-    if (schedules) {
-      setLocalSchedules(schedules);
-    }
-  }, [schedules]);
 
   const { data: fetchedOfficerProfiles, isLoading: isLoadingProfiles } = useQuery({
     queryKey: ['officer-profiles-weekly'],
@@ -228,41 +223,17 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   };
 
   const handleRemovePTO = async (schedule: any, date: string, officerId: string) => {
-    console.log('🗑️ [WeeklyView] handleRemovePTO called:', { schedule, date, officerId });
-    
     if (!onEventHandlers.onRemovePTO) return;
     
     try {
       toast.loading("Removing PTO...");
-      
       await onEventHandlers.onRemovePTO(schedule, date, officerId);
       
-      await queryClient.invalidateQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId],
-        refetchType: 'all'
-      });
-      
-      await queryClient.invalidateQueries({ 
-        queryKey: ['schedule-data', 'weekly', selectedShiftId, currentWeekStart.toISOString()],
-        refetchType: 'all'
-      });
-      
-      await queryClient.refetchQueries({ 
-        queryKey: ['weekly-schedule', selectedShiftId],
-        type: 'active'
-      });
-      
       if (refetchScheduleData) {
-        await refetchScheduleData();
+        await refetchScheduleData();  // parent handles the refetch once
       }
       
-      await queryClient.refetchQueries({ 
-        queryKey: ['schedule-data', 'weekly', selectedShiftId, currentWeekStart.toISOString()],
-        type: 'active'
-      });
-      
       toast.success("PTO removed successfully");
-      
     } catch (error) {
       toast.error("Failed to remove PTO");
       console.error('Error removing PTO:', error);

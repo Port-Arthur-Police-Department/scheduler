@@ -189,11 +189,12 @@ export const DailyScheduleView = ({
     updatePartnershipMutation // NEW: Added partnership mutation
   } = useScheduleMutations(dateStr);
 
-  // UPDATED: Include filterShiftId in query key AND add refetch function
-  const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
-    queryKey: ["daily-schedule", dateStr, filterShiftId],
-    queryFn: () => getScheduleData(selectedDate, filterShiftId),
-  });
+  // UPDATED with claude to stop the constant data pulling
+    const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
+        queryKey: ["daily-schedule", dateStr, filterShiftId],
+        queryFn: () => getScheduleData(selectedDate, filterShiftId),
+        staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes, stops constant background polling
+      });
 
   // FIXED: Updated handlers to work with the new callback signatures
   const handleSavePosition = async (officer: any, position: string) => {

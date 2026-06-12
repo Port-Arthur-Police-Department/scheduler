@@ -303,8 +303,6 @@ export const PartnershipManagement = () => {
 
       return filteredPartnerships;
     }
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
   });
 
   // Fetch available regular officers (non-PPO) for new partnerships

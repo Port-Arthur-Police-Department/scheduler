@@ -627,6 +627,8 @@ const TheBook = ({
       }
     },
     enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Navigation functions

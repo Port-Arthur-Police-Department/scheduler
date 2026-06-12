@@ -148,8 +148,8 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return profilesMap;
     },
     enabled: !officerProfiles,
-        staleTime: 5 * 60 * 1000,   // ← ADD: cache 5 minutes
-        gcTime: 10 * 60 * 1000,     // ← ADD: keep in memory 10 minutes
+    staleTime: 5 * 60 * 1000,   // ← ADD: cache 5 minutes
+    gcTime: 10 * 60 * 1000,     // ← ADD: keep in memory 10 minutes
       });
 
   const effectiveOfficerProfiles = React.useMemo(() => {

@@ -66,6 +66,8 @@ export const BulkPTOAssignmentDialog = ({
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Reset form when dialog opens
@@ -98,10 +100,10 @@ export const BulkPTOAssignmentDialog = ({
     if (!startDate || !endDate || selectedShifts.length === 0 || !shiftTypes) return;
 
     setCalculating(true);
-    
+
     try {
       const days = eachDayOfInterval({ start: startDate, end: endDate });
-      const filteredDays = excludeWeekends 
+      const filteredDays = excludeWeekends
         ? days.filter(day => !isWeekend(day))
         : days;
 
@@ -118,12 +120,12 @@ export const BulkPTOAssignmentDialog = ({
       for (const day of filteredDays) {
         const dayOfWeek = day.getDay();
         const dateStr = format(day, "yyyy-MM-dd");
-        
+
         // Check if officer has a recurring schedule for this day
         const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
-        
+
         // Only include shifts that are both selected AND in the officer's recurring schedule
-        const applicableShifts = daySchedules.filter(s => 
+        const applicableShifts = daySchedules.filter(s =>
           selectedShifts.includes(s.shift_type_id)
         );
 
@@ -131,7 +133,7 @@ export const BulkPTOAssignmentDialog = ({
           const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
           if (shift) {
             affectedDates.push(`${dateStr} - ${shift.name}`);
-            
+
             if (isFullShift) {
               const hours = calculateHours(shift.start_time, shift.end_time);
               totalHoursCalculated += hours;
@@ -184,7 +186,7 @@ export const BulkPTOAssignmentDialog = ({
       }
 
       const days = eachDayOfInterval({ start: startDate, end: endDate });
-      const filteredDays = excludeWeekends 
+      const filteredDays = excludeWeekends
         ? days.filter(day => !isWeekend(day))
         : days;
 
@@ -200,9 +202,9 @@ export const BulkPTOAssignmentDialog = ({
       for (const day of filteredDays) {
         const dayOfWeek = day.getDay();
         const dateStr = format(day, "yyyy-MM-dd");
-        
+
         const daySchedules = recurringSchedules?.filter(s => s.day_of_week === dayOfWeek) || [];
-        const applicableShifts = daySchedules.filter(s => 
+        const applicableShifts = daySchedules.filter(s =>
           selectedShifts.includes(s.shift_type_id)
         );
 

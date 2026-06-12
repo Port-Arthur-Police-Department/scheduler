@@ -71,7 +71,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const [editingSchedule, setEditingSchedule] = useState<any>(null);
   const [weekPattern, setWeekPattern] = useState<"all" | "odd" | "even" | "custom">("all");
   const [customWeeks, setCustomWeeks] = useState<number[]>([0]); // Default: Week 1 only
-  
+
   // New state for default assignments
   const [activeTab, setActiveTab] = useState("schedules");
   const [showDefaultAssignmentForm, setShowDefaultAssignmentForm] = useState(false);
@@ -105,45 +105,47 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     }
   }, [open, officer?.id]);
 
-    const { data: schedules, isLoading: schedulesLoading } = useQuery({
-      queryKey: ["officer-schedules", officer.id],
-      queryFn: async () => {
-        // Get ALL schedules without any week_offset filtering
-        const { data, error } = await supabase
-          .from("recurring_schedules")
-          .select(`
+  const { data: schedules, isLoading: schedulesLoading } = useQuery({
+    queryKey: ["officer-schedules", officer.id],
+    queryFn: async () => {
+      // Get ALL schedules without any week_offset filtering
+      const { data, error } = await supabase
+        .from("recurring_schedules")
+        .select(`
             *,
             shift_types(id, name, start_time, end_time)
           `)
-          .eq("officer_id", officer.id)
-          .order("start_date", { ascending: false });
-    
-        if (error) throw error;
-        
-        if (!data || data.length === 0) return [];
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Only separate active vs ended based on dates
-        // DO NOT filter by week_offset in the management view
-        const active = data.filter(s => {
-          const endDate = s.end_date ? new Date(s.end_date) : null;
-          return !endDate || endDate >= today;
-        });
-        
-        const ended = data.filter(s => {
-          const endDate = s.end_date ? new Date(s.end_date) : null;
-          return endDate && endDate < today;
-        });
-        
-        console.log(`📋 Officer ${officer.full_name}: ${data.length} total schedules (${active.length} active, ${ended.length} ended)`);
-        
-        // Return all schedules (active first, then ended)
-        return [...active, ...ended];
-      },
-      enabled: open,
-    });
+        .eq("officer_id", officer.id)
+        .order("start_date", { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) return [];
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Only separate active vs ended based on dates
+      // DO NOT filter by week_offset in the management view
+      const active = data.filter(s => {
+        const endDate = s.end_date ? new Date(s.end_date) : null;
+        return !endDate || endDate >= today;
+      });
+
+      const ended = data.filter(s => {
+        const endDate = s.end_date ? new Date(s.end_date) : null;
+        return endDate && endDate < today;
+      });
+
+      console.log(`📋 Officer ${officer.full_name}: ${data.length} total schedules (${active.length} active, ${ended.length} ended)`);
+
+      // Return all schedules (active first, then ended)
+      return [...active, ...ended];
+    },
+    enabled: open,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
   // Fetch officer's default assignments - FIXED: Include assignments with future end dates
   const { data: defaultAssignments, isLoading: defaultAssignmentsLoading } = useQuery({
@@ -156,24 +158,26 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
         .order("start_date", { ascending: false });
 
       if (error) throw error;
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       // FIX: Include assignments that are either ongoing OR end in the future
       const active = (data || []).filter((da: any) => {
         const endDate = da.end_date ? new Date(da.end_date) : null;
         return !endDate || endDate >= today;
       });
-      
+
       const ended = (data || []).filter((da: any) => {
         const endDate = da.end_date ? new Date(da.end_date) : null;
         return endDate && endDate < today;
       });
-      
+
       return [...active, ...ended];
     },
     enabled: open,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Fetch shift types
@@ -188,39 +192,41 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       return data;
     },
     enabled: open,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   // Delete schedule mutation
   const deleteScheduleMutation = useMutation({
-  mutationFn: async (scheduleId: string) => {
-    // Get current user for audit logging
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    
-    // Get schedule data before deletion for audit logging
-    const { data: scheduleData } = await supabase
-      .from("recurring_schedules")
-      .select("*")
-      .eq("id", scheduleId)
-      .single();
+    mutationFn: async (scheduleId: string) => {
+      // Get current user for audit logging
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-    const { error } = await supabase
-      .from("recurring_schedules")
-      .delete()
-      .eq("id", scheduleId);
+      // Get schedule data before deletion for audit logging
+      const { data: scheduleData } = await supabase
+        .from("recurring_schedules")
+        .select("*")
+        .eq("id", scheduleId)
+        .single();
 
-    if (error) throw error;
+      const { error } = await supabase
+        .from("recurring_schedules")
+        .delete()
+        .eq("id", scheduleId);
 
-    // AUDIT LOGGING: Log schedule deletion
-    if (currentUser && scheduleData) {
-      await auditLogger.logScheduleChange(
-        'Deleted',
-        scheduleId,
-        scheduleData,
-        currentUser.id,
-        currentUser.email
-      );
-    }
-  },
+      if (error) throw error;
+
+      // AUDIT LOGGING: Log schedule deletion
+      if (currentUser && scheduleData) {
+        await auditLogger.logScheduleChange(
+          'Deleted',
+          scheduleId,
+          scheduleData,
+          currentUser.id,
+          currentUser.email
+        );
+      }
+    },
     onSuccess: () => {
       toast.success("Schedule removed");
       queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
@@ -233,111 +239,111 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-    const addScheduleMutation = useMutation({
-      mutationFn: async (data: { 
-        days: number[]; 
-        shiftId: string; 
-        start: string; 
-        end?: string;
-        unitNumber?: string;
-        assignedPosition?: string;
-        weekPattern?: string;
-        customWeeks?: number[];
-      }) => {
-        const startDate = new Date(data.start);
-        if (data.end && new Date(data.end) < startDate) {
-          throw new Error("End date cannot be before start date");
+  const addScheduleMutation = useMutation({
+    mutationFn: async (data: {
+      days: number[];
+      shiftId: string;
+      start: string;
+      end?: string;
+      unitNumber?: string;
+      assignedPosition?: string;
+      weekPattern?: string;
+      customWeeks?: number[];
+    }) => {
+      const startDate = new Date(data.start);
+      if (data.end && new Date(data.end) < startDate) {
+        throw new Error("End date cannot be before start date");
+      }
+
+      // Determine which week offsets to create based on pattern
+      let weekOffsetsToCreate: (number | null)[] = [];
+
+      console.log("📅 Creating schedule with pattern:", data.weekPattern);
+      console.log("📅 Custom weeks:", data.customWeeks);
+
+      if (data.weekPattern === "odd") {
+        // Weeks 1 and 3 (0 and 2)
+        weekOffsetsToCreate = [0, 2];
+      } else if (data.weekPattern === "even") {
+        // Weeks 2 and 4 (1 and 3)
+        weekOffsetsToCreate = [1, 3];
+      } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
+        // Custom weeks selected by user
+        weekOffsetsToCreate = [...data.customWeeks];
+      } else if (data.weekPattern === "all") {
+        // "Every Week" - use NULL to indicate every week
+        weekOffsetsToCreate = [null];
+      } else {
+        // Default: only week 0 (Week 1 only)
+        weekOffsetsToCreate = [0];
+      }
+
+      console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
+
+      // Create schedules array
+      const schedules: any[] = [];
+
+      for (const day of data.days) {
+        for (const weekOffset of weekOffsetsToCreate) {
+          schedules.push({
+            officer_id: officer.id,
+            day_of_week: day,
+            shift_type_id: data.shiftId,
+            start_date: data.start,
+            end_date: data.end || null,
+            unit_number: data.unitNumber || null,
+            position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
+            week_offset: weekOffset  // Can be null (every week) or 0,1,2,3 (specific week)
+          });
         }
-    
-        // Determine which week offsets to create based on pattern
-        let weekOffsetsToCreate: (number | null)[] = [];
-        
-        console.log("📅 Creating schedule with pattern:", data.weekPattern);
-        console.log("📅 Custom weeks:", data.customWeeks);
-        
-        if (data.weekPattern === "odd") {
-          // Weeks 1 and 3 (0 and 2)
-          weekOffsetsToCreate = [0, 2];
-        } else if (data.weekPattern === "even") {
-          // Weeks 2 and 4 (1 and 3)
-          weekOffsetsToCreate = [1, 3];
-        } else if (data.weekPattern === "custom" && data.customWeeks && data.customWeeks.length > 0) {
-          // Custom weeks selected by user
-          weekOffsetsToCreate = [...data.customWeeks];
-        } else if (data.weekPattern === "all") {
-          // "Every Week" - use NULL to indicate every week
-          weekOffsetsToCreate = [null];
-        } else {
-          // Default: only week 0 (Week 1 only)
-          weekOffsetsToCreate = [0];
-        }
-    
-        console.log("📅 Creating schedules for week offsets:", weekOffsetsToCreate);
-    
-        // Create schedules array
-        const schedules: any[] = [];
-        
-        for (const day of data.days) {
-          for (const weekOffset of weekOffsetsToCreate) {
-            schedules.push({
-              officer_id: officer.id,
-              day_of_week: day,
-              shift_type_id: data.shiftId,
-              start_date: data.start,
-              end_date: data.end || null,
-              unit_number: data.unitNumber || null,
-              position_name: data.assignedPosition !== "none" ? data.assignedPosition : null,
-              week_offset: weekOffset  // Can be null (every week) or 0,1,2,3 (specific week)
-            });
-          }
-        }
-    
-        console.log("📅 Total schedules to insert:", schedules.length);
-        console.log("📅 Sample schedule:", schedules[0]);
-    
-        // Insert all schedules
-        const { data: insertedSchedules, error } = await supabase
-          .from("recurring_schedules")
-          .insert(schedules)
-          .select();
-    
-        if (error) {
-          console.error("Insert error:", error);
-          throw error;
-        }
-    
-        return insertedSchedules;
-      },
-    
-      onSuccess: (insertedSchedules) => {
-        console.log("Successfully created schedules:", insertedSchedules);
-        toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
-        queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
-        queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
-        queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
-        resetForm();
-      },
-      onError: (error: any) => {
-        console.error("Schedule creation error:", error);
-        toast.error(error.message || "Failed to add schedule");
-      },
-    });
-  
+      }
+
+      console.log("📅 Total schedules to insert:", schedules.length);
+      console.log("📅 Sample schedule:", schedules[0]);
+
+      // Insert all schedules
+      const { data: insertedSchedules, error } = await supabase
+        .from("recurring_schedules")
+        .insert(schedules)
+        .select();
+
+      if (error) {
+        console.error("Insert error:", error);
+        throw error;
+      }
+
+      return insertedSchedules;
+    },
+
+    onSuccess: (insertedSchedules) => {
+      console.log("Successfully created schedules:", insertedSchedules);
+      toast.success(`Created ${insertedSchedules.length} schedule(s) successfully`);
+      queryClient.invalidateQueries({ queryKey: ["officer-schedules", officer.id] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      resetForm();
+    },
+    onError: (error: any) => {
+      console.error("Schedule creation error:", error);
+      toast.error(error.message || "Failed to add schedule");
+    },
+  });
+
   // Update schedule mutation - now updates all fields
   const updateScheduleMutation = useMutation({
-    mutationFn: async ({ 
-      scheduleId, 
-      updates 
-    }: { 
-      scheduleId: string; 
-      updates: { 
+    mutationFn: async ({
+      scheduleId,
+      updates
+    }: {
+      scheduleId: string;
+      updates: {
         day_of_week: number;
         shift_type_id: string;
         start_date: string;
         end_date?: string | null;
         unit_number?: string | null;
         position_name?: string | null;
-      } 
+      }
     }) => {
       const { error } = await supabase
         .from("recurring_schedules")
@@ -382,7 +388,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
   // Add default assignment mutation - now ends previous active assignments
   const addDefaultAssignmentMutation = useMutation({
-    mutationFn: async (data: { 
+    mutationFn: async (data: {
       unitNumber?: string;
       assignedPosition?: string;
       start: string;
@@ -391,12 +397,12 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       // First, end any existing active assignments that overlap with the new one
       const { error: endPreviousError } = await supabase
         .from("officer_default_assignments")
-        .update({ 
-          end_date: data.start 
+        .update({
+          end_date: data.start
         })
         .eq("officer_id", officer.id)
-       .or(`end_date.is.null,end_date.gte.${data.start}`);
-       // .lt("start_date", data.start); // That started before the new assignment
+        .or(`end_date.is.null,end_date.gte.${data.start}`);
+      // .lt("start_date", data.start); // That started before the new assignment
 
       if (endPreviousError) {
         console.error("Failed to end previous assignments:", endPreviousError);
@@ -457,17 +463,17 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
   // Update default assignment mutation
   const updateDefaultAssignmentMutation = useMutation({
-    mutationFn: async ({ 
-      assignmentId, 
-      updates 
-    }: { 
-      assignmentId: string; 
-      updates: { 
+    mutationFn: async ({
+      assignmentId,
+      updates
+    }: {
+      assignmentId: string;
+      updates: {
         unit_number?: string | null;
         position_name?: string | null;
         start_date: string;
         end_date?: string | null;
-      } 
+      }
     }) => {
       const { error } = await supabase
         .from("officer_default_assignments")
@@ -508,46 +514,46 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     },
   });
 
-    // FIXED: Handle add schedule with proper validation
-    const handleAddSchedule = () => {
-      if (selectedDays.length === 0) {
-        toast.error("Please select at least one day");
-        return;
-      }
-      if (!shiftTypeId) {
-        toast.error("Please select a shift");
-        return;
-      }
-    
-      // Validate end date if provided
-      if (endDate && endDate < startDate) {
-        toast.error("End date cannot be before start date");
-        return;
-      }
-    
-      // Use formatLocalDate to prevent timezone issues
-      const startDateStr = formatLocalDate(startDate);
-      const endDateStr = endDate ? formatLocalDate(endDate) : undefined;
-    
-      console.log("📅 Adding schedule with dates:", {
-        startDate: startDateStr,
-        endDate: endDateStr,
-        originalStartDate: startDate,
-        originalEndDate: endDate
-      });
-    
-      addScheduleMutation.mutate({
-        days: selectedDays,
-        shiftId: shiftTypeId,
-        start: startDateStr,
-        end: endDateStr,
-        unitNumber: unitNumber || undefined,
-        assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
-        weekPattern: weekPattern,
-        customWeeks: customWeeks
-      });
-    };
-  
+  // FIXED: Handle add schedule with proper validation
+  const handleAddSchedule = () => {
+    if (selectedDays.length === 0) {
+      toast.error("Please select at least one day");
+      return;
+    }
+    if (!shiftTypeId) {
+      toast.error("Please select a shift");
+      return;
+    }
+
+    // Validate end date if provided
+    if (endDate && endDate < startDate) {
+      toast.error("End date cannot be before start date");
+      return;
+    }
+
+    // Use formatLocalDate to prevent timezone issues
+    const startDateStr = formatLocalDate(startDate);
+    const endDateStr = endDate ? formatLocalDate(endDate) : undefined;
+
+    console.log("📅 Adding schedule with dates:", {
+      startDate: startDateStr,
+      endDate: endDateStr,
+      originalStartDate: startDate,
+      originalEndDate: endDate
+    });
+
+    addScheduleMutation.mutate({
+      days: selectedDays,
+      shiftId: shiftTypeId,
+      start: startDateStr,
+      end: endDateStr,
+      unitNumber: unitNumber || undefined,
+      assignedPosition: assignedPosition !== "none" ? assignedPosition : undefined,
+      weekPattern: weekPattern,
+      customWeeks: customWeeks
+    });
+  };
+
   const handleEditSchedule = (schedule: any) => {
     setEditingSchedule(schedule);
     setSelectedDays([schedule.day_of_week]);
@@ -569,9 +575,9 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       toast.error("Please select at least one day");
       return;
     }
-  
+
     const dayOfWeek = selectedDays[0];
-  
+
     // Use formatLocalDate to prevent timezone issues
     const updates = {
       day_of_week: dayOfWeek,
@@ -581,22 +587,22 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       unit_number: unitNumber || null,
       position_name: assignedPosition !== "none" ? assignedPosition : null,
     };
-  
+
     console.log("📅 Saving edit with dates:", {
       start_date: updates.start_date,
       end_date: updates.end_date
     });
-  
+
     updateScheduleMutation.mutate({
       scheduleId: editingSchedule.id,
       updates
     });
   };
-  
+
   const handleEndAllSchedules = () => {
     const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
     const today = format(new Date(), "yyyy-MM-dd");
-    
+
     activeSchedules.forEach(schedule => {
       endScheduleMutation.mutate({ scheduleId: schedule.id, endDate: today });
     });
@@ -604,7 +610,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
   const handleDeleteAllSchedules = () => {
     const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
-    
+
     if (activeSchedules.length > 0) {
       setScheduleToDelete("all");
     }
@@ -622,8 +628,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     }
 
     // Handle custom position
-    const finalPosition = defaultAssignedPosition === "Other (Custom)" 
-      ? customPosition 
+    const finalPosition = defaultAssignedPosition === "Other (Custom)"
+      ? customPosition
       : defaultAssignedPosition;
 
     if (defaultAssignedPosition === "Other (Custom)" && !customPosition.trim()) {
@@ -643,7 +649,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const handleEditDefaultAssignment = (assignment: any) => {
     setEditingDefaultAssignment(assignment);
     setDefaultUnitNumber(assignment.unit_number || "");
-    
+
     // Check if the position is in predefined positions or is custom
     const position = assignment.position_name;
     if (position && PREDEFINED_POSITIONS.includes(position as any)) {
@@ -656,7 +662,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       setDefaultAssignedPosition("none");
       setCustomPosition("");
     }
-    
+
     setDefaultAssignmentStartDate(new Date(assignment.start_date));
     setDefaultAssignmentEndDate(assignment.end_date ? new Date(assignment.end_date) : undefined);
   };
@@ -671,8 +677,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
     }
 
     // Handle custom position
-    const finalPosition = defaultAssignedPosition === "Other (Custom)" 
-      ? customPosition 
+    const finalPosition = defaultAssignedPosition === "Other (Custom)"
+      ? customPosition
       : defaultAssignedPosition;
 
     if (defaultAssignedPosition === "Other (Custom)" && !customPosition.trim()) {
@@ -782,70 +788,70 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                   <CalendarIcon className="h-4 w-4" />
                   Regular Schedules
                 </h3>
-            
 
-              {schedulesLoading ? (
-                <p className="text-sm text-muted-foreground">Loading schedules...</p>
-              ) : !schedules || schedules.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No regular schedule set</p>
-              ) : (
-                <div className="space-y-4">
-                  {/* Active Schedules Section */}
-                  {activeSchedules.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-green-700 dark:text-green-400">Active Schedules</h4>
-                      
-                      {/* Single End and Delete Buttons */}
-                      <div className="flex gap-2 mb-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleEndAllSchedules}
-                          disabled={endScheduleMutation.isPending}
-                          className="flex items-center gap-2"
-                        >
-                          <StopCircle className="h-4 w-4" />
-                          End Schedule
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleDeleteAllSchedules}
-                          disabled={deleteScheduleMutation.isPending}
-                          className="flex items-center gap-2 text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete Schedule
-                        </Button>
-                      </div>
-                       {activeSchedules.map((schedule) => {
-                        // Handle week offset display
-                        const weekOffset = schedule.week_offset;
-                        let weekDisplay = "";
-                        
-                        if (weekOffset === null || weekOffset === undefined) {
-                          weekDisplay = "Every Week";
-                        } else {
-                          weekDisplay = `Week ${weekOffset + 1}`;
-                        }
-                        
-                        console.log(`Schedule: ${schedule.id}, week_offset: ${weekOffset}, display: ${weekDisplay}`);
-                        
-                        return (
-                          <div
-                            key={schedule.id}
-                            className="flex items-center justify-between p-3 border rounded-lg"
+
+                {schedulesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading schedules...</p>
+                ) : !schedules || schedules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">No regular schedule set</p>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Active Schedules Section */}
+                    {activeSchedules.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-green-700 dark:text-green-400">Active Schedules</h4>
+
+                        {/* Single End and Delete Buttons */}
+                        <div className="flex gap-2 mb-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleEndAllSchedules}
+                            disabled={endScheduleMutation.isPending}
+                            className="flex items-center gap-2"
                           >
-                            <div className="space-y-1 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="outline">
-                                  {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
-                                </Badge>
-                                <span className="font-medium">{schedule.shift_types?.name}</span>
-                                {weekDisplay && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {weekDisplay}
+                            <StopCircle className="h-4 w-4" />
+                            End Schedule
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDeleteAllSchedules}
+                            disabled={deleteScheduleMutation.isPending}
+                            className="flex items-center gap-2 text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete Schedule
+                          </Button>
+                        </div>
+                        {activeSchedules.map((schedule) => {
+                          // Handle week offset display
+                          const weekOffset = schedule.week_offset;
+                          let weekDisplay = "";
+
+                          if (weekOffset === null || weekOffset === undefined) {
+                            weekDisplay = "Every Week";
+                          } else {
+                            weekDisplay = `Week ${weekOffset + 1}`;
+                          }
+
+                          console.log(`Schedule: ${schedule.id}, week_offset: ${weekOffset}, display: ${weekDisplay}`);
+
+                          return (
+                            <div
+                              key={schedule.id}
+                              className="flex items-center justify-between p-3 border rounded-lg"
+                            >
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline">
+                                    {daysOfWeek.find((d) => d.value === schedule.day_of_week)?.label}
                                   </Badge>
+                                  <span className="font-medium">{schedule.shift_types?.name}</span>
+                                  {weekDisplay && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {weekDisplay}
+                                    </Badge>
                                   )}
                                 </div>
                                 <p className="text-sm text-muted-foreground">
@@ -908,10 +914,10 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           .map((schedule) => {
                             // Display week offset info if present
                             const weekOffset = schedule.week_offset;
-                            const weekDisplay = weekOffset !== undefined && weekOffset !== null && weekOffset !== 0 
-                              ? `Week ${weekOffset + 1}` 
+                            const weekDisplay = weekOffset !== undefined && weekOffset !== null && weekOffset !== 0
+                              ? `Week ${weekOffset + 1}`
                               : (weekOffset === 0 ? "Every Week" : null);
-                            
+
                             return (
                               <div
                                 key={schedule.id}
@@ -981,7 +987,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                     <Edit className="h-4 w-4" />
                     Edit Schedule
                   </h3>
-                  
+
                   <div className="space-y-2">
                     <Label>Day of Week</Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1121,7 +1127,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                   <h3 className="font-medium">
                     {isEditing ? "Edit Schedule" : "Create Work Schedule"}
                   </h3>
-                  
+
                   <div className="space-y-2">
                     <Label>Work Days (Select Multiple)</Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1168,8 +1174,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                   {!isEditing && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Week Pattern (4-Week Rotation)</Label>
-                      <Select 
-                        value={weekPattern} 
+                      <Select
+                        value={weekPattern}
                         onValueChange={(value: any) => setWeekPattern(value)}
                       >
                         <SelectTrigger>
@@ -1182,7 +1188,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           <SelectItem value="custom">Custom Weeks</SelectItem>
                         </SelectContent>
                       </Select>
-                      
+
                       {weekPattern === "custom" && (
                         <div className="mt-2 p-3 border rounded-lg bg-muted/30">
                           <Label className="text-xs mb-2 block">Select which weeks of the 4-week cycle this schedule applies to</Label>
@@ -1211,7 +1217,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                           </p>
                         </div>
                       )}
-                      
+
                       {weekPattern !== "all" && weekPattern !== "custom" && weekPattern !== "odd" && weekPattern !== "even" && (
                         <p className="text-xs text-muted-foreground mt-1">
                           Schedule will only apply to Week 1 of every 4-week cycle
@@ -1343,7 +1349,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                       onClick={isEditing ? handleSaveEdit : handleAddSchedule}
                       disabled={isEditing ? updateScheduleMutation.isPending : addScheduleMutation.isPending}
                     >
-                      {isEditing 
+                      {isEditing
                         ? (updateScheduleMutation.isPending ? "Saving..." : "Save Changes")
                         : (addScheduleMutation.isPending ? "Creating..." : "Create Schedule")
                       }
@@ -1484,7 +1490,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                     <Edit className="h-4 w-4" />
                     Edit Default Assignment
                   </h3>
-                  
+
                   <div className="space-y-4 p-4 border rounded-lg bg-white">
                     <h4 className="font-medium text-sm flex items-center gap-2">
                       <Building className="h-4 w-4" />
@@ -1633,7 +1639,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
               ) : showDefaultAssignmentForm && (
                 <div className="border rounded-lg p-4 space-y-4">
                   <h3 className="font-medium">Create Default Assignment</h3>
-                  
+
                   <div className="space-y-4 p-4 border rounded-lg bg-white">
                     <h4 className="font-medium text-sm flex items-center gap-2">
                       <Building className="h-4 w-4" />
@@ -1786,14 +1792,14 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              {scheduleToDelete === "all" 
+              {scheduleToDelete === "all"
                 ? "Warning, you are deleting ALL active schedules which includes their history. This action cannot be undone."
                 : "Warning, you are deleting the schedule which includes the history. This action cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={cancelDelete}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -1814,7 +1820,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDefaultAssignmentToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDeleteDefaultAssignment}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

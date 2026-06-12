@@ -37,12 +37,12 @@ export const VacancyManagement = ({ isOfficerView = false, userId }: VacancyMana
   const [selectedShiftForCustomMessage, setSelectedShiftForCustomMessage] = useState<any>(null);
   const [detectionCustomMessage, setDetectionCustomMessage] = useState("");
 
-// Add website settings query
-const { data: websiteSettings } = useWebsiteSettings();
-// Check if mass alert sending is enabled (controls vacancy alert buttons)
-const massAlertSendingEnabled = websiteSettings?.enable_mass_alert_sending !== false;
-// Check if automated notifications are enabled
-const notificationsEnabled = websiteSettings?.enable_notifications || false;
+  // Add website settings query
+  const { data: websiteSettings } = useWebsiteSettings();
+  // Check if mass alert sending is enabled (controls vacancy alert buttons)
+  const massAlertSendingEnabled = websiteSettings?.enable_mass_alert_sending !== false;
+  // Check if automated notifications are enabled
+  const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
   // Add real-time subscription for vacancy alerts
   useEffect(() => {
@@ -79,13 +79,15 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const { data: alerts, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
     queryKey: ["all-vacancy-alerts"],
     queryFn: async () => {
       console.log("🔄 Fetching vacancy alerts...");
-      
+
       const { data: alertsData, error } = await supabase
         .from("vacancy_alerts")
         .select(`
@@ -99,12 +101,12 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
         `)
         .order("date", { ascending: false })
         .limit(20);
-      
+
       if (error) {
         console.error("Error fetching vacancy alerts:", error);
         throw error;
       }
-      
+
       return alertsData;
     },
     staleTime: 30000,
@@ -115,7 +117,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     queryKey: ["vacancy-responses-admin"],
     queryFn: async () => {
       console.log("🔄 Fetching officer responses...");
-      
+
       const { data: responsesData, error: responsesError } = await supabase
         .from("vacancy_responses")
         .select(`
@@ -179,7 +181,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       const combinedData = responsesData.map(response => {
         const alertId = response.alert_id || response.vacancy_alert_id;
         const alert = alertsData?.find(a => a.id === alertId);
-        
+
         return {
           ...response,
           vacancy_alerts: alert
@@ -189,6 +191,8 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       console.log("📋 Final officer responses:", combinedData);
       return combinedData;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const addOfficerToShift = async (responseId: string) => {
@@ -284,7 +288,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     try {
       const shiftName = alert.shift_types?.name || "Unknown Shift";
       const date = alert.date ? format(new Date(alert.date), "EEEE, MMM d, yyyy") : "Unknown Date";
-      
+
       const { error } = await supabase.rpc('create_vacancy_notification', {
         officer_id: officerId,
         notification_title: "Extra Shift Assignment Confirmed",
@@ -337,13 +341,13 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
   };
 
   const updateResponseMutation = useMutation({
-    mutationFn: async ({ 
-      responseId, 
-      status, 
-      rejectionReason 
-    }: { 
-      responseId: string; 
-      status: string; 
+    mutationFn: async ({
+      responseId,
+      status,
+      rejectionReason
+    }: {
+      responseId: string;
+      status: string;
       rejectionReason?: string;
     }) => {
       const dbStatus = status === "approved" ? "accepted" : "rejected";
@@ -391,11 +395,11 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     },
   });
 
-  const { 
-    data: understaffedShifts, 
-    isLoading: understaffedLoading, 
+  const {
+    data: understaffedShifts,
+    isLoading: understaffedLoading,
     error: understaffedError,
-    refetch: refetchUnderstaffed 
+    refetch: refetchUnderstaffed
   } = useUnderstaffedDetection(selectedShiftId);
 
   const { data: existingAlerts } = useQuery({
@@ -409,6 +413,8 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const handleRefreshAll = () => {
@@ -477,10 +483,10 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
       if (!alertData.custom_message) {
         console.log("No custom message - skipping notifications");
-        
+
         const { error } = await supabase
           .from("vacancy_alerts")
-          .update({ 
+          .update({
             notification_sent: true,
             notified_at: new Date().toISOString()
           })
@@ -507,12 +513,12 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
       const alertMessage = alertData.custom_message;
       const emailSubject = `Vacancy Alert - ${format(new Date(alertData.date), "MMM d, yyyy")} - ${alertData.shift_types?.name}`;
-      
+
       console.log("🔍 DEBUG - Sending message:", alertMessage);
 
       for (const officer of officers || []) {
         const preferences = officer.notification_preferences || { receiveEmails: true, receiveTexts: true };
-        
+
         if (preferences.receiveEmails !== false && officer.email) {
           console.log(`🔍 DEBUG - Sending email to: ${officer.email}`);
           emailPromises.push(
@@ -555,10 +561,10 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       }
 
       await Promise.all([...emailPromises, ...textPromises]);
-      
+
       const { error } = await supabase
         .from("vacancy_alerts")
-        .update({ 
+        .update({
           notification_sent: true,
           notified_at: new Date().toISOString()
         })
@@ -578,8 +584,8 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
   });
 
   const isAlertCreated = (shift: any) => {
-    return existingAlerts?.some(alert => 
-      alert.date === shift.date && 
+    return existingAlerts?.some(alert =>
+      alert.date === shift.date &&
       alert.shift_type_id === shift.shift_type_id
     );
   };
@@ -590,14 +596,14 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     setDetectionCustomMessage("");
     setShowCustomMessageDialog(true);
   };
-  
+
   const handleConfirmDetectionAlert = () => {
     if (!selectedShiftForCustomMessage) {
       toast.error("No shift selected");
       return;
     }
 
-    const finalMessage = detectionCustomMessage.trim() || 
+    const finalMessage = detectionCustomMessage.trim() ||
       `Urgent: ${selectedShiftForCustomMessage.minimum_required - selectedShiftForCustomMessage.current_staffing} more officers needed for ${selectedShiftForCustomMessage.shift_types?.name} shift on ${format(new Date(selectedShiftForCustomMessage.date), "MMM d")}`;
 
     createAlertMutation.mutate({
@@ -620,7 +626,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     if (!understaffedShifts) return;
 
     const shiftsWithoutAlerts = understaffedShifts.filter(shift => !isAlertCreated(shift));
-    
+
     if (shiftsWithoutAlerts.length === 0) {
       toast.info("All understaffed shifts already have alerts");
       return;
@@ -628,7 +634,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
     shiftsWithoutAlerts.forEach(shift => {
       const defaultMessage = `Urgent: ${shift.minimum_required - shift.current_staffing} more officers needed for ${shift.shift_types?.name} shift on ${format(new Date(shift.date), "MMM d")}`;
-      
+
       createAlertMutation.mutate({
         shift_type_id: shift.shift_type_id,
         date: shift.date,
@@ -642,7 +648,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
   };
 
   const handleSendAlert = (shift: any) => {
-    const alert = existingAlerts?.find(a => 
+    const alert = existingAlerts?.find(a =>
       a.date === shift.date && a.shift_type_id === shift.shift_type_id
     );
 
@@ -696,7 +702,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
     }
   };
 
-   // If this is officer view, hide all create alert functionality
+  // If this is officer view, hide all create alert functionality
   if (isOfficerView) {
     return (
       <div className="space-y-6">
@@ -729,7 +735,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
               <div className="space-y-4">
                 {alerts.map((alert) => {
                   const shiftName = alert.shift_types?.name || `Shift ID: ${alert.shift_type_id}`;
-                  const shiftTime = alert.shift_types 
+                  const shiftTime = alert.shift_types
                     ? `${alert.shift_types.start_time} - ${alert.shift_types.end_time}`
                     : "Time not available";
 
@@ -746,7 +752,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                           <p className="text-sm text-muted-foreground mt-1">
                             Staffing: {alert.current_staffing} / {alert.minimum_required}
                           </p>
-                          
+
                           {alert.position_type && (
                             <div className="mt-2">
                               <Badge variant="outline" className="bg-blue-50 text-blue-700">
@@ -754,7 +760,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                               </Badge>
                             </div>
                           )}
-                          
+
                           {alert.custom_message && (
                             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
                               <p className="text-sm text-blue-800">{alert.custom_message}</p>
@@ -810,8 +816,8 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
       </div>
 
       {/* Only show Officer Responses card if mass alert sending is enabled */}
-        {massAlertSendingEnabled && (
-          <Card>
+      {massAlertSendingEnabled && (
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -837,7 +843,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                             <p className="font-medium">
                               {response.profiles?.full_name} (#{response.profiles?.badge_number})
                             </p>
-                            <Badge 
+                            <Badge
                               variant={getStatusVariant(response.status)}
                               className="flex items-center gap-1 capitalize"
                             >
@@ -845,11 +851,11 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                               {getStatusDisplay(response.status)}
                             </Badge>
                           </div>
-                          
+
                           <p className="text-sm text-muted-foreground">
                             {shiftName} - {date}
                           </p>
-                          
+
                           {response.approved_by && (
                             <p className="text-xs text-muted-foreground mt-1">
                               {response.status === "accepted" ? "Approved" : "Denied"} on{" "}
@@ -870,9 +876,9 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                           <div className="flex flex-col gap-2 ml-4">
                             <Button
                               size="sm"
-                              onClick={() => updateResponseMutation.mutate({ 
-                                responseId: response.id, 
-                                status: "approved" 
+                              onClick={() => updateResponseMutation.mutate({
+                                responseId: response.id,
+                                status: "approved"
                               })}
                               disabled={updateResponseMutation.isPending}
                               className="flex items-center gap-1"
@@ -880,7 +886,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                               <Check className="h-3 w-3" />
                               Approve
                             </Button>
-                            
+
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button
@@ -900,7 +906,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                                     Provide a reason for denying this shift request from {response.profiles?.full_name}.
                                   </DialogDescription>
                                 </DialogHeader>
-                                
+
                                 <div className="space-y-4">
                                   <div className="space-y-2">
                                     <Label htmlFor="rejection-reason">Reason for Denial</Label>
@@ -911,12 +917,12 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                                       maxLength={500}
                                     />
                                   </div>
-                                  
+
                                   <Button
                                     onClick={() => {
                                       const textarea = document.getElementById('rejection-reason') as HTMLTextAreaElement;
-                                      updateResponseMutation.mutate({ 
-                                        responseId: response.id, 
+                                      updateResponseMutation.mutate({
+                                        responseId: response.id,
                                         status: "denied",
                                         rejectionReason: textarea.value
                                       });
@@ -1014,7 +1020,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
               {understaffedShifts.map((shift, index) => {
                 const alertExists = isAlertCreated(shift);
                 const shiftName = shift.shift_types?.name || `Shift ID: ${shift.shift_type_id}`;
-                const shiftTime = shift.shift_types 
+                const shiftTime = shift.shift_types
                   ? `${shift.shift_types.start_time} - ${shift.shift_types.end_time}`
                   : "Time not available";
 
@@ -1029,7 +1035,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(shift.date + 'T12:00:00'), "EEEE, MMM d, yyyy")} • {shiftTime}
                         </p>
-                        
+
                         <div className="bg-gray-100 p-2 rounded text-xs mt-2">
                           <p className="text-gray-600">
                             <strong>Staffing:</strong> {shift.current_staffing}/{shift.minimum_required} |
@@ -1042,7 +1048,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                             </p>
                           )}
                           <p className="text-gray-500 mt-1">
-                            <strong>Assigned:</strong> {shift.assigned_officers?.map(o => 
+                            <strong>Assigned:</strong> {shift.assigned_officers?.map(o =>
                               `${o.name} (${o.position || 'No position'} - ${o.isSupervisor ? 'Supervisor' : 'Officer'})`
                             ).join(', ') || 'None'}
                           </p>
@@ -1070,7 +1076,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
                         </div>
                       </div>
                       {/* Only show Create Alert/Send Alert buttons if mass alert sending is enabled */}
-                        {massAlertSendingEnabled && (
+                      {massAlertSendingEnabled && (
                         <div className="flex flex-col gap-2">
                           {!alertExists ? (
                             <Button
@@ -1103,7 +1109,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
 
       {/* Only show Manual Vacancy Alert Creation card if mass alert sending is enabled */}
       {massAlertSendingEnabled && (
-         <Card>
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -1216,7 +1222,7 @@ const notificationsEnabled = websiteSettings?.enable_notifications || false;
               <div className="space-y-4">
                 {alerts.map((alert) => {
                   const shiftName = alert.shift_types?.name || `Shift ID: ${alert.shift_type_id}`;
-                  const shiftTime = alert.shift_types 
+                  const shiftTime = alert.shift_types
                     ? `${alert.shift_types.start_time} - ${alert.shift_types.end_time}`
                     : "Time not available";
 

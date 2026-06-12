@@ -32,9 +32,9 @@ interface StaffManagementMobileProps {
   isAdminOrSupervisor?: boolean;
 }
 
-export const StaffManagementMobile = ({ 
-  userId, 
-  isAdminOrSupervisor = false 
+export const StaffManagementMobile = ({
+  userId,
+  isAdminOrSupervisor = false
 }: StaffManagementMobileProps) => {
   const [editingOfficer, setEditingOfficer] = useState<any>(null);
   const [managingSchedule, setManagingSchedule] = useState<any>(null);
@@ -43,7 +43,7 @@ export const StaffManagementMobile = ({
   const [bulkPTOOfficer, setBulkPTOOfficer] = useState<any>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("directory");
-  
+
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
 
@@ -88,12 +88,14 @@ export const StaffManagementMobile = ({
 
       return officers;
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   // Helper function to get seniority label based on rank and promotion dates
   const getSeniorityLabel = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
-    
+
     if (rank.includes('lieutenant') || rank.includes('lt')) {
       return 'LT Seniority';
     } else if (rank.includes('sergeant') || rank.includes('sgt')) {
@@ -107,7 +109,7 @@ export const StaffManagementMobile = ({
   const getSeniorityDetails = (officer: any) => {
     const rank = officer.rank?.toLowerCase() || '';
     const items = [];
-    
+
     // Always show hire date
     if (officer.hire_date) {
       items.push(
@@ -117,7 +119,7 @@ export const StaffManagementMobile = ({
         </div>
       );
     }
-    
+
     // Show "Since" for current rank's promotion date
     if ((rank.includes('lieutenant') || rank.includes('lt')) && officer.promotion_date_lieutenant) {
       items.push(
@@ -134,7 +136,7 @@ export const StaffManagementMobile = ({
         </div>
       );
     }
-    
+
     // Show promotion history (previous ranks)
     if (rank.includes('lieutenant') || rank.includes('lt')) {
       // If Lieutenant, show Sergeant promotion if exists
@@ -167,18 +169,18 @@ export const StaffManagementMobile = ({
         );
       }
     }
-    
+
     return items;
   };
 
   // Filter officers based on search query
   const filteredOfficers = useMemo(() => {
     if (!officers) return [];
-    
+
     if (!searchQuery.trim()) return officers;
 
     const query = searchQuery.toLowerCase().trim();
-    return officers.filter(officer => 
+    return officers.filter(officer =>
       officer.full_name?.toLowerCase().includes(query) ||
       officer.email?.toLowerCase().includes(query) ||
       officer.badge_number?.toLowerCase().includes(query) ||
@@ -242,7 +244,7 @@ export const StaffManagementMobile = ({
             </div>
           )}
         </div>
-        
+
         {/* Tabs for switching between directory and schedules */}
         <Tabs defaultValue="directory" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
@@ -255,7 +257,7 @@ export const StaffManagementMobile = ({
               Schedules
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="directory" className="mt-4">
             {/* Search Bar - Only show in directory tab */}
             <div className="relative">
@@ -275,7 +277,7 @@ export const StaffManagementMobile = ({
               )}
             </div>
           </TabsContent>
-          
+
           <TabsContent value="schedules" className="mt-0">
             {/* Officer Schedule Management Component */}
             <div className="text-sm text-muted-foreground mb-4">
@@ -297,7 +299,7 @@ export const StaffManagementMobile = ({
             <div className="text-center py-8">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground mb-4">No officers found.</p>
-              <Button 
+              <Button
                 onClick={() => setCreatingNewOfficer(true)}
                 className="flex items-center gap-2 mx-auto"
               >
@@ -313,7 +315,7 @@ export const StaffManagementMobile = ({
                   <p className="text-sm text-muted-foreground mb-2">
                     No officers found for "{searchQuery}"
                   </p>
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={() => setSearchQuery("")}
                     size="sm"
@@ -422,7 +424,7 @@ export const StaffManagementMobile = ({
                               <span className="font-medium text-sm">{officer.holiday_hours || 0}h</span>
                             </div>
                           </div>
-                          
+
                           {/* Seniority Section */}
                           <div className="pt-2 border-t space-y-2">
                             <div className="flex items-center gap-1">
@@ -437,7 +439,7 @@ export const StaffManagementMobile = ({
                                 </span>
                               )}
                             </div>
-                            
+
                             {/* Seniority Details */}
                             <div className="space-y-1 text-xs pl-4">
                               {getSeniorityDetails(officer)}
@@ -454,12 +456,12 @@ export const StaffManagementMobile = ({
                             </span>
                             <span className="font-medium text-sm ml-1">{officer.service_credit?.toFixed(1) || 0} yrs</span>
                           </div>
-                          
+
                           {/* Seniority Details */}
                           <div className="space-y-1 text-xs pl-4">
                             {getSeniorityDetails(officer)}
                           </div>
-                          
+
                           <div className="text-xs text-muted-foreground italic">
                             PTO managed as indefinite
                           </div>
@@ -473,7 +475,7 @@ export const StaffManagementMobile = ({
           )
         ) : (
           // Schedules View - Officer Schedule Management
-          <OfficersManagement 
+          <OfficersManagement
             userId={userId}
             isAdminOrSupervisor={isAdminOrSupervisor}
             isMobile={true}

@@ -13,15 +13,16 @@ export const UpcomingEventsWidget = () => {
       const { data, error } = await supabase.rpc('get_upcoming_anniversaries', {
         days_ahead: 30
       });
-      
+
       if (error) {
         console.error('Error fetching upcoming events:', error);
         return [];
       }
-      
+
       return data || [];
     },
-    refetchInterval: 60 * 60 * 1000, // Refetch every hour
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const getEventIcon = (eventType: string) => {
@@ -69,7 +70,7 @@ export const UpcomingEventsWidget = () => {
         ) : (
           <div className="space-y-3">
             {upcomingEvents.slice(0, 5).map((event: any) => (
-              <div 
+              <div
                 key={`${event.event_type}-${event.officer_id}`}
                 className={`p-3 rounded-lg border ${getEventColor(event.event_type)}`}
               >
@@ -90,9 +91,9 @@ export const UpcomingEventsWidget = () => {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-medium">
-                      {event.days_until === 0 ? 'Today' : 
-                       event.days_until === 1 ? 'Tomorrow' : 
-                       `In ${event.days_until} days`}
+                      {event.days_until === 0 ? 'Today' :
+                        event.days_until === 1 ? 'Tomorrow' :
+                          `In ${event.days_until} days`}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {event.event_type === 'anniversary' ? 'Hire Date' : 'Birthday'}
@@ -101,7 +102,7 @@ export const UpcomingEventsWidget = () => {
                 </div>
               </div>
             ))}
-            
+
             {upcomingEvents.length > 5 && (
               <div className="text-center pt-2">
                 <p className="text-sm text-muted-foreground">

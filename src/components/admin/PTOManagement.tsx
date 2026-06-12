@@ -57,6 +57,8 @@ export const PTOManagement = () => {
         return lastNameA.localeCompare(lastNameB);
       });
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Helper function to get seniority label based on rank and promotion dates
@@ -220,6 +222,8 @@ export const PTOManagement = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   const accrueAllSickTimeMutation = useMutation({

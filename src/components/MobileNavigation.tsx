@@ -18,11 +18,11 @@ interface MobileNavigationProps {
   isAdmin: boolean;
 }
 
-const MobileNavigation = ({ 
-  activeTab, 
-  onTabChange, 
-  isAdminOrSupervisor, 
-  isAdmin 
+const MobileNavigation = ({
+  activeTab,
+  onTabChange,
+  isAdminOrSupervisor,
+  isAdmin
 }: MobileNavigationProps) => {
   const navigate = useNavigate();
 
@@ -31,7 +31,7 @@ const MobileNavigation = ({
     queryKey: ['website-settings-mobile-nav'],
     queryFn: async () => {
       console.log('Fetching website settings for mobile navigation...');
-      
+
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
@@ -45,9 +45,11 @@ const MobileNavigation = ({
       console.log('Website settings fetched for mobile nav:', data);
       return data;
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
-const showPtoTab = websiteSettings?.show_pto_tab ?? true;
+  const showPtoTab = websiteSettings?.show_pto_tab ?? true;
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -115,7 +117,7 @@ const showPtoTab = websiteSettings?.show_pto_tab ?? true;
             </button>
           );
         })}
-        
+
       </div>
     </nav>
   );

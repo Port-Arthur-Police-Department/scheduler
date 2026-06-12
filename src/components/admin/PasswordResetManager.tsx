@@ -28,10 +28,12 @@ export const PasswordResetManager = () => {
       if (error) throw error;
       return profilesData || [];
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
   // Filter officers based on search query
-  const filteredOfficers = officers?.filter(officer => 
+  const filteredOfficers = officers?.filter(officer =>
     officer.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     officer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     officer.rank?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -39,51 +41,51 @@ export const PasswordResetManager = () => {
 
   // Password reset mutation
   const resetPasswordMutation = useMutation({
-  mutationFn: async () => {
-    if (!selectedOfficer) throw new Error("Please select an officer");
-    if (!newPassword) throw new Error("Please enter a new password");
+    mutationFn: async () => {
+      if (!selectedOfficer) throw new Error("Please select an officer");
+      if (!newPassword) throw new Error("Please enter a new password");
 
-    if (newPassword.length < 6) {
-      throw new Error("Password must be at least 6 characters");
-    }
+      if (newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
 
-    // Get the current user's session
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error("You must be logged in to reset passwords");
-    }
+      // Get the current user's session
+      const { data: { session } } = await supabase.auth.getSession();
 
-    const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/update-password', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({
-        userId: selectedOfficer,
-        newPassword: newPassword
-      }),
-    });
+      if (!session) {
+        throw new Error("You must be logged in to reset passwords");
+      }
 
-    const result = await response.json();
+      const response = await fetch('https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/update-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          userId: selectedOfficer,
+          newPassword: newPassword
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to reset password');
-    }
+      const result = await response.json();
 
-    // AUDIT LOGGING: Log password reset
-    await auditLogger.log({
-      user_id: session.user.id,
-      user_email: session.user.email!,
-      action_type: 'password_reset',
-      table_name: 'auth.users',
-      record_id: selectedOfficer,
-      description: `Password reset for officer ${selectedOfficerData?.full_name} (${selectedOfficerData?.email})`,
-    });
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to reset password');
+      }
 
-    return result;
-  },
+      // AUDIT LOGGING: Log password reset
+      await auditLogger.log({
+        user_id: session.user.id,
+        user_email: session.user.email!,
+        action_type: 'password_reset',
+        table_name: 'auth.users',
+        record_id: selectedOfficer,
+        description: `Password reset for officer ${selectedOfficerData?.full_name} (${selectedOfficerData?.email})`,
+      });
+
+      return result;
+    },
     onSuccess: () => {
       toast.success("Password reset successfully");
       setNewPassword("");

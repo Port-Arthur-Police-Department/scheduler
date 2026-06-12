@@ -34,6 +34,8 @@ export const UnderstaffedDetection = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   // Get existing vacancy alerts to check which ones already exist
@@ -53,27 +55,29 @@ export const UnderstaffedDetection = () => {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
   });
 
 
 
-// THEN REPLACE the query with:
-const { 
-  data: understaffedShifts, 
-  isLoading, 
-  error,
-  refetch
-} = useUnderstaffedDetection(selectedShiftId);
+  // THEN REPLACE the query with:
+  const {
+    data: understaffedShifts,
+    isLoading,
+    error,
+    refetch
+  } = useUnderstaffedDetection(selectedShiftId);
 
   // Create vacancy alert mutation
   const createAlertMutation = useMutation({
     mutationFn: async (shift: any) => {
       // Calculate how many positions are needed
-      const supervisorsNeeded = shift.isSupervisorsUnderstaffed 
-        ? shift.min_supervisors - shift.current_supervisors 
+      const supervisorsNeeded = shift.isSupervisorsUnderstaffed
+        ? shift.min_supervisors - shift.current_supervisors
         : 0;
-      const officersNeeded = shift.isOfficersUnderstaffed 
-        ? shift.min_officers - shift.current_officers 
+      const officersNeeded = shift.isOfficersUnderstaffed
+        ? shift.min_officers - shift.current_officers
         : 0;
 
       // Determine position type
@@ -149,7 +153,7 @@ const {
       // Update alert status
       const { error: updateError } = await supabase
         .from("vacancy_alerts")
-        .update({ 
+        .update({
           status: "notified",
           updated_at: new Date().toISOString()
         })
@@ -192,7 +196,7 @@ const {
     if (!understaffedShifts || understaffedShifts.length === 0) return;
 
     const shiftsToCreate = understaffedShifts.filter(shift => !isAlertCreated(shift));
-    
+
     if (shiftsToCreate.length === 0) {
       toast.info("All alerts have already been created");
       return;
@@ -213,7 +217,7 @@ const {
     });
   };
 
-   return (
+  return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -256,9 +260,9 @@ const {
           <div className="space-y-4">
             {understaffedShifts.map((shift, index) => {
               const alertExists = isAlertCreated(shift);
-              
+
               const shiftName = shift.shift_types?.name || `Shift ID: ${shift.shift_type_id}`;
-              const shiftTime = shift.shift_types 
+              const shiftTime = shift.shift_types
                 ? `${shift.shift_types.start_time} - ${shift.shift_types.end_time}`
                 : "Time not available";
 

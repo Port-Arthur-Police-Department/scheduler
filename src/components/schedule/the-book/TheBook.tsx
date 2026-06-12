@@ -213,7 +213,9 @@ const TheBook = ({
       return data || [];
     },
     enabled: !!selectedShiftId,
-  });
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  })
 
   // Function to get default assignment for an officer on a specific day
   const getDefaultAssignmentForDay = (officerId: string, dayOfWeek: number) => {

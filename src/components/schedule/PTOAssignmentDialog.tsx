@@ -53,6 +53,8 @@ const PTO_TYPES = [
   { value: "sick", label: "Sick Leave", column: "sick_hours" },
   { value: "comp", label: "Comp Time", column: "comp_hours" },
   { value: "holiday", label: "Holiday", column: "holiday_hours" },
+  { value: "military", label: "Military Leave", column: "military_hours" },
+  { value: "death", label: "Death Leave", column: "death_hours" },
 ];
 
 // Helper function to check if officer is PPO

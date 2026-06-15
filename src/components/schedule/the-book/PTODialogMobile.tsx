@@ -125,8 +125,6 @@ const handleSave = () => {
                 <SelectItem value="sick">Sick Leave</SelectItem>
                 <SelectItem value="holiday">Holiday</SelectItem>
                 <SelectItem value="comp">Comp Time</SelectItem>
-                <SelectItem value="military">Military Leave</SelectItem>
-                <SelectItem value="death">Death Leave</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>

@@ -328,7 +328,6 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   });
 
 
-  // In both Dashboard.tsx and MobileNavigation.tsx:
   // Helper – default to false when settings not loaded
   const getSetting = (key: string, defaultValue: boolean = false): boolean => {
     if (!websiteSettings) return defaultValue;
@@ -338,6 +337,23 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   // Use the helper – these will be false on first load (before data arrives)
   const showPtoTab = getSetting('show_pto_tab', false);
   const showStaffingOverview = getSetting('show_staffing_overview', false);
+
+  // 👇 ADD THIS NEW HELPER RIGHT HERE
+  const isAnniversaryVisibleForRole = (role: string): boolean => {
+    if (!websiteSettings) return false;
+    if (!websiteSettings.enable_anniversary_countdown) return false;
+
+    switch (role) {
+      case 'admin':
+        return websiteSettings.anniversary_countdown_admins !== false;
+      case 'supervisor':
+        return websiteSettings.anniversary_countdown_supervisors !== false;
+      case 'officer':
+        return websiteSettings.anniversary_countdown_officers !== false;
+      default:
+        return false;
+    }
+  };
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {
@@ -986,7 +1002,11 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         </div>
 
         {/* Anniversary Countdown Dashboard */}
-        {user && profile?.hire_date && websiteSettings?.enable_anniversary_countdown && (
+        {user &&
+         profile?.hire_date &&
+         websiteSettings?.enable_anniversary_countdown &&
+         isAnniversaryVisibleForRole(primaryRole) &&
+         profile?.show_anniversary_countdown !== false && (
           <div className="mb-8">
             <AnniversaryCountdownDashboard
               userId={user.id}

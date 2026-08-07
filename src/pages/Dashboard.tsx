@@ -997,7 +997,7 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
         )}
 
         {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
-        {isAdminOrSupervisor && !isMobile && getSetting('show_staffing_overview', true) && (
+        {isAdminOrSupervisor && !isMobile && !settingsLoading && websiteSettings && showStaffingOverview && (
           <Card className="mb-8">
             <CardHeader>
               <div className="flex items-center justify-between">

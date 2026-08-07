@@ -418,8 +418,26 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     },
     onSuccess: () => {
       toast.success("Officer profile deleted successfully");
+  
+      // Invalidate the main officer lists
       queryClient.invalidateQueries({ queryKey: ["all-officers"] });
       queryClient.invalidateQueries({ queryKey: ["officers-pto"] });
+  
+      // If you have any queries that fetch a single officer by ID (e.g., ["profile", officer.id]),
+      // remove them from the cache entirely
+      if (officer?.id) {
+        queryClient.removeQueries({ queryKey: ["profile", officer.id] });
+        // Also remove any other query key pattern that might contain the ID
+        queryClient.removeQueries({ queryKey: ["officer", officer.id] });
+      }
+  
+      // Force refetch the officer list immediately
+      // (this ensures the UI updates without waiting for the next mount)
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ["all-officers"] });
+      }, 100);
+  
+      // Close the dialog
       onOpenChange(false);
     },
     onError: (error: any) => {

@@ -303,42 +303,39 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   }, [user]);
 
   // Fetch website settings
-  const { data: websiteSettings } = useQuery({
+  const { data: websiteSettings, isLoading: settingsLoading } = useQuery({
     queryKey: ['website-settings-dashboard'],
     queryFn: async () => {
       console.log('Fetching website settings for dashboard...');
-
+  
       const { data, error } = await supabase
         .from('website_settings')
         .select('*')
-        .single();
-
+        .maybeSingle(); // ← returns null if no rows, avoids PGRST116
+  
       if (error) {
-        console.log('Error fetching website settings:', error);
-        return DEFAULT_NOTIFICATION_SETTINGS;
+        console.error('Error fetching website settings:', error);
+        throw error; // Let React Query handle errors
       }
-
-      console.log('Website settings fetched for dashboard:', data);
-      return data;
+  
+      console.log('Website settings fetched:', data);
+      return data || {}; // return empty object if null
     },
-    staleTime: 30 * 60 * 1000,
+    enabled: !!user?.id, // ← Only fetch after user is authenticated
+    staleTime: 0,        // Always fetch fresh on mount
+    refetchOnMount: true,
     gcTime: 60 * 60 * 1000,
   });
 
 
   // In both Dashboard.tsx and MobileNavigation.tsx:
-  const getSetting = (key: string, defaultValue: boolean = true): boolean => {
+  // Helper – default to false when settings not loaded
+  const getSetting = (key: string, defaultValue: boolean = false): boolean => {
     if (!websiteSettings) return defaultValue;
-
-    // FIX: Check if property exists (including false values)
-    if (websiteSettings.hasOwnProperty(key)) {
-      return websiteSettings[key];
-    }
-
-    return defaultValue;
+    return websiteSettings[key] ?? defaultValue;
   };
-
-  // Then update ALL usages to use the fixed function:
+  
+  // Use the helper – these will be false on first load (before data arrives)
   const showPtoTab = getSetting('show_pto_tab', false);
   const showStaffingOverview = getSetting('show_staffing_overview', false);
 

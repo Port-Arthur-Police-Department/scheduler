@@ -916,29 +916,52 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
                   </ChangePassword>
                 )}
 
-                {/* Add this inside the DropdownMenuContent, after Change Password and before the separator */}
+                                {/* Anniversary countdown toggle - with error handling & logging */}
                 <DropdownMenuItem
                   className="cursor-pointer"
                   onClick={async (e) => {
                     e.preventDefault();
-                    // Toggle anniversary countdown
-                    const { data: currentProfile } = await supabase
-                      .from('profiles')
-                      .select('show_anniversary_countdown')
-                      .eq('id', user.id)
-                      .single();
 
-                    const newValue = !currentProfile?.show_anniversary_countdown;
+                    try {
+                      // Fetch current value
+                      const { data: currentProfile, error: fetchError } = await supabase
+                        .from('profiles')
+                        .select('show_anniversary_countdown')
+                        .eq('id', user.id)
+                        .maybeSingle();
 
-                    const { error } = await supabase
-                      .from('profiles')
-                      .update({ show_anniversary_countdown: newValue })
-                      .eq('id', user.id);
+                      if (fetchError) {
+                        console.error('❌ Failed to fetch current preference:', fetchError);
+                        toast.error('Could not load current setting. Please try again.');
+                        return;
+                      }
 
-                    if (!error) {
+                      const newValue = !currentProfile?.show_anniversary_countdown;
+
+                      // Update the preference
+                      const { error: updateError } = await supabase
+                        .from('profiles')
+                        .update({ show_anniversary_countdown: newValue })
+                        .eq('id', user.id);
+
+                      if (updateError) {
+                        console.error('❌ Failed to update anniversary preference:', updateError);
+                        // Provide a more helpful error message
+                        if (updateError.code === '42501') {
+                          toast.error('Permission denied – you may not have update rights on profiles. Contact an admin.');
+                        } else {
+                          toast.error(`Update failed: ${updateError.message}`);
+                        }
+                        return;
+                      }
+
+                      // Success
                       toast.success(`Anniversary countdown ${newValue ? 'enabled' : 'disabled'}`);
-                      // Refresh profile data
-                      fetchProfile(user.id);
+                      // Refresh profile data in state
+                      await fetchProfile(user.id);
+                    } catch (err) {
+                      console.error('❌ Unexpected error toggling anniversary:', err);
+                      toast.error('An unexpected error occurred. See console for details.');
                     }
                   }}
                 >

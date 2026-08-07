@@ -96,6 +96,7 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
               </p>
               
               <div className="space-y-2">
+                {/* Administrators */}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="events_dashboard_visible_to_admins"
@@ -108,6 +109,7 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                   </Label>
                 </div>
                 
+                {/* Supervisors */}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="events_dashboard_visible_to_supervisors"
@@ -120,6 +122,7 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                   </Label>
                 </div>
                 
+                {/* Officers */}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="events_dashboard_visible_to_officers"
@@ -129,6 +132,19 @@ export const EventsDashboardSettings: React.FC<EventsDashboardSettingsProps> = (
                   />
                   <Label htmlFor="events_dashboard_visible_to_officers" className="text-sm">
                     Officers
+                  </Label>
+                </div>
+            
+                {/* NEW: Secretaries */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="events_dashboard_visible_to_secretaries"
+                    checked={settings?.events_dashboard_visible_to_secretaries !== false}
+                    onCheckedChange={(checked) => handleCheckboxChange("events_dashboard_visible_to_secretaries", checked as boolean)}
+                    disabled={isPending}
+                  />
+                  <Label htmlFor="events_dashboard_visible_to_secretaries" className="text-sm">
+                    Secretaries
                   </Label>
                 </div>
               </div>

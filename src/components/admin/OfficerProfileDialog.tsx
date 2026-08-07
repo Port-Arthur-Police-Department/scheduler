@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Award, Clock, TrendingUp, Cake } from "lucide-react";
+import { CalendarIcon, Award, Clock, TrendingUp, Cake, Trash2 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -33,7 +33,7 @@ interface OfficerProfileDialogProps {
     comp_hours?: number | null;
     holiday_hours?: number | null;
     rank?: string | null;
-    birthday?: string | null; // ADDED: Birthday field
+    birthday?: string | null;
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -235,12 +235,12 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       if (currentUser) {
         await auditLogger.logProfileUpdate(
           officer.id,
-          data.full_name || officer.full_name, // Use the new name from form
+          data.full_name || officer.full_name,
           oldProfile,
           profileData,
           currentUser.id,
           currentUser.email,
-          // `Updated profile for ${data.full_name || officer.full_name}` // Add description with name
+          `Updated profile for ${data.full_name || officer.full_name}`
         );
       }
 
@@ -345,12 +345,12 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       if (currentUser) {
         await auditLogger.logProfileUpdate(
           result.userId,
-          data.full_name, // Use the new officer's name
-          null, // No old data for creation
+          data.full_name,
+          null,
           profileData,
           currentUser.id,
           currentUser.email,
-          //  `Created profile for ${data.full_name}`
+          `Created profile for ${data.full_name}`
         );
       }
 
@@ -365,6 +365,66 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       toast.error(error.message);
     },
   });
+
+  // NEW: Delete profile mutation
+  const deleteProfileMutation = useMutation({
+    mutationFn: async () => {
+      if (!officer?.id) throw new Error("No officer ID provided");
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      // Fetch old profile data for audit
+      const { data: oldProfile, error: fetchError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", officer.id)
+        .single();
+      if (fetchError) throw new Error(`Failed to fetch profile: ${fetchError.message}`);
+
+      // Delete user_roles first
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", officer.id);
+      if (roleError) throw new Error(`Failed to delete user roles: ${roleError.message}`);
+
+      // Delete the profile
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", officer.id);
+      if (profileError) throw new Error(`Failed to delete profile: ${profileError.message}`);
+
+      // Audit logging
+      if (currentUser) {
+        await auditLogger.logProfileUpdate(
+          officer.id,
+          officer.full_name || "Unknown",
+          oldProfile,
+          null, // new data is null for deletion
+          currentUser.id,
+          currentUser.email,
+          `Deleted profile for ${officer.full_name}`
+        );
+      }
+    },
+    onSuccess: () => {
+      toast.success("Officer profile deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["all-officers"] });
+      queryClient.invalidateQueries({ queryKey: ["officers-pto"] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete profile");
+    },
+  });
+
+  const handleDelete = () => {
+    if (!officer) return;
+    if (window.confirm(`Are you sure you want to delete the profile for ${officer.full_name}? This action cannot be undone.`)) {
+      deleteProfileMutation.mutate();
+    }
+  };
 
   // Handle date input changes
   const handleHireDateInputChange = (value: string) => {
@@ -469,7 +529,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     };
   };
 
-  const isPending = updateProfileMutation.isPending || createProfileMutation.isPending;
+  const isPending = updateProfileMutation.isPending || createProfileMutation.isPending || deleteProfileMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -881,13 +941,29 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
           </form>
         </Tabs>
 
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isPending} onClick={handleSubmit}>
-            {isPending ? "Saving..." : (isEditing ? "Save Changes" : "Create Profile")}
-          </Button>
+        {/* Updated Footer with Delete Button */}
+        <div className="flex justify-between gap-2 mt-4 pt-4 border-t">
+          <div className="flex gap-2">
+            {isEditing && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending} onClick={handleSubmit}>
+              {isPending ? "Saving..." : (isEditing ? "Save Changes" : "Create Profile")}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

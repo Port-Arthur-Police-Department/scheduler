@@ -339,8 +339,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   };
 
   // Then update ALL usages to use the fixed function:
-  const showPtoTab = getSetting('show_pto_tab', true);
-  const showStaffingOverview = getSetting('show_staffing_overview', true);
+  const showPtoTab = getSetting('show_pto_tab', false);
+  const showStaffingOverview = getSetting('show_staffing_overview', false);
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {

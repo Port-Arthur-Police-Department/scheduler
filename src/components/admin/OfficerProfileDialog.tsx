@@ -366,36 +366,44 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
     },
   });
 
-  // NEW: Delete profile mutation
+  // NEW: Delete profile mutation using Edge Function
   const deleteProfileMutation = useMutation({
     mutationFn: async () => {
       if (!officer?.id) throw new Error("No officer ID provided");
-
+  
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-      // Fetch old profile data for audit
+  
+      // Fetch old profile data for audit (before deletion)
       const { data: oldProfile, error: fetchError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", officer.id)
         .single();
       if (fetchError) throw new Error(`Failed to fetch profile: ${fetchError.message}`);
-
-      // Delete user_roles first
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", officer.id);
-      if (roleError) throw new Error(`Failed to delete user roles: ${roleError.message}`);
-
-      // Delete the profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", officer.id);
-      if (profileError) throw new Error(`Failed to delete profile: ${profileError.message}`);
-
-      // Audit logging
+  
+      // Call the Edge Function to delete the auth user, profile, and roles
+      const response = await fetch(
+        'https://ywghefarrcwbnraqyfgk.supabase.co/functions/v1/delete-user',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Include the user's JWT if your Edge Function checks authentication
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          },
+          body: JSON.stringify({
+            userId: officer.id,
+            fullName: officer.full_name,
+          }),
+        }
+      );
+  
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
+  
+      // Audit logging (client-side)
       if (currentUser) {
         await auditLogger.logProfileUpdate(
           officer.id,
@@ -418,14 +426,14 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       toast.error(error.message || "Failed to delete profile");
     },
   });
-
+  
   const handleDelete = () => {
     if (!officer) return;
     if (window.confirm(`Are you sure you want to delete the profile for ${officer.full_name}? This action cannot be undone.`)) {
       deleteProfileMutation.mutate();
     }
   };
-
+  
   // Handle date input changes
   const handleHireDateInputChange = (value: string) => {
     setHireDateInput(value);

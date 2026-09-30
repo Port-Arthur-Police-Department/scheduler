@@ -848,7 +848,12 @@ useEffect(() => {
         <Sonner />
         <HashRouter>
           <UserProvider>
-            
+
+            {/* Staging Branch Banner */}
+            <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-center py-2 font-bold shadow-lg">
+              🚧 STAGING BRANCH - Development Environment 🚧
+            </div>
+
             {/* Subscription Status Message */}
             {subscriptionMessage && (
               <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md animate-slide-down">

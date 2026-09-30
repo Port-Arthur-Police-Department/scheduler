@@ -74,17 +74,27 @@ jobs:
         run: |
           echo "🔧 Fixing service worker paths for ${{ steps.env-vars.outputs.ENV_NAME }}..."
           DEPLOY_PATH="${{ steps.env-vars.outputs.DEPLOY_PATH }}"
-          
+
           # Create OneSignal service worker files in dist root
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/OneSignalSDKWorker.js
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKUpdaterWorker.js");' > dist/OneSignalSDKUpdaterWorker.js
-          
+
           # Also create them in the deploy directory
           mkdir -p dist/$DEPLOY_PATH
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/$DEPLOY_PATH/OneSignalSDKWorker.js
-          
-          echo "✅ Created service worker files for $DEPLOY_PATH"
-          
+
+          # Copy Vite PWA service worker files to deploy directory
+          echo "📁 Copying Vite PWA service worker files..."
+          cp dist/sw.js dist/$DEPLOY_PATH/sw.js 2>/dev/null || echo "⚠️  sw.js not found"
+          cp dist/workbox-*.js dist/$DEPLOY_PATH/ 2>/dev/null || echo "⚠️  workbox files not found"
+          cp dist/registerSW.js dist/$DEPLOY_PATH/registerSW.js 2>/dev/null || echo "⚠️  registerSW.js not found"
+
+          # Copy all other assets to deploy directory
+          echo "📁 Copying assets to $DEPLOY_PATH..."
+          rsync -av dist/ --exclude="$DEPLOY_PATH" --exclude="index.html" dist/$DEPLOY_PATH/ || true
+
+          echo "✅ Created and copied service worker files for $DEPLOY_PATH"
+
           # Update manifest.json to use absolute paths
           if [ -f "dist/manifest.json" ]; then
             echo "📝 Updating manifest.json paths..."
@@ -98,9 +108,14 @@ jobs:
           echo "📁 Final deployment structure for $DEPLOY_PATH:"
           ls -la dist/ | grep -E "(js|json|html|worker)" || true
           echo ""
+          echo "📁 Files in dist/$DEPLOY_PATH/:"
+          ls -la dist/$DEPLOY_PATH/ | grep -E "(js|json|html|worker)" || true
+          echo ""
           echo "Service worker verification:"
-          echo "Root: $(test -f dist/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
-          echo "$DEPLOY_PATH/: $(test -f dist/$DEPLOY_PATH/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
+          echo "Root sw.js: $(test -f dist/sw.js && echo '✅' || echo '❌')"
+          echo "$DEPLOY_PATH/sw.js: $(test -f dist/$DEPLOY_PATH/sw.js && echo '✅' || echo '❌')"
+          echo "Root registerSW.js: $(test -f dist/registerSW.js && echo '✅' || echo '❌')"
+          echo "$DEPLOY_PATH/registerSW.js: $(test -f dist/$DEPLOY_PATH/registerSW.js && echo '✅' || echo '❌')"
 
       # Deploy to a subdirectory WITHOUT force_orphan so it doesn't wipe the other env
       - name: Deploy to GitHub Pages

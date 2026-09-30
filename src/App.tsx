@@ -99,48 +99,23 @@ useEffect(() => {
       const { data: { session } } = await supabase.auth.getSession();
       const isAuthenticated = !!session;
       const userId = session?.user?.id || null;
-      
+
       setUserLoggedIn(isAuthenticated);
       setCurrentUserId(userId);
-      
+
       if (isAuthenticated && userId) {
-        // Check if user has dismissed the prompt before
-        const hasDismissedPrompt = localStorage.getItem(`pwa_prompt_dismissed_${userId}`);
-        const hasSeenPromptThisSession = sessionStorage.getItem(`pwa_prompt_shown_${userId}`);
-        
-        // Only show if PWA is installable, not installed, not dismissed, and not shown this session
-        if (pwaStatus.isInstallable && 
-            !pwaStatus.isInstalled && 
-            !hasDismissedPrompt && 
-            !hasSeenPromptThisSession &&
-            pwaStatus.serviceWorkerActive) {
-          
-          // Small delay to ensure user sees they're logged in first
-          setTimeout(() => {
-            setShowInstallPrompt(true);
-            // Mark as shown for this session
-            sessionStorage.setItem(`pwa_prompt_shown_${userId}`, 'true');
-          }, 1500);
-          
-        } else {
-          setShowInstallPrompt(false);
-        }
-        
         // Initialize background tasks for authenticated users
         initializeBackgroundTasks();
-        
+
         // Register for push notifications
-        if (pwaStatus.serviceWorkerActive) {
-          registerForPushNotifications();
+        if (serviceWorkerRegistration && userId) {
+          await registerForPushNotifications(userId, serviceWorkerRegistration);
         }
-      } else {
-        // User is not logged in, hide the prompt
-        setShowInstallPrompt(false);
       }
     };
-    
+
     checkAuthAndManagePrompt();
-  }, [pwaStatus.isInstallable, pwaStatus.isInstalled, pwaStatus.serviceWorkerActive]);
+  }, [serviceWorkerRegistration, currentUserId]);
 
   // Listen for auth state changes
   useEffect(() => {
@@ -158,6 +133,7 @@ useEffect(() => {
           setUserLoggedIn(false);
           setPushSubscription(null);
           setServiceWorkerRegistration(null);
+          setServiceWorkerRegistration(null);
           
           // Clean up background tasks
           backgroundTaskManager.destroy();
@@ -167,12 +143,14 @@ useEffect(() => {
           const userId = session?.user?.id;
           setCurrentUserId(userId);
           setUserLoggedIn(true);
-          
+
           // Small delay to ensure other initialization is complete
-          setTimeout(() => {
-            if (pwaStatus.serviceWorkerActive) {
-              initializeBackgroundTasks();
-              registerForPushNotifications();
+          setTimeout(async () => {
+            if (serviceWorkerRegistration && currentUserId) {
+              const success = await registerForPushNotifications(currentUserId, serviceWorkerRegistration);
+              if (success) {
+                console.log('✅ Push registration successful');
+              }
             }
           }, 1000);
         } else if (event === 'INITIAL_SESSION') {
@@ -538,33 +516,6 @@ useEffect(() => {
               </div>
             )}
             
-            {/* Custom PWA Install Prompt - Shows only after login */}
-            {showInstallPrompt && userLoggedIn && pwaStatus.isInstallable && !pwaStatus.isInstalled && (
-              <div className="fixed bottom-4 right-4 z-50 max-w-sm animate-slide-up">
-                <div className="bg-white rounded-lg shadow-xl border border-blue-200 p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Smartphone className="h-6 w-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900">Install Police Scheduler</h3>
-                        <p className="text-sm text-gray-600">Get quick access to your shifts - Recommended for all officers</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleDismissPrompt}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Works offline when network is unavailable</span>
-                    </div>
                     <div className="flex items-center gap-2 text-sm text-gray-700">
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
                       <span>Push notifications for shift changes</span>
@@ -577,32 +528,7 @@ useEffect(() => {
                       <div className="h-2 w-2 rounded-full bg-green-500"></div>
                       <span>Background anniversary & birthday alerts</span>
                     </div>
-                  </div>
-                  
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      onClick={installPWA}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Install App
-                    </Button>
-                    <Button
-                      onClick={handleDismissPrompt}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Not Now
-                    </Button>
-                  </div>
-                  
-                  <p className="text-xs text-gray-500 mt-3">
-                    For all 129+ officers • Secure HTTPS connection • Department approved
-                  </p>
-                </div>
-              </div>
-            )}
-            
+
             {/* Status Indicator Panel */}
             {shouldShowPanel ? (
               <div style={{
@@ -703,9 +629,9 @@ useEffect(() => {
                     width: '12px',
                     height: '12px',
                     borderRadius: '50%',
-                    background: pwaStatus.serviceWorkerActive ? '#10b981' : '#ef4444'
+                    background: serviceWorkerRegistration ? '#10b981' : '#ef4444'
                   }} />
-                  <strong>PWA:</strong> {pwaStatus.isInstalled ? '✅ Installed' : pwaStatus.serviceWorkerActive ? '📱 Ready' : '🔧 Setting up...'}
+                  <strong>Service Worker:</strong> {serviceWorkerRegistration ? '✅ Active' : '❌ Not Ready'}
                 </div>
                 
                 <div style={{ marginBottom: '8px' }}>
@@ -717,7 +643,7 @@ useEffect(() => {
                 </div>
                 
                 <div style={{ marginBottom: '12px' }}>
-                  <strong>Prompt Status:</strong> {showInstallPrompt ? '🟡 Showing' : '⚫ Hidden'}
+                  <strong>Notification Permission:</strong> {notificationStatus.permission}
                 </div>
                 
                 {/* Action buttons */}
@@ -772,25 +698,7 @@ useEffect(() => {
                   >
                     Test Push Notification
                   </button>
-                  
-                  {pwaStatus.isInstallable && !pwaStatus.isInstalled && (
-                    <button
-                      onClick={installPWA}
-                      style={{
-                        background: '#10b981',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                    >
-                      📱 Install App
-                    </button>
-                  )}
-                  
+
                   {currentUserId && (
                     <button
                       onClick={enablePwaPromptAgain}

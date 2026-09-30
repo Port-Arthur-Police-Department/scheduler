@@ -52,7 +52,6 @@ jobs:
           cat > .env << EOF
           VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_APP_URL=${{ steps.env-vars.outputs.APP_URL }}
           VITE_BASE_PATH=${{ steps.env-vars.outputs.BASE_PATH }}
           EOF
@@ -66,7 +65,6 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_APP_URL: ${{ steps.env-vars.outputs.APP_URL }}
           NODE_ENV: production
 

@@ -4,14 +4,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const isStackblitz = process.env.STACKBLITZ === 'true' || 
+const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
+const isStaging = process.env.VITE_BASE_PATH?.includes('/staging');
 
 export default defineConfig({
   plugins: [
     react(),
-    // Only enable PWA in production, not in StackBlitz/bolt.diy
-    isProduction && !isStackblitz && VitePWA({
+    // Only enable PWA in production (main branch), not in staging or StackBlitz
+    isProduction && !isStackblitz && !isStaging && VitePWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
       injectRegister: 'auto',

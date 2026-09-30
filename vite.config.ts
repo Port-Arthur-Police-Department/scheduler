@@ -8,7 +8,7 @@ const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
 const isStaging = process.env.VITE_BASE_PATH?.includes('/staging');
 
-// Determine base path: use env var if set, otherwise use relative paths
+// Determine base path: use env var if set (for GitHub Actions), otherwise use relative paths
 const basePath = process.env.VITE_BASE_PATH || './';
 
 export default defineConfig({

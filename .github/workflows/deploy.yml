@@ -68,7 +68,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_APP_URL: ${{ steps.env-vars.outputs.APP_URL }}
-          VITE_BASE_PATH: ${{ steps.env-vars.outputs.BASE_PATH }}
+          NODE_ENV: production
 
       - name: Verify build output
         run: |

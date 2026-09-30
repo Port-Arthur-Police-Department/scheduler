@@ -106,7 +106,7 @@ export default defineConfig({
     })
   ].filter(Boolean), // Filter out false values
   
-  base: './',
+  base: process.env.VITE_BASE_PATH || './',
   
   build: {
     outDir: 'dist',

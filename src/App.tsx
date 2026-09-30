@@ -849,10 +849,12 @@ useEffect(() => {
         <HashRouter>
           <UserProvider>
 
-            {/* Staging Branch Banner */}
-            <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-center py-2 font-bold shadow-lg">
-              🚧 STAGING BRANCH - Development Environment 🚧
-            </div>
+            {/* Staging Branch Banner - Only show on staging deployment */}
+            {import.meta.env.VITE_BASE_PATH?.includes('/staging') && (
+              <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-center py-2 font-bold shadow-lg">
+                🚧 STAGING BRANCH - Development Environment 🚧
+              </div>
+            )}
 
             {/* Subscription Status Message */}
             {subscriptionMessage && (

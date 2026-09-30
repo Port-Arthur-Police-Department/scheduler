@@ -2,18 +2,16 @@ name: Deploy Website
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, staging ]
   workflow_dispatch:
 
-# ADD THESE PERMISSIONS (GitHub now requires explicit permissions)
 permissions:
   contents: write
   pages: write
   id-token: write
 
-# ADD THIS to prevent concurrent deployments
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.ref }}"
   cancel-in-progress: true
 
 jobs:
@@ -32,113 +30,91 @@ jobs:
         with:
           node-version: 20
 
+      # Determine environment-specific values
+      - name: Set environment variables
+        id: env-vars
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "DEPLOY_PATH=scheduler" >> $GITHUB_OUTPUT
+            echo "BASE_PATH=/scheduler/" >> $GITHUB_OUTPUT
+            echo "APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=production" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_PATH=staging" >> $GITHUB_OUTPUT
+            echo "BASE_PATH=/staging/" >> $GITHUB_OUTPUT
+            echo "APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/staging/" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=staging" >> $GITHUB_OUTPUT
+          fi
+          echo "✅ Environment: ${{ github.ref_name }}"
+
       - name: Create environment variables
         run: |
-          # Create .env file for build process
           cat > .env << EOF
           VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_ONESIGNAL_APP_ID=${{ secrets.VITE_ONESIGNAL_APP_ID }}
-          VITE_APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
+          VITE_APP_URL=${{ steps.env-vars.outputs.APP_URL }}
+          VITE_BASE_PATH=${{ steps.env-vars.outputs.BASE_PATH }}
           EOF
-          
-          echo "✅ Environment file created"
+          echo "✅ Environment file created for ${{ steps.env-vars.outputs.ENV_NAME }}"
 
       - name: Install dependencies
-        run: |
-          npm ci
+        run: npm ci
 
       - name: Build site
-        run: npm run build
+        run: npm run build -- --base=${{ steps.env-vars.outputs.BASE_PATH }}
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
-          VITE_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/
+          VITE_APP_URL: ${{ steps.env-vars.outputs.APP_URL }}
+          VITE_BASE_PATH: ${{ steps.env-vars.outputs.BASE_PATH }}
 
       - name: Fix Service Worker Paths
         run: |
-          echo "🔧 Fixing service worker paths for GitHub Pages..."
+          echo "🔧 Fixing service worker paths for ${{ steps.env-vars.outputs.ENV_NAME }}..."
+          DEPLOY_PATH="${{ steps.env-vars.outputs.DEPLOY_PATH }}"
           
           # Create OneSignal service worker files in dist root
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/OneSignalSDKWorker.js
           echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKUpdaterWorker.js");' > dist/OneSignalSDKUpdaterWorker.js
           
-          # Also create them in a scheduler directory for backup
-          mkdir -p dist/scheduler
-          echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/scheduler/OneSignalSDKWorker.js
+          # Also create them in the deploy directory
+          mkdir -p dist/$DEPLOY_PATH
+          echo 'importScripts("https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js");' > dist/$DEPLOY_PATH/OneSignalSDKWorker.js
           
-          echo "✅ Created service worker files in multiple locations"
+          echo "✅ Created service worker files for $DEPLOY_PATH"
           
           # Update manifest.json to use absolute paths
           if [ -f "dist/manifest.json" ]; then
             echo "📝 Updating manifest.json paths..."
-            sed -i 's|"icons/|"/scheduler/icons/|g' dist/manifest.json
+            sed -i "s|\"icons/|/$DEPLOY_PATH/icons/|g" dist/manifest.json
             echo "✅ Updated manifest.json"
           fi
-          
-          # Create a test HTML to verify paths
-          cat > dist/test-paths.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head><title>Path Test</title></head>
-          <body>
-            <h1>Service Worker Path Test</h1>
-            <p>Testing if service workers are accessible:</p>
-            <ul>
-              <li><a href="/OneSignalSDKWorker.js">/OneSignalSDKWorker.js</a></li>
-              <li><a href="/scheduler/OneSignalSDKWorker.js">/scheduler/OneSignalSDKWorker.js</a></li>
-              <li><a href="/scheduler/manifest.json">/scheduler/manifest.json</a></li>
-              <li><a href="/scheduler/sw.js">/scheduler/sw.js</a></li>
-            </ul>
-          </body>
-          </html>
-          EOF
 
       - name: Verify Deployment Structure
         run: |
-          echo "📁 Final deployment structure:"
-          echo ""
-          echo "Root files:"
+          DEPLOY_PATH="${{ steps.env-vars.outputs.DEPLOY_PATH }}"
+          echo "📁 Final deployment structure for $DEPLOY_PATH:"
           ls -la dist/ | grep -E "(js|json|html|worker)" || true
           echo ""
-          echo "scheduler/ directory files:"
-          ls -la dist/scheduler/ 2>/dev/null || echo "No scheduler directory"
-          echo ""
           echo "Service worker verification:"
-          echo "OneSignalSDKWorker.js exists at root: $(test -f dist/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
-          echo "OneSignalSDKWorker.js exists in scheduler: $(test -f dist/scheduler/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
-          
-          echo ""
-          echo "🔍 Checking index.html for correct paths:"
-          grep -n "serviceWorker" dist/index.html || echo "No serviceWorker references"
+          echo "Root: $(test -f dist/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
+          echo "$DEPLOY_PATH/: $(test -f dist/$DEPLOY_PATH/OneSignalSDKWorker.js && echo '✅' || echo '❌')"
 
+      # Deploy to a subdirectory WITHOUT force_orphan so it doesn't wipe the other env
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          force_orphan: true
+          destination_dir: ${{ steps.env-vars.outputs.DEPLOY_PATH }}
+          keep_files: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
       - name: Post-Deployment Test
         run: |
-          echo "🌐 Deployment completed!"
+          echo "🌐 Deployment completed for ${{ steps.env-vars.outputs.ENV_NAME }}!"
           echo ""
-          echo "===== TEST YOUR DEPLOYMENT ====="
-          echo ""
-          echo "1. Open your deployed site:"
-          echo "   https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/"
-          echo ""
-          echo "2. Open browser DevTools (F12) and check:"
-          echo "   - Console tab for errors"
-          echo "   - Application → Service Workers"
-          echo "   - Network tab for 404 errors"
-          echo ""
-          echo "3. Test service worker URLs:"
-          echo "   - https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/OneSignalSDKWorker.js"
-          echo "   - https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/OneSignalSDKWorker.js"
-          echo ""
-          echo "4. If still failing, try this workaround in browser console:"
-          echo "   navigator.serviceWorker.register('/scheduler/OneSignalSDKWorker.js', { scope: '/scheduler/' })"
+          echo "URL: ${{ steps.env-vars.outputs.APP_URL }}"

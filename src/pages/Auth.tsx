@@ -112,7 +112,12 @@ const Auth = () => {
                 className="w-32 h-32 object-contain"
               />
             </div>
-            <CardTitle className="text-2xl">Port Arthur PD</CardTitle>
+            <div className="relative inline-block">
+              <CardTitle className="text-2xl">Port Arthur PD</CardTitle>
+              <span className="absolute -top-1 -right-20 px-2 py-0.5 text-xs font-semibold bg-amber-500 text-white rounded">
+                Staging Branch
+              </span>
+            </div>
             <CardDescription>
               {isLogin ? "Sign in to access your schedule" : "Create your account"}
             </CardDescription>

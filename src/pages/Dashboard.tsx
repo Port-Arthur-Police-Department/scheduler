@@ -564,7 +564,9 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
       }
     },
     enabled: isAdminOrSupervisor,
-    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes instead of 0
+    gcTime: 10 * 60 * 1000,   // Garbage collect after 10 minutes
+    refetchInterval: 2 * 60 * 1000, // Auto-refresh every 2 minutes instead of 30 seconds
   });
 
   // Function to manually refresh stats

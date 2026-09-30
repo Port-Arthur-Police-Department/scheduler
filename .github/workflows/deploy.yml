@@ -70,33 +70,10 @@ jobs:
           VITE_APP_URL: ${{ steps.env-vars.outputs.APP_URL }}
           VITE_BASE_PATH: ${{ steps.env-vars.outputs.BASE_PATH }}
 
-      - name: Prepare deployment structure
+      - name: Verify build output
         run: |
-          echo "📦 Preparing deployment for ${{ steps.env-vars.outputs.ENV_NAME }}..."
-          DEPLOY_PATH="${{ steps.env-vars.outputs.DEPLOY_PATH }}"
-
-          # For staging, rename dist to staging so it deploys to /scheduler/staging/
-          if [ "$DEPLOY_PATH" == "staging" ]; then
-            mkdir -p staging_temp
-            mv dist/* staging_temp/
-            rm -rf dist
-            mkdir -p dist/staging
-            mv staging_temp/* dist/staging/
-            echo "✅ Staging structure ready: dist/staging/"
-          else
-            echo "✅ Main deployment structure ready"
-          fi
-
-          # List final structure
-          echo ""
-          echo "📁 Final dist structure:"
-          find dist -maxdepth 2 -type f | head -20
-
-      - name: Verify Deployment Structure
-        run: |
-          DEPLOY_PATH="${{ steps.env-vars.outputs.DEPLOY_PATH }}"
-          echo "📁 Final deployment structure:"
-          find dist -maxdepth 3 -type f | head -30
+          echo "📁 Dist structure:"
+          ls -la dist/ | head -20
           echo ""
           echo "✅ Ready for deployment"
 

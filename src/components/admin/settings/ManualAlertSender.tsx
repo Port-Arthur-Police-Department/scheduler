@@ -55,12 +55,12 @@ export const ManualAlertSender = () => {
     queryKey: ['officers-active-schedules', todayDate, useActiveSchedulePeriod],
     queryFn: async () => {
       console.log('🔍 Fetching officers with active schedules...');
-      
+
       try {
-        // Get all active officers WITH push subscription info
+        // Get all active officers
         const { data: officers, error: officersError } = await supabase
           .from('profiles')
-          .select('id, full_name, badge_number, phone, email, push_subscription, notification_preferences')
+          .select('id, full_name, badge_number, phone, email, notification_preferences')
           .eq('active', true)
           .order('full_name', { ascending: true });
 
@@ -71,9 +71,26 @@ export const ManualAlertSender = () => {
 
         console.log(`✅ Found ${officers?.length || 0} active officers`);
 
+        // Get push subscriptions separately
+        const { data: pushSubscriptions } = await supabase
+          .from('user_push_subscriptions')
+          .select('user_id, enabled')
+          .eq('enabled', true);
+
+        // Create a map of user_id -> has push
+        const pushMap = new Map(
+          (pushSubscriptions || []).map(ps => [ps.user_id, true])
+        );
+
+        // Add push_subscription flag to each officer
+        const officersWithPush = officers?.map(officer => ({
+          ...officer,
+          push_subscription: pushMap.has(officer.id) ? { enabled: true } : null
+        })) || [];
+
         // For each officer, find their MOST RECENT active schedule
         const officersWithCurrentShifts = await Promise.all(
-          officers.map(async (officer) => {
+          officersWithPush.map(async (officer) => {
             try {
               let query = supabase
                 .from('recurring_schedules')

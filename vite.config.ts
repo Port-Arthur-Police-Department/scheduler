@@ -6,10 +6,45 @@ import { resolve } from 'path';
 const isProduction = process.env.NODE_ENV === 'production';
 const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
-const isStaging = process.env.VITE_BASE_PATH?.includes('/staging');
 
-// Determine base path: use env var if set (for GitHub Actions), otherwise use relative paths
-const basePath = process.env.VITE_BASE_PATH || './';
+// Debug: Log environment variables
+console.log('🔍 Vite Config Debug:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  GITHUB_REF_NAME:', process.env.GITHUB_REF_NAME);
+console.log('  VITE_BASE_PATH (raw):', process.env.VITE_BASE_PATH);
+
+// Normalize VITE_BASE_PATH if it was converted to Windows path by Git Bash
+let normalizedBasePath = process.env.VITE_BASE_PATH || '';
+if (normalizedBasePath.match(/^[A-Z]:/i)) {
+  // This is a Windows absolute path (starts with C:, D:, etc)
+  // Git Bash converted /scheduler/staging/ to C:/Users/.../scheduler/staging/
+  // We need to extract just /scheduler/staging/ from it
+  normalizedBasePath = normalizedBasePath.replace(/\\/g, '/');
+  // Find 'scheduler/' and take everything from there
+  const idx = normalizedBasePath.indexOf('/scheduler/');
+  if (idx !== -1) {
+    normalizedBasePath = normalizedBasePath.substring(idx);
+  }
+}
+console.log('  VITE_BASE_PATH (normalized):', normalizedBasePath);
+
+// Determine base path - use normalized VITE_BASE_PATH from workflow if available
+let basePath = './';
+
+if (isProduction) {
+  if (normalizedBasePath) {
+    basePath = normalizedBasePath;
+    console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
+  } else if (process.env.GITHUB_REF_NAME === 'staging') {
+    basePath = '/scheduler/staging/';
+    console.log('✅ Vite Config: Using /scheduler/staging/ (staging branch)');
+  } else {
+    basePath = '/scheduler/';
+    console.log('✅ Vite Config: Using /scheduler/ (main branch)');
+  }
+} else {
+  console.log('✅ Vite Config: Using ./ base path (development mode)');
+}
 
 export default defineConfig({
   plugins: [

@@ -6,10 +6,18 @@ import { resolve } from 'path';
 const isProduction = process.env.NODE_ENV === 'production';
 const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
-const isStaging = process.env.VITE_BASE_PATH?.includes('/staging');
 
-// Determine base path: use env var if set (for GitHub Actions), otherwise use relative paths
-const basePath = process.env.VITE_BASE_PATH || './';
+// Determine if staging based on environment
+const isStaging = process.env.GITHUB_REF_NAME === 'staging' ||
+                  process.env.VITE_BASE_PATH?.includes('staging');
+
+// Determine base path based on branch
+let basePath = './';
+if (isProduction && isStaging) {
+  basePath = '/scheduler/staging/';
+} else if (isProduction) {
+  basePath = '/scheduler/';
+}
 
 export default defineConfig({
   plugins: [

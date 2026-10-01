@@ -78,14 +78,14 @@ jobs:
           echo ""
           echo "✅ Ready for deployment"
 
-      # Deploy to a subdirectory WITHOUT force_orphan so it doesn't wipe the other env
+      # Deploy to a subdirectory WITH clean slate to avoid stale files
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           destination_dir: ${{ steps.env-vars.outputs.DEPLOY_PATH }}
-          keep_files: true
+          keep_files: false
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
 

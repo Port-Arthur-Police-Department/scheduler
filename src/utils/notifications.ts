@@ -437,7 +437,7 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  // Initialize notifications
+  // Initialize notifications (only called if service worker not auto-registered)
   public async initialize(): Promise<void> {
     if (!('serviceWorker' in navigator)) {
       console.log('Service workers not supported');
@@ -450,9 +450,17 @@ export class NotificationService {
     }
 
     try {
-      // Register service worker - use relative path for GitHub Pages subdirectory
-      this.swRegistration = await navigator.serviceWorker.register('./sw.js');
-      console.log('Service Worker registered:', this.swRegistration);
+      // Check if service worker is already registered by Vite PWA
+      const registrations = await navigator.serviceWorker.getRegistrations();
+
+      if (registrations.length > 0) {
+        this.swRegistration = registrations[0];
+        console.log('✅ Service Worker already registered by Vite PWA:', this.swRegistration);
+      } else {
+        // Fallback: register manually with relative path
+        this.swRegistration = await navigator.serviceWorker.register('./sw.js');
+        console.log('✅ Service Worker registered manually:', this.swRegistration);
+      }
 
       // Request notification permission
       await this.requestPermission();

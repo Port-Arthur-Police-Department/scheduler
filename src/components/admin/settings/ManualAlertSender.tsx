@@ -120,7 +120,7 @@ export const ManualAlertSender = () => {
                 
                 if (shiftType) {
                   const isCurrentlyOnShift = isOfficerCurrentlyOnShift(shiftType);
-                  
+
                   return {
                     ...officer,
                     current_shift: {
@@ -135,7 +135,7 @@ export const ManualAlertSender = () => {
                       end_date: schedule.end_date,
                       day_of_week: schedule.day_of_week
                     },
-                    has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
+                    has_push: !!officer.push_subscription
                   };
                 }
               }
@@ -144,7 +144,7 @@ export const ManualAlertSender = () => {
                 ...officer,
                 current_shift: null,
                 schedule_info: null,
-                has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
+                has_push: !!officer.push_subscription
               };
             } catch (error) {
               console.error(`❌ Error processing ${officer.full_name}:`, error);
@@ -152,7 +152,7 @@ export const ManualAlertSender = () => {
                 ...officer,
                 current_shift: null,
                 schedule_info: null,
-                has_push: !!officer.push_subscription && officer.notification_preferences?.push_enabled !== false
+                has_push: !!officer.push_subscription
               };
             }
           })

@@ -65,7 +65,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           VITE_APP_URL: ${{ steps.env-vars.outputs.APP_URL }}
+          VITE_BASE_PATH: ${{ steps.env-vars.outputs.BASE_PATH }}
           NODE_ENV: production
 
       - name: Verify build output

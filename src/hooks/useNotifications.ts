@@ -59,11 +59,9 @@ export const useNotifications = () => {
         if (supported) {
           const service = NotificationService.getInstance();
           setNotificationService(service);
-          
-          // Initialize notifications
-          await service.initialize();
-          
-          // Get current permission status
+
+          // Don't call initialize() - Vite PWA already registered sw.js
+          // Just request permission and check status
           const currentPermission = Notification.permission;
           setPermission(currentPermission);
           setIsEnabled(currentPermission === 'granted');

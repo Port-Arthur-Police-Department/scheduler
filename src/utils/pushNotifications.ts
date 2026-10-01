@@ -39,10 +39,11 @@ export const registerForPushNotifications = async (
     const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
     if (!vapidPublicKey) {
-      console.warn('⚠️ VAPID public key not configured');
-      // Return false but don't fail - local notifications still work
+      console.warn('⚠️ VAPID public key not configured - check .env.local');
       return false;
     }
+
+    console.log('✅ VAPID key found, proceeding with subscription...');
 
     try {
       // Check if already subscribed

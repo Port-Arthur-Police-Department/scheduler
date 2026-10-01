@@ -7,6 +7,12 @@ const isProduction = process.env.NODE_ENV === 'production';
 const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
 
+// Debug: Log environment variables
+console.log('🔍 Vite Config Debug:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  GITHUB_REF_NAME:', process.env.GITHUB_REF_NAME);
+console.log('  VITE_BASE_PATH:', process.env.VITE_BASE_PATH);
+
 // Determine if staging - check GITHUB_REF_NAME first (from CI), then VITE_BASE_PATH
 const isStaging = process.env.GITHUB_REF_NAME === 'staging' ||
                   (process.env.VITE_BASE_PATH && process.env.VITE_BASE_PATH.includes('staging'));

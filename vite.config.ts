@@ -7,16 +7,23 @@ const isProduction = process.env.NODE_ENV === 'production';
 const isStackblitz = process.env.STACKBLITZ === 'true' ||
                      process.env.CODESANDBOX_HOST !== undefined;
 
-// Determine if staging based on environment
+// Determine if staging - check GITHUB_REF_NAME first (from CI), then VITE_BASE_PATH
 const isStaging = process.env.GITHUB_REF_NAME === 'staging' ||
-                  process.env.VITE_BASE_PATH?.includes('staging');
+                  (process.env.VITE_BASE_PATH && process.env.VITE_BASE_PATH.includes('staging'));
 
-// Determine base path based on branch
+// Set base path - priority: explicit staging > GITHUB_REF_NAME > VITE_BASE_PATH > default
 let basePath = './';
-if (isProduction && isStaging) {
-  basePath = '/scheduler/staging/';
-} else if (isProduction) {
-  basePath = '/scheduler/';
+
+if (isProduction) {
+  if (isStaging) {
+    basePath = '/scheduler/staging/';
+    console.log('✅ Vite Config: Using /scheduler/staging/ base path (staging branch detected)');
+  } else {
+    basePath = '/scheduler/';
+    console.log('✅ Vite Config: Using /scheduler/ base path (main branch detected)');
+  }
+} else {
+  console.log('✅ Vite Config: Using ./ base path (development mode)');
 }
 
 export default defineConfig({

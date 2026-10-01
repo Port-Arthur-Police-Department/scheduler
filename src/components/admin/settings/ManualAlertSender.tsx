@@ -71,11 +71,28 @@ export const ManualAlertSender = () => {
 
         console.log(`✅ Found ${officers?.length || 0} active officers`);
 
-        // Get push subscriptions separately
-        const { data: pushSubscriptions } = await supabase
+        // Get push subscriptions separately (only count enabled ones)
+        const { data: pushSubscriptions, error: pushError } = await supabase
           .from('user_push_subscriptions')
-          .select('user_id, enabled')
+          .select('user_id, enabled, updated_at')
           .eq('enabled', true);
+
+        if (pushError) {
+          console.error('Error fetching push subscriptions:', pushError);
+        }
+
+        // Filter out subscriptions older than 30 days (likely stale)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const validPushMap = new Map(
+          (pushSubscriptions || [])
+            .filter(ps => {
+              const updated = new Date(ps.updated_at);
+              return updated > thirtyDaysAgo;
+            })
+            .map(ps => [ps.user_id, true])
+        );
 
         // Create a map of user_id -> has push
         const pushMap = new Map(

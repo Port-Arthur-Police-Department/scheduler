@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { sendInAppNotification, notifySupervisorsAndAdmins } from "./notifications";
+import { sendPushNotification } from "./pushNotifications";
 
 export class AlertSystem {
   private static instance: AlertSystem;
@@ -143,6 +144,21 @@ export class AlertSystem {
 
       if (error) {
         console.error('Error creating in-app notifications:', error);
+      }
+
+      // Also send push notifications to users who have them enabled
+      try {
+        await sendPushNotification(userIdsArray, title, message, {
+          tag: 'alert',
+          data: {
+            type: 'alert',
+            alertType: alertType
+          }
+        });
+        console.log(`📤 Push notifications sent to ${userIdsArray.length} users`);
+      } catch (pushError) {
+        console.warn('⚠️ Failed to send push notifications:', pushError);
+        // Don't fail the whole alert if push fails
       }
 
       toast.success(`Alert sent to ${userIdsArray.length} users`);

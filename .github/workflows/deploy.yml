@@ -71,14 +71,21 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           NODE_ENV: production
 
-      - name: Verify build output
+      - name: Verify build configuration
         run: |
-          echo "📁 Dist structure:"
-          ls -la dist/ | head -20
+          echo "🔍 Build Configuration:"
+          echo "  Branch: ${{ github.ref_name }}"
+          echo "  Deploy Path: ${{ steps.env-vars.outputs.DEPLOY_PATH }}"
+          echo "  Base Path: ${{ steps.env-vars.outputs.BASE_PATH }}"
+          echo "  App URL: ${{ steps.env-vars.outputs.APP_URL }}"
           echo ""
-          echo "✅ Ready for deployment"
+          echo "📄 Built index.html preview:"
+          head -50 dist/index.html | tail -15
 
-      # Deploy to a subdirectory WITH clean slate to avoid stale files
+      # Clean up old /staging/ directory if it exists (from previous deployments)
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:

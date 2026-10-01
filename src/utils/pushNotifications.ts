@@ -90,51 +90,24 @@ export const savePushSubscriptionToDb = async (
   try {
     const subscriptionJson = JSON.stringify(subscription);
 
-    // Check if subscription already exists
-    const { data: existing, error: fetchError } = await supabase
+    // Use upsert to handle duplicate key errors gracefully
+    // This will insert or update depending on whether the user_id already exists
+    const { error: upsertError } = await supabase
       .from('user_push_subscriptions')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
+      .upsert({
+        user_id: userId,
+        subscription: subscriptionJson,
+        enabled: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'  // Match on user_id only, update if exists
+      });
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching existing subscription:', fetchError);
-      return;
-    }
-
-    if (existing) {
-      // Update existing subscription
-      const { error: updateError } = await supabase
-        .from('user_push_subscriptions')
-        .update({
-          subscription: subscriptionJson,
-          updated_at: new Date().toISOString(),
-          enabled: true
-        })
-        .eq('user_id', userId);
-
-      if (updateError) {
-        console.error('❌ Failed to update push subscription:', updateError);
-      } else {
-        console.log('✅ Push subscription updated in database');
-      }
+    if (upsertError) {
+      console.error('❌ Failed to save push subscription:', upsertError);
     } else {
-      // Insert new subscription
-      const { error: insertError } = await supabase
-        .from('user_push_subscriptions')
-        .insert({
-          user_id: userId,
-          subscription: subscriptionJson,
-          enabled: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (insertError) {
-        console.error('❌ Failed to save push subscription:', insertError);
-      } else {
-        console.log('✅ Push subscription saved to database');
-      }
+      console.log('✅ Push subscription saved/updated in database');
     }
   } catch (error) {
     console.error('❌ Error saving push subscription:', error);

@@ -38,6 +38,15 @@ const App = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [serviceWorkerRegistration, setServiceWorkerRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null);
+  const [pwaStatus, setPwaStatus] = useState<{
+    isInstalled: boolean;
+    serviceWorkerActive: boolean;
+    hasManifest: boolean;
+  }>({
+    isInstalled: false,
+    serviceWorkerActive: false,
+    hasManifest: false
+  });
 
 
   // Initialize background tasks for PWA

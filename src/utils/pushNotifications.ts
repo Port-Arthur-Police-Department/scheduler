@@ -90,24 +90,27 @@ export const savePushSubscriptionToDb = async (
   try {
     const subscriptionJson = JSON.stringify(subscription);
 
-    // Use upsert to handle duplicate key errors gracefully
-    // This will insert or update depending on whether the user_id already exists
-    const { error: upsertError } = await supabase
+    // Delete any existing subscriptions for this user first
+    await supabase
       .from('user_push_subscriptions')
-      .upsert({
+      .delete()
+      .eq('user_id', userId);
+
+    // Then insert the new subscription
+    const { error: insertError } = await supabase
+      .from('user_push_subscriptions')
+      .insert({
         user_id: userId,
         subscription: subscriptionJson,
         enabled: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'  // Match on user_id only, update if exists
       });
 
-    if (upsertError) {
-      console.error('❌ Failed to save push subscription:', upsertError);
+    if (insertError) {
+      console.error('❌ Failed to save push subscription:', insertError);
     } else {
-      console.log('✅ Push subscription saved/updated in database');
+      console.log('✅ Push subscription saved to database');
     }
   } catch (error) {
     console.error('❌ Error saving push subscription:', error);

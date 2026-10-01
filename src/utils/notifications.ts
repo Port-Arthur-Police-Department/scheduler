@@ -504,63 +504,6 @@ export class NotificationService {
     }
   }
 
-  // Subscribe to push notifications
-  private async subscribeToPushNotifications(): Promise<void> {
-    if (!this.swRegistration) {
-      console.log('Service worker not registered');
-      return;
-    }
-
-    try {
-      const subscription = await this.swRegistration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: this.getPublicKey()
-      });
-
-      console.log('Push subscription:', subscription);
-      
-      // Send subscription to server
-      await this.sendSubscriptionToServer(subscription);
-    } catch (error) {
-      console.error('Failed to subscribe to push notifications:', error);
-    }
-  }
-
-  // Get public key for push notifications (you'll need to generate this)
-  private getPublicKey(): Uint8Array {
-    // This is a demo key - replace with your actual VAPID public key
-    const publicKey = 'BEl62iUYgU9x_jTOfV7qOA9Wb6lM6BfGJq8J1JcE7Y8XJcE7Y8XJcE7Y8XJcE7Y8';
-    return this.urlBase64ToUint8Array(publicKey);
-  }
-
-  // Convert base64 to Uint8Array
-  private urlBase64ToUint8Array(base64String: string): Uint8Array {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
-  // Send subscription to server
-  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
-    try {
-      // Replace with your actual API endpoint
-      await fetch('/api/save-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(subscription),
-      });
-    } catch (error) {
-      console.error('Failed to send subscription to server:', error);
-    }
-  }
 
   // Schedule a notification
   public scheduleNotification(title: string, body: string, delay: number): void {

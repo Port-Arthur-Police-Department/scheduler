@@ -193,7 +193,8 @@ export const DailyScheduleView = ({
   const { data: scheduleData, isLoading, refetch: refetchSchedule } = useQuery({
     queryKey: ["daily-schedule", dateStr, filterShiftId],
     queryFn: () => getScheduleData(selectedDate, filterShiftId),
-    staleTime: 2 * 60 * 1000,   // ← ADD: cache 2 minutes, stops constant background polling
+    staleTime: 5 * 60 * 1000,   // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000,     // Garbage collect after 10 minutes
   });
 
   // FIXED: Updated handlers to work with the new callback signatures

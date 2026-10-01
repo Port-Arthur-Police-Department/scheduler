@@ -165,8 +165,8 @@ const TheBook = ({
       if (error) throw error;
       return data;
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,  // Cache for 10 minutes
+    gcTime: 15 * 60 * 1000,     // Garbage collect after 15 minutes
   });
 
   // ADD THE useEffect HERE - AFTER shiftTypes query
@@ -215,8 +215,8 @@ const TheBook = ({
       return data || [];
     },
     enabled: !!selectedShiftId,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,  // Cache for 10 minutes
+    gcTime: 15 * 60 * 1000,     // Garbage collect after 15 minutes
   })
 
   // Function to get default assignment for an officer on a specific day
@@ -233,29 +233,31 @@ const TheBook = ({
   };
 
   // Function to fetch service credits for multiple officers
+  // OPTIMIZED: Uses Promise.all for concurrent requests instead of sequential loop
   const fetchServiceCredits = async (officerIds: string[]) => {
     if (!officerIds.length) return new Map();
 
     const serviceCredits = new Map();
 
-    // Fetch service credits for each officer
-    for (const officerId of officerIds) {
-      try {
-        const { data, error } = await supabase
-          .rpc('get_service_credit', { profile_id: officerId });
-
-        if (error) {
+    // Fetch service credits concurrently for all officers instead of sequentially
+    const promises = officerIds.map(officerId =>
+      supabase
+        .rpc('get_service_credit', { profile_id: officerId })
+        .then(({ data, error }) => {
+          if (error) {
+            console.error(`Error fetching service credit for officer ${officerId}:`, error);
+            serviceCredits.set(officerId, 0);
+          } else {
+            serviceCredits.set(officerId, data || 0);
+          }
+        })
+        .catch(error => {
           console.error(`Error fetching service credit for officer ${officerId}:`, error);
           serviceCredits.set(officerId, 0);
-        } else {
-          serviceCredits.set(officerId, data || 0);
-        }
-      } catch (error) {
-        console.error(`Error fetching service credit for officer ${officerId}:`, error);
-        serviceCredits.set(officerId, 0);
-      }
-    }
+        })
+    );
 
+    await Promise.all(promises);
     return serviceCredits;
   };
 
@@ -631,8 +633,8 @@ const TheBook = ({
       }
     },
     enabled: !!selectedShiftId && (activeView === "weekly" || activeView === "monthly"),
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,   // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000,     // Garbage collect after 10 minutes
   });
 
   // Navigation functions

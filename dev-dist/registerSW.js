@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/scheduler/dev-sw.js?dev-sw', { scope: '/scheduler/', type: 'classic' })

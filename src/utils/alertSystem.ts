@@ -1,13 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { sendInAppNotification, notifySupervisorsAndAdmins } from "./notifications";
-import { 
-  sendPushNotification, 
-  sendPushNotificationToAll, 
-  sendPushNotificationToRole,
-  subscribeToPushNotifications,
-  unsubscribeFromPushNotifications 
-} from "./supabasePushNotifications";
 
 export class AlertSystem {
   private static instance: AlertSystem;
@@ -25,16 +18,13 @@ export class AlertSystem {
    * Send alert to all users
    */
   async sendAlertToAll(
-    title: string, 
-    message: string, 
+    title: string,
+    message: string,
     alertType: 'info' | 'warning' | 'critical' | 'emergency' = 'info'
   ): Promise<void> {
     try {
       console.log(`📢 Sending alert to ALL users: ${title}`);
 
-      // Send push notifications
-      const pushResult = await sendPushNotificationToAll(title, message, alertType);
-      
       // Send in-app notifications to all active users
       const { data: allUsers } = await supabase
         .from('profiles')
@@ -43,7 +33,7 @@ export class AlertSystem {
 
       if (allUsers && allUsers.length > 0) {
         const userIds = allUsers.map(user => user.id);
-        
+
         // Create in-app notification records
         const notifications = userIds.map(userId => ({
           user_id: userId,
@@ -65,7 +55,7 @@ export class AlertSystem {
         }
       }
 
-      toast.success(`Alert sent to all users (${pushResult.results?.successful || 0} via push)`);
+      toast.success(`Alert sent to all users`);
 
     } catch (error) {
       console.error('Error sending alert to all:', error);
@@ -77,17 +67,14 @@ export class AlertSystem {
    * Send alert to specific role
    */
   async sendAlertToRole(
-    role: 'officer' | 'supervisor' | 'admin', 
-    title: string, 
-    message: string, 
+    role: 'officer' | 'supervisor' | 'admin',
+    title: string,
+    message: string,
     alertType: 'info' | 'warning' | 'critical' | 'emergency' = 'info'
   ): Promise<void> {
     try {
       console.log(`📢 Sending alert to ${role}s: ${title}`);
 
-      // Send push notifications
-      const pushResult = await sendPushNotificationToRole(role, title, message, alertType);
-      
       // Get all users with this role for in-app notifications
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -96,7 +83,7 @@ export class AlertSystem {
 
       if (userRoles && userRoles.length > 0) {
         const userIds = userRoles.map(role => role.user_id);
-        
+
         const notifications = userIds.map(userId => ({
           user_id: userId,
           title,
@@ -117,7 +104,7 @@ export class AlertSystem {
         }
       }
 
-      toast.success(`Alert sent to ${role}s (${pushResult.results?.successful || 0} via push)`);
+      toast.success(`Alert sent to ${role}s`);
 
     } catch (error) {
       console.error(`Error sending alert to ${role}s:`, error);
@@ -129,18 +116,15 @@ export class AlertSystem {
    * Send alert to specific users
    */
   async sendAlertToUsers(
-    userIds: string | string[], 
-    title: string, 
-    message: string, 
+    userIds: string | string[],
+    title: string,
+    message: string,
     alertType: 'info' | 'warning' | 'critical' | 'emergency' = 'info'
   ): Promise<void> {
     try {
       const userIdsArray = Array.isArray(userIds) ? userIds : [userIds];
       console.log(`📢 Sending alert to ${userIdsArray.length} users: ${title}`);
 
-      // Send push notifications
-      const pushResult = await sendPushNotification(userIdsArray, title, message, alertType);
-      
       // Create in-app notifications
       const notifications = userIdsArray.map(userId => ({
         user_id: userId,
@@ -161,7 +145,7 @@ export class AlertSystem {
         console.error('Error creating in-app notifications:', error);
       }
 
-      toast.success(`Alert sent to ${userIdsArray.length} users (${pushResult.results?.successful || 0} via push)`);
+      toast.success(`Alert sent to ${userIdsArray.length} users`);
 
     } catch (error) {
       console.error('Error sending alert to users:', error);
@@ -175,14 +159,6 @@ export class AlertSystem {
   async sendEmergencyAlert(title: string, message: string): Promise<void> {
     try {
       console.log(`🚨 Sending EMERGENCY alert: ${title}`);
-
-      // Send emergency push notifications
-      const pushResult = await sendPushNotificationToAll(
-        `🚨 EMERGENCY: ${title}`,
-        message,
-        'emergency',
-        { priority: 'high', sound: 'default' }
-      );
 
       // Create in-app emergency notifications for all active users
       const { data: allUsers } = await supabase
@@ -207,8 +183,8 @@ export class AlertSystem {
           .insert(notifications);
       }
 
-      console.log(`🚨 Emergency alert sent: ${pushResult.results?.successful || 0} via push`);
-      toast.success(`Emergency alert sent (${pushResult.results?.successful || 0} via push)`);
+      console.log(`🚨 Emergency alert sent`);
+      toast.success(`Emergency alert sent`);
 
     } catch (error) {
       console.error('Error sending emergency alert:', error);
@@ -393,12 +369,6 @@ export class AlertSystem {
 
       console.log('Notification settings updated for user:', userId);
 
-      // If push notifications are being enabled, register for them
-      if (settings.push_enabled === true) {
-        await subscribeToPushNotifications(userId);
-      } else if (settings.push_enabled === false) {
-        await unsubscribeFromPushNotifications(userId);
-      }
 
     } catch (error) {
       console.error('Error updating notification settings:', error);

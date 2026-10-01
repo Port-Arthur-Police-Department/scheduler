@@ -14,13 +14,14 @@ const basePath = process.env.VITE_BASE_PATH || './';
 export default defineConfig({
   plugins: [
     react(),
-    // Only enable PWA in production (main branch), not in staging or StackBlitz
-    isProduction && !isStackblitz && !isStaging && VitePWA({
+    // Enable PWA for both production and staging (both need push notifications)
+    // Only disable on StackBlitz
+    isProduction && !isStackblitz && VitePWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['icons/*.png', 'vite.svg'],
-      
+
       manifest: {
         name: "Port Arthur PD Scheduler",
         short_name: "PAPD Scheduler",
@@ -33,7 +34,7 @@ export default defineConfig({
         start_url: "./",
         id: "./",
         categories: ["productivity", "business"],
-        
+
         icons: [
           {
             src: "./icons/icon-72x72.png",
@@ -84,7 +85,7 @@ export default defineConfig({
             purpose: "maskable any"
           }
         ],
-        
+
        shortcuts: [
           {
             name: "Daily Schedule",
@@ -95,7 +96,7 @@ export default defineConfig({
           }
         ]
       },
-      
+
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf,json}'],
         navigateFallback: './index.html',
@@ -103,7 +104,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
-      
+
       devOptions: {
         enabled: false,
       }

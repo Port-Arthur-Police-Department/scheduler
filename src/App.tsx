@@ -172,32 +172,37 @@ useEffect(() => {
   // Enhanced PWA Status Check and Service Worker Registration
   useEffect(() => {
     console.log('📱 Initializing PWA functionality...');
-    
+
     const checkPWAStatus = () => {
       // Check if installed
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isInWebAppiOS = (window.navigator as any).standalone === true;
       const isInstalled = isStandalone || isInWebAppiOS;
-      
+
       // Check manifest
       const hasManifest = document.querySelector('link[rel="manifest"]') !== null;
-      
+
       // Check service worker
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(registration => {
           const serviceWorkerActive = !!registration?.active;
-          
+
           setPwaStatus(prev => ({
             ...prev,
             isInstalled,
             serviceWorkerActive,
             hasManifest
           }));
-          
+
           // If service worker is active, store the registration
           if (registration) {
+            console.log('✅ Found existing service worker registration:', registration.scope);
             setServiceWorkerRegistration(registration);
+          } else {
+            console.log('⚠️ No existing service worker registration found');
           }
+        }).catch(error => {
+          console.error('❌ Error checking service worker registration:', error);
         });
       } else {
         setPwaStatus(prev => ({
@@ -207,8 +212,8 @@ useEffect(() => {
         }));
       }
     };
-    
-    // Register service workers for PWA
+
+    // Register service workers for PWA - STAGING VERSION
     const registerServiceWorkers = async () => {
       if (!('serviceWorker' in navigator)) {
         console.log('❌ Service Workers not supported');
@@ -216,37 +221,70 @@ useEffect(() => {
       }
 
       try {
-        const registration = await navigator.serviceWorker.register(
-          '/scheduler/service-worker.js',
-          {
-            scope: '/scheduler/',
-            updateViaCache: 'none'
-          }
-        );
-        console.log('✅ PWA Service Worker registered:', registration.scope);
-        setServiceWorkerRegistration(registration);
+        // For staging deployment, try relative path first
+        // Vite PWA (if enabled) generates sw.js; otherwise try common locations
+        const potentialPaths = [
+          './sw.js',  // Relative path (works for subdirectory)
+          'sw.js',    // Relative without ./
+          '/scheduler/sw.js',  // GitHub Pages staging subdirectory
+          '/scheduler/staging/sw.js',  // Full staging path
+          '/scheduler/service-worker.js',  // Old path fallback
+        ];
 
-        // Listen for service worker messages
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          console.log('📨 Message from service worker:', event.data);
+        let registered = false;
+        let lastError: any = null;
 
-          if (event.data && event.data.type === 'SERVICE_WORKER_READY') {
-            console.log('✅ Service worker ready:', event.data.message);
+        for (const path of potentialPaths) {
+          try {
+            console.log(`🔍 Attempting to register service worker from: ${path}`);
+            const registration = await navigator.serviceWorker.register(path, {
+              updateViaCache: 'none'
+            });
+            console.log('✅ Service Worker registered successfully:', path);
+            console.log('   Scope:', registration.scope);
+            setServiceWorkerRegistration(registration);
+            registered = true;
+
+            // Listen for service worker messages
+            navigator.serviceWorker.addEventListener('message', (event) => {
+              console.log('📨 Message from service worker:', event.data);
+
+              if (event.data && event.data.type === 'SERVICE_WORKER_READY') {
+                console.log('✅ Service worker ready:', event.data.message);
+              }
+            });
+
+            break; // Success, stop trying other paths
+          } catch (pathError) {
+            console.warn(`⚠️ Failed to register from ${path}:`, (pathError as Error).message);
+            lastError = pathError;
+            // Continue to next path
           }
-        });
+        }
+
+        if (!registered) {
+          console.error('❌ Could not register service worker from any path. Last error:', lastError);
+        }
 
       } catch (error) {
         console.error('❌ Service worker registration failed:', error);
       }
     };
 
-    // Initial registration
-    registerServiceWorkers();
+    // Check for existing registration first, then try to register
+    checkPWAStatus();
+
+    // Small delay to allow existing registration to be detected
+    setTimeout(() => {
+      if (!serviceWorkerRegistration) {
+        registerServiceWorkers();
+      }
+    }, 500);
 
     return () => {
       // Cleanup
     };
-  }, []);
+  }, [serviceWorkerRegistration]);
 
   // Browser Notification Initialization
   useEffect(() => {

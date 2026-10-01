@@ -450,8 +450,8 @@ export class NotificationService {
     }
 
     try {
-      // Register service worker
-      this.swRegistration = await navigator.serviceWorker.register('/service-worker.js');
+      // Register service worker - use relative path for GitHub Pages subdirectory
+      this.swRegistration = await navigator.serviceWorker.register('./sw.js');
       console.log('Service Worker registered:', this.swRegistration);
 
       // Request notification permission

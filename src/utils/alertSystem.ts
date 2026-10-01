@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { sendInAppNotification, notifySupervisorsAndAdmins } from "./notifications";
+import { sendPushNotification } from "./pushNotifications";
 
 export class AlertSystem {
   private static instance: AlertSystem;
@@ -123,33 +124,26 @@ export class AlertSystem {
   ): Promise<void> {
     try {
       const userIdsArray = Array.isArray(userIds) ? userIds : [userIds];
-      console.log(`📢 Sending alert to ${userIdsArray.length} users: ${title}`);
+      console.log(`📢 Sending push alert to ${userIdsArray.length} users: ${title}`);
 
-      // Create in-app notifications
-      const notifications = userIdsArray.map(userId => ({
-        user_id: userId,
-        title,
-        message,
-        type: 'alert',
-        alert_type: alertType,
-        is_read: false,
-        created_at: new Date().toISOString(),
-        metadata: { alertType }
-      }));
-
-      const { error } = await supabase
-        .from('notifications')
-        .insert(notifications);
-
-      if (error) {
-        console.error('Error creating in-app notifications:', error);
+      // Send push notifications via Edge Function
+      try {
+        await sendPushNotification(userIdsArray, title, message, {
+          tag: 'alert',
+          data: {
+            type: 'alert',
+            alertType: alertType
+          }
+        });
+        console.log(`📤 Push notifications sent to ${userIdsArray.length} users`);
+      } catch (pushError) {
+        console.warn('⚠️ Failed to send push notifications:', pushError);
+        throw pushError; // Re-throw to let caller know push failed
       }
 
-      toast.success(`Alert sent to ${userIdsArray.length} users`);
-
     } catch (error) {
-      console.error('Error sending alert to users:', error);
-      toast.error('Failed to send alert');
+      console.error('Error sending push alert:', error);
+      throw error; // Re-throw to let caller handle it
     }
   }
 

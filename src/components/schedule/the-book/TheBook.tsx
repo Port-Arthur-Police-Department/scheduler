@@ -752,7 +752,7 @@ const TheBook = ({
         : ptoData.endTime;
 
       // Use formatLocalDate to prevent timezone issues
-      const dateStr = formatLocalDate(new Date(selectedOfficerForPTO.date));
+      const dateStr = formatLocalDate(parseLocalDate(selectedOfficerForPTO.date));
 
       const { data: existingExceptions } = await supabase
         .from("schedule_exceptions")

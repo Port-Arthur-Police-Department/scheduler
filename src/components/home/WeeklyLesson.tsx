@@ -44,7 +44,7 @@ export const WeeklyLesson = ({ lesson, isLoading }: WeeklyLessonProps) => {
     : '';
 
   const authorName = lesson.author
-    ? `${lesson.author.rank ? lesson.author.rank + ' ' : ''}${lesson.author.first_name || ''} ${lesson.author.last_name || ''}`.trim()
+    ? `${lesson.author.rank ? lesson.author.rank + ' ' : ''}${lesson.author.full_name || ''}`.trim()
     : 'Department Administration';
 
   return (

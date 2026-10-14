@@ -109,7 +109,7 @@ export const LessonComments = ({
             comments.map((comment) => {
               const officer = comment.officer;
               const authorName = officer
-                ? `${officer.rank ? officer.rank + ' ' : ''}${officer.first_name || ''} ${officer.last_name || ''}`.trim()
+                ? `${officer.rank ? officer.rank + ' ' : ''}${officer.full_name || ''}`.trim()
                 : 'Officer';
               const canDelete = isAdminOrSupervisor || comment.officer_id === currentOfficerId;
 

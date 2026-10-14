@@ -187,7 +187,7 @@ export const WeeklyLessonSettings = () => {
                     ? formatWeekRange(parseLocalDate(lesson.week_start_date))
                     : 'N/A';
                   const authorName = lesson.author
-                    ? `${lesson.author.rank || ''} ${lesson.author.first_name || ''} ${lesson.author.last_name || ''}`.trim()
+                    ? `${lesson.author.rank || ''} ${lesson.author.full_name || ''}`.trim()
                     : 'Admin';
 
                   return (

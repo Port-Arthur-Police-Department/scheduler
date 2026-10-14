@@ -7,7 +7,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Users, AlertTriangle, Clock, LogOut, Bell, X, RefreshCw, Settings, Moon, Sun, Monitor, Smartphone } from "lucide-react";
+import { Calendar, Users, AlertTriangle, Clock, LogOut, Bell, X, RefreshCw, Settings, Moon, Sun, Monitor, Smartphone, Home } from "lucide-react";
+import { WeeklyLesson } from "@/components/home/WeeklyLesson";
+import { LessonComments } from "@/components/home/LessonComments";
+import { useWeeklyLesson } from "@/hooks/useWeeklyLesson";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 import { DailyScheduleManagement } from "@/components/schedule/DailyScheduleManagement";
@@ -113,7 +116,7 @@ const determineUserCurrentShift = async (userId: string): Promise<string> => {
   }
 };
 
-const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
+const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
@@ -125,6 +128,8 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const [userCurrentShift, setUserCurrentShift] = useState<string>("all");
   const [determiningShift, setDeterminingShift] = useState<boolean>(false);
+
+  const { data: weeklyLesson, isLoading: weeklyLessonLoading } = useWeeklyLesson();
 
   // PWA Status state
   const [pwaStatus, setPwaStatus] = useState({
@@ -769,6 +774,13 @@ const Dashboard = ({ isMobile, initialTab = "daily" }: DashboardProps) => {
     }
 
     switch (activeTab) {
+      case "home":
+        return (
+          <div className="space-y-6">
+            <WeeklyLesson lesson={weeklyLesson} isLoading={weeklyLessonLoading} />
+            <LessonComments lessonId={weeklyLesson?.id} currentOfficerId={user?.id} isAdminOrSupervisor={isAdminOrSupervisor} />
+          </div>
+        );
       case "daily":
         // Show DailyScheduleManagement for everyone
         return isMobile ? (

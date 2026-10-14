@@ -1309,7 +1309,7 @@ export const getScheduleData = async (selectedDate: Date, filterShiftId: string 
   if (shiftError) throw shiftError;
 
   // Get minimum staffing
-  const { data: minimumStaffing, error: minError } = await supabase
+  let { data: minimumStaffing, error: minError } = await supabase
     .from("minimum_staffing")
     .select("minimum_officers, minimum_supervisors, shift_type_id")
     .eq("day_of_week", dayOfWeek);

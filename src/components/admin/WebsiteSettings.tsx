@@ -25,6 +25,7 @@ import { AnniversaryAlertSettings } from "./settings/AnniversaryAlertSettings";
 import { EventsDashboardSettings } from "./settings/EventsDashboardSettings";
 import { AnniversaryCountdownSettings } from "./settings/AnniversaryCountdownSettings";
 import { MinimumStaffingManager } from "./settings/MinimumStaffingManager";
+import { WeeklyLessonSettings } from "./settings/WeeklyLessonSettings";
 
 // Constants - UPDATED WITH YOUR CURRENT SETTINGS FROM SUPABASE
 export const DEFAULT_COLORS = {
@@ -668,7 +669,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-<TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 h-auto"> {/* Changed from 7 to 8 */}
+<TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 h-auto">
   <TabsTrigger value="notifications" className="py-2">
     Notifications
   </TabsTrigger>
@@ -681,7 +682,10 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   <TabsTrigger value="events" className="py-2">
     Events Dashboard
   </TabsTrigger>
-  <TabsTrigger value="staffing" className="py-2"> {/* NEW TAB */}
+  <TabsTrigger value="lesson" className="py-2">
+    Weekly Lesson
+  </TabsTrigger>
+  <TabsTrigger value="staffing" className="py-2">
     Staffing Rules
   </TabsTrigger>
   <TabsTrigger value="colors" className="py-2">
@@ -732,6 +736,11 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             isPending={updateSettingsMutation.isPending}
             isPreviewLoading={isGeneratingPreview}
           />
+        </TabsContent>
+
+        {/* WEEKLY LESSON TAB */}
+        <TabsContent value="lesson" className="space-y-6 mt-6">
+          <WeeklyLessonSettings />
         </TabsContent>
 
         {/* Minimum Staff TAB */}

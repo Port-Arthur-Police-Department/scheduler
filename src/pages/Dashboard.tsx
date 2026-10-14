@@ -1248,9 +1248,31 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
                 )}
               </TabsList>
             )}
-            <TabsContent value={activeTab} className="space-y-6">
+            <TabsContent value="home" className="space-y-6">
               {renderTabContent()}
             </TabsContent>
+            <TabsContent value="daily" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="schedule" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="vacancies" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="staff" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            {showPtoTab && (
+              <TabsContent value="requests" className="space-y-6">
+                {renderTabContent()}
+              </TabsContent>
+            )}
+            {isAdmin && (
+              <TabsContent value="settings" className="space-y-6">
+                {renderTabContent()}
+              </TabsContent>
+            )}
           </Tabs>
         )}
 

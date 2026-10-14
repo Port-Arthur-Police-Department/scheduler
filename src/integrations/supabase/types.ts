@@ -536,6 +536,89 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_lessons: {
+        Row: {
+          id: string
+          title: string
+          content: string
+          photo_url: string | null
+          week_start_date: string
+          is_active: boolean
+          created_by: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          content: string
+          photo_url?: string | null
+          week_start_date: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          content?: string
+          photo_url?: string | null
+          week_start_date?: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_lessons_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lesson_comments: {
+        Row: {
+          id: string
+          lesson_id: string
+          officer_id: string
+          content: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          lesson_id: string
+          officer_id: string
+          content: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          lesson_id?: string
+          officer_id?: string
+          content?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_comments_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_comments_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

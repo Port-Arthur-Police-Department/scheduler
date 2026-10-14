@@ -362,7 +362,9 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
 
   // Sync active tab with current route - simplified for HashRouter
   useEffect(() => {
-    if (hash.startsWith('/daily-schedule')) {
+    if (hash.startsWith('/home') || hash === '') {
+      setActiveTab('home');
+    } else if (hash.startsWith('/daily-schedule')) {
       setActiveTab('daily');
     } else if (hash.startsWith('/the-book')) {
       setActiveTab('schedule');
@@ -373,8 +375,8 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
     } else if (hash.startsWith('/time-off') || hash.startsWith('/pto')) {
       // If PTO tab is disabled, redirect to daily schedule
       if (!showPtoTab) {
-        navigate("/daily-schedule");
-        setActiveTab('daily');
+        navigate("/home");
+        setActiveTab('home');
         toast.info("PTO tab is currently disabled");
       } else {
         setActiveTab('requests');
@@ -382,7 +384,7 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
     } else if (hash.startsWith('/settings')) {
       setActiveTab('settings');
     } else if (hash.startsWith('/dashboard')) {
-      setActiveTab('daily');
+      setActiveTab('home');
     }
   }, [location, showPtoTab, navigate]);
 
@@ -398,6 +400,7 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
 
     // Map internal tab names to route paths with hash
     const routeMap: { [key: string]: string } = {
+      home: "/home",
       daily: "/daily-schedule",
       schedule: "/weekly-schedule",
       vacancies: "/vacancies",
@@ -406,7 +409,7 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
       settings: "/settings"
     };
 
-    const route = routeMap[tab] || "/dashboard";
+    const route = routeMap[tab] || "/home";
     navigate(route);
   };
 
@@ -1136,9 +1139,14 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
         {!isMobile && (
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             {isAdmin ? (
-              // Admin tabs - All tabs including Settings (REMOVED Officers tab)
+              // Admin tabs - All tabs including Settings
               // Dynamically calculate grid columns based on PTO tab visibility
-              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-1`}>
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-7' : 'md:grid-cols-6'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
                 <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
                   <Calendar className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Riding List</span>
@@ -1174,9 +1182,14 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
                 </TabsTrigger>
               </TabsList>
             ) : isAdminOrSupervisor ? (
-              // Supervisor tabs - All tabs except Settings (REMOVED Officers tab)
+              // Supervisor tabs - All tabs except Settings
               // Dynamically calculate grid columns based on PTO tab visibility
-              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-1`}>
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
                 <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
                   <Calendar className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Riding List</span>
@@ -1207,9 +1220,14 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
                 )}
               </TabsList>
             ) : (
-              // Officer tabs - Daily, Weekly, and PTO tabs
+              // Officer tabs - Home, Daily, Weekly, and PTO tabs
               // Dynamically calculate grid columns based on PTO tab visibility
-              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-1`}>
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
                 <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
                   <Calendar className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Riding List</span>

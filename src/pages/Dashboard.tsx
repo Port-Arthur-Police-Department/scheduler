@@ -366,7 +366,7 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
       setActiveTab('home');
     } else if (hash.startsWith('/daily-schedule')) {
       setActiveTab('daily');
-    } else if (hash.startsWith('/the-book')) {
+    } else if (hash.startsWith('/weekly-schedule') || hash.startsWith('/the-book')) {
       setActiveTab('schedule');
     } else if (hash.startsWith('/vacancies')) {
       setActiveTab('vacancies');

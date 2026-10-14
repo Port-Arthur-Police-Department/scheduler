@@ -794,6 +794,7 @@ useEffect(() => {
                 <Route path="/auth" element={<Auth />} />
                 
                 {/* Tab-specific routes */}
+                <Route path="/home" element={<Dashboard isMobile={isMobile} initialTab="home" />} />
                 <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} initialTab="daily" />} />
                 <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} initialTab="schedule" />} />
                 <Route path="/vacancies" element={<Dashboard isMobile={isMobile} initialTab="vacancies" />} />

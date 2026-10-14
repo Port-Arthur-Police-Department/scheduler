@@ -1028,6 +1028,282 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
           />
         </div>
 
-        {/* Anniversary Countdown Dashboard */}
+               {/* Anniversary Countdown Dashboard */}
         {user &&
-         profile?.hire_date
+         profile?.hire_date &&
+         websiteSettings?.enable_anniversary_countdown &&
+         isAnniversaryVisibleForRole(primaryRole) &&
+         profile?.show_anniversary_countdown !== false && (
+          <div className="mb-8">
+            <AnniversaryCountdownDashboard
+              userId={user.id}
+              userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+              websiteSettings={websiteSettings}
+            />
+          </div>
+        )}
+
+        {/* Enhanced Staffing Overview - Only for Admin/Supervisor AND when enabled in settings */}
+        {isAdminOrSupervisor && !isMobile && !settingsLoading && websiteSettings && showStaffingOverview && (
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Staffing Overview - {new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshStats}
+                  disabled={statsLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${statsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+              <CardDescription>
+                Current staffing counts using the same calculation as Daily Schedule View
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-2 text-muted-foreground">Loading staffing data...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {stats?.staffingBreakdown && Object.entries(stats.staffingBreakdown).map(([shiftName, data]) => (
+                    <div key={shiftName} className="border rounded-lg p-4">
+                      <h3 className="font-semibold text-lg mb-3">{shiftName}</h3>
+
+                      {/* Supervisors */}
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-muted-foreground">Supervisors:</span>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={data.supervisors >= data.minRequired.supervisors ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {data.supervisors} / {data.minRequired.supervisors}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Officers */}
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm text-muted-foreground">Officers:</span>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={data.officers >= data.minRequired.officers ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {data.officers} / {data.minRequired.officers}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Total and Status */}
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="text-sm font-medium">Total:</span>
+                        <span className="text-sm font-bold">{data.total}</span>
+                      </div>
+
+                      {/* Status Indicator */}
+                      <div className="mt-2">
+                        {data.supervisors >= data.minRequired.supervisors &&
+                          data.officers >= data.minRequired.officers ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Fully Staffed
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                            Understaffed
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Fallback if no data */}
+                  {(!stats?.staffingBreakdown || Object.keys(stats.staffingBreakdown).length === 0) && (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No staffing data available for today</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Desktop Navigation */}
+        {!isMobile && (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+            {isAdmin ? (
+              // Admin tabs - All tabs including Settings
+              // Dynamically calculate grid columns based on PTO tab visibility
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-7' : 'md:grid-cols-6'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
+                <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Riding List</span>
+                  <span className="md:hidden">Daily</span>
+                </TabsTrigger>
+                <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">The Book</span>
+                  <span className="md:hidden">Weekly</span>
+                </TabsTrigger>
+                <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
+                  <AlertTriangle className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Vacancies</span>
+                  <span className="md:hidden">Vacancies</span>
+                </TabsTrigger>
+                <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
+                  <Users className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Staff</span>
+                  <span className="md:hidden">Staff</span>
+                </TabsTrigger>
+                {/* Conditionally show PTO tab */}
+                {showPtoTab && (
+                  <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+                    <Clock className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">PTO</span>
+                    <span className="md:hidden">PTO</span>
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="settings" className="flex-shrink-0 whitespace-nowrap">
+                  <Settings className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Settings</span>
+                  <span className="md:hidden">Settings</span>
+                </TabsTrigger>
+              </TabsList>
+            ) : isAdminOrSupervisor ? (
+              // Supervisor tabs - All tabs except Settings
+              // Dynamically calculate grid columns based on PTO tab visibility
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
+                <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Riding List</span>
+                  <span className="md:hidden">Daily</span>
+                </TabsTrigger>
+                <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">The Book</span>
+                  <span className="md:hidden">Weekly</span>
+                </TabsTrigger>
+                <TabsTrigger value="vacancies" className="flex-shrink-0 whitespace-nowrap">
+                  <AlertTriangle className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Vacancies</span>
+                  <span className="md:hidden">Vacancies</span>
+                </TabsTrigger>
+                <TabsTrigger value="staff" className="flex-shrink-0 whitespace-nowrap">
+                  <Users className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Staff</span>
+                  <span className="md:hidden">Staff</span>
+                </TabsTrigger>
+                {/* Conditionally show PTO tab */}
+                {showPtoTab && (
+                  <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+                    <Clock className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">PTO</span>
+                    <span className="md:hidden">PTO</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            ) : (
+              // Officer tabs - Home, Daily, Weekly, and PTO tabs
+              // Dynamically calculate grid columns based on PTO tab visibility
+              <TabsList className={`w-full overflow-x-auto flex md:grid ${showPtoTab ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-1`}>
+                <TabsTrigger value="home" className="flex-shrink-0 whitespace-nowrap">
+                  <Home className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Home</span>
+                  <span className="md:hidden">Home</span>
+                </TabsTrigger>
+                <TabsTrigger value="daily" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Riding List</span>
+                  <span className="md:hidden">Daily</span>
+                </TabsTrigger>
+                <TabsTrigger value="schedule" className="flex-shrink-0 whitespace-nowrap">
+                  <Calendar className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">The Book</span>
+                  <span className="md:hidden">Weekly</span>
+                </TabsTrigger>
+                {/* Conditionally show PTO tab */}
+                {showPtoTab && (
+                  <TabsTrigger value="requests" className="flex-shrink-0 whitespace-nowrap">
+                    <Clock className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">PTO</span>
+                    <span className="md:hidden">PTO</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            )}
+            <TabsContent value="home" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="daily" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="schedule" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="vacancies" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            <TabsContent value="staff" className="space-y-6">
+              {renderTabContent()}
+            </TabsContent>
+            {showPtoTab && (
+              <TabsContent value="requests" className="space-y-6">
+                {renderTabContent()}
+              </TabsContent>
+            )}
+            {isAdmin && (
+              <TabsContent value="settings" className="space-y-6">
+                {renderTabContent()}
+              </TabsContent>
+            )}
+          </Tabs>
+        )}
+
+        {/* Mobile Content */}
+        {isMobile && (
+          <div className="space-y-6">
+            {renderTabContent()}
+          </div>
+        )}
+      </main>
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && (
+        <MobileNavigation
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isAdminOrSupervisor={isAdminOrSupervisor}
+          isAdmin={isAdmin}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;

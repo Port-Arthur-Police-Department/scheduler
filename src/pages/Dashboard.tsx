@@ -28,6 +28,8 @@ import { NotificationsBell } from "@/components/NotificationsBell";
 import { ChangePassword } from "@/components/profile/ChangePassword";
 import { StaffManagementMobile } from "@/components/admin/StaffManagementMobile";
 import PoliceNotificationSubscribe from '@/components/PoliceNotificationSubscribe';
+import { AvatarUploadDialog } from "@/components/profile/AvatarUploadDialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -917,17 +919,41 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
             {/* User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
+                <Button variant="ghost" className="flex items-center gap-2 px-2">
+                  <Avatar className="h-8 w-8 border border-primary/20">
+                    <AvatarImage src={profile?.avatar_url} alt={profile?.full_name || user?.email} />
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                      {profile?.full_name ? profile.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().substring(0, 2) : "U"}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="text-right hidden sm:block">
-                    <p className="font-medium">{profile?.full_name || user?.email}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{primaryRole}</p>
+                    <p className="font-medium text-sm">{profile?.full_name || user?.email}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{primaryRole}</p>
                   </div>
-                  <UserIcon className="h-4 w-4 md:h-5 md:w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+
+                {/* Profile Picture / Avatar Option */}
+                {user && (
+                  <AvatarUploadDialog
+                    userId={user.id}
+                    userEmail={user.email!}
+                    currentAvatarUrl={profile?.avatar_url}
+                    currentFullName={profile?.full_name}
+                    onSuccess={() => fetchProfile(user.id)}
+                  >
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <UserIcon className="h-4 w-4 mr-2" />
+                      Change Profile Picture
+                    </DropdownMenuItem>
+                  </AvatarUploadDialog>
+                )}
 
                 {/* Change Password - Using the fixed component */}
                 {user && (

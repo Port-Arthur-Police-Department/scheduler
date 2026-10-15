@@ -1,9 +1,9 @@
 // src/utils/weekUtils.ts
 
 /**
- * Get the start of the week (Sunday) for a given date
+ * Get the start of the week (Monday) for a given date
  */
-export const getStartOfWeek = (date: Date = new Date(), weekStartsOn: number = 0): Date => {
+export const getStartOfWeek = (date: Date = new Date(), weekStartsOn: number = 1): Date => {
   const d = new Date(date);
   const day = d.getDay();
   const diff = (day < weekStartsOn ? 7 : 0) + day - weekStartsOn;

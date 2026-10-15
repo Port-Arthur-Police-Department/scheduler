@@ -122,7 +122,7 @@ export const AvatarUploadDialog = ({
             Profile Picture
           </DialogTitle>
           <DialogDescription>
-            Upload a photo or enter an image URL to use as your profile avatar.
+            Upload a photo or enter an image URL to use as your profile avatar. Recommended: Square image (400x400px or higher).
           </DialogDescription>
         </DialogHeader>
 
@@ -181,7 +181,7 @@ export const AvatarUploadDialog = ({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Paste a direct link to an image or upload one from your device.
+              Paste a direct link to an image or upload one from your device. Recommended: Square aspect ratio (400x400px or higher).
             </p>
           </div>
 

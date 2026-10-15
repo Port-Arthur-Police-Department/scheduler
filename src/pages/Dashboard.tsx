@@ -791,6 +791,9 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
       case "home":
         return (
           <div className="space-y-6">
+            <UpcomingEventsDashboard
+              userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
+            />
             <WeeklyLesson lesson={weeklyLesson} isLoading={weeklyLessonLoading} />
             <LessonComments lessonId={weeklyLesson?.id} currentOfficerId={user?.id} isAdminOrSupervisor={isAdminOrSupervisor} />
           </div>
@@ -1045,13 +1048,6 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
         <div className="mb-8">
           <h2 className="text-2xl md:text-3xl font-bold mb-2">Welcome back, {profile?.full_name?.split(" ")[0] || "Officer"}</h2>
           <p className="text-muted-foreground">Manage your schedule and view upcoming shifts</p>
-        </div>
-
-        {/* Upcoming Events Dashboard */}
-        <div className="mb-8">
-          <UpcomingEventsDashboard
-            userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
-          />
         </div>
 
                {/* Anniversary Countdown Dashboard */}

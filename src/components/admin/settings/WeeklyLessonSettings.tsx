@@ -127,11 +127,54 @@ export const WeeklyLessonSettings = () => {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this weekly lesson?')) return;
     try {
+      const lessonToDelete = lessons.find((l) => l.id === id);
+      if (lessonToDelete?.photo_url) {
+        const urlParts = lessonToDelete.photo_url.split('/lesson-photos/');
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1];
+          await supabase.storage.from('lesson-photos').remove([filePath]);
+        }
+      }
+
       await deleteLesson.mutateAsync(id);
-      toast.success('Weekly lesson deleted');
+      toast.success('Weekly lesson and associated photo deleted');
     } catch (error) {
       console.error('Error deleting lesson:', error);
       toast.error('Failed to delete lesson');
+    }
+  };
+
+  const handleCleanupArchivedPhotos = async () => {
+    if (!confirm('This will remove photo attachments from all archived (inactive) weekly lessons to free up storage. The lesson text will be preserved. Proceed?')) return;
+    try {
+      const archivedLessons = lessons.filter((l) => !l.is_active && l.photo_url);
+      if (archivedLessons.length === 0) {
+        toast.info('No photos found on archived lessons to clean up.');
+        return;
+      }
+
+      let cleanedCount = 0;
+      for (const lesson of archivedLessons) {
+        if (lesson.photo_url) {
+          const urlParts = lesson.photo_url.split('/lesson-photos/');
+          if (urlParts.length > 1) {
+            const filePath = urlParts[1];
+            await supabase.storage.from('lesson-photos').remove([filePath]);
+          }
+          // Update lesson photo_url to null in DB
+          await supabase
+            .from('weekly_lessons')
+            .update({ photo_url: null })
+            .eq('id', lesson.id);
+          cleanedCount++;
+        }
+      }
+
+      toast.success(`Successfully cleaned up photos from ${cleanedCount} archived lesson(s).`);
+      window.location.reload();
+    } catch (error) {
+      console.error('Error cleaning up archived photos:', error);
+      toast.error('Failed to clean up archived photos');
     }
   };
 
@@ -158,10 +201,15 @@ export const WeeklyLessonSettings = () => {
             Create, edit, and manage weekly lessons, scriptures, and leadership thought posts for officers.
           </CardDescription>
         </div>
-        <Button onClick={handleOpenCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Weekly Lesson
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleCleanupArchivedPhotos} title="Remove storage files from archived lessons to save space">
+            Cleanup Archived Photos
+          </Button>
+          <Button onClick={handleOpenCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Weekly Lesson
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent>

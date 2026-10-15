@@ -17,14 +17,17 @@ interface MobileNavigationProps {
   onTabChange: (tab: string) => void;
   isAdminOrSupervisor: boolean;
   isAdmin: boolean;
+  isChaplainOnly: boolean;
 }
 
 const MobileNavigation = ({
   activeTab,
   onTabChange,
   isAdminOrSupervisor,
-  isAdmin
+  isAdmin,
+  isChaplainOnly
 }: MobileNavigationProps) => {
+
   const navigate = useNavigate();
 
   // Fetch website settings to check if PTO tab should be shown

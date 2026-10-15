@@ -17,6 +17,7 @@ export interface WeeklyLesson {
     full_name?: string;
     badge_number?: string;
     rank?: string;
+    avatar_url?: string;
   };
 }
 
@@ -30,6 +31,7 @@ export interface LessonComment {
     full_name?: string;
     badge_number?: string;
     rank?: string;
+    avatar_url?: string;
   };
 }
 
@@ -44,7 +46,7 @@ export const useWeeklyLesson = (weekStartDate?: string) => {
         .from('weekly_lessons')
         .select(`
           *,
-          author:created_by(full_name, badge_number, rank)
+          author:created_by(full_name, badge_number, rank, avatar_url)
         `)
         .eq('week_start_date', targetDate)
         .maybeSingle();
@@ -85,7 +87,7 @@ export const useWeeklyLessonsList = () => {
         .from('weekly_lessons')
         .select(`
           *,
-          author:created_by(full_name, badge_number, rank)
+          author:created_by(full_name, badge_number, rank, avatar_url)
         `)
         .order('week_start_date', { ascending: false });
 
@@ -104,7 +106,7 @@ export const useLessonComments = (lessonId?: string) => {
         .from('lesson_comments')
         .select(`
           *,
-          officer:officer_id(full_name, badge_number, rank)
+          officer:officer_id(full_name, badge_number, rank, avatar_url)
         `)
         .eq('lesson_id', lessonId)
         .order('created_at', { ascending: true });

@@ -15,7 +15,7 @@ export const getStartOfWeek = (date: Date = new Date(), weekStartsOn: number = 1
 /**
  * Get the end of the week for a given date
  */
-export const getEndOfWeek = (date: Date = new Date(), weekStartsOn: number = 0): Date => {
+export const getEndOfWeek = (date: Date = new Date(), weekStartsOn: number = 1): Date => {
   const start = getStartOfWeek(date, weekStartsOn);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);

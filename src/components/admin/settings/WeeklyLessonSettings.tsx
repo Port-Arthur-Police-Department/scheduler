@@ -303,7 +303,7 @@ export const WeeklyLessonSettings = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="weekStart">Week Start Date (Sunday)</Label>
+                  <Label htmlFor="weekStart">Week Start Date (Monday)</Label>
                   <Input
                     id="weekStart"
                     type="date"

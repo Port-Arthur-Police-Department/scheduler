@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send, Trash2, User as UserIcon } from "lucide-react";
+import { MessageSquare, Send, Trash2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLessonComments, useWeeklyLessonMutations } from "@/hooks/useWeeklyLesson";
 import { toast } from "sonner";
 
@@ -21,6 +22,16 @@ export const LessonComments = ({
   const [newComment, setNewComment] = useState("");
   const { data: comments = [], isLoading } = useLessonComments(lessonId);
   const { addComment, deleteComment } = useWeeklyLessonMutations();
+
+  const getInitials = (name?: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,9 +131,12 @@ export const LessonComments = ({
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <div className="bg-primary/10 p-1.5 rounded-full">
-                        <UserIcon className="h-3 w-3 text-primary" />
-                      </div>
+                      <Avatar className="h-7 w-7 border border-primary/20">
+                        <AvatarImage src={officer?.avatar_url} alt={authorName} />
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                          {getInitials(authorName)}
+                        </AvatarFallback>
+                      </Avatar>
                       <span className="font-semibold text-foreground">
                         {authorName}
                       </span>

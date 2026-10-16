@@ -11,6 +11,7 @@ import { OfficerProfileDialog } from "./OfficerProfileDialog";
 import { OfficerScheduleManager } from "./OfficerScheduleManager";
 import { BulkPTOAssignmentDialog } from "./BulkPTOAssignmentDialog";
 import { PartnershipManagement } from "./PartnershipManagement";
+import { ShiftBiddingAdmin } from "./ShiftBiddingAdmin";
 import { OfficersManagement } from "@/components/schedule/OfficersManagement";
 import { format } from "date-fns";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
@@ -215,10 +216,11 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="px-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="officers">Officers</TabsTrigger>
             <TabsTrigger value="schedules">Schedules</TabsTrigger>
             <TabsTrigger value="partnerships">Partnerships</TabsTrigger>
+            <TabsTrigger value="bidding">Shift Bidding</TabsTrigger>
           </TabsList>
         </div>
 
@@ -415,6 +417,11 @@ export const StaffManagement = ({ userId, isAdminOrSupervisor }: StaffManagement
           {/* Partnerships Tab Content */}
           <TabsContent value="partnerships" className="mt-0">
             <PartnershipManagement />
+          </TabsContent>
+
+          {/* Shift Bidding Tab Content */}
+          <TabsContent value="bidding" className="mt-0">
+            <ShiftBiddingAdmin />
           </TabsContent>
         </CardContent>
       </Tabs>

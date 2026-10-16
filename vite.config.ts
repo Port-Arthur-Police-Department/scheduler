@@ -24,8 +24,7 @@ if (normalizedBasePath.match(/^[A-Z]:/i)) {
   if (idx !== -1) {
     normalizedBasePath = normalizedBasePath.substring(idx);
   } else {
-    // Root deploy case
-    normalizedBasePath = '/';
+    normalizedBasePath = '/scheduler/';
   }
 }
 console.log('  VITE_BASE_PATH (normalized):', normalizedBasePath);
@@ -41,7 +40,6 @@ if (isProduction) {
     basePath = '/staging/';
     console.log('✅ Vite Config: Using /staging/ (staging branch)');
   } else {
-    // Main branch: project site is served under /scheduler/
     basePath = '/scheduler/';
     console.log('✅ Vite Config: Using /scheduler/ (main branch)');
   }
@@ -61,39 +59,79 @@ export default defineConfig({
       includeAssets: ['icons/*.png', 'vite.svg'],
 
       manifest: {
-  name: "Port Arthur PD Scheduler",
-  short_name: "PAPD Scheduler",
-  description: "Officer scheduling system for Port Arthur Police Department",
-  theme_color: "#1e40af",
-  background_color: "#0f172a",
-  display: "standalone",
-  orientation: "portrait-primary",
-  scope: "./",
-  start_url: "./",
-  id: "./",
-  categories: ["productivity", "business"],
+        name: "Port Arthur PD Scheduler",
+        short_name: "PAPD Scheduler",
+        description: "Officer scheduling system for Port Arthur Police Department",
+        theme_color: "#1e40af",
+        background_color: "#0f172a",
+        display: "standalone",
+        orientation: "portrait-primary",
+        scope: "./",
+        start_url: "./",
+        id: "./",
+        categories: ["productivity", "business"],
 
-  icons: [
-    { src: "./icons/icon-72x72.png",   sizes: "72x72",   type: "image/png", purpose: "any" },
-    { src: "./icons/icon-96x96.png",   sizes: "96x96",   type: "image/png", purpose: "any" },
-    { src: "./icons/icon-128x128.png", sizes: "128x128", type: "image/png", purpose: "any" },
-    { src: "./icons/icon-144x144.png", sizes: "144x144", type: "image/png", purpose: "any" },
-    { src: "./icons/icon-152x152.png", sizes: "152x152", type: "image/png", purpose: "any" },
-    { src: "./icons/icon-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "./icons/icon-384x384.png", sizes: "384x384", type: "image/png", purpose: "any" },
-    { src: "./icons/icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" }
-  ],
+        icons: [
+          {
+            src: "./icons/icon-72x72.png",
+            sizes: "72x72",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-96x96.png",
+            sizes: "96x96",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-128x128.png",
+            sizes: "128x128",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-144x144.png",
+            sizes: "144x144",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-152x152.png",
+            sizes: "152x152",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-384x384.png",
+            sizes: "384x384",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "./icons/icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any"
+          }
+        ],
 
-  shortcuts: [
-    {
-      name: "Daily Schedule",
-      short_name: "Schedule",
-      description: "View today's riding list",
-      url: "./#/daily-schedule",
-      icons: [{ src: "./icons/icon-96x96.png", sizes: "96x96", purpose: "any" }]
-    }
-  ]
-},
+        shortcuts: [
+          {
+            name: "Daily Schedule",
+            short_name: "Schedule",
+            description: "View today's riding list",
+            url: "./#/daily-schedule",
+            icons: [{ src: "./icons/icon-96x96.png", sizes: "96x96" }]
+          }
+        ]
+      },
 
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf,json}'],

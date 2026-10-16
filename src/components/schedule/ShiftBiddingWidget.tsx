@@ -112,8 +112,16 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
             {isMyTurn ? "YOUR TURN TO PICK!" : isCompleted ? "SELECTION CONFIRMED" : "WAITING IN QUEUE"}
           </Badge>
         </div>
-        <CardDescription>
-          Seniority-based shift selection for Division {activeRound.division}. Officer Rank: {officerRank || "Officer"}
+        <CardDescription className="space-y-1">
+          <div>
+            Seniority-based shift selection for Division {activeRound.division}. Officer Rank: {officerRank || "Officer"}
+          </div>
+          {activeRound.start_date && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary pt-0.5">
+              <Calendar className="h-3.5 w-3.5" />
+              Effective Start Date: {activeRound.start_date} ({activeRound.year})
+            </div>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -131,6 +139,13 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
               <Clock className="h-4 w-4 animate-spin" />
               It is your turn in the seniority queue! Make your selection below.
             </div>
+
+            {activeRound.start_date && (
+              <div className="p-2.5 bg-primary/10 rounded-md text-xs text-primary font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span>Your selected shift will be applied to your official schedule starting on <strong>{activeRound.start_date}</strong>.</span>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Shift Type</label>

@@ -324,13 +324,28 @@ export const useShiftBiddingMutations = () => {
           .eq("officer_id", queueItem.officer_id)
           .or(`end_date.is.null,end_date.gte.${startDateStr}`);
 
+        // Check if officer has a default assignment set in their profile for this start date
+        const { data: defaultAssignments } = await supabase
+          .from("officer_default_assignments")
+          .select("*")
+          .eq("officer_id", queueItem.officer_id)
+          .lte("start_date", startDateStr)
+          .or(`end_date.is.null,end_date.gte.${startDateStr}`)
+          .order("start_date", { ascending: false })
+          .limit(1);
+
+        const activeDefaultAssignment = defaultAssignments && defaultAssignments.length > 0 ? defaultAssignments[0] : null;
+        const defaultPositionName = activeDefaultAssignment ? activeDefaultAssignment.position_name : null;
+        const defaultUnitNumber = activeDefaultAssignment ? activeDefaultAssignment.unit_number : null;
+
         const scheduleRecords = allowedPos.recurring_days.map((dayOfWeek: number) => ({
           officer_id: queueItem.officer_id,
           shift_type_id: shiftTypeId,
           day_of_week: dayOfWeek,
           start_date: startDateStr,
           end_date: endDateStr,
-          position_name: positionName,
+          position_name: defaultPositionName, // Blank by default unless a default assignment has been set in their profile
+          unit_number: defaultUnitNumber,
           week_offset: null, // Every week
         }));
 

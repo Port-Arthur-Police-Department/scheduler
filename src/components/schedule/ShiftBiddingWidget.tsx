@@ -15,6 +15,8 @@ interface ShiftBiddingWidgetProps {
   officerDivision?: string | null;
 }
 
+const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftBiddingWidgetProps) => {
   const { data: rounds = [], isLoading: roundsLoading } = useShiftBiddingRounds();
   const activeRound = rounds.find(r => r.division === officerDivision && r.status === 'active');
@@ -38,6 +40,18 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
   const { data: allowedPositions = [] } = useShiftTypeAllowedPositions(selectedShiftTypeId);
 
   const myQueueItem = queue.find(q => q.officer_id === currentOfficerId);
+  const officerRank = myQueueItem?.profiles?.rank || "";
+  const officerRankLower = officerRank.toLowerCase();
+
+  // Filter allowed positions based on officer rank restriction
+  const filteredAllowedPositions = allowedPositions.filter(ap => {
+    if (!ap.allowed_rank || ap.allowed_rank === 'Any' || ap.allowed_rank === '') return true;
+    const requiredRankLower = ap.allowed_rank.toLowerCase();
+    return officerRankLower.includes(requiredRankLower);
+  });
+
+  const selectedPositionObj = allowedPositions.find(p => p.position_name === selectedPosition);
+
   const isMyTurn = myQueueItem?.status === 'active';
   const isCompleted = myQueueItem?.status === 'completed';
 
@@ -111,7 +125,7 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
           </Badge>
         </div>
         <CardDescription>
-          Seniority-based shift selection for Division {activeRound.division}.
+          Seniority-based shift selection for Division {activeRound.division}. Officer Rank: {officerRank || "Officer"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -160,22 +174,27 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
                   onValueChange={setSelectedPosition}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose allowed position..." />
+                    <SelectValue placeholder="Choose allowed position for your rank..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {allowedPositions.length === 0 ? (
+                    {filteredAllowedPositions.length === 0 ? (
                       <div className="p-2 text-xs text-muted-foreground text-center">
-                        No positions configured for this shift yet.
+                        No positions allowed for your rank ({officerRank || "Officer"}) in this shift.
                       </div>
                     ) : (
-                      allowedPositions.map(ap => (
+                      filteredAllowedPositions.map(ap => (
                         <SelectItem key={ap.id} value={ap.position_name}>
-                          {ap.position_name}
+                          {ap.position_name} {ap.allowed_rank && ap.allowed_rank !== 'Any' ? `(Rank: ${ap.allowed_rank})` : ''}
                         </SelectItem>
                       ))
                     )}
                   </SelectContent>
                 </Select>
+                {selectedPositionObj && selectedPositionObj.recurring_days && selectedPositionObj.recurring_days.length > 0 && (
+                  <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border mt-1">
+                    📅 Recurring Schedule Days: {selectedPositionObj.recurring_days.map(d => dayNames[d]).join(", ")} (Will automatically apply to your annual schedule upon confirmation)
+                  </p>
+                )}
               </div>
             )}
 

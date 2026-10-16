@@ -48,6 +48,8 @@ export interface ShiftTypeAllowedPosition {
   id: string;
   shift_type_id: string;
   position_name: string;
+  allowed_rank: string | null;
+  recurring_days: number[] | null;
   created_at: string;
 }
 
@@ -236,8 +238,25 @@ export const useShiftBiddingMutations = () => {
       nextTurnIndex: number;
       isLastTurn?: boolean;
     }) => {
-      // 1. Update queue item
-      const { error: queueError } = await supabase
+      // 1. Get queue item & round details (officer_id, round year)
+      const { data: queueItem, error: queueItemError } = await supabase
+        .from("shift_bidding_queue")
+        .select("officer_id, round_id")
+        .eq("id", queueItemId)
+        .single();
+
+      if (queueItemError || !queueItem) throw new Error("Queue item not found");
+
+      const { data: round, error: roundError } = await supabase
+        .from("shift_bidding_rounds")
+        .select("year")
+        .eq("id", roundId)
+        .single();
+
+      if (roundError || !round) throw new Error("Bidding round not found");
+
+      // 2. Update queue item with selection
+      const { error: updateQueueError } = await supabase
         .from("shift_bidding_queue")
         .update({
           selected_shift_type_id: shiftTypeId,
@@ -247,9 +266,43 @@ export const useShiftBiddingMutations = () => {
         })
         .eq("id", queueItemId);
 
-      if (queueError) throw queueError;
+      if (updateQueueError) throw updateQueueError;
 
-      // 2. Check if there is a next officer in queue
+      // 3. Fetch allowed position configuration for recurring days & rank
+      const { data: allowedPos } = await supabase
+        .from("shift_type_allowed_positions")
+        .select("*")
+        .eq("shift_type_id", shiftTypeId)
+        .eq("position_name", positionName)
+        .single();
+
+      // 4. If recurring days are configured, automatically populate recurring_schedules for the year
+      if (allowedPos && allowedPos.recurring_days && allowedPos.recurring_days.length > 0) {
+        const year = round.year;
+        const startDateStr = `${year}-01-01`;
+        const endDateStr = `${year}-12-31`;
+
+        const scheduleRecords = allowedPos.recurring_days.map((dayOfWeek: number) => ({
+          officer_id: queueItem.officer_id,
+          shift_type_id: shiftTypeId,
+          day_of_week: dayOfWeek,
+          start_date: startDateStr,
+          end_date: endDateStr,
+          position_name: positionName,
+          week_offset: null, // Every week
+        }));
+
+        const { error: scheduleInsertError } = await supabase
+          .from("recurring_schedules")
+          .insert(scheduleRecords);
+
+        if (scheduleInsertError) {
+          console.error("Error inserting recurring schedules from shift bidding:", scheduleInsertError);
+          // Non-blocking for selection, but log error
+        }
+      }
+
+      // 5. Advance queue to next officer or complete round
       const { data: nextOfficer } = await supabase
         .from("shift_bidding_queue")
         .select("id")
@@ -258,19 +311,16 @@ export const useShiftBiddingMutations = () => {
         .single();
 
       if (nextOfficer) {
-        // Set next officer to active
         await supabase
           .from("shift_bidding_queue")
           .update({ status: 'active' })
           .eq("id", nextOfficer.id);
 
-        // Update round current turn index
         await supabase
           .from("shift_bidding_rounds")
           .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
           .eq("id", roundId);
       } else {
-        // Round completed!
         await supabase
           .from("shift_bidding_rounds")
           .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -280,7 +330,8 @@ export const useShiftBiddingMutations = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
-      toast.success("Shift selection confirmed successfully!");
+      queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
+      toast.success("Shift selection confirmed and official schedule updated successfully!");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to submit shift selection");
@@ -288,7 +339,13 @@ export const useShiftBiddingMutations = () => {
   });
 
   const saveAllowedPositions = useMutation({
-    mutationFn: async ({ shiftTypeId, positions }: { shiftTypeId: string; positions: string[] }) => {
+    mutationFn: async ({
+      shiftTypeId,
+      positions,
+    }: {
+      shiftTypeId: string;
+      positions: Array<{ position_name: string; allowed_rank?: string; recurring_days?: number[] }>;
+    }) => {
       // Delete existing allowed positions for this shift type
       await supabase
         .from("shift_type_allowed_positions")
@@ -298,7 +355,9 @@ export const useShiftBiddingMutations = () => {
       if (positions.length > 0) {
         const records = positions.map((pos) => ({
           shift_type_id: shiftTypeId,
-          position_name: pos.trim(),
+          position_name: pos.position_name.trim(),
+          allowed_rank: pos.allowed_rank || 'Any',
+          recurring_days: pos.recurring_days || [],
         }));
 
         const { error } = await supabase
@@ -311,7 +370,7 @@ export const useShiftBiddingMutations = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_type_allowed_positions"] });
       queryClient.invalidateQueries({ queryKey: ["all_shift_type_allowed_positions"] });
-      toast.success("Allowed positions updated successfully");
+      toast.success("Allowed positions and schedule rules updated successfully");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update allowed positions");

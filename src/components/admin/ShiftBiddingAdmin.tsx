@@ -1,6 +1,6 @@
 // src/components/admin/ShiftBiddingAdmin.tsx
 import { useState } from "react";
-import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useAllAllowedPositions } from "@/hooks/useShiftBidding";
+import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useAllAllowedPositions, ShiftTypeAllowedPosition } from "@/hooks/useShiftBidding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,10 +9,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Settings, UserCheck, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+interface ConfiguredPosition {
+  position_name: string;
+  allowed_rank: string;
+  recurring_days: number[];
+}
+
+const daysOfWeek = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
 
 export const ShiftBiddingAdmin = () => {
   const { data: rounds = [], isLoading: roundsLoading } = useShiftBiddingRounds();
@@ -28,7 +45,9 @@ export const ShiftBiddingAdmin = () => {
   // Shift type position config state
   const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<string>("");
   const [positionInput, setPositionInput] = useState<string>("");
-  const [configuredPositions, setConfiguredPositions] = useState<string[]>([]);
+  const [selectedRank, setSelectedRank] = useState<string>("Any");
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [configuredPositions, setConfiguredPositions] = useState<ConfiguredPosition[]>([]);
 
   // Fetch shift types
   const { data: shiftTypes = [] } = useQuery({
@@ -67,23 +86,42 @@ export const ShiftBiddingAdmin = () => {
     setSelectedShiftTypeId(shiftId);
     const existing = allAllowedPositions
       .filter(p => p.shift_type_id === shiftId)
-      .map(p => p.position_name);
+      .map(p => ({
+        position_name: p.position_name,
+        allowed_rank: p.allowed_rank || "Any",
+        recurring_days: p.recurring_days || [],
+      }));
     setConfiguredPositions(existing);
+  };
+
+  const handleToggleDay = (dayVal: number) => {
+    setSelectedDays(prev =>
+      prev.includes(dayVal) ? prev.filter(d => d !== dayVal) : [...prev, dayVal].sort()
+    );
   };
 
   const handleAddPosition = () => {
     if (!positionInput.trim()) return;
-    if (configuredPositions.includes(positionInput.trim())) {
+    if (configuredPositions.some(p => p.position_name.toLowerCase() === positionInput.trim().toLowerCase())) {
       toast.error("Position already added");
       return;
     }
-    const updated = [...configuredPositions, positionInput.trim()];
+    const updated = [
+      ...configuredPositions,
+      {
+        position_name: positionInput.trim(),
+        allowed_rank: selectedRank,
+        recurring_days: selectedDays,
+      }
+    ];
     setConfiguredPositions(updated);
     setPositionInput("");
+    setSelectedRank("Any");
+    setSelectedDays([]);
   };
 
-  const handleRemovePosition = (pos: string) => {
-    const updated = configuredPositions.filter(p => p !== pos);
+  const handleRemovePosition = (posName: string) => {
+    const updated = configuredPositions.filter(p => p.position_name !== posName);
     setConfiguredPositions(updated);
   };
 
@@ -92,7 +130,16 @@ export const ShiftBiddingAdmin = () => {
       toast.error("Please select a shift type first");
       return;
     }
-    saveAllowedPositions.mutate({ shiftTypeId: selectedShiftTypeId, positions: configuredPositions });
+    saveAllowedPositions.mutate({
+      shiftTypeId: selectedShiftTypeId,
+      positions: configuredPositions
+    });
+  };
+
+  const formatDaysSummary = (days: number[]) => {
+    if (!days || days.length === 0) return "No recurring schedule";
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return days.map(d => names[d]).join(", ");
   };
 
   return (
@@ -104,7 +151,7 @@ export const ShiftBiddingAdmin = () => {
             Annual Seniority Shift Bidding Management
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage division-scoped annual seniority shift bidding rounds, generate queue order, and configure allowed positions per shift.
+            Manage division-scoped annual seniority shift bidding rounds, generate queue order, and configure allowed positions per shift with rank restrictions and recurring schedules.
           </p>
         </div>
 
@@ -323,7 +370,7 @@ export const ShiftBiddingAdmin = () => {
             <CardHeader>
               <CardTitle className="text-lg">Shift Type Allowed Positions Configuration</CardTitle>
               <CardDescription>
-                Configure which positions are eligible to be picked for each shift type during shift bidding.
+                Configure allowed positions per shift, set required rank restrictions, and define recurring work schedule days.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -350,58 +397,110 @@ export const ShiftBiddingAdmin = () => {
 
                   {selectedShiftTypeId && (
                     <div className="space-y-4 pt-4 border-t">
-                      <div className="space-y-2">
-                        <Label htmlFor="position-name">Add Allowed Position Name</Label>
-                        <div className="flex gap-2">
+                      <div className="space-y-3 p-4 border rounded-lg bg-card/50">
+                        <h4 className="font-medium text-sm">Add New Position Rule</h4>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="position-name">Position Name</Label>
                           <Input
                             id="position-name"
-                            placeholder="e.g. Patrol Officer, Supervisor, Desk, Traffic"
+                            placeholder="e.g. Day - Shift Lieutenant, Patrol Officer"
                             value={positionInput}
                             onChange={(e) => setPositionInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPosition(); } }}
                           />
-                          <Button type="button" onClick={handleAddPosition}>
-                            <Plus className="h-4 w-4 mr-1" /> Add
-                          </Button>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="required-rank">Required Rank Restriction</Label>
+                          <Select value={selectedRank} onValueChange={setSelectedRank}>
+                            <SelectTrigger id="required-rank">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Any">Any Rank (Open to all)</SelectItem>
+                              <SelectItem value="Lieutenant">Lieutenant / LT</SelectItem>
+                              <SelectItem value="Sergeant">Sergeant / SGT</SelectItem>
+                              <SelectItem value="Officer">Police Officer</SelectItem>
+                              <SelectItem value="Dispatcher">Dispatcher</SelectItem>
+                              <SelectItem value="Coordinator for Support Services">Coordinator for Support Services</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Recurring Schedule Days</Label>
+                          <div className="grid grid-cols-4 gap-2 pt-1">
+                            {daysOfWeek.map((day) => (
+                              <div key={day.value} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`day-chk-${day.value}`}
+                                  checked={selectedDays.includes(day.value)}
+                                  onCheckedChange={() => handleToggleDay(day.value)}
+                                />
+                                <Label htmlFor={`day-chk-${day.value}`} className="text-xs cursor-pointer font-normal">
+                                  {day.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Selecting days here will automatically populate the officer's recurring schedule upon selection.
+                          </p>
+                        </div>
+
+                        <Button type="button" onClick={handleAddPosition} className="w-full mt-2">
+                          <Plus className="h-4 w-4 mr-1" /> Add Position Rule
+                        </Button>
                       </div>
 
                       <div className="space-y-2">
                         <Label>Configured Positions ({configuredPositions.length})</Label>
-                        <div className="flex flex-wrap gap-2 pt-1">
+                        <div className="space-y-2 pt-1">
                           {configuredPositions.length === 0 ? (
                             <p className="text-sm text-muted-foreground italic">No positions configured for this shift type yet.</p>
                           ) : (
                             configuredPositions.map((pos) => (
-                              <Badge key={pos} variant="secondary" className="flex items-center gap-1.5 py-1.5 px-3">
-                                {pos}
-                                <button
+                              <div key={pos.position_name} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm">{pos.position_name}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      Rank: {pos.allowed_rank}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Recurring Days: {formatDaysSummary(pos.recurring_days)}
+                                  </p>
+                                </div>
+                                <Button
                                   type="button"
-                                  onClick={() => handleRemovePosition(pos)}
-                                  className="text-muted-foreground hover:text-destructive ml-1"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleRemovePosition(pos.position_name)}
+                                  className="text-muted-foreground hover:text-destructive"
                                 >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </Badge>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             ))
                           )}
                         </div>
                       </div>
 
                       <Button onClick={handleSavePositions} className="w-full mt-4" disabled={saveAllowedPositions.isPending}>
-                        Save Allowed Positions
+                        Save All Position Rules
                       </Button>
                     </div>
                   )}
                 </div>
 
                 <div className="bg-muted/30 p-5 rounded-lg border space-y-3">
-                  <h3 className="font-semibold text-sm">How Shift Positions Work</h3>
+                  <h3 className="font-semibold text-sm">How Shift Positions & Rank Restrictions Work</h3>
                   <p className="text-sm text-muted-foreground">
-                    During annual seniority shift bidding, officers pick both a shift type (e.g., Day Shift) and an allowed position (e.g., Patrol Officer or Beat 1) configured here by administrators.
+                    Administrators can specify supervisor and officer positions tied to specific ranks (e.g. only a Lieutenant can choose a Lieutenant position).
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Make sure to assign allowed positions for each active shift type before officers begin their bidding turns.
+                    Configuring recurring schedule days (e.g. Tuesday, Wednesday, Thursday, Friday) ensures that when an officer locks their shift bid, their official recurring work schedule for the year is populated automatically.
                   </p>
                 </div>
               </div>

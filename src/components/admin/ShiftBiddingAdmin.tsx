@@ -47,6 +47,11 @@ export const ShiftBiddingAdmin = () => {
   // New round form state
   const [newYear, setNewYear] = useState<number>(new Date().getFullYear() + 1);
   const [newDivision, setNewDivision] = useState<'FOD' | 'CID' | 'Admin'>('FOD');
+  const [newStartDate, setNewStartDate] = useState<string>(`${newYear}-01-01`);
+
+  useEffect(() => {
+    setNewStartDate(`${newYear}-01-01`);
+  }, [newYear]);
 
   // Shift type position config state
   const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<string>("");
@@ -109,7 +114,7 @@ export const ShiftBiddingAdmin = () => {
 
   const handleCreateRound = (e: React.FormEvent) => {
     e.preventDefault();
-    createRound.mutate({ year: Number(newYear), division: newDivision }, {
+    createRound.mutate({ year: Number(newYear), division: newDivision, startDate: newStartDate }, {
       onSuccess: (data) => {
         if (data) setSelectedRoundId(data.id);
       }
@@ -317,6 +322,17 @@ export const ShiftBiddingAdmin = () => {
                       type="number"
                       value={newYear}
                       onChange={(e) => setNewYear(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="start_date">Schedule Start Date</Label>
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={newStartDate}
+                      onChange={(e) => setNewStartDate(e.target.value)}
                       required
                     />
                   </div>

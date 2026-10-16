@@ -42,6 +42,7 @@ import { User as UserIcon, Lock } from "lucide-react";
 import { setupDailyCheck } from '@/utils/scheduledTasks';
 import { UpcomingEventsDashboard } from "@/components/dashboard/UpcomingEventsDashboard";
 import { AnniversaryCountdownDashboard } from "@/components/dashboard/AnniversaryCountdownDashboard";
+import { ShiftBiddingWidget } from "@/components/schedule/ShiftBiddingWidget";
 
 // Import the ResponsiveTheBook component instead of TheBook
 import { ResponsiveTheBook } from "@/components/schedule/the-book";
@@ -841,6 +842,10 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
       case "home":
         return (
           <div className="space-y-6">
+            <ShiftBiddingWidget
+              currentOfficerId={user?.id}
+              officerDivision={profile?.division}
+            />
             <UpcomingEventsDashboard
               userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
             />

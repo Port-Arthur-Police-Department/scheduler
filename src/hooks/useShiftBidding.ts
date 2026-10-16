@@ -10,6 +10,7 @@ export interface ShiftBiddingRound {
   division: 'FOD' | 'CID' | 'Admin';
   status: 'setup' | 'active' | 'paused' | 'completed';
   current_turn_index: number;
+  start_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,10 +126,16 @@ export const useShiftBiddingMutations = () => {
   const queryClient = useQueryClient();
 
   const createRound = useMutation({
-    mutationFn: async ({ year, division }: { year: number; division: 'FOD' | 'CID' | 'Admin' }) => {
+    mutationFn: async ({ year, division, startDate }: { year: number; division: 'FOD' | 'CID' | 'Admin'; startDate?: string }) => {
       const { data, error } = await supabase
         .from("shift_bidding_rounds")
-        .insert({ year, division, status: 'setup', current_turn_index: 0 })
+        .insert({
+          year,
+          division,
+          status: 'setup',
+          current_turn_index: 0,
+          start_date: startDate || `${year}-01-01`
+        })
         .select()
         .single();
 
@@ -249,7 +256,7 @@ export const useShiftBiddingMutations = () => {
 
       const { data: round, error: roundError } = await supabase
         .from("shift_bidding_rounds")
-        .select("year")
+        .select("year, start_date")
         .eq("id", roundId)
         .single();
 
@@ -276,11 +283,22 @@ export const useShiftBiddingMutations = () => {
         .eq("position_name", positionName)
         .single();
 
-      // 4. If recurring days are configured, automatically populate recurring_schedules for the year
+      // 4. If recurring days are configured, end existing overlapping schedules and populate new recurring schedules
       if (allowedPos && allowedPos.recurring_days && allowedPos.recurring_days.length > 0) {
         const year = round.year;
-        const startDateStr = `${year}-01-01`;
+        const startDateStr = round.start_date || `${year}-01-01`;
         const endDateStr = `${year}-12-31`;
+
+        // End any other recurring schedules the user has so they don't have overlapping schedules
+        const prevDate = new Date(startDateStr);
+        prevDate.setDate(prevDate.getDate() - 1);
+        const dayBeforeStart = prevDate.toISOString().split('T')[0];
+
+        await supabase
+          .from("recurring_schedules")
+          .update({ end_date: dayBeforeStart })
+          .eq("officer_id", queueItem.officer_id)
+          .or(`end_date.is.null,end_date.gte.${startDateStr}`);
 
         const scheduleRecords = allowedPos.recurring_days.map((dayOfWeek: number) => ({
           officer_id: queueItem.officer_id,

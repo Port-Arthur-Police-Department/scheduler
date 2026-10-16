@@ -24,6 +24,7 @@ interface OfficerProfileDialogProps {
     email: string;
     phone?: string | null;
     badge_number?: string | null;
+    division?: string | null;
     hire_date?: string | null;
     promotion_date_sergeant?: string | null;
     promotion_date_lieutenant?: string | null;
@@ -94,6 +95,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   // ADDED: Birthday state
   const [birthday, setBirthday] = useState<Date | undefined>();
   const [birthdayInput, setBirthdayInput] = useState<string>("");
+  const [division, setDivision] = useState<string>(officer?.division || "FOD");
 
   const [serviceCreditOverride, setServiceCreditOverride] = useState<string>(
     officer?.service_credit_override?.toString() || ""
@@ -133,6 +135,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       // ADDED: Set birthday state
       setBirthday(parsedBirthday);
       setBirthdayInput(parsedBirthday ? formatDateForInput(parsedBirthday) : "");
+      setDivision(officer?.division || "FOD");
 
       setServiceCreditOverride(officer?.service_credit_override?.toString() || "");
       setFormData({
@@ -185,6 +188,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         email: data.email,
         phone: data.phone || null,
         badge_number: data.badge_number || null,
+        division: division || null,
         rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
       };
@@ -289,6 +293,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         full_name: data.full_name,
         phone: data.phone,
         badge_number: data.badge_number,
+        division: division || null,
         rank: data.rank,
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
       };
@@ -636,6 +641,23 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
                     <SelectItem value="Dispatcher">Dispatcher</SelectItem>
                     <SelectItem value="Secretary">Secretary</SelectItem>
                     <SelectItem value="Coordinator for Support Services">Coordinator for Support Services</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="division">Division</Label>
+                <Select
+                  value={division}
+                  onValueChange={setDivision}
+                >
+                  <SelectTrigger id="division">
+                    <SelectValue placeholder="Select division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FOD">FOD</SelectItem>
+                    <SelectItem value="CID">CID</SelectItem>
+                    <SelectItem value="Admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "admin" | "supervisor" | "officer";
+type UserRole = "admin" | "supervisor" | "officer" | "chaplain";
 
 export const useUserRole = (userId: string | undefined) => {
   const [roles, setRoles] = useState<UserRole[]>([]);
@@ -21,7 +21,7 @@ export const useUserRole = (userId: string | undefined) => {
           .eq("user_id", userId);
 
         if (error) throw error;
-        
+
         setRoles(data?.map((r) => r.role as UserRole) || []);
       } catch (error) {
         console.error("Error fetching user roles:", error);
@@ -36,7 +36,8 @@ export const useUserRole = (userId: string | undefined) => {
 
   const hasRole = (role: UserRole) => roles.includes(role);
   const isAdmin = hasRole("admin");
-  const isSupervisor = hasRole("supervisor");  // Make sure this line exists
+  const isSupervisor = hasRole("supervisor");
+  const isChaplain = hasRole("chaplain");
   const isAdminOrSupervisor = isAdmin || isSupervisor;
   const primaryRole = roles[0] || "officer";
 
@@ -44,7 +45,8 @@ export const useUserRole = (userId: string | undefined) => {
     roles,
     hasRole,
     isAdmin,
-    isSupervisor,  // Make sure this is in the return object
+    isSupervisor,
+    isChaplain,
     isAdminOrSupervisor,
     primaryRole,
     loading,

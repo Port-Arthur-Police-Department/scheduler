@@ -188,8 +188,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     console.log('Invalidated all schedule queries');
   };
 
-  // FIXED: Use the officer's canonical shift date (dayOfficer.date), not the column date.
-  // Night shifts cross midnight and the canonical date is the shift's start date.
+  // Use the column date clicked by the user (date), matching Riding List behavior for night shifts.
   const handleAssignPTO = async (
     schedule: any,
     date: string,
@@ -197,7 +196,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     officerName: string,
     canonicalDate?: string
   ) => {
-    const ptoDate = canonicalDate || date;
+    const ptoDate = date;
 
     console.log('🎯 [WeeklyView] handleAssignPTO called:', {
       columnDate: date,
@@ -236,9 +235,9 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
     schedule: any,
     date: string,
     officerId: string,
-    canonicalDate?: string
+    _canonicalDate?: string
   ) => {
-    const ptoDate = canonicalDate || date;
+    const ptoDate = date;
 
     if (!onEventHandlers.onRemovePTO) return;
 

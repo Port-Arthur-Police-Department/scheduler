@@ -77,30 +77,30 @@ const App = () => {
   };
 
   // Add this useEffect in your App.tsx, around line 200 (after the other useEffects)
-useEffect(() => {
-  // Clean inline styles on mount
-  cleanAllInlineStyles();
-  
-  // Set up a mutation observer to clean styles dynamically
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) { // Element node
-            cleanAllInlineStyles();
-          }
-        });
-      }
+  useEffect(() => {
+    // Clean inline styles on mount
+    cleanAllInlineStyles();
+
+    // Set up a mutation observer to clean styles dynamically
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) { // Element node
+              cleanAllInlineStyles();
+            }
+          });
+        }
+      });
     });
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  return () => observer.disconnect();
-}, []);
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Check authentication status and manage PWA prompt
   useEffect(() => {
@@ -131,7 +131,7 @@ useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('🔄 Auth state changed:', event, 'User ID:', session?.user?.id);
-        
+
         if (event === 'SIGNED_OUT') {
           // Clear session storage when user logs out
           const userId = session?.user?.id;
@@ -143,7 +143,7 @@ useEffect(() => {
           setPushSubscription(null);
           setServiceWorkerRegistration(null);
           setServiceWorkerRegistration(null);
-          
+
           // Clean up background tasks
           backgroundTaskManager.destroy();
         } else if (event === 'SIGNED_IN') {
@@ -170,7 +170,7 @@ useEffect(() => {
         }
       }
     );
-    
+
     return () => {
       subscription.unsubscribe();
       // Clean up background tasks on unmount
@@ -298,18 +298,18 @@ useEffect(() => {
   // Browser Notification Initialization
   useEffect(() => {
     console.log('🔔 Setting up browser notifications...');
-    
+
     const initializeNotifications = async () => {
       // Check browser permission
       const browserPermission = Notification.permission;
       console.log('🔔 Browser notification permission:', browserPermission);
-      
+
       // Update state
       setNotificationStatus(prev => ({
         ...prev,
         permission: browserPermission
       }));
-      
+
       // Check if user has already subscribed (stored in database)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
@@ -318,7 +318,7 @@ useEffect(() => {
           .select('notification_subscribed')
           .eq('id', session.user.id)
           .single();
-          
+
         if (profile?.notification_subscribed && browserPermission === 'granted') {
           setNotificationStatus(prev => ({
             ...prev,
@@ -331,7 +331,7 @@ useEffect(() => {
         }
       }
     };
-    
+
     initializeNotifications();
   }, []);
 
@@ -343,41 +343,41 @@ useEffect(() => {
   // Request browser notification permission
   const requestNotificationPermission = async () => {
     console.log('🔔 Requesting browser notification permission...');
-    
+
     // Show loading message
     setSubscriptionMessage('🔄 Requesting notification permission...');
-    
+
     try {
       // Request browser permission
       const browserPermission = await Notification.requestPermission();
       console.log('Browser permission result:', browserPermission);
-      
+
       if (browserPermission === 'granted') {
         // Browser permission granted
         setSubscriptionMessage('✅ Browser notifications enabled!');
-        
+
         // Update state
         setNotificationStatus(prev => ({
           ...prev,
           permission: 'granted',
           subscribed: true
         }));
-        
+
         // Store in database
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.id) {
           await supabase
             .from('profiles')
-            .update({ 
+            .update({
               notification_subscribed: true,
               notification_subscribed_at: new Date().toISOString(),
               notification_provider: 'browser'
             })
             .eq('id', session.user.id);
         }
-        
+
         setShowNotificationBanner(false);
-        
+
         // Register for push notifications if service worker is active
         if (serviceWorkerRegistration && currentUserId) {
           const success = await registerForPushNotifications(currentUserId, serviceWorkerRegistration);
@@ -385,10 +385,10 @@ useEffect(() => {
             console.log('✅ Push registration successful');
           }
         }
-        
+
         // Show success message
         toast.success("Notifications enabled! You'll receive shift alerts.");
-        
+
       } else if (browserPermission === 'denied') {
         setSubscriptionMessage('❌ Notifications blocked in browser settings');
         setNotificationStatus(prev => ({ ...prev, permission: 'denied' }));
@@ -397,13 +397,13 @@ useEffect(() => {
         setSubscriptionMessage('❌ Notification permission not granted');
         setNotificationStatus(prev => ({ ...prev, permission: 'default' }));
       }
-      
+
     } catch (error) {
       console.error('❌ Error requesting permission:', error);
       setSubscriptionMessage('❌ Failed to request permission');
       toast.error("Failed to enable notifications. Please try again.");
     }
-    
+
     // Clear message after 3 seconds
     setTimeout(() => {
       setSubscriptionMessage('');
@@ -418,7 +418,7 @@ useEffect(() => {
       await triggerSubscriptionPrompt();
       return;
     }
-    
+
     try {
       if (serviceWorkerRegistration) {
         // Use service worker for notification
@@ -434,7 +434,7 @@ useEffect(() => {
             url: '/scheduler/#/dashboard'
           }
         });
-        
+
         toast.success("Test notification sent!");
       } else if ('Notification' in window && Notification.permission === 'granted') {
         // Fallback to browser notifications
@@ -443,11 +443,11 @@ useEffect(() => {
           icon: '/scheduler/icons/icon-192.png',
           tag: 'test-notification'
         });
-        
+
         notification.onclick = () => {
           window.focus();
         };
-        
+
         toast.success("Test notification sent via browser!");
       } else {
         toast.error("Notifications not available. Please enable them.");
@@ -464,7 +464,7 @@ useEffect(() => {
       toast.error("Service worker not ready. Please refresh the page.");
       return;
     }
-    
+
     try {
       // Send message to service worker to show test notification
       if (serviceWorkerRegistration.active) {
@@ -518,13 +518,12 @@ useEffect(() => {
             {/* Subscription Status Message */}
             {subscriptionMessage && (
               <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md animate-slide-down">
-                <div className={`p-4 rounded-lg shadow-lg ${
-                  subscriptionMessage.includes('✅') 
-                    ? 'bg-green-100 border border-green-300 text-green-800' 
-                    : subscriptionMessage.includes('❌')
+                <div className={`p-4 rounded-lg shadow-lg ${subscriptionMessage.includes('✅')
+                  ? 'bg-green-100 border border-green-300 text-green-800'
+                  : subscriptionMessage.includes('❌')
                     ? 'bg-red-100 border border-red-300 text-red-800'
                     : 'bg-blue-100 border border-blue-300 text-blue-800'
-                }`}>
+                  }`}>
                   <div className="flex items-center gap-2">
                     {subscriptionMessage.includes('✅') && <CheckCircle className="h-5 w-5" />}
                     <span className="font-medium">{subscriptionMessage}</span>
@@ -532,7 +531,7 @@ useEffect(() => {
                 </div>
               </div>
             )}
-            
+
             {/* Notification Subscription Banner */}
             {showNotificationBanner && !notificationStatus.subscribed && Notification.permission === 'default' && (
               <div className="fixed top-0 left-0 right-0 z-40 bg-blue-600 text-white p-4 shadow-lg">
@@ -562,19 +561,19 @@ useEffect(() => {
                 </div>
               </div>
             )}
-            
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Push notifications for shift changes</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Quick access from home screen like an app</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      <span>Background anniversary & birthday alerts</span>
-                    </div>
+
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              <span>Push notifications for shift changes</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              <span>Quick access from home screen like an app</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              <span>Background anniversary & birthday alerts</span>
+            </div>
 
             {/* Status Indicator Panel */}
             {shouldShowPanel ? (
@@ -633,7 +632,7 @@ useEffect(() => {
                     }
                   `}
                 </style>
-                
+
                 {/* Close Button */}
                 <button
                   onClick={handleClosePanel}
@@ -656,7 +655,7 @@ useEffect(() => {
                 >
                   <X size={14} />
                 </button>
-                
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', marginRight: '16px' }}>
                   <div style={{
                     width: '12px',
@@ -666,11 +665,11 @@ useEffect(() => {
                   }} />
                   <strong>Notifications:</strong> {notificationStatus.subscribed ? '✅ Enabled' : '❌ Disabled'}
                 </div>
-                
+
                 <div style={{ marginBottom: '8px' }}>
                   <strong>Browser Permission:</strong> {Notification.permission}
                 </div>
-                
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                   <div style={{
                     width: '12px',
@@ -680,19 +679,19 @@ useEffect(() => {
                   }} />
                   <strong>Service Worker:</strong> {serviceWorkerRegistration ? '✅ Active' : '❌ Not Ready'}
                 </div>
-                
+
                 <div style={{ marginBottom: '8px' }}>
                   <strong>User Logged In:</strong> {userLoggedIn ? '✅ Yes' : '❌ No'}
                 </div>
-                
+
                 <div style={{ marginBottom: '12px' }}>
                   <strong>Service Worker:</strong> {serviceWorkerRegistration ? '✅ Active' : '❌ Not Ready'}
                 </div>
-                
+
                 <div style={{ marginBottom: '12px' }}>
                   <strong>Notification Permission:</strong> {notificationStatus.permission}
                 </div>
-                
+
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <button
@@ -711,7 +710,7 @@ useEffect(() => {
                   >
                     {notificationStatus.subscribed ? '✅ Notifications Enabled' : '🔔 Enable Notifications'}
                   </button>
-                  
+
                   <button
                     onClick={testNotification}
                     style={{
@@ -728,7 +727,7 @@ useEffect(() => {
                   >
                     Test Browser Notification
                   </button>
-                  
+
                   <button
                     onClick={testPushNotification}
                     style={{
@@ -786,14 +785,15 @@ useEffect(() => {
                 Status
               </button>
             )}
-            
+
             <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard isMobile={isMobile} />} />
                 <Route path="/auth" element={<Auth />} />
-                
+
                 {/* Tab-specific routes */}
+                <Route path="/home" element={<Dashboard isMobile={isMobile} initialTab="home" />} />
                 <Route path="/daily-schedule" element={<Dashboard isMobile={isMobile} initialTab="daily" />} />
                 <Route path="/weekly-schedule" element={<Dashboard isMobile={isMobile} initialTab="schedule" />} />
                 <Route path="/vacancies" element={<Dashboard isMobile={isMobile} initialTab="vacancies" />} />
@@ -801,7 +801,7 @@ useEffect(() => {
                 <Route path="/time-off" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
                 <Route path="/pto" element={<Dashboard isMobile={isMobile} initialTab="requests" />} />
                 <Route path="/settings" element={<Dashboard isMobile={isMobile} initialTab="settings" />} />
-                
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>

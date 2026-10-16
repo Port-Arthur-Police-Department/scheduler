@@ -1,4 +1,5 @@
-import { Calendar, Users, AlertTriangle, Clock, Settings, LogOut } from "lucide-react";
+// src/components/MobileNavigation.tsx
+import { Calendar, Users, AlertTriangle, Clock, Settings, LogOut, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -16,14 +17,17 @@ interface MobileNavigationProps {
   onTabChange: (tab: string) => void;
   isAdminOrSupervisor: boolean;
   isAdmin: boolean;
+  isChaplainOnly: boolean;
 }
 
 const MobileNavigation = ({
   activeTab,
   onTabChange,
   isAdminOrSupervisor,
-  isAdmin
+  isAdmin,
+  isChaplainOnly
 }: MobileNavigationProps) => {
+
   const navigate = useNavigate();
 
   // Fetch website settings to check if PTO tab should be shown
@@ -66,6 +70,7 @@ const MobileNavigation = ({
 
   // Navigation items for regular officers
   const officerItems: NavItem[] = [
+    { id: 'home', label: 'Home', icon: Home },
     { id: 'daily', label: 'Riding List', icon: Calendar },
     { id: 'schedule', label: 'The Book', icon: Calendar },
   ];
@@ -75,8 +80,9 @@ const MobileNavigation = ({
     officerItems.push({ id: 'requests', label: 'PTO', icon: Clock });
   }
 
-  // Navigation items for admin/supervisor - REMOVED "Officers" tab
+  // Navigation items for admin/supervisor
   const adminSupervisorItems: NavItem[] = [
+    { id: 'home', label: 'Home', icon: Home },
     { id: 'daily', label: 'Riding List', icon: Calendar },
     { id: 'schedule', label: 'The Book', icon: Calendar },
     { id: 'vacancies', label: 'Vacancies', icon: AlertTriangle },

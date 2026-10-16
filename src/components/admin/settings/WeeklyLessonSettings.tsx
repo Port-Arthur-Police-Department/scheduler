@@ -198,7 +198,7 @@ export const WeeklyLessonSettings = () => {
             <span>Weekly Lesson Management</span>
           </CardTitle>
           <CardDescription>
-            Create, edit, and manage weekly lessons, scriptures, and leadership thought posts for officers.
+            Create, edit, and manage weekly lessons, tips, and leadership thought posts for officers.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
@@ -244,11 +244,10 @@ export const WeeklyLessonSettings = () => {
                       <TableCell>{lesson.title}</TableCell>
                       <TableCell>
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            lesson.is_active
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${lesson.is_active
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                               : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                          }`}
+                            }`}
                         >
                           {lesson.is_active ? 'Active' : 'Archived'}
                         </span>
@@ -315,10 +314,10 @@ export const WeeklyLessonSettings = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="content">Lesson Content / Scripture / Message</Label>
+                <Label htmlFor="content">Lesson Content / Tips / Message</Label>
                 <Textarea
                   id="content"
-                  placeholder="Enter the weekly message, scripture, or leadership lesson..."
+                  placeholder="Enter the weekly message, tips, or leadership lesson..."
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={6}

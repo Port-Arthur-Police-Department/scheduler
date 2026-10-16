@@ -58,7 +58,16 @@ The system is built around a few foundational ideas:
 - **PTO management panel** — view all officers' vacation/sick/comp/holiday balances, manual adjustments, and bulk accrual (sick time and annual PTO).
 - **Accrual rules** — configure how vacation (tiered by service-credit years) and holiday (flat rate) time accrues.
 
-### Staffing & Vacancies
+### Annual Seniority-Based Shift Bidding
+
+- **Division-scoped rounds** — create and manage annual shift bidding rounds scoped by division (`FOD`, `CID`, `Admin`).
+- **Seniority queue generation** — automatically sort and order officers within each division by seniority using department/rank sorting rules (`sortOfficersConsistently`).
+- **Shift position configuration** — configure available positions per shift with rank restrictions (`allowed_rank`) and recurring schedule days (`recurring_days`), supporting editable positions and custom saved preset templates (`SavedPreset`).
+- **Automatic scheduling & conflict prevention** — upon officer confirmation, automatically populates official recurring schedules (`recurring_schedules`) starting from the configured schedule start date (`start_date`), while automatically ending any overlapping prior schedules for the officer.
+
+### Weekly Training & Lessons
+
+- **Weekly lessons module** — department training and announcements displayed directly on the dashboard home tab, complete with interactive officer comments.
 
 - **Understaffed detection** — automatically scans the next 7 days for shifts below minimum staffing and surfaces supervisor/officer breakdowns.
 - **Vacancy alerts** — create and broadcast open-shift alerts to active officers (email via Resend, SMS, and in-app), respecting each officer's notification preferences.
@@ -162,7 +171,8 @@ Core tables (managed in Supabase, secured with RLS):
 - **`pto_accrual_rules`** — accrual rules by service-credit band.
 - **`user_roles`** — role assignments (`app_role`: officer/supervisor/admin).
 - **`website_settings`** — global admin configuration (notification toggles, PTO visibility, colors, etc.).
-- **`notifications`**, **`audit_logs`**, **`user_push_subscriptions`**, **`officer_beat_preferences`**, **`officer_default_assignments`**, **`partnership_exceptions`** — in-app notifications, audit trail, push subscriptions, and supporting data.
+- **`shift_bidding_rounds`**, **`shift_bidding_queue`**, **`shift_type_allowed_positions`** — annual seniority shift bidding rounds, division-scoped queue progression, and allowed shift positions with rank & recurring schedule rules.
+- **`weekly_lessons`**, **`lesson_comments`** — department training lessons and interactive officer discussions on the dashboard.
 
 **SQL functions:** `accrue_annual_pto`, `accrue_sick_time`, `get_service_credit`, `has_role`, `has_admin_or_supervisor_role`.
 

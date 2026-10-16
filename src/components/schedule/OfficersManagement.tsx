@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, startOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from "date-fns";
-import { Calendar, Plus, Edit2, Clock, Trash2, ChevronLeft, ChevronRight, Grid, Calendar as CalendarIcon } from "lucide-react";
+import { Calendar, Plus, Edit2, Clock, Trash2, ChevronLeft, ChevronRight, Grid, Calendar as CalendarIcon, Search } from "lucide-react";
 import { ScheduleManagementDialog } from "./ScheduleManagementDialog";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { PositionEditor } from "./PositionEditor";
@@ -16,6 +18,12 @@ import { usePositionMutation } from "@/hooks/usePositionMutation";
 import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
+
+// ✅ MOVED TO MODULE SCOPE — pure helper function, no component state needed
+const getLastName = (fullName: string) => {
+  const names = fullName.trim().split(/\s+/);
+  return names[names.length - 1] || fullName;
+};
 
 interface OfficersManagementProps {
   userId: string;
@@ -46,8 +54,51 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<"weekly" | "monthly">("weekly");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [officerSearchQuery, setOfficerSearchQuery] = useState("");
+  const [isOfficerSearchOpen, setIsOfficerSearchOpen] = useState(false);
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
+
+  // ✅ MOVED UP — must be declared BEFORE filteredProfiles and selectedOfficer
+  // Fetch all profiles for admin/supervisor selection
+  const { data: profiles, isLoading: profilesLoading } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      console.log("🔍 Fetching profiles...");
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number, rank, email, phone")
+        .order("full_name");
+      if (error) throw error;
+
+      // Sort by last name alphabetically
+      return data.sort((a, b) => {
+        const lastNameA = getLastName(a.full_name || "").toLowerCase();
+        const lastNameB = getLastName(b.full_name || "").toLowerCase();
+        return lastNameA.localeCompare(lastNameB);
+      });
+    },
+    enabled: isAdminOrSupervisor,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
+  });
+
+  // ✅ Now safe to reference 'profiles' below
+  const filteredProfiles = useMemo(() => {
+    if (!profiles) return [];
+    if (!officerSearchQuery.trim()) return profiles;
+
+    const query = officerSearchQuery.toLowerCase().trim();
+    return profiles.filter(profile =>
+      profile.full_name?.toLowerCase().includes(query) ||
+      profile.email?.toLowerCase().includes(query) ||
+      profile.badge_number?.toLowerCase().includes(query) ||
+      profile.rank?.toLowerCase().includes(query) ||
+      profile.phone?.toLowerCase().includes(query)
+    );
+  }, [profiles, officerSearchQuery]);
+
+  const selectedOfficer = profiles?.find(p => p.id === selectedOfficerId);
 
   // Initialize selectedOfficerId when component mounts or props change
   useEffect(() => {
@@ -86,40 +137,11 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     setCurrentMonth(new Date());
   };
 
-  // Function to extract last name from full name
-  const getLastName = (fullName: string) => {
-    const names = fullName.trim().split(/\s+/);
-    return names[names.length - 1] || fullName;
-  };
-
   // Callback to refresh schedule when new schedule is created
   const handleScheduleCreated = useCallback(() => {
     console.log("🔄 Schedule created, refreshing data...");
     setRefreshTrigger(prev => prev + 1);
   }, []);
-
-  // Fetch all profiles for admin/supervisor selection
-  const { data: profiles, isLoading: profilesLoading } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: async () => {
-      console.log("🔍 Fetching profiles...");
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, badge_number")
-        .order("full_name");
-      if (error) throw error;
-
-      // Sort by last name alphabetically
-      return data.sort((a, b) => {
-        const lastNameA = getLastName(a.full_name || "").toLowerCase();
-        const lastNameB = getLastName(b.full_name || "").toLowerCase();
-        return lastNameA.localeCompare(lastNameB);
-      });
-    },
-    enabled: isAdminOrSupervisor,
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
-  });
 
   // Set default officer for admins when profiles load
   useEffect(() => {
@@ -931,21 +953,70 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
             </CardTitle>
             {isAdminOrSupervisor && (
               <div className="flex items-center gap-3">
-                <Select
-                  value={selectedOfficerId}
-                  onValueChange={(value) => setSelectedOfficerId(value)}
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue placeholder="Select officer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles?.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name} (Badge: {profile.badge_number})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={isOfficerSearchOpen} onOpenChange={setIsOfficerSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <div className="relative w-72 cursor-pointer">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search officers by name, badge, rank..."
+                        value={isOfficerSearchOpen ? officerSearchQuery : (selectedOfficer ? `${selectedOfficer.full_name} (${selectedOfficer.badge_number || 'No Badge'})` : officerSearchQuery)}
+                        onChange={(e) => {
+                          setOfficerSearchQuery(e.target.value);
+                          if (!isOfficerSearchOpen) setIsOfficerSearchOpen(true);
+                        }}
+                        onClick={() => setIsOfficerSearchOpen(true)}
+                        className="pl-10 pr-12 cursor-pointer text-sm"
+                      />
+                      {officerSearchQuery && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <Badge variant="secondary" className="text-xs">
+                            {filteredProfiles.length}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0" align="end">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search officers by name, badge, rank, email, or phone..."
+                        value={officerSearchQuery}
+                        onChange={(e) => setOfficerSearchQuery(e.target.value)}
+                        className="h-9 text-sm pl-3"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-1 space-y-1">
+                      {filteredProfiles.length === 0 ? (
+                        <div className="p-3 text-center text-sm text-muted-foreground">
+                          No officers found matching "{officerSearchQuery}"
+                        </div>
+                      ) : (
+                        filteredProfiles.map((profile) => (
+                          <div
+                            key={profile.id}
+                            className={`flex items-center justify-between p-2.5 rounded-md text-sm cursor-pointer hover:bg-accent transition-colors ${profile.id === selectedOfficerId ? 'bg-accent/80 font-medium' : ''}`}
+                            onClick={() => {
+                              setSelectedOfficerId(profile.id);
+                              setOfficerSearchQuery("");
+                              setIsOfficerSearchOpen(false);
+                            }}
+                          >
+                            <div className="space-y-0.5">
+                              <p className="font-medium text-foreground">{profile.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {profile.rank ? `${profile.rank} • ` : ''}Badge: {profile.badge_number || 'N/A'}
+                              </p>
+                            </div>
+                            {profile.id === selectedOfficerId && (
+                              <Badge variant="default" className="text-xs">Selected</Badge>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button onClick={() => setDialogOpen(true)} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Schedule

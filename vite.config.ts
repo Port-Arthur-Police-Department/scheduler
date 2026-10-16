@@ -41,9 +41,9 @@ if (isProduction) {
     basePath = '/staging/';
     console.log('✅ Vite Config: Using /staging/ (staging branch)');
   } else {
-    // Main branch: site is served from the root of the repo's Pages URL
-    basePath = '/';
-    console.log('✅ Vite Config: Using / (main branch, repo root)');
+    // Main branch: project site is served under /scheduler/
+    basePath = '/scheduler/';
+    console.log('✅ Vite Config: Using /scheduler/ (main branch)');
   }
 } else {
   console.log('✅ Vite Config: Using ./ base path (development mode)');

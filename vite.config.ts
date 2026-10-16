@@ -17,13 +17,15 @@ console.log('  VITE_BASE_PATH (raw):', process.env.VITE_BASE_PATH);
 let normalizedBasePath = process.env.VITE_BASE_PATH || '';
 if (normalizedBasePath.match(/^[A-Z]:/i)) {
   // This is a Windows absolute path (starts with C:, D:, etc)
-  // Git Bash converted /scheduler/staging/ to C:/Users/.../scheduler/staging/
-  // We need to extract just /scheduler/staging/ from it
+  // Git Bash converted /staging/ to C:/Users/.../staging/
+  // We need to extract just /staging/ from it
   normalizedBasePath = normalizedBasePath.replace(/\\/g, '/');
-  // Find 'scheduler/' and take everything from there
-  const idx = normalizedBasePath.indexOf('/scheduler/');
+  const idx = normalizedBasePath.indexOf('/staging/');
   if (idx !== -1) {
     normalizedBasePath = normalizedBasePath.substring(idx);
+  } else {
+    // Root deploy case
+    normalizedBasePath = '/';
   }
 }
 console.log('  VITE_BASE_PATH (normalized):', normalizedBasePath);
@@ -36,11 +38,12 @@ if (isProduction) {
     basePath = normalizedBasePath;
     console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
   } else if (process.env.GITHUB_REF_NAME === 'staging') {
-    basePath = '/scheduler/staging/';
-    console.log('✅ Vite Config: Using /scheduler/staging/ (staging branch)');
+    basePath = '/staging/';
+    console.log('✅ Vite Config: Using /staging/ (staging branch)');
   } else {
-    basePath = '/scheduler/';
-    console.log('✅ Vite Config: Using /scheduler/ (main branch)');
+    // Main branch: site is served from the root of the repo's Pages URL
+    basePath = '/';
+    console.log('✅ Vite Config: Using / (main branch, repo root)');
   }
 } else {
   console.log('✅ Vite Config: Using ./ base path (development mode)');
@@ -71,57 +74,17 @@ export default defineConfig({
         categories: ["productivity", "business"],
 
         icons: [
-          {
-            src: "./icons/icon-72x72.png",
-            sizes: "72x72",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-96x96.png",
-            sizes: "96x96",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-128x128.png",
-            sizes: "128x128",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-144x144.png",
-            sizes: "144x144",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-152x152.png",
-            sizes: "152x152",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-192x192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-384x384.png",
-            sizes: "384x384",
-            type: "image/png",
-            purpose: "maskable any"
-          },
-          {
-            src: "./icons/icon-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable any"
-          }
+          { src: "./icons/icon-72x72.png",   sizes: "72x72",   type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-96x96.png",   sizes: "96x96",   type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-128x128.png", sizes: "128x128", type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-144x144.png", sizes: "144x144", type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-152x152.png", sizes: "152x152", type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-192x192.png", sizes: "192x192", type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-384x384.png", sizes: "384x384", type: "image/png", purpose: "maskable any" },
+          { src: "./icons/icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable any" }
         ],
 
-       shortcuts: [
+        shortcuts: [
           {
             name: "Daily Schedule",
             short_name: "Schedule",
@@ -144,10 +107,10 @@ export default defineConfig({
         enabled: false,
       }
     })
-  ].filter(Boolean), // Filter out false values
+  ].filter(Boolean),
 
   base: basePath,
-  
+
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -161,13 +124,13 @@ export default defineConfig({
       }
     }
   },
-  
-server: {
-  port: isStackblitz ? 5173 : (process.env.PORT || 3000),
-  open: !isStackblitz, // Only auto-open locally
-  host: true,
-},
-  
+
+  server: {
+    port: isStackblitz ? 5173 : (process.env.PORT || 3000),
+    open: !isStackblitz,
+    host: true,
+  },
+
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')

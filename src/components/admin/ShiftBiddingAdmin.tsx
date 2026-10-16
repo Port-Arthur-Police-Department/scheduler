@@ -42,7 +42,7 @@ export const ShiftBiddingAdmin = () => {
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const { data: queue = [], isLoading: queueLoading } = useBiddingQueue(selectedRoundId || rounds[0]?.id);
   const { data: allAllowedPositions = [] } = useAllAllowedPositions();
-  const { createRound, updateRoundStatus, generateQueue, submitSelection, saveAllowedPositions } = useShiftBiddingMutations();
+  const { createRound, updateRoundStatus, deleteRound, generateQueue, submitSelection, saveAllowedPositions } = useShiftBiddingMutations();
 
   // New round form state
   const [newYear, setNewYear] = useState<number>(new Date().getFullYear() + 1);
@@ -411,12 +411,34 @@ export const ShiftBiddingAdmin = () => {
                         </Button>
                       )}
 
+                      {activeRound.status === 'completed' && (
+                        <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                          <Play className="h-4 w-4 mr-2" />
+                          Reopen / Resume Bidding
+                        </Button>
+                      )}
+
                       {activeRound.status !== 'completed' && (
                         <Button variant="secondary" onClick={() => handleToggleStatus('completed')}>
                           <CheckCircle2 className="h-4 w-4 mr-2" />
                           Mark Completed
                         </Button>
                       )}
+
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
+                            deleteRound.mutate(activeRound.id, {
+                              onSuccess: () => setSelectedRoundId(null)
+                            });
+                          }
+                        }}
+                        disabled={deleteRound.isPending}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Round
+                      </Button>
                     </div>
 
                     <div className="rounded-md border mt-4 overflow-hidden">

@@ -174,6 +174,30 @@ export const useShiftBiddingMutations = () => {
     },
   });
 
+  const deleteRound = useMutation({
+    mutationFn: async (roundId: string) => {
+      await supabase
+        .from("shift_bidding_queue")
+        .delete()
+        .eq("round_id", roundId);
+
+      const { error } = await supabase
+        .from("shift_bidding_rounds")
+        .delete()
+        .eq("id", roundId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      toast.success("Bidding round deleted successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete bidding round");
+    },
+  });
+
   const generateQueue = useMutation({
     mutationFn: async ({ roundId, division }: { roundId: string; division: string }) => {
       // 1. Fetch profiles for this division
@@ -398,6 +422,7 @@ export const useShiftBiddingMutations = () => {
   return {
     createRound,
     updateRoundStatus,
+    deleteRound,
     generateQueue,
     submitSelection,
     saveAllowedPositions,

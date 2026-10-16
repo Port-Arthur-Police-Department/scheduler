@@ -19,6 +19,12 @@ import { toast } from "sonner";
 import { auditLogger } from "@/lib/auditLogger";
 import { useUser } from "@/contexts/UserContext";
 
+// ✅ MOVED TO MODULE SCOPE — pure helper function, no component state needed
+const getLastName = (fullName: string) => {
+  const names = fullName.trim().split(/\s+/);
+  return names[names.length - 1] || fullName;
+};
+
 interface OfficersManagementProps {
   userId: string;
   isAdminOrSupervisor: boolean;
@@ -53,6 +59,31 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
   const queryClient = useQueryClient();
   const { userEmail } = useUser();
 
+  // ✅ MOVED UP — must be declared BEFORE filteredProfiles and selectedOfficer
+  // Fetch all profiles for admin/supervisor selection
+  const { data: profiles, isLoading: profilesLoading } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      console.log("🔍 Fetching profiles...");
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number, rank, email, phone")
+        .order("full_name");
+      if (error) throw error;
+
+      // Sort by last name alphabetically
+      return data.sort((a, b) => {
+        const lastNameA = getLastName(a.full_name || "").toLowerCase();
+        const lastNameB = getLastName(b.full_name || "").toLowerCase();
+        return lastNameA.localeCompare(lastNameB);
+      });
+    },
+    enabled: isAdminOrSupervisor,
+    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
+    gcTime: 60 * 60 * 1000,
+  });
+
+  // ✅ Now safe to reference 'profiles' below
   const filteredProfiles = useMemo(() => {
     if (!profiles) return [];
     if (!officerSearchQuery.trim()) return profiles;
@@ -106,40 +137,11 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     setCurrentMonth(new Date());
   };
 
-  // Function to extract last name from full name
-  const getLastName = (fullName: string) => {
-    const names = fullName.trim().split(/\s+/);
-    return names[names.length - 1] || fullName;
-  };
-
   // Callback to refresh schedule when new schedule is created
   const handleScheduleCreated = useCallback(() => {
     console.log("🔄 Schedule created, refreshing data...");
     setRefreshTrigger(prev => prev + 1);
   }, []);
-
-  // Fetch all profiles for admin/supervisor selection
-  const { data: profiles, isLoading: profilesLoading } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: async () => {
-      console.log("🔍 Fetching profiles...");
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, badge_number, rank, email, phone")
-        .order("full_name");
-      if (error) throw error;
-
-      // Sort by last name alphabetically
-      return data.sort((a, b) => {
-        const lastNameA = getLastName(a.full_name || "").toLowerCase();
-        const lastNameB = getLastName(b.full_name || "").toLowerCase();
-        return lastNameA.localeCompare(lastNameB);
-      });
-    },
-    enabled: isAdminOrSupervisor,
-    staleTime: 30 * 60 * 1000,   // 30 minutes - shift types rarely change
-    gcTime: 60 * 60 * 1000,
-  });
 
   // Set default officer for admins when profiles load
   useEffect(() => {

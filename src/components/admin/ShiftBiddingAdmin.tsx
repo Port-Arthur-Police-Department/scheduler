@@ -1,5 +1,5 @@
 // src/components/admin/ShiftBiddingAdmin.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useAllAllowedPositions, ShiftTypeAllowedPosition } from "@/hooks/useShiftBidding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Settings, UserCheck, Clock } from "lucide-react";
+import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,12 @@ interface ConfiguredPosition {
   position_name: string;
   allowed_rank: string;
   recurring_days: number[];
+}
+
+interface SavedPreset {
+  id: string;
+  name: string;
+  positions: ConfiguredPosition[];
 }
 
 const daysOfWeek = [
@@ -48,6 +54,46 @@ export const ShiftBiddingAdmin = () => {
   const [selectedRank, setSelectedRank] = useState<string>("Any");
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [configuredPositions, setConfiguredPositions] = useState<ConfiguredPosition[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  // Custom saved presets state (persisted in localStorage)
+  const [savedPresets, setSavedPresets] = useState<SavedPreset[]>(() => {
+    try {
+      const stored = localStorage.getItem("shift_bidding_custom_presets");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error("Failed to load presets from localStorage", e);
+    }
+    return [
+      {
+        id: "preset-patrol",
+        name: "Standard Patrol Squad",
+        positions: [
+          { position_name: "Patrol Officer (Mon-Thu)", allowed_rank: "Officer", recurring_days: [1, 2, 3, 4] },
+          { position_name: "Patrol Officer (Tue-Fri)", allowed_rank: "Officer", recurring_days: [2, 3, 4, 5] },
+          { position_name: "Patrol Officer (Wed-Sat)", allowed_rank: "Officer", recurring_days: [3, 4, 5, 6] },
+        ]
+      },
+      {
+        id: "preset-supervisor",
+        name: "Supervisor Squad",
+        positions: [
+          { position_name: "Shift Lieutenant (Mon-Thu)", allowed_rank: "Lieutenant", recurring_days: [1, 2, 3, 4] },
+          { position_name: "Shift Sergeant (Mon-Thu)", allowed_rank: "Sergeant", recurring_days: [1, 2, 3, 4] },
+          { position_name: "Shift Sergeant (Tue-Fri)", allowed_rank: "Sergeant", recurring_days: [2, 3, 4, 5] },
+        ]
+      }
+    ];
+  });
+  const [newPresetName, setNewPresetName] = useState<string>("");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("shift_bidding_custom_presets", JSON.stringify(savedPresets));
+    } catch (e) {
+      console.error("Failed to save presets to localStorage", e);
+    }
+  }, [savedPresets]);
 
   // Fetch shift types
   const { data: shiftTypes = [] } = useQuery({
@@ -92,6 +138,10 @@ export const ShiftBiddingAdmin = () => {
         recurring_days: p.recurring_days || [],
       }));
     setConfiguredPositions(existing);
+    setEditingIndex(null);
+    setPositionInput("");
+    setSelectedRank("Any");
+    setSelectedDays([]);
   };
 
   const handleToggleDay = (dayVal: number) => {
@@ -100,29 +150,96 @@ export const ShiftBiddingAdmin = () => {
     );
   };
 
-  const handleAddPosition = () => {
-    if (!positionInput.trim()) return;
-    if (configuredPositions.some(p => p.position_name.toLowerCase() === positionInput.trim().toLowerCase())) {
-      toast.error("Position already added");
+  const handleSavePositionItem = () => {
+    if (!positionInput.trim()) {
+      toast.error("Please enter a position name");
       return;
     }
-    const updated = [
-      ...configuredPositions,
-      {
+
+    if (editingIndex !== null) {
+      const updated = [...configuredPositions];
+      updated[editingIndex] = {
         position_name: positionInput.trim(),
         allowed_rank: selectedRank,
         recurring_days: selectedDays,
+      };
+      setConfiguredPositions(updated);
+      setEditingIndex(null);
+      toast.success("Position updated in staging");
+    } else {
+      if (configuredPositions.some(p => p.position_name.toLowerCase() === positionInput.trim().toLowerCase())) {
+        toast.error("Position name already exists in this shift config");
+        return;
       }
-    ];
-    setConfiguredPositions(updated);
+      const updated = [
+        ...configuredPositions,
+        {
+          position_name: positionInput.trim(),
+          allowed_rank: selectedRank,
+          recurring_days: selectedDays,
+        }
+      ];
+      setConfiguredPositions(updated);
+      toast.success("Position added to staging");
+    }
+
     setPositionInput("");
     setSelectedRank("Any");
     setSelectedDays([]);
   };
 
-  const handleRemovePosition = (posName: string) => {
-    const updated = configuredPositions.filter(p => p.position_name !== posName);
+  const handleEditPosition = (index: number) => {
+    const pos = configuredPositions[index];
+    setPositionInput(pos.position_name);
+    setSelectedRank(pos.allowed_rank);
+    setSelectedDays(pos.recurring_days || []);
+    setEditingIndex(index);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setPositionInput("");
+    setSelectedRank("Any");
+    setSelectedDays([]);
+  };
+
+  const handleRemovePosition = (index: number) => {
+    const updated = configuredPositions.filter((_, i) => i !== index);
     setConfiguredPositions(updated);
+    if (editingIndex === index) {
+      handleCancelEdit();
+    }
+  };
+
+  const handleLoadPreset = (preset: SavedPreset) => {
+    setConfiguredPositions(preset.positions);
+    toast.success(`Loaded preset "${preset.name}" successfully!`);
+  };
+
+  const handleSaveCurrentAsPreset = () => {
+    if (!newPresetName.trim()) {
+      toast.error("Please enter a name for your preset template");
+      return;
+    }
+    if (configuredPositions.length === 0) {
+      toast.error("Add at least one position to save as a preset template");
+      return;
+    }
+
+    const newPreset: SavedPreset = {
+      id: `preset-${Date.now()}`,
+      name: newPresetName.trim(),
+      positions: [...configuredPositions],
+    };
+
+    setSavedPresets(prev => [...prev, newPreset]);
+    setNewPresetName("");
+    toast.success(`Preset template "${newPreset.name}" saved successfully!`);
+  };
+
+  const handleDeletePreset = (presetId: string) => {
+    setSavedPresets(prev => prev.filter(p => p.id !== presetId));
+    toast.success("Preset template deleted");
   };
 
   const handleSavePositions = () => {
@@ -368,9 +485,9 @@ export const ShiftBiddingAdmin = () => {
         <TabsContent value="positions" className="space-y-6">
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg">Shift Type Allowed Positions Configuration</CardTitle>
+              <CardTitle className="text-lg">Shift Type Allowed Positions Configuration & Presets</CardTitle>
               <CardDescription>
-                Configure allowed positions per shift, set required rank restrictions, and define recurring work schedule days.
+                Configure allowed positions per shift, set rank restrictions, recurring schedules, and manage custom saved preset templates.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -397,8 +514,71 @@ export const ShiftBiddingAdmin = () => {
 
                   {selectedShiftTypeId && (
                     <div className="space-y-4 pt-4 border-t">
+                      {/* Saved Preset Templates Management */}
+                      <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                            <span>Preset Templates ({savedPresets.length})</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {savedPresets.map((preset) => (
+                            <div key={preset.id} className="flex items-center bg-card border rounded-md px-2.5 py-1 text-xs gap-2">
+                              <span
+                                className="font-medium cursor-pointer hover:text-primary"
+                                onClick={() => handleLoadPreset(preset)}
+                                title="Click to load preset"
+                              >
+                                {preset.name} ({preset.positions.length} pos)
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeletePreset(preset.id)}
+                                className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                                title="Delete preset template"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Save Current as Preset */}
+                        <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                          <Input
+                            placeholder="New preset name..."
+                            value={newPresetName}
+                            onChange={(e) => setNewPresetName(e.target.value)}
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={handleSaveCurrentAsPreset}
+                            className="h-8 text-xs shrink-0 flex items-center gap-1"
+                          >
+                            <BookmarkPlus className="h-3.5 w-3.5" />
+                            Save as Preset
+                          </Button>
+                        </div>
+                      </div>
+
                       <div className="space-y-3 p-4 border rounded-lg bg-card/50">
-                        <h4 className="font-medium text-sm">Add New Position Rule</h4>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">
+                            {editingIndex !== null ? `Editing Position #${editingIndex + 1}` : "Add New Position Rule"}
+                          </h4>
+                          {editingIndex !== null && (
+                            <Button type="button" size="sm" variant="ghost" onClick={handleCancelEdit}>
+                              Cancel Edit
+                            </Button>
+                          )}
+                        </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="position-name">Position Name</Label>
@@ -448,8 +628,12 @@ export const ShiftBiddingAdmin = () => {
                           </p>
                         </div>
 
-                        <Button type="button" onClick={handleAddPosition} className="w-full mt-2">
-                          <Plus className="h-4 w-4 mr-1" /> Add Position Rule
+                        <Button type="button" onClick={handleSavePositionItem} className="w-full mt-2">
+                          {editingIndex !== null ? (
+                            <>Update Position in Staging</>
+                          ) : (
+                            <><Plus className="h-4 w-4 mr-1" /> Add Position Rule</>
+                          )}
                         </Button>
                       </div>
 
@@ -459,8 +643,8 @@ export const ShiftBiddingAdmin = () => {
                           {configuredPositions.length === 0 ? (
                             <p className="text-sm text-muted-foreground italic">No positions configured for this shift type yet.</p>
                           ) : (
-                            configuredPositions.map((pos) => (
-                              <div key={pos.position_name} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                            configuredPositions.map((pos, idx) => (
+                              <div key={idx} className={`flex items-center justify-between p-3 border rounded-lg bg-card ${editingIndex === idx ? 'border-primary bg-primary/5' : ''}`}>
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
                                     <span className="font-semibold text-sm">{pos.position_name}</span>
@@ -472,15 +656,27 @@ export const ShiftBiddingAdmin = () => {
                                     Recurring Days: {formatDaysSummary(pos.recurring_days)}
                                   </p>
                                 </div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleRemovePosition(pos.position_name)}
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleEditPosition(idx)}
+                                    title="Edit position"
+                                  >
+                                    <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleRemovePosition(idx)}
+                                    title="Delete position"
+                                    className="text-muted-foreground hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             ))
                           )}
@@ -488,19 +684,19 @@ export const ShiftBiddingAdmin = () => {
                       </div>
 
                       <Button onClick={handleSavePositions} className="w-full mt-4" disabled={saveAllowedPositions.isPending}>
-                        Save All Position Rules
+                        Save All Position Rules to Database
                       </Button>
                     </div>
                   )}
                 </div>
 
                 <div className="bg-muted/30 p-5 rounded-lg border space-y-3">
-                  <h3 className="font-semibold text-sm">How Shift Positions & Rank Restrictions Work</h3>
+                  <h3 className="font-semibold text-sm">How Custom Saved Presets Work</h3>
                   <p className="text-sm text-muted-foreground">
-                    Administrators can specify supervisor and officer positions tied to specific ranks (e.g. only a Lieutenant can choose a Lieutenant position).
+                    Configure your desired positions and recurring schedules for any shift type, then click <b>"Save as Preset"</b> to save them as a custom template.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Configuring recurring schedule days (e.g. Tuesday, Wednesday, Thursday, Friday) ensures that when an officer locks their shift bid, their official recurring work schedule for the year is populated automatically.
+                    You can load any saved preset template into other shift types instantly, and delete presets you no longer need.
                   </p>
                 </div>
               </div>

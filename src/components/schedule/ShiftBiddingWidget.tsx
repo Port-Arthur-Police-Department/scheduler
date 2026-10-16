@@ -94,19 +94,7 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
   }
 
   if (!activeRound) {
-    return (
-      <Card className="shadow-md border-primary/20">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" />
-            Annual Shift Bidding ({officerDivision || "General"})
-          </CardTitle>
-          <CardDescription>
-            No active shift bidding round currently open for your division ({officerDivision || "Unassigned"}).
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return null;
   }
 
   const currentlyActiveQueueItem = queue.find(q => q.status === 'active');

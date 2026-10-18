@@ -1,4 +1,4 @@
-# Port Arthur PD Shift Scheduler -
+# Port Arthur PD Shift Scheduler
 
 A progressive web application (PWA) for managing work schedules across a police department of **129+ officers**. It handles shift assignments, "The Book" of schedule views, PTO/vacation tracking, vacancy alerts, officer partnerships, staffing rules, and notifications — with tiered access for **officers**, **supervisors**, and **admins**.
 

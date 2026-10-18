@@ -14,21 +14,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PAPD Scheduler" />
 
-    <!-- iOS Home Screen Icon (absolute path — Vite prepends base at build) -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/scheduler/icons/icon-192x192.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
-    <link rel="apple-touch-icon" sizes="167x167" href="/scheduler/icons/icon-192x192.png" />
+    <!-- iOS Home Screen Icon (single 180x180 file — the only size iOS uses) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
 
     <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- Manifest -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Manifest is injected by vite-plugin-pwa — do not add manually -->
 
     <!-- Microsoft Tile -->
     <meta name="msapplication-TileColor" content="#1e40af" />
-    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
-    <meta name="msapplication-config" content="/browserconfig.xml" />
 
     <title>Police Department Scheduler</title>
     <script type="module" crossorigin src="/scheduler/assets/main-Ue66pJ2y.js"></script>

@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +113,46 @@ export const ShiftBiddingAdmin = () => {
   });
 
   const activeRound = rounds.find(r => r.id === (selectedRoundId || rounds[0]?.id));
+
+  // Supervisor override dialog state
+  const [overrideItem, setOverrideItem] = useState<any | null>(null);
+  const [overrideShiftTypeId, setOverrideShiftTypeId] = useState<string>("");
+  const [overridePosition, setOverridePosition] = useState<string>("");
+  const [isOverrideOpen, setIsOverrideOpen] = useState(false);
+  const overrideAllowedPositions = allAllowedPositions.filter(p => p.shift_type_id === overrideShiftTypeId);
+
+  const handleSupervisorOverride = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRound || !overrideItem) return;
+    if (!overrideShiftTypeId) {
+      toast.error("Please select a shift type");
+      return;
+    }
+    if (!overridePosition) {
+      toast.error("Please select a position");
+      return;
+    }
+
+    const isCurrentTurn = overrideItem.turn_index === activeRound.current_turn_index;
+    const nextTurnIndex = isCurrentTurn ? activeRound.current_turn_index + 1 : activeRound.current_turn_index;
+
+    submitSelection.mutate({
+      roundId: activeRound.id,
+      queueItemId: overrideItem.id,
+      shiftTypeId: overrideShiftTypeId,
+      positionName: overridePosition,
+      nextTurnIndex,
+      isOverride: true,
+    }, {
+      onSuccess: () => {
+        setIsOverrideOpen(false);
+        setOverrideItem(null);
+        setOverrideShiftTypeId("");
+        setOverridePosition("");
+        toast.success(`Supervisor override successful for ${overrideItem.profiles?.full_name}`);
+      }
+    });
+  };
 
   const handleCreateRound = (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,9 +341,10 @@ export const ShiftBiddingAdmin = () => {
       </div>
 
       <Tabs defaultValue="rounds" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
           <TabsTrigger value="rounds">Bidding Rounds & Queue</TabsTrigger>
           <TabsTrigger value="positions">Shift Position Config</TabsTrigger>
+          <TabsTrigger value="matrix">Availability Matrix</TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Rounds & Queue */}
@@ -451,18 +494,19 @@ export const ShiftBiddingAdmin = () => {
                             <TableHead>Badge #</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Selection</TableHead>
+                            <TableHead className="text-right">Supervisor Override</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {queueLoading ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                                 Loading queue...
                               </TableCell>
                             </TableRow>
                           ) : queue.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                                 No officers in queue. Click "Generate Seniority Queue" above.
                               </TableCell>
                             </TableRow>
@@ -500,6 +544,22 @@ export const ShiftBiddingAdmin = () => {
                                     ) : (
                                       <span className="text-xs text-muted-foreground">Pending</span>
                                     )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs gap-1"
+                                      onClick={() => {
+                                        setOverrideItem(item);
+                                        setOverrideShiftTypeId(item.selected_shift_type_id || shiftTypes[0]?.id || "");
+                                        setOverridePosition(item.selected_position_name || "");
+                                        setIsOverrideOpen(true);
+                                      }}
+                                    >
+                                      <UserCheck className="h-3 w-3" />
+                                      {isCompleted ? "Modify Selection" : "Override Turn"}
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -741,7 +801,101 @@ export const ShiftBiddingAdmin = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab 3: Availability Matrix */}
+        <TabsContent value="matrix" className="space-y-6">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Division Shift Bidding & Position Availability Matrix</CardTitle>
+              <CardDescription>
+                Real-time overview of claimed vs available positions grouped by shift type for Division {activeRound?.division || "N/A"}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BiddingMatrixView
+                round={activeRound}
+                queue={queue}
+                shiftTypes={shiftTypes}
+                allAllowedPositions={allAllowedPositions}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Supervisor Override Dialog */}
+      <Dialog open={isOverrideOpen} onOpenChange={setIsOverrideOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              Supervisor Override / Modify Selection
+            </DialogTitle>
+            <DialogDescription>
+              Make or modify shift selection on behalf of <b>{overrideItem?.profiles?.full_name}</b> (Rank: {overrideItem?.profiles?.rank || "Officer"}).
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSupervisorOverride} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Select Shift Type</Label>
+              <Select
+                value={overrideShiftTypeId}
+                onValueChange={(val) => {
+                  setOverrideShiftTypeId(val);
+                  setOverridePosition("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose shift type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {shiftTypes.map(st => (
+                    <SelectItem key={st.id} value={st.id}>
+                      {st.name} ({st.start_time} - {st.end_time})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {overrideShiftTypeId && (
+              <div className="space-y-2">
+                <Label>Select Position / Assignment</Label>
+                <Select
+                  value={overridePosition}
+                  onValueChange={setOverridePosition}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose allowed position..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {overrideAllowedPositions.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground text-center">
+                        No allowed positions configured for this shift type.
+                      </div>
+                    ) : (
+                      overrideAllowedPositions.map(ap => (
+                        <SelectItem key={ap.id} value={ap.position_name}>
+                          {ap.position_name} {ap.allowed_rank && ap.allowed_rank !== 'Any' ? `(Rank: ${ap.allowed_rank})` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsOverrideOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitSelection.isPending || !overrideShiftTypeId || !overridePosition}>
+                Confirm Override Selection
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

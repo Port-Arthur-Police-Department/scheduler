@@ -360,28 +360,33 @@ export const useShiftBiddingMutations = () => {
       }
 
       // 5. Advance queue to next officer or complete round
-      const { data: nextOfficer } = await supabase
-        .from("shift_bidding_queue")
-        .select("id")
-        .eq("round_id", roundId)
-        .eq("turn_index", nextTurnIndex)
-        .single();
+      // Only advance the active turn if it's a normal selection or if we are overriding the currently active person
+      const isOutOfTurnOverride = isOverride && queueItem.status !== 'active';
 
-      if (nextOfficer) {
-        await supabase
+      if (!isOutOfTurnOverride) {
+        const { data: nextOfficer } = await supabase
           .from("shift_bidding_queue")
-          .update({ status: 'active' })
-          .eq("id", nextOfficer.id);
+          .select("id")
+          .eq("round_id", roundId)
+          .eq("turn_index", nextTurnIndex)
+          .single();
 
-        await supabase
-          .from("shift_bidding_rounds")
-          .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
-          .eq("id", roundId);
-      } else {
-        await supabase
-          .from("shift_bidding_rounds")
-          .update({ status: 'completed', updated_at: new Date().toISOString() })
-          .eq("id", roundId);
+        if (nextOfficer) {
+          await supabase
+            .from("shift_bidding_queue")
+            .update({ status: 'active' })
+            .eq("id", nextOfficer.id);
+
+          await supabase
+            .from("shift_bidding_rounds")
+            .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
+            .eq("id", roundId);
+        } else {
+          await supabase
+            .from("shift_bidding_rounds")
+            .update({ status: 'completed', updated_at: new Date().toISOString() })
+            .eq("id", roundId);
+        }
       }
     },
     onSuccess: () => {

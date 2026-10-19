@@ -261,6 +261,8 @@ export const useShiftBiddingMutations = () => {
       shiftTypeId,
       positionName,
       nextTurnIndex,
+      isLastTurn,
+      isOverride,
     }: {
       roundId: string;
       queueItemId: string;
@@ -268,6 +270,7 @@ export const useShiftBiddingMutations = () => {
       positionName: string;
       nextTurnIndex: number;
       isLastTurn?: boolean;
+      isOverride?: boolean;
     }) => {
       // 1. Get queue item & round details (officer_id, round year)
       const { data: queueItem, error: queueItemError } = await supabase

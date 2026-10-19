@@ -211,8 +211,21 @@ export const useShiftBiddingMutations = () => {
         throw new Error(`No officers found assigned to division ${division}`);
       }
 
+      // Fetch service credit via RPC for each profile to include adjustments/overrides
+      const profilesWithCredit = await Promise.all(
+        profiles.map(async (profile) => {
+          const { data: creditData } = await supabase.rpc("get_service_credit", {
+            profile_id: profile.id,
+          });
+          return {
+            ...profile,
+            service_credit: creditData !== null ? Number(creditData) : 0,
+          };
+        })
+      );
+
       // 2. Sort officers consistently using seniority sorting algorithm
-      const sortedOfficers = sortOfficersConsistently(profiles);
+      const sortedOfficers = sortOfficersConsistently(profilesWithCredit);
 
       // 3. Clear existing queue for this round
       await supabase

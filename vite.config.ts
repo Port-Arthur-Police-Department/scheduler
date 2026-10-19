@@ -16,11 +16,8 @@ console.log('  VITE_BASE_PATH (raw):', process.env.VITE_BASE_PATH);
 // Normalize VITE_BASE_PATH if it was converted to Windows path by Git Bash
 let normalizedBasePath = process.env.VITE_BASE_PATH || '';
 if (normalizedBasePath.match(/^[A-Z]:/i)) {
-  // This is a Windows absolute path (starts with C:, D:, etc)
-  // Git Bash converted /staging/ to C:/Users/.../staging/
-  // We need to extract just /staging/ from it
   normalizedBasePath = normalizedBasePath.replace(/\\/g, '/');
-  const idx = normalizedBasePath.indexOf('/staging/');
+  const idx = normalizedBasePath.indexOf('/scheduler/');
   if (idx !== -1) {
     normalizedBasePath = normalizedBasePath.substring(idx);
   } else {
@@ -29,23 +26,24 @@ if (normalizedBasePath.match(/^[A-Z]:/i)) {
 }
 console.log('  VITE_BASE_PATH (normalized):', normalizedBasePath);
 
-// Determine base path - use normalized VITE_BASE_PATH from workflow if available
+// Determine base path
 let basePath = './';
 
-if (isProduction) {
-  if (normalizedBasePath) {
-    basePath = normalizedBasePath;
-    console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
-  } else if (process.env.GITHUB_REF_NAME === 'staging') {
-    basePath = '/staging/';
-    console.log('✅ Vite Config: Using /staging/ (staging branch)');
+if (normalizedBasePath) {
+  basePath = normalizedBasePath;
+  console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
+} else if (isProduction) {
+  if (process.env.GITHUB_REF_NAME === 'staging') {
+    basePath = '/scheduler/staging/';
+    console.log('✅ Vite Config: Using /scheduler/staging/ (staging branch)');
   } else {
     basePath = '/scheduler/';
-    console.log('✅ Vite Config: Using /scheduler/ (main branch)');
+    console.log('✅ Vite Config: Using /scheduler/ (production/main branch)');
   }
 } else {
   console.log('✅ Vite Config: Using ./ base path (development mode)');
 }
+
 
 export default defineConfig({
   plugins: [
@@ -125,7 +123,7 @@ export default defineConfig({
   },
 
   server: {
-    port: isStackblitz ? 5173 : (process.env.PORT || 3000),
+    port: isStackblitz ? 5173 : (process.env.PORT ? Number(process.env.PORT) : 3000),
     open: !isStackblitz,
     host: true,
   },

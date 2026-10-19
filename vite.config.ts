@@ -29,22 +29,20 @@ if (normalizedBasePath.match(/^[A-Z]:/i)) {
 }
 console.log('  VITE_BASE_PATH (normalized):', normalizedBasePath);
 
-// Determine base path - use normalized VITE_BASE_PATH from workflow if available
+// Determine base path - use './' by default for robust relative asset loading
 let basePath = './';
 
-if (isProduction) {
-  if (normalizedBasePath) {
-    basePath = normalizedBasePath;
-    console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
-  } else if (process.env.GITHUB_REF_NAME === 'staging') {
-    basePath = '/staging/';
-    console.log('✅ Vite Config: Using /staging/ (staging branch)');
-  } else {
-    basePath = '/scheduler/';
-    console.log('✅ Vite Config: Using /scheduler/ (main branch)');
-  }
+if (normalizedBasePath) {
+  basePath = normalizedBasePath;
+  console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
+} else if (process.env.GITHUB_REF_NAME === 'staging') {
+  basePath = '/staging/';
+  console.log('✅ Vite Config: Using /staging/ (staging branch)');
+} else if (process.env.GITHUB_REF_NAME === 'main') {
+  basePath = '/scheduler/';
+  console.log('✅ Vite Config: Using /scheduler/ (main branch)');
 } else {
-  console.log('✅ Vite Config: Using ./ base path (development mode)');
+  console.log('✅ Vite Config: Using ./ base path (default relative)');
 }
 
 export default defineConfig({

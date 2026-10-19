@@ -42,9 +42,9 @@ jobs:
             echo "APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/scheduler/" >> $GITHUB_OUTPUT
             echo "ENV_NAME=production" >> $GITHUB_OUTPUT
           else
-            # Staging branch publishes to /staging/ subfolder for preview
+            # Staging branch publishes to /staging/ subfolder for preview under /scheduler/staging/
             echo "DEST_DIR=staging" >> $GITHUB_OUTPUT
-            echo "BASE_PATH=/staging/" >> $GITHUB_OUTPUT
+            echo "BASE_PATH=/scheduler/staging/" >> $GITHUB_OUTPUT
             echo "APP_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/staging/" >> $GITHUB_OUTPUT
             echo "ENV_NAME=staging" >> $GITHUB_OUTPUT
           fi

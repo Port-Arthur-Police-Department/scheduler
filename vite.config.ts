@@ -32,15 +32,18 @@ let basePath = './';
 if (normalizedBasePath) {
   basePath = normalizedBasePath;
   console.log('✅ Vite Config: Using normalized VITE_BASE_PATH:', basePath);
-} else if (process.env.GITHUB_REF_NAME === 'staging') {
-  basePath = '/scheduler/staging/';
-  console.log('✅ Vite Config: Using /scheduler/staging/ (staging branch)');
-} else if (process.env.GITHUB_REF_NAME === 'main') {
-  basePath = '/scheduler/';
-  console.log('✅ Vite Config: Using /scheduler/ (main branch)');
+} else if (isProduction) {
+  if (process.env.GITHUB_REF_NAME === 'staging') {
+    basePath = '/scheduler/staging/';
+    console.log('✅ Vite Config: Using /scheduler/staging/ (staging branch)');
+  } else {
+    basePath = '/scheduler/';
+    console.log('✅ Vite Config: Using /scheduler/ (production/main branch)');
+  }
 } else {
-  console.log('✅ Vite Config: Using ./ base path (default relative)');
+  console.log('✅ Vite Config: Using ./ base path (development mode)');
 }
+
 
 export default defineConfig({
   plugins: [

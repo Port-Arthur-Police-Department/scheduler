@@ -272,10 +272,10 @@ export const useShiftBiddingMutations = () => {
       isLastTurn?: boolean;
       isOverride?: boolean;
     }) => {
-      // 1. Get queue item & round details (officer_id, round year)
+      // 1. Get queue item & round details (officer_id, round year, status)
       const { data: queueItem, error: queueItemError } = await supabase
         .from("shift_bidding_queue")
-        .select("officer_id, round_id")
+        .select("officer_id, round_id, status")
         .eq("id", queueItemId)
         .single();
 

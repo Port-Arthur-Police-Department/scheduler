@@ -30,19 +30,10 @@ const calculateServiceCredit = (
   debugLog('calculateServiceCredit called with:', {
     hireDate,
     override,
-    hasOverride: override !== undefined && override !== null && override > 0,
     promotionDateSergeant,
     promotionDateLieutenant,
     currentRank
   });
-
-  // If there's an override and it's greater than 0, use it
-  if (override !== undefined && override !== null && override > 0) {
-    debugLog(`Using override: ${override} (instead of calculating)`);
-    return override;
-  }
-
-  debugLog('No override or override is 0, calculating from dates...');
 
   // Determine which date to use based on rank and promotion dates
   let relevantDate: Date | null = null;
@@ -66,28 +57,27 @@ const calculateServiceCredit = (
     relevantDate = new Date(hireDate);
   }
 
-  if (!relevantDate) {
-    debugLog('No relevant date found, returning 0');
-    return 0;
+  let baseCredit = 0;
+  if (relevantDate) {
+    try {
+      const now = new Date();
+      const years = now.getFullYear() - relevantDate.getFullYear();
+      const months = now.getMonth() - relevantDate.getMonth();
+      const days = now.getDate() - relevantDate.getDate();
+
+      // Calculate decimal years (3 decimal places for precision)
+      const totalYears = years + (months / 12) + (days / 365);
+      baseCredit = Math.max(0, Math.round(totalYears * 1000) / 1000);
+    } catch (error) {
+      console.error('Error calculating service credit:', error);
+    }
   }
 
-  try {
-    const now = new Date();
-    const years = now.getFullYear() - relevantDate.getFullYear();
-    const months = now.getMonth() - relevantDate.getMonth();
-    const days = now.getDate() - relevantDate.getDate();
-
-    // Calculate decimal years
-    const totalYears = years + (months / 12) + (days / 365);
-
-    // Round to 1 decimal place
-    const result = Math.max(0, Math.round(totalYears * 10) / 10);
-    debugLog(`Calculated service credit: ${result} from date: ${relevantDate.toISOString().split('T')[0]}`);
-    return result;
-  } catch (error) {
-    console.error('Error calculating service credit:', error);
-    return 0;
-  }
+  const adjustment = override !== undefined && override !== null && !isNaN(Number(override)) ? Number(override) : 0;
+  const result = Math.max(0, baseCredit + adjustment);
+  const finalResult = Math.round(result * 1000) / 1000;
+  debugLog(`Calculated service credit: ${finalResult} (base: ${baseCredit}, adjustment: ${adjustment})`);
+  return finalResult;
 };
 
 export interface OfficerForSorting {

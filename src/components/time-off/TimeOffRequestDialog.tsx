@@ -36,6 +36,9 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
   const [calculating, setCalculating] = useState(false);
   const queryClient = useQueryClient();
 
+  // Add website settings hook
+  const { data: settings } = useWebsiteSettings();
+
   // Reset selectedOfficerId when dialog opens or userId changes
   useEffect(() => {
     if (open) {

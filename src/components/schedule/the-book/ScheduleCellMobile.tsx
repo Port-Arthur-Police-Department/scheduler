@@ -21,6 +21,7 @@ interface ScheduleCellMobileProps {
   onRemovePTO?: (schedule: any, dateStr: string, officerId: string) => void;
   onEditAssignment?: (officer: any, dateStr: string) => void;
   onRemoveOfficer?: (scheduleId: string, type: 'recurring' | 'exception', officerData?: any) => void;
+  onReviewPTO?: (timeOffRequestId: string, officerName: string, dateStr: string) => void;
   isUpdating?: boolean;
 }
 
@@ -85,6 +86,7 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
   onRemovePTO,
   onEditAssignment,
   onRemoveOfficer,
+  onReviewPTO,
   isUpdating = false,
 }) => {
   const hasOfficerData = officer && officer.shiftInfo;
@@ -170,7 +172,18 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
             </span>
           </div>
           {shiftInfo?.ptoData?.isPending && (
-            <Badge variant="outline" className="text-[9px] px-0.5 py-0 bg-amber-100 text-amber-800 border-amber-300 mt-0.5">
+            <Badge
+              variant="outline"
+              className={`text-[9px] px-0.5 py-0 bg-amber-100 text-amber-800 border-amber-300 mt-0.5 ${isAdminOrSupervisor && (shiftInfo?.ptoData?.timeOffRequestId || shiftInfo?.scheduleId) ? 'cursor-pointer hover:bg-amber-200' : ''}`}
+              onClick={(e) => {
+                const torId = shiftInfo?.ptoData?.timeOffRequestId || shiftInfo?.scheduleId;
+                if (isAdminOrSupervisor && torId) {
+                  e.stopPropagation();
+                  onReviewPTO?.(torId, officerName, dateStr);
+                }
+              }}
+              title={isAdminOrSupervisor ? "Click to review/approve/deny pending request" : undefined}
+            >
               Pending
             </Badge>
           )}

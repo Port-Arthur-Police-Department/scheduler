@@ -16,6 +16,7 @@ import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { sendPTORequestNotification } from "@/utils/notifications";
+import { isSupervisorByRank } from "@/components/schedule/the-book/utils";
 
 interface TimeOffRequestDialogProps {
   open: boolean;
@@ -95,6 +96,23 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
     gcTime: 60 * 60 * 1000,
   });
 
+  // Fetch requesting officer's rank to determine staffing category
+  const { data: requestingOfficer } = useQuery({
+    queryKey: ["requesting-officer", selectedOfficerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("rank, full_name, badge_number")
+        .eq("id", selectedOfficerId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!selectedOfficerId,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+
   // Fetch and calculate affected shifts and daily staffing when dates change or dialog opens
   useEffect(() => {
     if (startDate && endDate && selectedOfficerId && shiftTypes) {
@@ -106,7 +124,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
     }
   }, [startDate, endDate, selectedOfficerId, shiftTypes, open]);
 
-  // Function to fetch affected shifts and daily staffing
+  // Function to fetch affected shifts and staffing
   const fetchAffectedShiftsAndStaffing = async () => {
     if (!startDate || !endDate || !selectedOfficerId || !shiftTypes) {
       setAffectedShifts([]);
@@ -123,6 +141,23 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
 
       const startDateStr = format(startDate, "yyyy-MM-dd");
       const endDateStr = format(endDate, "yyyy-MM-dd");
+
+      // Get requesting officer rank
+      const { data: reqProfile } = await supabase
+        .from("profiles")
+        .select("rank")
+        .eq("id", selectedOfficerId)
+        .single();
+
+      const isReqSupervisor = reqProfile ? isSupervisorByRank(reqProfile) : false;
+
+      // Fetch all profiles with rank for shift staffing calculations
+      const { data: allProfiles } = await supabase
+        .from("profiles")
+        .select("id, rank");
+
+      const profileRankMap = new Map();
+      allProfiles?.forEach(p => profileRankMap.set(p.id, p.rank));
 
       // Get officer's recurring schedules that are active during this period
       const { data: recurringSchedules, error: scheduleError } = await supabase
@@ -144,9 +179,8 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
         .eq("is_off", false);
 
       const affectedShiftsData: any[] = [];
-      const staffingSummaryData: any[] = [];
 
-      // Fetch all active schedules / exceptions for these days to calculate department staffing impact
+      // Fetch all active schedules / exceptions for these days to calculate shift staffing
       const { data: allExceptions } = await supabase
         .from("schedule_exceptions")
         .select("*")
@@ -184,6 +218,45 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
         for (const schedule of daySchedules) {
           const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
           if (shift) {
+            // Calculate shift-specific staffing for this shift_type_id on dateStr
+            const shiftRecurringIds = allRecurring?.filter(r => {
+              if (r.shift_type_id !== shift.id) return false;
+              if (r.day_of_week !== dayOfWeek) return false;
+              const rStart = new Date(r.start_date);
+              const rEnd = r.end_date ? new Date(r.end_date) : null;
+              const cur = new Date(dateStr);
+              return cur >= rStart && (!rEnd || cur <= rEnd);
+            }).map(r => r.officer_id) || [];
+
+            const shiftExceptionIds = allExceptions?.filter(e => {
+              if (e.date !== dateStr) return false;
+              if (e.shift_type_id !== shift.id) return false;
+              return !e.is_off && !e.is_pto;
+            }).map(e => e.officer_id) || [];
+
+            const offIdsSet = new Set(allExceptions?.filter(e => e.date === dateStr && (e.is_off || e.is_pto)).map(e => e.officer_id) || []);
+
+            const shiftWorkingIds = new Set([
+              ...shiftRecurringIds.filter(id => !offIdsSet.has(id)),
+              ...shiftExceptionIds
+            ]);
+
+            let supCount = 0;
+            let ofcCount = 0;
+            shiftWorkingIds.forEach(id => {
+              const rank = profileRankMap.get(id) || '';
+              if (isSupervisorByRank({ rank })) {
+                supCount++;
+              } else {
+                ofcCount++;
+              }
+            });
+
+            const relevantCount = isReqSupervisor ? supCount : ofcCount;
+            const shiftStaffingLabel = isReqSupervisor
+              ? `${relevantCount} supervisor${relevantCount === 1 ? '' : 's'} working`
+              : `${relevantCount} officer${relevantCount === 1 ? '' : 's'} working`;
+
             affectedShiftsData.push({
               date: dateStr,
               dayName: dayName,
@@ -191,7 +264,8 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
               shiftTime: `${shift.start_time} - ${shift.end_time}`,
               unitNumber: schedule.unit_number,
               positionName: schedule.position_name,
-              hours: calculateShiftHours(shift.start_time, shift.end_time)
+              hours: calculateShiftHours(shift.start_time, shift.end_time),
+              shiftStaffingLabel
             });
           }
         }
@@ -201,40 +275,59 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
           if (shift) {
             const startTime = dayException.custom_start_time || shift.start_time;
             const endTime = dayException.custom_end_time || shift.end_time;
+
+            const shiftRecurringIds = allRecurring?.filter(r => {
+              if (r.shift_type_id !== shift.id) return false;
+              if (r.day_of_week !== dayOfWeek) return false;
+              const rStart = new Date(r.start_date);
+              const rEnd = r.end_date ? new Date(r.end_date) : null;
+              const cur = new Date(dateStr);
+              return cur >= rStart && (!rEnd || cur <= rEnd);
+            }).map(r => r.officer_id) || [];
+
+            const shiftExceptionIds = allExceptions?.filter(e => {
+              if (e.date !== dateStr) return false;
+              if (e.shift_type_id !== shift.id) return false;
+              return !e.is_off && !e.is_pto;
+            }).map(e => e.officer_id) || [];
+
+            const offIdsSet = new Set(allExceptions?.filter(e => e.date === dateStr && (e.is_off || e.is_pto)).map(e => e.officer_id) || []);
+
+            const shiftWorkingIds = new Set([
+              ...shiftRecurringIds.filter(id => !offIdsSet.has(id)),
+              ...shiftExceptionIds
+            ]);
+
+            let supCount = 0;
+            let ofcCount = 0;
+            shiftWorkingIds.forEach(id => {
+              const rank = profileRankMap.get(id) || '';
+              if (isSupervisorByRank({ rank })) {
+                supCount++;
+              } else {
+                ofcCount++;
+              }
+            });
+
+            const relevantCount = isReqSupervisor ? supCount : ofcCount;
+            const shiftStaffingLabel = isReqSupervisor
+              ? `${relevantCount} supervisor${relevantCount === 1 ? '' : 's'} working`
+              : `${relevantCount} officer${relevantCount === 1 ? '' : 's'} working`;
+
             affectedShiftsData.push({
               date: dateStr,
               dayName: dayName,
               shiftName: shift.name,
               shiftTime: `${startTime} - ${endTime}`,
-              hours: calculateShiftHours(startTime, endTime)
+              hours: calculateShiftHours(startTime, endTime),
+              shiftStaffingLabel
             });
           }
         }
-
-        // Calculate department staffing for this specific date (only for days the user is scheduled)
-        const dayExceptions = allExceptions?.filter(e => e.date === dateStr) || [];
-        const offOfficerIdsSet = new Set(dayExceptions.filter(e => e.is_off || e.is_pto).map(e => e.officer_id));
-
-        const activeRecurringCount = allRecurring?.filter(r => {
-          if (r.day_of_week !== dayOfWeek) return false;
-          const rStart = new Date(r.start_date);
-          const rEnd = r.end_date ? new Date(r.end_date) : null;
-          const cur = new Date(dateStr);
-          return cur >= rStart && (!rEnd || cur <= rEnd) && !offOfficerIdsSet.has(r.officer_id);
-        }).length || 0;
-
-        const extraWorkingCount = dayExceptions.filter(e => !e.is_off && !e.is_pto).length;
-        const totalWorkingOnDate = Math.max(0, activeRecurringCount + extraWorkingCount);
-
-        staffingSummaryData.push({
-          date: dateStr,
-          dayName,
-          workingCount: totalWorkingOnDate,
-        });
       }
 
       setAffectedShifts(affectedShiftsData);
-      setDailyStaffingSummary(staffingSummaryData);
+      setDailyStaffingSummary([]);
     } catch (error) {
       console.error("Error fetching affected shifts and staffing:", error);
       toast.error("Failed to load scheduled shifts and staffing impact");
@@ -471,61 +564,43 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
                 </div>
               </div>
 
-              <div className="mt-2 max-h-40 overflow-y-auto">
-                <p className="font-medium mb-1 text-sm">Shift Details:</p>
+              <div className="mt-2 max-h-60 overflow-y-auto space-y-2">
+                <p className="font-medium mb-1 text-sm">Shift Details & Staffing:</p>
                 {affectedShifts.map((shift, index) => (
-                  <div key={index} className="text-xs p-2 border-b last:border-b-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-medium">{shift.dayName}, {format(new Date(shift.date), "MMM d")}</span>
+                  <div key={index} className="text-xs p-2.5 border rounded-md bg-white space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-900">{shift.dayName}, {format(new Date(shift.date), "MMM d")}</span>
                       <Badge variant="outline" className="text-xs">
                         {shift.shiftName}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{shift.shiftTime}</span>
-                      {shift.unitNumber && (
-                        <>
-                          <MapPin className="h-3 w-3 ml-2" />
-                          <span>{shift.unitNumber}</span>
-                        </>
-                      )}
-                      {shift.positionName && (
-                        <>
-                          <Building className="h-3 w-3 ml-2" />
-                          <span>{shift.positionName}</span>
-                        </>
-                      )}
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3 w-3" />
+                        <span>{shift.shiftTime}</span>
+                        {shift.unitNumber && (
+                          <>
+                            <MapPin className="h-3 w-3 ml-1" />
+                            <span>{shift.unitNumber}</span>
+                          </>
+                        )}
+                        {shift.positionName && (
+                          <>
+                            <Building className="h-3 w-3 ml-1" />
+                            <span>{shift.positionName}</span>
+                          </>
+                        )}
+                      </div>
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-800 border border-blue-200">
+                        {shift.shiftStaffingLabel}
+                      </Badge>
                     </div>
                   </div>
                 ))}
               </div>
 
               <p className="text-xs text-muted-foreground mt-2">
-                These are your regularly scheduled shifts that will be affected by this time off request.
-              </p>
-            </div>
-          )}
-
-          {/* Daily Staffing Summary on Requested Dates */}
-          {startDate && endDate && dailyStaffingSummary.length > 0 && (
-            <div className="space-y-3 p-4 border rounded-lg bg-blue-50/50">
-              <h4 className="font-semibold text-sm flex items-center gap-2 text-blue-900">
-                <Users className="h-4 w-4" />
-                Department Staffing on Requested Dates ({dailyStaffingSummary.length} days)
-              </h4>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {dailyStaffingSummary.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs p-2 bg-white/80 border border-blue-100 rounded">
-                    <span className="font-medium text-blue-900">{item.dayName}, {format(new Date(item.date), "MMM d, yyyy")}</span>
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                      {item.workingCount} officers working
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Review department staffing levels before submitting time off request.
+                These are your regularly scheduled shifts affected by this time off request, along with shift staffing levels.
               </p>
             </div>
           )}

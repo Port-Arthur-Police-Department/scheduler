@@ -311,6 +311,22 @@ const TheBook = ({
 
         if (exceptionsError) throw exceptionsError;
 
+        // Fetch recurring schedules
+        let { data: recurringSchedules, error: recurringError } = await supabase
+          .from("recurring_schedules")
+          .select(`
+            *,
+            profiles:officer_id (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("shift_type_id", selectedShiftId)
+          .or(`end_date.is.null,end_date.gte.${startStr}`);
+
+        if (recurringError) throw recurringError;
+
         // Fetch pending time off requests
         const { data: pendingTorData } = await supabase
           .from("time_off_requests")
@@ -364,22 +380,6 @@ const TheBook = ({
             }
           }
         }
-
-        // Fetch recurring schedules
-        let { data: recurringSchedules, error: recurringError } = await supabase
-          .from("recurring_schedules")
-          .select(`
-            *,
-            profiles:officer_id (
-              id, full_name, badge_number, rank, hire_date,
-              promotion_date_sergeant, promotion_date_lieutenant,
-              service_credit_override
-            )
-          `)
-          .eq("shift_type_id", selectedShiftId)
-          .or(`end_date.is.null,end_date.gte.${startStr}`);
-
-        if (recurringError) throw recurringError;
 
         // Get the cycle start date for this shift (only if Dispatch)
         let cycleStartDate: Date | null = null;

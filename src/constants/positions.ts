@@ -3,7 +3,7 @@ export const PREDEFINED_POSITIONS = [
   "Supervisor",
   "District 1",
   "District 1/2",
-  "District 2", 
+  "District 2",
   "District 3",
   "District 4",
   "District 5",
@@ -12,11 +12,6 @@ export const PREDEFINED_POSITIONS = [
   "District 7/8",
   "District 9",
   "City-Wide",
-  "Dispatch-A",
-  "Dispatch-B",
-  "Dispatch Supervisor",
-  "Dispatch Call Taker",
-  "Dispatch Fire",
   "Other (Custom)",
 ] as const;
 

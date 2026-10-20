@@ -134,6 +134,15 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
 
       if (scheduleError) throw scheduleError;
 
+      // Also get any officer exceptions (working shifts) for this period
+      const { data: officerExceptions } = await supabase
+        .from("schedule_exceptions")
+        .select("date, shift_type_id, is_off, custom_start_time, custom_end_time")
+        .eq("officer_id", selectedOfficerId)
+        .gte("date", startDateStr)
+        .lte("date", endDateStr)
+        .eq("is_off", false);
+
       const affectedShiftsData: any[] = [];
       const staffingSummaryData: any[] = [];
 
@@ -155,6 +164,9 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
         const dateStr = format(day, "yyyy-MM-dd");
         const dayName = format(day, "EEEE");
 
+        // Check if officer has a working exception on this date
+        const dayException = officerExceptions?.find(e => e.date === dateStr);
+
         // Check if officer has a recurring schedule for this day
         const daySchedules = recurringSchedules?.filter(s => {
           if (s.day_of_week !== dayOfWeek) return false;
@@ -163,6 +175,11 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
           const currentDate = new Date(dateStr);
           return currentDate >= scheduleStart && (!scheduleEnd || currentDate <= scheduleEnd);
         }) || [];
+
+        // If neither exception (working) nor recurring schedule exists for this day, skip it!
+        if (!dayException && daySchedules.length === 0) {
+          continue;
+        }
 
         for (const schedule of daySchedules) {
           const shift = shiftTypes.find(s => s.id === schedule.shift_type_id);
@@ -179,8 +196,22 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
           }
         }
 
-        // Calculate department staffing for this specific date
-        // Count working officers on this date (recurring matching day minus exceptions that are off/PTO)
+        if (dayException) {
+          const shift = shiftTypes.find(s => s.id === dayException.shift_type_id);
+          if (shift) {
+            const startTime = dayException.custom_start_time || shift.start_time;
+            const endTime = dayException.custom_end_time || shift.end_time;
+            affectedShiftsData.push({
+              date: dateStr,
+              dayName: dayName,
+              shiftName: shift.name,
+              shiftTime: `${startTime} - ${endTime}`,
+              hours: calculateShiftHours(startTime, endTime)
+            });
+          }
+        }
+
+        // Calculate department staffing for this specific date (only for days the user is scheduled)
         const dayExceptions = allExceptions?.filter(e => e.date === dateStr) || [];
         const offOfficerIdsSet = new Set(dayExceptions.filter(e => e.is_off || e.is_pto).map(e => e.officer_id));
 

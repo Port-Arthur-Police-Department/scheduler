@@ -26,14 +26,14 @@ export const PositionEditor = ({
 
   const isCustom = currentPosition && !availablePositions.includes(currentPosition);
 
-  const [editPosition, setEditPosition] = useState(isCustom ? "Other (Custom)" : (currentPosition || ""));
+  const [editPosition, setEditPosition] = useState(
+    isCustom ? "Other (Custom)" : (currentPosition || "__none__")
+  );
   const [customPosition, setCustomPosition] = useState(isCustom ? currentPosition : "");
 
   const handleSave = () => {
-    const finalPosition = editPosition === "Other (Custom)" ? customPosition : editPosition;
-    if (!finalPosition) {
-      return;
-    }
+    const rawPosition = editPosition === "Other (Custom)" ? customPosition : editPosition;
+    const finalPosition = rawPosition === "__none__" ? "" : rawPosition;
     onSave(finalPosition);
   };
 
@@ -45,7 +45,7 @@ export const PositionEditor = ({
             <SelectValue placeholder="Select position" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">(No Position)</SelectItem>
+            <SelectItem value="__none__">(No Position)</SelectItem>
             {availablePositions.map((pos) => (
               <SelectItem key={pos} value={pos}>
                 {pos}

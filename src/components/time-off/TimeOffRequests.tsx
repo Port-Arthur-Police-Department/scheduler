@@ -107,12 +107,10 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
               {isAdminOrSupervisor ? "Manage all time off requests" : "View and submit your time off requests"}
             </CardDescription>
           </div>
-          {!isAdminOrSupervisor && (
-            <Button onClick={() => setDialogOpen(true)} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Request
-            </Button>
-          )}
+          <Button onClick={() => setDialogOpen(true)} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            New Request
+          </Button>
         </div>
 
         {/* Add PTO status indicator */}
@@ -224,6 +222,7 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         userId={userId}
+        isAdminOrSupervisor={isAdminOrSupervisor}
       />
     </Card>
   );

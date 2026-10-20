@@ -21,35 +21,57 @@ interface TimeOffRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
+  isAdminOrSupervisor?: boolean;
 }
 
-export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequestDialogProps) => {
+export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupervisor }: TimeOffRequestDialogProps) => {
+  const [selectedOfficerId, setSelectedOfficerId] = useState<string>(userId);
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [reason, setReason] = useState("");
   const [ptoType, setPtoType] = useState<string>("vacation");
   const [hoursRequired, setHoursRequired] = useState<number>(0);
   const [affectedShifts, setAffectedShifts] = useState<any[]>([]);
+  const [dailyStaffingSummary, setDailyStaffingSummary] = useState<any[]>([]);
   const [calculating, setCalculating] = useState(false);
   const queryClient = useQueryClient();
 
-  // Add website settings hook
-  const { data: settings } = useWebsiteSettings();
+  // Reset selectedOfficerId when dialog opens or userId changes
+  useEffect(() => {
+    if (open) {
+      setSelectedOfficerId(userId);
+    }
+  }, [open, userId]);
 
-  // Fetch user's current PTO balances
+  // Fetch all profiles if supervisor/admin
+  const { data: allOfficers } = useQuery({
+    queryKey: ["all-officers-profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, badge_number")
+        .order("full_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!isAdminOrSupervisor,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Fetch user's current PTO balances for selected officer
   const { data: userProfile } = useQuery({
-    queryKey: ["user-profile-pto", userId],
+    queryKey: ["user-profile-pto", selectedOfficerId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("vacation_hours, sick_hours, comp_hours, holiday_hours, full_name")
-        .eq("id", userId)
+        .eq("id", selectedOfficerId)
         .single();
 
       if (error) throw error;
       return data;
     },
-    enabled: open && settings?.show_pto_balances,
+    enabled: open && (!!settings?.show_pto_balances || isAdminOrSupervisor),
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
@@ -70,45 +92,60 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
     gcTime: 60 * 60 * 1000,
   });
 
-  // Fetch and calculate affected shifts when dates change or dialog opens
+  // Fetch and calculate affected shifts and daily staffing when dates change or dialog opens
   useEffect(() => {
-    if (startDate && endDate && userId && shiftTypes) {
-      fetchAffectedShifts();
+    if (startDate && endDate && selectedOfficerId && shiftTypes) {
+      fetchAffectedShiftsAndStaffing();
     } else {
       setAffectedShifts([]);
+      setDailyStaffingSummary([]);
       setHoursRequired(0);
     }
-  }, [startDate, endDate, userId, shiftTypes, open]); // Added 'open' to dependencies
+  }, [startDate, endDate, selectedOfficerId, shiftTypes, open]);
 
-  // Function to fetch affected shifts
-  const fetchAffectedShifts = async () => {
-    if (!startDate || !endDate || !userId || !shiftTypes) {
+  // Function to fetch affected shifts and daily staffing
+  const fetchAffectedShiftsAndStaffing = async () => {
+    if (!startDate || !endDate || !selectedOfficerId || !shiftTypes) {
       setAffectedShifts([]);
+      setDailyStaffingSummary([]);
       return;
     }
 
     setCalculating(true);
     try {
-      // Get all days in the date range
       const days = eachDayOfInterval({
         start: startOfDay(startDate),
         end: endOfDay(endDate)
       });
 
-      // Format dates for Supabase query
       const startDateStr = format(startDate, "yyyy-MM-dd");
+      const endDateStr = format(endDate, "yyyy-MM-dd");
 
       // Get officer's recurring schedules that are active during this period
       const { data: recurringSchedules, error: scheduleError } = await supabase
         .from("recurring_schedules")
         .select("day_of_week, shift_type_id, unit_number, position_name, start_date, end_date")
-        .eq("officer_id", userId)
+        .eq("officer_id", selectedOfficerId)
         .or(`end_date.is.null,end_date.gte.${startDateStr}`)
-        .lte("start_date", format(endDate, "yyyy-MM-dd"));
+        .lte("start_date", endDateStr);
 
       if (scheduleError) throw scheduleError;
 
       const affectedShiftsData: any[] = [];
+      const staffingSummaryData: any[] = [];
+
+      // Fetch all active schedules / exceptions for these days to calculate department staffing impact
+      const { data: allExceptions } = await supabase
+        .from("schedule_exceptions")
+        .select("*")
+        .gte("date", startDateStr)
+        .lte("date", endDateStr);
+
+      const { data: allRecurring } = await supabase
+        .from("recurring_schedules")
+        .select("officer_id, day_of_week, shift_type_id, start_date, end_date")
+        .or(`end_date.is.null,end_date.gte.${startDateStr}`)
+        .lte("start_date", endDateStr);
 
       for (const day of days) {
         const dayOfWeek = day.getDay();
@@ -117,19 +154,11 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
 
         // Check if officer has a recurring schedule for this day
         const daySchedules = recurringSchedules?.filter(s => {
-          // Check if schedule applies to this day of week
           if (s.day_of_week !== dayOfWeek) return false;
-
-          // Check if schedule is active on this specific date
           const scheduleStart = new Date(s.start_date);
           const scheduleEnd = s.end_date ? new Date(s.end_date) : null;
-
           const currentDate = new Date(dateStr);
-
-          // Schedule is active if current date is on or after start date
-          // AND (no end date OR current date is on or before end date)
-          return currentDate >= scheduleStart &&
-            (!scheduleEnd || currentDate <= scheduleEnd);
+          return currentDate >= scheduleStart && (!scheduleEnd || currentDate <= scheduleEnd);
         }) || [];
 
         for (const schedule of daySchedules) {
@@ -146,12 +175,35 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
             });
           }
         }
+
+        // Calculate department staffing for this specific date
+        // Count working officers on this date (recurring matching day minus exceptions that are off/PTO)
+        const dayExceptions = allExceptions?.filter(e => e.date === dateStr) || [];
+        const offOfficerIdsSet = new Set(dayExceptions.filter(e => e.is_off || e.is_pto).map(e => e.officer_id));
+
+        const activeRecurringCount = allRecurring?.filter(r => {
+          if (r.day_of_week !== dayOfWeek) return false;
+          const rStart = new Date(r.start_date);
+          const rEnd = r.end_date ? new Date(r.end_date) : null;
+          const cur = new Date(dateStr);
+          return cur >= rStart && (!rEnd || cur <= rEnd) && !offOfficerIdsSet.has(r.officer_id);
+        }).length || 0;
+
+        const extraWorkingCount = dayExceptions.filter(e => !e.is_off && !e.is_pto).length;
+        const totalWorkingOnDate = Math.max(0, activeRecurringCount + extraWorkingCount);
+
+        staffingSummaryData.push({
+          date: dateStr,
+          dayName,
+          workingCount: totalWorkingOnDate,
+        });
       }
 
       setAffectedShifts(affectedShiftsData);
+      setDailyStaffingSummary(staffingSummaryData);
     } catch (error) {
-      console.error("Error fetching affected shifts:", error);
-      toast.error("Failed to load scheduled shifts");
+      console.error("Error fetching affected shifts and staffing:", error);
+      toast.error("Failed to load scheduled shifts and staffing impact");
     } finally {
       setCalculating(false);
     }
@@ -220,7 +272,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
       const { data: request, error } = await supabase
         .from("time_off_requests")
         .insert({
-          officer_id: userId,
+          officer_id: selectedOfficerId,
           start_date: format(startDate, "yyyy-MM-dd"),
           end_date: format(endDate, "yyyy-MM-dd"),
           reason: reason || null,
@@ -244,9 +296,9 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
       if (request?.id) {
         console.log('🔔 [DIALOG] PTO request submitted, calling sendPTORequestNotification');
         console.log('🔔 [DIALOG] Request ID:', request.id);
-        console.log('🔔 [DIALOG] User ID:', userId);
+        console.log('🔔 [DIALOG] Officer ID:', selectedOfficerId);
 
-        sendPTORequestNotification(request.id, userId, 'created');
+        sendPTORequestNotification(request.id, selectedOfficerId, 'created');
       } else {
         console.error('❌ [DIALOG] No request ID returned after submission');
       }
@@ -279,6 +331,24 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
         </DialogHeader>
 
         <div className="space-y-4">
+          {isAdminOrSupervisor && allOfficers && allOfficers.length > 0 && (
+            <div className="space-y-2">
+              <Label>Officer</Label>
+              <Select value={selectedOfficerId} onValueChange={setSelectedOfficerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select officer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allOfficers.map((officer: any) => (
+                    <SelectItem key={officer.id} value={officer.id}>
+                      {officer.full_name} {officer.badge_number ? `(#${officer.badge_number})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>PTO Type</Label>
             <Select value={ptoType} onValueChange={setPtoType}>
@@ -399,6 +469,29 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId }: TimeOffRequ
 
               <p className="text-xs text-muted-foreground mt-2">
                 These are your regularly scheduled shifts that will be affected by this time off request.
+              </p>
+            </div>
+          )}
+
+          {/* Daily Staffing Summary on Requested Dates */}
+          {startDate && endDate && dailyStaffingSummary.length > 0 && (
+            <div className="space-y-3 p-4 border rounded-lg bg-blue-50/50">
+              <h4 className="font-semibold text-sm flex items-center gap-2 text-blue-900">
+                <Users className="h-4 w-4" />
+                Department Staffing on Requested Dates ({dailyStaffingSummary.length} days)
+              </h4>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {dailyStaffingSummary.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs p-2 bg-white/80 border border-blue-100 rounded">
+                    <span className="font-medium text-blue-900">{item.dayName}, {format(new Date(item.date), "MMM d, yyyy")}</span>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      {item.workingCount} officers working
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Review department staffing levels before submitting time off request.
               </p>
             </div>
           )}

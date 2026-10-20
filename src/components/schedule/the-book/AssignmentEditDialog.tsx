@@ -21,14 +21,11 @@ export const AssignmentEditDialog: React.FC<AssignmentEditDialogProps> = ({
   onSave,
   updatePositionMutation,
 }) => {
-  const [editPosition, setEditPosition] = useState("");
-  const [customPosition, setCustomPosition] = useState("");
-
-  if (!editingAssignment) return null;
-
-  const { officer } = editingAssignment;
   const currentPosition = officer.shiftInfo?.position;
   const isCustomPosition = currentPosition && !PREDEFINED_POSITIONS.includes(currentPosition);
+
+  const [editPosition, setEditPosition] = useState(isCustomPosition ? "Other (Custom)" : (currentPosition || ""));
+  const [customPosition, setCustomPosition] = useState(isCustomPosition ? currentPosition : "");
 
   return (
     <Dialog open={!!editingAssignment} onOpenChange={(open) => !open && onClose()}>
@@ -44,6 +41,7 @@ export const AssignmentEditDialog: React.FC<AssignmentEditDialogProps> = ({
                 <SelectValue placeholder="Select position" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="">(No Position)</SelectItem>
                 {PREDEFINED_POSITIONS.map((pos) => (
                   <SelectItem key={pos} value={pos}>
                     {pos}

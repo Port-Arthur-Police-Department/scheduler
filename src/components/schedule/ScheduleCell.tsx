@@ -170,7 +170,7 @@ export const ScheduleCell = ({
       {hasPTO ? (
         <div className="text-center">
           {/* PTO Badge - Show PTO type instead of DD */}
-          <Badge 
+          <Badge
             className="text-xs mb-1"
             style={{
               backgroundColor: getPTOColor(ptoData?.ptoType).bg,
@@ -180,6 +180,13 @@ export const ScheduleCell = ({
           >
             {ptoData?.ptoType || 'PTO'}
           </Badge>
+          {ptoData?.isPending && (
+            <div className="mt-0.5">
+              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-100 text-amber-800 border-amber-300">
+                Pending
+              </Badge>
+            </div>
+          )}
           
           {/* Show position for partial PTO */}
           {isPartialPTO && displayPosition && (

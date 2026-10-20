@@ -101,6 +101,11 @@ export const PTOCard = ({
           <Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
             {ptoRecord.ptoType}
           </Badge>
+          {ptoRecord.isPending && (
+            <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+              Pending
+            </Badge>
+          )}
           <span className="text-gray-700">
             {ptoRecord.startTime} - {ptoRecord.endTime}
             {!ptoRecord.isFullShift && " (Partial Day)"}

@@ -169,6 +169,11 @@ export const ScheduleCellMobile: React.FC<ScheduleCellMobileProps> = ({
               {ptoInfo.abbreviation}
             </span>
           </div>
+          {shiftInfo?.ptoData?.isPending && (
+            <Badge variant="outline" className="text-[9px] px-0.5 py-0 bg-amber-100 text-amber-800 border-amber-300 mt-0.5">
+              Pending
+            </Badge>
+          )}
           {/* Show position for partial PTO */}
           {shiftInfo?.ptoData?.isFullShift === false && position && (
             <div className="text-[10px] mt-0.5 truncate max-w-[70px] opacity-80" title={position}>

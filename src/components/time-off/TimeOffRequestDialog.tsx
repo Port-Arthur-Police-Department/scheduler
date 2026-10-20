@@ -240,6 +240,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
               ...shiftRecurringIds.filter(id => !offIdsSet.has(id)),
               ...shiftExceptionIds
             ]);
+            shiftWorkingIds.delete(selectedOfficerId);
 
             let supCount = 0;
             let ofcCount = 0;
@@ -297,6 +298,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
               ...shiftRecurringIds.filter(id => !offIdsSet.has(id)),
               ...shiftExceptionIds
             ]);
+            shiftWorkingIds.delete(selectedOfficerId);
 
             let supCount = 0;
             let ofcCount = 0;

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// src/components/schedule/PositionEditor.tsx
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,37 +14,26 @@ interface PositionEditorProps {
   shiftName?: string; // Optional shift name for dynamic positions
 }
 
-export const PositionEditor = ({ 
-  currentPosition, 
-  onSave, 
-  onCancel, 
+export const PositionEditor = ({
+  currentPosition,
+  onSave,
+  onCancel,
   isSaving = false,
-  shiftName 
+  shiftName
 }: PositionEditorProps) => {
-  const [editPosition, setEditPosition] = useState("");
-  const [customPosition, setCustomPosition] = useState("");
-
   // Get positions based on shift type (Dispatch shifts get special positions)
   const availablePositions = getPositionsForShift(shiftName);
 
-  // Initialize form when component mounts or currentPosition changes
-  useEffect(() => {
-    const isCustomPosition = currentPosition && !availablePositions.includes(currentPosition);
-    
-    if (isCustomPosition) {
-      setEditPosition("Other (Custom)");
-      setCustomPosition(currentPosition);
-    } else {
-      setEditPosition(currentPosition || "");
-      setCustomPosition("");
-    }
-  }, [currentPosition, availablePositions]);
+  const isCustom = currentPosition && !availablePositions.includes(currentPosition);
+
+  const [editPosition, setEditPosition] = useState(
+    isCustom ? "Other (Custom)" : (currentPosition || "__none__")
+  );
+  const [customPosition, setCustomPosition] = useState(isCustom ? currentPosition : "");
 
   const handleSave = () => {
-    const finalPosition = editPosition === "Other (Custom)" ? customPosition : editPosition;
-    if (!finalPosition) {
-      return;
-    }
+    const rawPosition = editPosition === "Other (Custom)" ? customPosition : editPosition;
+    const finalPosition = rawPosition === "__none__" ? "" : rawPosition;
     onSave(finalPosition);
   };
 
@@ -55,6 +45,7 @@ export const PositionEditor = ({
             <SelectValue placeholder="Select position" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="__none__">(No Position)</SelectItem>
             {availablePositions.map((pos) => (
               <SelectItem key={pos} value={pos}>
                 {pos}

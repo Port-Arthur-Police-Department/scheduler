@@ -327,6 +327,60 @@ const TheBook = ({
 
         if (recurringError) throw recurringError;
 
+        // Fetch pending time off requests
+        const { data: pendingTorData } = await supabase
+          .from("time_off_requests")
+          .select(`
+            *,
+            profiles:profiles!time_off_requests_officer_id_fkey (
+              id, full_name, badge_number, rank, hire_date,
+              promotion_date_sergeant, promotion_date_lieutenant,
+              service_credit_override
+            )
+          `)
+          .eq("status", "pending")
+          .lte("start_date", endStr)
+          .gte("end_date", startStr);
+
+        let mutableExceptions = [...(exceptions || [])];
+        if (pendingTorData && pendingTorData.length > 0) {
+          const dates = activeView === "weekly"
+            ? eachDayOfInterval({ start: currentWeekStart, end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }) })
+              .map(date => format(date, "yyyy-MM-dd"))
+            : eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
+              .map(date => format(date, "yyyy-MM-dd"));
+
+          for (const req of pendingTorData) {
+            for (const dateStr of dates) {
+              if (dateStr >= req.start_date && dateStr <= req.end_date) {
+                const targetDateObj = parseISO(dateStr);
+                const dayOfWeek = targetDateObj.getDay();
+
+                const hasRecurring = recurringSchedules?.some(r => r.officer_id === req.officer_id && r.shift_type_id === selectedShiftId && r.day_of_week === dayOfWeek);
+                const hasWorkingException = mutableExceptions.some(e => e.officer_id === req.officer_id && e.date === dateStr && e.shift_type_id === selectedShiftId && !e.is_off);
+
+                if (hasRecurring || hasWorkingException) {
+                  const existingEx = mutableExceptions.find(e => e.officer_id === req.officer_id && e.date === dateStr && e.shift_type_id === selectedShiftId);
+                  if (!existingEx) {
+                    mutableExceptions.push({
+                      id: req.id,
+                      officer_id: req.officer_id,
+                      date: dateStr,
+                      shift_type_id: selectedShiftId,
+                      is_off: true,
+                      reason: req.pto_type || req.reason || "PTO",
+                      isPending: true,
+                      profiles: req.profiles
+                    });
+                  } else if (existingEx.is_off) {
+                    existingEx.isPending = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Get the cycle start date for this shift (only if Dispatch)
         let cycleStartDate: Date | null = null;
         if (isDispatchShift) {
@@ -427,7 +481,7 @@ const TheBook = ({
         const allOfficerIds = new Set<string>();
 
         // Add officer IDs from exceptions
-        exceptions?.forEach(exception => {
+        mutableExceptions?.forEach(exception => {
           if (exception.officer_id) {
             allOfficerIds.add(exception.officer_id);
           }
@@ -452,7 +506,7 @@ const TheBook = ({
           const dayOfWeek = date.getDay();
 
           // Get exceptions for this day
-          const dayExceptions = exceptions?.filter(e => e.date === dateStr) || [];
+          const dayExceptions = mutableExceptions?.filter(e => e.date === dateStr) || [];
           const dayRecurring = recurringSchedules?.filter(r => r.day_of_week === dayOfWeek) || [];
 
           const officers = [];
@@ -489,7 +543,8 @@ const TheBook = ({
                   ptoType: exception.reason,
                   isFullShift: !exception.custom_start_time && !exception.custom_end_time,
                   startTime: exception.custom_start_time,
-                  endTime: exception.custom_end_time
+                  endTime: exception.custom_end_time,
+                  isPending: exception.isPending || false
                 } : undefined,
                 reason: exception.reason,
                 is_extra_shift: exception.is_extra_shift || false,

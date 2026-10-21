@@ -302,6 +302,21 @@ export const useShiftBiddingMutations = () => {
 
       if (roundError || !round) throw new Error("Bidding round not found");
 
+      // 1.5. Check if this position has already been claimed by another officer in the same round
+      const { data: existingClaims, error: claimCheckError } = await supabase
+        .from("shift_bidding_queue")
+        .select("id")
+        .eq("round_id", roundId)
+        .eq("selected_shift_type_id", shiftTypeId)
+        .eq("selected_position_name", positionName)
+        .neq("id", queueItemId)
+        .limit(1);
+
+      if (claimCheckError) throw claimCheckError;
+      if (existingClaims && existingClaims.length > 0) {
+        throw new Error("This position has already been claimed by another officer. Please choose a different position.");
+      }
+
       // 2. Update queue item with selection
       const { error: updateQueueError } = await supabase
         .from("shift_bidding_queue")
@@ -455,6 +470,180 @@ export const useShiftBiddingMutations = () => {
     },
   });
 
+  const removeOfficerFromQueue = useMutation({
+    mutationFn: async ({ roundId, queueItemId }: { roundId: string; queueItemId: string }) => {
+      const { error: deleteError } = await supabase
+        .from("shift_bidding_queue")
+        .delete()
+        .eq("id", queueItemId);
+
+      if (deleteError) throw deleteError;
+
+      const { data: remaining, error: fetchError } = await supabase
+        .from("shift_bidding_queue")
+        .select("*")
+        .eq("round_id", roundId)
+        .order("turn_index", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      if (remaining && remaining.length > 0) {
+        let hasActive = remaining.some(item => item.status === 'active');
+
+        for (let i = 0; i < remaining.length; i++) {
+          const item = remaining[i];
+          const newStatus = !hasActive && i === 0 && item.status !== 'completed' ? 'active' : item.status;
+          if (!hasActive && i === 0 && item.status !== 'completed') {
+            hasActive = true;
+          }
+
+          await supabase
+            .from("shift_bidding_queue")
+            .update({ turn_index: i, status: newStatus })
+            .eq("id", item.id);
+        }
+
+        const activeItem = remaining.find(item => item.status === 'active');
+        const newTurnIndex = activeItem ? activeItem.turn_index : 0;
+        await supabase
+          .from("shift_bidding_rounds")
+          .update({ current_turn_index: newTurnIndex, updated_at: new Date().toISOString() })
+          .eq("id", roundId);
+      } else {
+        await supabase
+          .from("shift_bidding_rounds")
+          .update({ current_turn_index: 0, updated_at: new Date().toISOString() })
+          .eq("id", roundId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      toast.success("Officer removed from queue successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to remove officer from queue");
+    },
+  });
+
+  const addOfficerToQueue = useMutation({
+    mutationFn: async ({ roundId, officerId }: { roundId: string; officerId: string }) => {
+      const { data: existing, error: checkError } = await supabase
+        .from("shift_bidding_queue")
+        .select("id")
+        .eq("round_id", roundId)
+        .eq("officer_id", officerId)
+        .single();
+
+      if (existing) {
+        throw new Error("Officer is already in the bidding queue for this round.");
+      }
+
+      // Fetch all current queue items with their profile details
+      const { data: currentQueue, error: queueError } = await supabase
+        .from("shift_bidding_queue")
+        .select("*, profiles:officer_id(*)")
+        .eq("round_id", roundId);
+
+      if (queueError) throw queueError;
+
+      // Fetch the profile for the officer being added
+      const { data: newProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", officerId)
+        .single();
+
+      if (profileError || !newProfile) throw new Error("Officer profile not found");
+
+      // Get service credit for new profile
+      const { data: creditData } = await supabase.rpc("get_service_credit", {
+        profile_id: newProfile.id,
+      });
+      const newOfficerWithCredit = {
+        ...newProfile,
+        service_credit: creditData !== null ? Number(creditData) : 0,
+        _queueItem: null,
+      };
+
+      // Collect all profiles with service credit
+      const allQueueProfiles = await Promise.all(
+        (currentQueue || []).map(async (item) => {
+          const prof = item.profiles;
+          if (!prof) return null;
+          const { data: scData } = await supabase.rpc("get_service_credit", {
+            profile_id: prof.id,
+          });
+          return {
+            ...prof,
+            service_credit: scData !== null ? Number(scData) : 0,
+            _queueItem: item,
+          };
+        })
+      );
+
+      const validQueueProfiles = allQueueProfiles.filter(Boolean);
+      validQueueProfiles.push(newOfficerWithCredit);
+
+      // Sort all officers consistently using seniority sorting algorithm
+      const sortedOfficers = sortOfficersConsistently(validQueueProfiles as any[]);
+
+      // Prepare new queue items preserving existing selections
+      const newQueueItems = sortedOfficers.map((officer: any, index: number) => {
+        const existingItem = officer._queueItem;
+        return {
+          round_id: roundId,
+          officer_id: officer.id,
+          turn_index: index,
+          status: existingItem ? existingItem.status : 'pending',
+          selected_shift_type_id: existingItem ? existingItem.selected_shift_type_id : null,
+          selected_position_name: existingItem ? existingItem.selected_position_name : null,
+          selected_at: existingItem ? existingItem.selected_at : null,
+        };
+      });
+
+      // Clear existing queue for this round
+      await supabase
+        .from("shift_bidding_queue")
+        .delete()
+        .eq("round_id", roundId);
+
+      // Insert sorted queue items
+      const { error: insertError } = await supabase
+        .from("shift_bidding_queue")
+        .insert(newQueueItems);
+
+      if (insertError) throw insertError;
+
+      // Determine active turn index (first non-completed item)
+      const firstActiveIndex = newQueueItems.findIndex(i => i.status !== 'completed');
+      const targetTurnIndex = firstActiveIndex !== -1 ? firstActiveIndex : 0;
+
+      for (let i = 0; i < newQueueItems.length; i++) {
+        if (i === targetTurnIndex && newQueueItems[i].status === 'pending') {
+          await supabase
+            .from("shift_bidding_queue")
+            .update({ status: 'active' })
+            .eq("round_id", roundId)
+            .eq("turn_index", i);
+        }
+      }
+
+      await supabase
+        .from("shift_bidding_rounds")
+        .update({ current_turn_index: targetTurnIndex, updated_at: new Date().toISOString() })
+        .eq("id", roundId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      toast.success("Officer added to queue in correct seniority position successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to add officer to queue");
+    },
+  });
+
   return {
     createRound,
     updateRoundStatus,
@@ -462,5 +651,7 @@ export const useShiftBiddingMutations = () => {
     generateQueue,
     submitSelection,
     saveAllowedPositions,
+    removeOfficerFromQueue,
+    addOfficerToQueue,
   };
 };

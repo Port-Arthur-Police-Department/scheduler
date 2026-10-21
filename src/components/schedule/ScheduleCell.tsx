@@ -18,6 +18,7 @@ interface ScheduleCellProps {
   isUpdating?: boolean;
   isPPO?: boolean;
   partnerInfo?: string;
+  onReviewPTO?: (timeOffRequestId: string, officerName: string, dateStr: string) => void;
 }
 
 // Default fallback colors
@@ -45,7 +46,8 @@ export const ScheduleCell = ({
   onRemoveOfficer,
   isUpdating = false,
   isPPO = false,
-  partnerInfo = null
+  partnerInfo = null,
+  onReviewPTO
 }: ScheduleCellProps) => {
   // Use color settings with error boundary
   let weeklyColors = FALLBACK_COLORS;
@@ -170,7 +172,7 @@ export const ScheduleCell = ({
       {hasPTO ? (
         <div className="text-center">
           {/* PTO Badge - Show PTO type instead of DD */}
-          <Badge 
+          <Badge
             className="text-xs mb-1"
             style={{
               backgroundColor: getPTOColor(ptoData?.ptoType).bg,
@@ -180,6 +182,23 @@ export const ScheduleCell = ({
           >
             {ptoData?.ptoType || 'PTO'}
           </Badge>
+          {ptoData?.isPending && (
+            <div className="mt-0.5">
+              <Badge
+                variant="outline"
+                className={`text-[10px] px-1 py-0 bg-amber-100 text-amber-800 border-amber-300 ${isAdminOrSupervisor && (ptoData?.timeOffRequestId || officer?.shiftInfo?.scheduleId) ? 'cursor-pointer hover:bg-amber-200' : ''}`}
+                onClick={(e) => {
+                  if (isAdminOrSupervisor && (ptoData?.timeOffRequestId || officer?.shiftInfo?.scheduleId)) {
+                    e.stopPropagation();
+                    onReviewPTO?.(ptoData?.timeOffRequestId || officer?.shiftInfo?.scheduleId, officerName, dateStr);
+                  }
+                }}
+                title={isAdminOrSupervisor ? "Click to review/approve/deny pending request" : undefined}
+              >
+                Pending
+              </Badge>
+            </div>
+          )}
           
           {/* Show position for partial PTO */}
           {isPartialPTO && displayPosition && (

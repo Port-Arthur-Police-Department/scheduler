@@ -482,15 +482,18 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
     },
   });
 
-  const handleSavePosition = (scheduleId: string, type: "recurring" | "exception", positionName: string) => {
+  const handleSavePosition = (shiftInfo: any, dateStr: string, positionName: string) => {
     updatePositionMutation.mutate(
-      { scheduleId, type, positionName },
+      {
+        scheduleId: shiftInfo.scheduleId,
+        type: shiftInfo.scheduleType,
+        positionName,
+        date: dateStr,
+        officerId: selectedOfficerId,
+        shiftTypeId: shiftInfo.shift?.id || shiftInfo.ptoData?.shiftTypeId
+      },
       {
         onSuccess: () => {
-          // Force refresh the schedule data
-          queryClient.invalidateQueries({
-            queryKey: ["schedule", selectedOfficerId, currentWeekStart.toISOString(), currentMonth.toISOString(), activeView]
-          });
           setEditingSchedule(null);
           setRefreshTrigger(prev => prev + 1);
         }
@@ -743,9 +746,10 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
               {editingSchedule === `${shiftInfo.scheduleId}-${shiftInfo.scheduleType}` ? (
                 <PositionEditor
                   currentPosition={shiftInfo.position || ""}
-                  onSave={(positionName) => handleSavePosition(shiftInfo.scheduleId, shiftInfo.scheduleType, positionName)}
+                  onSave={(positionName) => handleSavePosition(shiftInfo, date, positionName)}
                   onCancel={() => setEditingSchedule(null)}
                   isSaving={updatePositionMutation.isPending}
+                  shiftName={shiftInfo.type}
                 />
               ) : (
                 <>
@@ -919,19 +923,31 @@ export const OfficersManagement = ({ userId, isAdminOrSupervisor }: OfficersMana
 
               {daySchedule?.shiftInfo && (
                 <div className="space-y-1 text-xs">
-                  <div className="font-medium truncate">{daySchedule.shiftInfo.type}</div>
-                  {daySchedule.shiftInfo.time && (
-                    <div className="text-muted-foreground truncate">{daySchedule.shiftInfo.time}</div>
-                  )}
-                  {daySchedule.shiftInfo.position && (
-                    <Badge variant="secondary" className="text-xs">
-                      {daySchedule.shiftInfo.position}
-                    </Badge>
-                  )}
-                  {daySchedule.shiftInfo.isOff && (
-                    <Badge variant="destructive" className="text-xs">
-                      {daySchedule.shiftInfo.reason || "Off"}
-                    </Badge>
+                  {editingSchedule === `${daySchedule.shiftInfo.scheduleId}-${daySchedule.shiftInfo.scheduleType}` ? (
+                    <PositionEditor
+                      currentPosition={daySchedule.shiftInfo.position || ""}
+                      onSave={(positionName) => handleSavePosition(daySchedule.shiftInfo, dateStr, positionName)}
+                      onCancel={() => setEditingSchedule(null)}
+                      isSaving={updatePositionMutation.isPending}
+                      shiftName={daySchedule.shiftInfo.type}
+                    />
+                  ) : (
+                    <>
+                      <div className="font-medium truncate">{daySchedule.shiftInfo.type}</div>
+                      {daySchedule.shiftInfo.time && (
+                        <div className="text-muted-foreground truncate">{daySchedule.shiftInfo.time}</div>
+                      )}
+                      {daySchedule.shiftInfo.position && (
+                        <Badge variant="secondary" className="text-xs">
+                          {daySchedule.shiftInfo.position}
+                        </Badge>
+                      )}
+                      {daySchedule.shiftInfo.isOff && (
+                        <Badge variant="destructive" className="text-xs">
+                          {daySchedule.shiftInfo.reason || "Off"}
+                        </Badge>
+                      )}
+                    </>
                   )}
                 </div>
               )}

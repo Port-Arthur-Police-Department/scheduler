@@ -411,18 +411,29 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
                         }
                       };
 
-                      const ptoColors = getPTOColor(ptoType);
+                      const isPending = officer.shiftInfo?.ptoData?.isPending || officer.shiftInfo?.isPending;
+                      const timeOffRequestId = officer.shiftInfo?.ptoData?.timeOffRequestId || officer.shiftInfo?.scheduleId;
+                      const ptoColors = isPending
+                        ? { bg: 'rgb(254, 243, 199)', text: 'rgb(146, 64, 14)', border: 'rgb(252, 211, 77)' } // Amber / Yellow for pending
+                        : getPTOColor(ptoType);
                       const rankBadgeClass = getRankBadgeColor(rankAbbreviation);
-                      
+
                       return (
-                        <div 
-                          key={officer.officerId} 
-                          className="text-xs p-1 rounded border flex items-center justify-between group hover:opacity-90"
+                        <div
+                          key={officer.officerId}
+                          className={`text-xs p-1 rounded border flex items-center justify-between group hover:opacity-90 ${isAdminOrSupervisor && isPending ? 'cursor-pointer' : ''}`}
                           style={{
                             backgroundColor: ptoColors.bg,
                             borderColor: ptoColors.border,
                             color: ptoColors.text
                           }}
+                          onClick={(e) => {
+                            if (isAdminOrSupervisor && isPending && timeOffRequestId && onEventHandlers?.onReviewPTO) {
+                              e.stopPropagation();
+                              onEventHandlers.onReviewPTO(timeOffRequestId, officer.officerName, dateStr);
+                            }
+                          }}
+                          title={isAdminOrSupervisor && isPending ? "Click to review/approve/deny pending request" : undefined}
                         >
                           <div className="flex items-center gap-1">
                             <div className={`font-medium truncate ${!isCurrentMonthDay ? 'opacity-70' : ''}`}>

@@ -64,18 +64,18 @@ export default defineConfig({
         background_color: "#0f172a",
         display: "standalone",
         orientation: "portrait-primary",
-        scope: "./",
-        start_url: "./",
-        id: "./",
+        scope: basePath,
+        start_url: basePath,
+        id: basePath,
         categories: ["productivity", "business"],
 
         icons: [
-          { src: "icons/favicon.ico", sizes: "32x32", type: "image/x-icon", purpose: "any" },
-          { src: "icons/apple-touch-icon.png", sizes: "180x180", type: "image/png", purpose: "any" },
-          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "icons/icon-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "icons/icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" }
+          { src: `${basePath}icons/favicon.ico`, sizes: "32x32", type: "image/x-icon", purpose: "any" },
+          { src: `${basePath}icons/apple-touch-icon.png`, sizes: "180x180", type: "image/png", purpose: "any" },
+          { src: `${basePath}icons/icon-192.png`, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: `${basePath}icons/icon-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: `${basePath}icons/icon-192x192.png`, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: `${basePath}icons/icon-512x512.png`, sizes: "512x512", type: "image/png", purpose: "any" }
         ],
 
         shortcuts: [

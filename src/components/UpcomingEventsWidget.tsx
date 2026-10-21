@@ -39,11 +39,11 @@ export const UpcomingEventsWidget = () => {
   const getEventColor = (eventType: string) => {
     switch (eventType) {
       case 'anniversary':
-        return "bg-blue-50 text-blue-700 border-blue-200";
+        return "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50";
       case 'birthday':
-        return "bg-pink-50 text-pink-700 border-pink-200";
+        return "bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800/50";
       default:
-        return "bg-gray-50";
+        return "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-foreground";
     }
   };
 

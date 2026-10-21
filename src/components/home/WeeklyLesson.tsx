@@ -1,16 +1,42 @@
 // src/components/home/WeeklyLesson.tsx
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Calendar, User, Award } from "lucide-react";
-import { WeeklyLesson as WeeklyLessonType } from "@/hooks/useWeeklyLesson";
+import { BookOpen, Calendar, User, Award, BarChart2 } from "lucide-react";
+import { WeeklyLesson as WeeklyLessonType, useLessonVotes, useWeeklyLessonMutations } from "@/hooks/useWeeklyLesson";
 import { formatWeekRange, parseLocalDate } from "@/utils/weekUtils";
+import { renderMarkdown } from "@/utils/markdownUtils";
+import { toast } from "sonner";
 
 interface WeeklyLessonProps {
   lesson: WeeklyLessonType | null;
   isLoading?: boolean;
+  currentOfficerId?: string;
 }
 
-export const WeeklyLesson = ({ lesson, isLoading }: WeeklyLessonProps) => {
+export const WeeklyLesson = ({ lesson, isLoading, currentOfficerId }: WeeklyLessonProps) => {
+  const { data: votes = [] } = useLessonVotes(lesson?.id);
+  const { voteOnPoll } = useWeeklyLessonMutations();
+
+  const userVote = votes.find(v => v.officer_id === currentOfficerId);
+  const totalVotes = votes.length;
+
+  const handleVote = async (optionIndex: number) => {
+    if (!lesson?.id || !currentOfficerId) {
+      toast.error("Please ensure you are logged in to vote.");
+      return;
+    }
+    try {
+      await voteOnPoll.mutateAsync({
+        lessonId: lesson.id,
+        officerId: currentOfficerId,
+        optionIndex,
+      });
+      toast.success("Vote recorded successfully!");
+    } catch (error) {
+      console.error("Error voting on poll:", error);
+      toast.error("Failed to record vote");
+    }
+  };
   if (isLoading) {
     return (
       <Card className="shadow-md">
@@ -82,9 +108,66 @@ export const WeeklyLesson = ({ lesson, isLoading }: WeeklyLessonProps) => {
           </div>
         )}
 
-        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-line text-foreground/90 leading-relaxed">
-          {lesson.content}
+        <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
+          {renderMarkdown(lesson.content)}
         </div>
+
+        {lesson.poll_question && lesson.poll_options && lesson.poll_options.length > 0 && (
+          <div className="mt-6 border rounded-xl p-5 bg-card/50 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-base flex items-center gap-2 text-foreground">
+                <BarChart2 className="h-4 w-4 text-primary" />
+                {lesson.poll_question}
+              </h4>
+              <Badge variant="secondary" className="text-xs">
+                {totalVotes} {totalVotes === 1 ? 'Vote' : 'Votes'}
+              </Badge>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {lesson.poll_options.map((option, idx) => {
+                const optionVotesCount = votes.filter(v => v.option_index === idx).length;
+                const percentage = totalVotes > 0 ? Math.round((optionVotesCount / totalVotes) * 100) : 0;
+                const isSelected = userVote?.option_index === idx;
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => handleVote(idx)}
+                    className={`relative overflow-hidden rounded-lg border p-3.5 transition-all cursor-pointer hover:border-primary/50 ${
+                      isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'bg-background'
+                    }`}
+                  >
+                    {/* Background percentage bar */}
+                    <div
+                      className="absolute left-0 top-0 bottom-0 bg-primary/10 transition-all duration-500"
+                      style={{ width: `${percentage}%` }}
+                    />
+                    <div className="relative flex items-center justify-between z-10">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs font-bold ${
+                          isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-muted-foreground'
+                        }`}>
+                          {isSelected ? '✓' : idx + 1}
+                        </div>
+                        <span className="font-medium text-sm text-foreground">{option}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs font-semibold text-muted-foreground">
+                        <span>{optionVotesCount} {optionVotesCount === 1 ? 'vote' : 'votes'}</span>
+                        <span className="w-10 text-right text-primary font-bold">{percentage}%</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {userVote && (
+              <div className="text-xs text-muted-foreground text-center pt-1">
+                Your vote has been recorded. Click another option to change your vote.
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="border-t pt-4 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center space-x-1.5">

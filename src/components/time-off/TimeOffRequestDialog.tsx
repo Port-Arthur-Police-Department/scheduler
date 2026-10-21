@@ -29,6 +29,8 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
   const [selectedOfficerId, setSelectedOfficerId] = useState<string>(userId);
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [ptoType, setPtoType] = useState<string>("vacation");
   const [hoursRequired, setHoursRequired] = useState<number>(0);
@@ -495,7 +497,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
 
           <div className="space-y-2">
             <Label>Start Date</Label>
-            <Popover>
+            <Popover open={startOpen} onOpenChange={setStartOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -512,7 +514,10 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
                 <Calendar
                   mode="single"
                   selected={startDate}
-                  onSelect={setStartDate}
+                  onSelect={(date) => {
+                    setStartDate(date);
+                    setStartOpen(false);
+                  }}
                   initialFocus
                   className="pointer-events-auto"
                 />
@@ -522,7 +527,7 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
 
           <div className="space-y-2">
             <Label>End Date</Label>
-            <Popover>
+            <Popover open={endOpen} onOpenChange={setEndOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -539,7 +544,10 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
                 <Calendar
                   mode="single"
                   selected={endDate}
-                  onSelect={setEndDate}
+                  onSelect={(date) => {
+                    setEndDate(date);
+                    setEndOpen(false);
+                  }}
                   initialFocus
                   className="pointer-events-auto"
                 />

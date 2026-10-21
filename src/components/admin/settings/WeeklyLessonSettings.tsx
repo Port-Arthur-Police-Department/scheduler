@@ -1,5 +1,5 @@
 // src/components/admin/settings/WeeklyLessonSettings.tsx
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,27 @@ export const WeeklyLessonSettings = () => {
   const [weekStartDate, setWeekStartDate] = useState(getWeekStartDateString());
   const [photoUrl, setPhotoUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  const applyFormatting = (wrapperBefore: string, wrapperAfter: string = '') => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+    const replacement = `${wrapperBefore}${selectedText || 'text'}${wrapperAfter}`;
+    const newText = text.substring(0, start) + replacement + text.substring(end);
+    setContent(newText);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + wrapperBefore.length, start + wrapperBefore.length + (selectedText.length || 4));
+    }, 0);
+  };
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -48,6 +68,8 @@ export const WeeklyLessonSettings = () => {
     setWeekStartDate(getWeekStartDateString());
     setPhotoUrl('');
     setIsActive(true);
+    setPollQuestion('');
+    setPollOptions(['', '']);
     setIsOpen(true);
   };
 
@@ -58,6 +80,8 @@ export const WeeklyLessonSettings = () => {
     setWeekStartDate(lesson.week_start_date || getWeekStartDateString());
     setPhotoUrl(lesson.photo_url || '');
     setIsActive(lesson.is_active);
+    setPollQuestion(lesson.poll_question || '');
+    setPollOptions(lesson.poll_options && lesson.poll_options.length > 0 ? lesson.poll_options : ['', '']);
     setIsOpen(true);
   };
 
@@ -113,6 +137,8 @@ export const WeeklyLessonSettings = () => {
         week_start_date: weekStartDate,
         photo_url: photoUrl.trim() || null,
         is_active: isActive,
+        poll_question: pollQuestion.trim() || null,
+        poll_options: pollOptions.filter(o => o.trim() !== '') as any,
         created_by: user?.id,
       });
 
@@ -314,8 +340,18 @@ export const WeeklyLessonSettings = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="content">Lesson Content / Tips / Message</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="content">Lesson Content / Tips / Message</Label>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => applyFormatting('**', '**')} title="Bold">B</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs italic" onClick={() => applyFormatting('*', '*')} title="Italic">I</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => applyFormatting('### ')} title="Heading">H3</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => applyFormatting('- ')} title="Bullet List">• List</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => applyFormatting('1. ')} title="Numbered List">1. List</Button>
+                  </div>
+                </div>
                 <Textarea
+                  ref={contentRef}
                   id="content"
                   placeholder="Enter the weekly message, tips, or leadership lesson..."
                   value={content}
@@ -323,6 +359,59 @@ export const WeeklyLessonSettings = () => {
                   rows={6}
                   required
                 />
+              </div>
+
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Interactive Poll (Optional)</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pollQuestion">Poll Question</Label>
+                  <Input
+                    id="pollQuestion"
+                    placeholder="e.g., Which shift schedule preference do you favor?"
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Poll Options</Label>
+                  {pollOptions.map((opt, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        placeholder={`Option ${idx + 1}`}
+                        value={opt}
+                        onChange={(e) => {
+                          const newOpts = [...pollOptions];
+                          newOpts[idx] = e.target.value;
+                          setPollOptions(newOpts);
+                        }}
+                      />
+                      {pollOptions.length > 2 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setPollOptions(pollOptions.filter((_, i) => i !== idx));
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 6 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPollOptions([...pollOptions, ''])}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add Option
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">

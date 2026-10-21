@@ -849,7 +849,7 @@ const Dashboard = ({ isMobile, initialTab = "home" }: DashboardProps) => {
             <UpcomingEventsDashboard
               userRole={primaryRole as 'officer' | 'supervisor' | 'admin'}
             />
-            <WeeklyLesson lesson={weeklyLesson} isLoading={weeklyLessonLoading} />
+            <WeeklyLesson lesson={weeklyLesson} isLoading={weeklyLessonLoading} currentOfficerId={user?.id} />
             <LessonComments lessonId={weeklyLesson?.id} currentOfficerId={user?.id} isAdminOrSupervisor={isAdminOrSupervisor} />
           </div>
         );

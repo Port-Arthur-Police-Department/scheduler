@@ -1,4 +1,4 @@
-// src/utils/markdownUtils.ts
+// src/utils/markdownUtils.tsx
 import React from 'react';
 
 export const renderMarkdown = (text: string) => {

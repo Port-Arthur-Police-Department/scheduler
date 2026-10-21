@@ -119,7 +119,15 @@ export const ShiftBiddingAdmin = () => {
   const [overrideShiftTypeId, setOverrideShiftTypeId] = useState<string>("");
   const [overridePosition, setOverridePosition] = useState<string>("");
   const [isOverrideOpen, setIsOverrideOpen] = useState(false);
-  const overrideAllowedPositions = allAllowedPositions.filter(p => p.shift_type_id === overrideShiftTypeId);
+  const overrideAllowedPositions = allAllowedPositions.filter(p => {
+    if (p.shift_type_id !== overrideShiftTypeId) return false;
+    const isClaimedByOther = queue.some(
+      q => q.selected_shift_type_id === overrideShiftTypeId &&
+           q.selected_position_name === p.position_name &&
+           q.officer_id !== overrideItem?.officer_id
+    );
+    return !isClaimedByOther;
+  });
 
   const handleSupervisorOverride = (e: React.FormEvent) => {
     e.preventDefault();

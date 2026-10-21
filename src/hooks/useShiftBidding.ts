@@ -302,6 +302,21 @@ export const useShiftBiddingMutations = () => {
 
       if (roundError || !round) throw new Error("Bidding round not found");
 
+      // 1.5. Check if this position has already been claimed by another officer in the same round
+      const { data: existingClaims, error: claimCheckError } = await supabase
+        .from("shift_bidding_queue")
+        .select("id")
+        .eq("round_id", roundId)
+        .eq("selected_shift_type_id", shiftTypeId)
+        .eq("selected_position_name", positionName)
+        .neq("id", queueItemId)
+        .limit(1);
+
+      if (claimCheckError) throw claimCheckError;
+      if (existingClaims && existingClaims.length > 0) {
+        throw new Error("This position has already been claimed by another officer. Please choose a different position.");
+      }
+
       // 2. Update queue item with selection
       const { error: updateQueueError } = await supabase
         .from("shift_bidding_queue")

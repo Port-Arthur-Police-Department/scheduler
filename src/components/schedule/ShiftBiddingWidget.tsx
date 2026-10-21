@@ -43,8 +43,15 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
   const officerRank = myQueueItem?.profiles?.rank || "";
   const officerRankLower = officerRank.toLowerCase();
 
-  // Filter allowed positions based on officer rank restriction
+  // Filter allowed positions based on rank restriction and whether already claimed by another officer
   const filteredAllowedPositions = allowedPositions.filter(ap => {
+    const isClaimedByOther = queue.some(
+      q => q.selected_shift_type_id === selectedShiftTypeId &&
+           q.selected_position_name === ap.position_name &&
+           q.officer_id !== currentOfficerId
+    );
+    if (isClaimedByOther) return false;
+
     if (!ap.allowed_rank || ap.allowed_rank === 'Any' || ap.allowed_rank === '') return true;
     const requiredRankLower = ap.allowed_rank.toLowerCase();
     return officerRankLower.includes(requiredRankLower);

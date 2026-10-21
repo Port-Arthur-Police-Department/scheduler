@@ -10,6 +10,8 @@ export interface WeeklyLesson {
   photo_url?: string;
   week_start_date: string;
   is_active: boolean;
+  poll_question?: string;
+  poll_options?: string[];
   created_by?: string;
   created_at?: string;
   updated_at?: string;
@@ -33,6 +35,14 @@ export interface LessonComment {
     rank?: string;
     avatar_url?: string;
   };
+}
+
+export interface PollVote {
+  id: string;
+  lesson_id: string;
+  officer_id: string;
+  option_index: number;
+  created_at: string;
 }
 
 export const useWeeklyLesson = (weekStartDate?: string) => {
@@ -117,6 +127,22 @@ export const useLessonComments = (lessonId?: string) => {
   });
 };
 
+export const useLessonVotes = (lessonId?: string) => {
+  return useQuery({
+    queryKey: ['lesson-votes', lessonId],
+    enabled: !!lessonId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lesson_poll_votes')
+        .select('*')
+        .eq('lesson_id', lessonId);
+
+      if (error) throw error;
+      return (data || []) as PollVote[];
+    },
+  });
+};
+
 export const useWeeklyLessonMutations = () => {
   const queryClient = useQueryClient();
 
@@ -187,10 +213,30 @@ export const useWeeklyLessonMutations = () => {
     },
   });
 
+  const voteOnPoll = useMutation({
+    mutationFn: async ({ lessonId, officerId, optionIndex }: { lessonId: string; officerId: string; optionIndex: number }) => {
+      const { data, error } = await supabase
+        .from('lesson_poll_votes')
+        .upsert(
+          { lesson_id: lessonId, officer_id: officerId, option_index: optionIndex },
+          { onConflict: 'lesson_id,officer_id' }
+        )
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-votes', variables.lessonId] });
+    },
+  });
+
   return {
     upsertLesson,
     deleteLesson,
     addComment,
     deleteComment,
+    voteOnPoll,
   };
 };

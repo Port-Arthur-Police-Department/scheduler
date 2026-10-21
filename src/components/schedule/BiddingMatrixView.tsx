@@ -1,8 +1,10 @@
 // src/components/schedule/BiddingMatrixView.tsx
+import { useState } from "react";
 import { ShiftBiddingRound, ShiftBiddingQueueItem, ShiftTypeAllowedPosition } from "@/hooks/useShiftBidding";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Clock, Shield } from "lucide-react";
+import { Users, Clock, Shield, Filter } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface BiddingMatrixViewProps {
   round: ShiftBiddingRound | undefined;
@@ -17,6 +19,9 @@ export const BiddingMatrixView = ({
   shiftTypes,
   allAllowedPositions,
 }: BiddingMatrixViewProps) => {
+  const [selectedShiftFilter, setSelectedShiftFilter] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
+
   if (!round) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -37,11 +42,26 @@ export const BiddingMatrixView = ({
       );
       return {
         ...pos,
+        shiftId: shift.id,
         shiftName: shift.name,
         shiftTime: `${shift.start_time} - ${shift.end_time}`,
         claimedItem,
       };
     });
+  });
+
+  // Filter positions based on selected shift and status filter
+  const filteredPositions = allPositionsWithShift.filter(item => {
+    if (selectedShiftFilter !== "all" && item.shiftId !== selectedShiftFilter) {
+      return false;
+    }
+    if (selectedStatusFilter === "available" && item.claimedItem) {
+      return false;
+    }
+    if (selectedStatusFilter === "claimed" && !item.claimedItem) {
+      return false;
+    }
+    return true;
   });
 
   return (
@@ -66,6 +86,43 @@ export const BiddingMatrixView = ({
         </Card>
       </div>
 
+      {/* Filter Controls Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-card p-4 rounded-xl border shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Filter className="h-4 w-4 text-primary" />
+          <span>Filter Availability Matrix:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <Select value={selectedShiftFilter} onValueChange={setSelectedShiftFilter}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="All Shifts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Shifts ({allPositionsWithShift.length} positions)</SelectItem>
+              {shiftTypes.map(st => {
+                const count = allPositionsWithShift.filter(p => p.shiftId === st.id).length;
+                return (
+                  <SelectItem key={st.id} value={st.id}>
+                    {st.name} ({count} positions)
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="available">Available Only</SelectItem>
+              <SelectItem value="claimed">Claimed Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="mobile-scroll overflow-x-auto">
         <div className="border rounded-lg overflow-hidden min-w-[900px] bg-card shadow-sm">
           <div className="grid grid-cols-6 bg-muted/50 border-b font-semibold text-sm">
@@ -77,12 +134,12 @@ export const BiddingMatrixView = ({
             <div className="p-3">Selected At</div>
           </div>
 
-          {allPositionsWithShift.length === 0 ? (
+          {filteredPositions.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No positions configured for shift types in this division. Configure positions in the "Shift Position Config" tab.
+              No positions found matching the selected filters.
             </div>
           ) : (
-            allPositionsWithShift.map((item, idx) => {
+            filteredPositions.map((item, idx) => {
               const claimed = !!item.claimedItem;
               const officer = item.claimedItem?.profiles;
               const selectedAt = item.claimedItem?.selected_at

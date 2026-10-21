@@ -470,6 +470,108 @@ export const useShiftBiddingMutations = () => {
     },
   });
 
+  const removeOfficerFromQueue = useMutation({
+    mutationFn: async ({ roundId, queueItemId }: { roundId: string; queueItemId: string }) => {
+      const { error: deleteError } = await supabase
+        .from("shift_bidding_queue")
+        .delete()
+        .eq("id", queueItemId);
+
+      if (deleteError) throw deleteError;
+
+      const { data: remaining, error: fetchError } = await supabase
+        .from("shift_bidding_queue")
+        .select("*")
+        .eq("round_id", roundId)
+        .order("turn_index", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      if (remaining && remaining.length > 0) {
+        let hasActive = remaining.some(item => item.status === 'active');
+
+        for (let i = 0; i < remaining.length; i++) {
+          const item = remaining[i];
+          const newStatus = !hasActive && i === 0 && item.status !== 'completed' ? 'active' : item.status;
+          if (!hasActive && i === 0 && item.status !== 'completed') {
+            hasActive = true;
+          }
+
+          await supabase
+            .from("shift_bidding_queue")
+            .update({ turn_index: i, status: newStatus })
+            .eq("id", item.id);
+        }
+
+        const activeItem = remaining.find(item => item.status === 'active');
+        const newTurnIndex = activeItem ? activeItem.turn_index : 0;
+        await supabase
+          .from("shift_bidding_rounds")
+          .update({ current_turn_index: newTurnIndex, updated_at: new Date().toISOString() })
+          .eq("id", roundId);
+      } else {
+        await supabase
+          .from("shift_bidding_rounds")
+          .update({ current_turn_index: 0, updated_at: new Date().toISOString() })
+          .eq("id", roundId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      toast.success("Officer removed from queue successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to remove officer from queue");
+    },
+  });
+
+  const addOfficerToQueue = useMutation({
+    mutationFn: async ({ roundId, officerId }: { roundId: string; officerId: string }) => {
+      const { data: existing, error: checkError } = await supabase
+        .from("shift_bidding_queue")
+        .select("id")
+        .eq("round_id", roundId)
+        .eq("officer_id", officerId)
+        .single();
+
+      if (existing) {
+        throw new Error("Officer is already in the bidding queue for this round.");
+      }
+
+      const { data: existingQueue, error: fetchError } = await supabase
+        .from("shift_bidding_queue")
+        .select("*")
+        .eq("round_id", roundId)
+        .order("turn_index", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      const nextTurnIndex = existingQueue && existingQueue.length > 0 ? existingQueue.length : 0;
+      const hasActive = existingQueue && existingQueue.some(item => item.status === 'active');
+      const status = !hasActive && nextTurnIndex === 0 ? 'active' : 'pending';
+
+      const { error: insertError } = await supabase
+        .from("shift_bidding_queue")
+        .insert({
+          round_id: roundId,
+          officer_id: officerId,
+          turn_index: nextTurnIndex,
+          status,
+        });
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      toast.success("Officer added to queue successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to add officer to queue");
+    },
+  });
+
   return {
     createRound,
     updateRoundStatus,
@@ -477,5 +579,7 @@ export const useShiftBiddingMutations = () => {
     generateQueue,
     submitSelection,
     saveAllowedPositions,
+    removeOfficerFromQueue,
+    addOfficerToQueue,
   };
 };

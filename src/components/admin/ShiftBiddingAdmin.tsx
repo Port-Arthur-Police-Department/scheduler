@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus } from "lucide-react";
+import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
@@ -44,7 +44,44 @@ export const ShiftBiddingAdmin = () => {
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const { data: queue = [], isLoading: queueLoading } = useBiddingQueue(selectedRoundId || rounds[0]?.id);
   const { data: allAllowedPositions = [] } = useAllAllowedPositions();
-  const { createRound, updateRoundStatus, deleteRound, generateQueue, submitSelection, saveAllowedPositions } = useShiftBiddingMutations();
+  const { createRound, updateRoundStatus, deleteRound, generateQueue, submitSelection, saveAllowedPositions, addOfficerToQueue, removeOfficerFromQueue } = useShiftBiddingMutations();
+
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ["profiles_for_bidding_admin"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("*").order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const [isAddOfficerOpen, setIsAddOfficerOpen] = useState(false);
+  const [officerToAddId, setOfficerToAddId] = useState<string>("");
+  const officersNotInQueue = allProfiles.filter(p => !queue.some(q => q.officer_id === p.id));
+
+  const handleAddOfficerToQueue = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRound || !officerToAddId) return;
+    addOfficerToQueue.mutate({
+      roundId: activeRound.id,
+      officerId: officerToAddId,
+    }, {
+      onSuccess: () => {
+        setIsAddOfficerOpen(false);
+        setOfficerToAddId("");
+      }
+    });
+  };
+
+  const handleRemoveFromQueue = (queueItemId: string, officerName: string) => {
+    if (!activeRound) return;
+    if (confirm(`Remove ${officerName} from the bidding queue? Their turn will be removed and remaining turns re-indexed.`)) {
+      removeOfficerFromQueue.mutate({
+        roundId: activeRound.id,
+        queueItemId,
+      });
+    }
+  };
 
   // New round form state
   const [newYear, setNewYear] = useState<number>(new Date().getFullYear() + 1);
@@ -441,6 +478,14 @@ export const ShiftBiddingAdmin = () => {
                         </Button>
                       )}
 
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsAddOfficerOpen(true)}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add Officer to Queue
+                      </Button>
+
                       {activeRound.status === 'setup' && (
                         <Button variant="default" onClick={() => handleToggleStatus('active')}>
                           <Play className="h-4 w-4 mr-2" />
@@ -554,20 +599,31 @@ export const ShiftBiddingAdmin = () => {
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs gap-1"
-                                      onClick={() => {
-                                        setOverrideItem(item);
-                                        setOverrideShiftTypeId(item.selected_shift_type_id || shiftTypes[0]?.id || "");
-                                        setOverridePosition(item.selected_position_name || "");
-                                        setIsOverrideOpen(true);
-                                      }}
-                                    >
-                                      <UserCheck className="h-3 w-3" />
-                                      {isCompleted ? "Modify Selection" : "Override Turn"}
-                                    </Button>
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs gap-1"
+                                        onClick={() => {
+                                          setOverrideItem(item);
+                                          setOverrideShiftTypeId(item.selected_shift_type_id || shiftTypes[0]?.id || "");
+                                          setOverridePosition(item.selected_position_name || "");
+                                          setIsOverrideOpen(true);
+                                        }}
+                                      >
+                                        <UserCheck className="h-3 w-3" />
+                                        {isCompleted ? "Modify Selection" : "Override Turn"}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                        onClick={() => handleRemoveFromQueue(item.id, officer?.full_name || "Officer")}
+                                        title="Remove officer from queue"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -899,6 +955,49 @@ export const ShiftBiddingAdmin = () => {
               </Button>
               <Button type="submit" disabled={submitSelection.isPending || !overrideShiftTypeId || !overridePosition}>
                 Confirm Override Selection
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Officer Dialog */}
+      <Dialog open={isAddOfficerOpen} onOpenChange={setIsAddOfficerOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Officer to Bidding Queue</DialogTitle>
+            <DialogDescription>
+              Select an officer to add to the end of cemeteries/seniority queue for Division {activeRound?.division} ({activeRound?.year}).
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddOfficerToQueue} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="officer-select">Select Officer</Label>
+              <Select value={officerToAddId} onValueChange={setOfficerToAddId}>
+                <SelectTrigger id="officer-select">
+                  <SelectValue placeholder="Choose officer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {officersNotInQueue.length === 0 ? (
+                    <div className="p-2 text-xs text-muted-foreground text-center">
+                      All officers are already in the queue.
+                    </div>
+                  ) : (
+                    officersNotInQueue.map(prof => (
+                      <SelectItem key={prof.id} value={prof.id}>
+                        {prof.full_name} ({prof.rank || 'Officer'} • Badge #{prof.badge_number || 'N/A'} • Div: {prof.division || 'None'})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsAddOfficerOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!officerToAddId || addOfficerToQueue.isPending}>
+                Add to Queue
               </Button>
             </div>
           </form>

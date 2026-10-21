@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen, Calendar, User, Award, BarChart2 } from "lucide-react";
 import { WeeklyLesson as WeeklyLessonType, useLessonVotes, useWeeklyLessonMutations } from "@/hooks/useWeeklyLesson";
 import { formatWeekRange, parseLocalDate } from "@/utils/weekUtils";
+import { renderMarkdown } from "@/utils/markdownUtils";
 import { toast } from "sonner";
 
 interface WeeklyLessonProps {
@@ -107,8 +108,8 @@ export const WeeklyLesson = ({ lesson, isLoading, currentOfficerId }: WeeklyLess
           </div>
         )}
 
-        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-line text-foreground/90 leading-relaxed">
-          {lesson.content}
+        <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
+          {renderMarkdown(lesson.content)}
         </div>
 
         {lesson.poll_question && lesson.poll_options && lesson.poll_options.length > 0 && (

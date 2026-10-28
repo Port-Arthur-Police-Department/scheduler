@@ -58,7 +58,7 @@ export default defineConfig({
 
       manifest: {
         name: "Port Arthur PD Scheduler",
-        short_name: "PAPD Scheduler",
+        short_name: "Schedule",
         description: "Officer scheduling system for Port Arthur Police Department",
         theme_color: "#1e40af",
         background_color: "#0f172a",

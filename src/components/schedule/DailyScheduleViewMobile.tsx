@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { usePDFExport } from "@/hooks/usePDFExport";
 import { PTOAssignmentDialog } from "./PTOAssignmentDialog";
 import { getScheduleData } from "./DailyScheduleView";
-import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 import { useScheduleMutations } from "@/hooks/useScheduleMutations";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { DEFAULT_LAYOUT_SETTINGS } from "@/constants/pdfLayoutSettings";
@@ -1040,9 +1040,9 @@ const AddOfficerDialogMobile = ({ open, onOpenChange, shift, date, onSuccess }: 
                 <SelectValue placeholder="Select officer" />
               </SelectTrigger>
               <SelectContent>
-                {officers?.map((officer) => (
+                {sortOfficersByLastName(officers || []).map((officer) => (
                   <SelectItem key={officer.id} value={officer.id}>
-                    {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
+                    {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                   </SelectItem>
                 ))}
               </SelectContent>

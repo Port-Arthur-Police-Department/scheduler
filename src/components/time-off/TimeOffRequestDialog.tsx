@@ -16,7 +16,7 @@ import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { sendPTORequestNotification } from "@/utils/notifications";
-import { isSupervisorByRank } from "@/components/schedule/the-book/utils";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 interface TimeOffRequestDialogProps {
   open: boolean;
@@ -470,9 +470,9 @@ export const TimeOffRequestDialog = ({ open, onOpenChange, userId, isAdminOrSupe
                   <SelectValue placeholder="Select officer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allOfficers.map((officer: any) => (
+                  {sortOfficersByLastName(allOfficers).map((officer: any) => (
                     <SelectItem key={officer.id} value={officer.id}>
-                      {officer.full_name} {officer.badge_number ? `(#${officer.badge_number})` : ''}
+                      {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                     </SelectItem>
                   ))}
                 </SelectContent>

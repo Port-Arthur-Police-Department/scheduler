@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Building, MapPin, CalendarDays } from "lucide-react";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 interface ScheduleManagementDialogProps {
   open: boolean;
@@ -198,9 +198,9 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
                 <SelectValue placeholder="Select officer" />
               </SelectTrigger>
               <SelectContent>
-                {officers?.map((officer) => (
+                {sortOfficersByLastName(officers || []).map((officer) => (
                   <SelectItem key={officer.id} value={officer.id}>
-                    {officer.full_name} ({officer.badge_number})
+                    {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                     {officer.shift_type_id && " ✓"}
                   </SelectItem>
                 ))}

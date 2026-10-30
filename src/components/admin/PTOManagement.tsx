@@ -13,7 +13,7 @@ import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWebsiteSettings } from "@/hooks/useWebsiteSettings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { auditLogger } from "@/lib/auditLogger";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 export const PTOManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState<string>("");
@@ -418,9 +418,9 @@ export const PTOManagement = () => {
                     <SelectValue placeholder="Select officer" />
                   </SelectTrigger>
                   <SelectContent>
-                    {officers?.map((officer) => (
+                    {sortOfficersByLastName(officers || []).map((officer) => (
                       <SelectItem key={officer.id} value={officer.id}>
-                        {officer.full_name} (#{officer.badge_number})
+                        {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                       </SelectItem>
                     ))}
                   </SelectContent>

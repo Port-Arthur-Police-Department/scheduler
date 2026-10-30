@@ -27,7 +27,7 @@ import { EmergencyPartnerReassignment } from "./EmergencyPartnerReassignment";
 import { PartnershipManager } from "./PartnershipManager";
 import { isPPOByRank } from "@/utils/ppoUtils";
 import { isSpecialAssignment } from "@/utils/scheduleUtils";
-import { sortOfficersByLastName } from "@/utils/sortingUtils";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 import {
   isShiftUnderstaffed,
   getStaffingDescription,
@@ -1122,7 +1122,7 @@ const AddOfficerForm = ({ shiftId, date, onSuccess, onCancel, shift, refetchSche
           <SelectContent>
             {sortOfficersByLastName(officers || []).map((officer) => (
               <SelectItem key={officer.id} value={officer.id}>
-                {officer.full_name} ({officer.badge_number}) {officer.rank ? `• ${officer.rank}` : ""}
+                {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
               </SelectItem>
             ))}
           </SelectContent>

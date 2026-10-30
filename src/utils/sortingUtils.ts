@@ -164,6 +164,39 @@ export const sortOfficersByLastName = (officers: any[]): any[] => {
   });
 };
 
+/**
+ * Format officer name for dropdown display with lastName first for easy searching
+ * Example: "Smith, John" instead of "John Smith"
+ */
+export const formatOfficerNameForDropdown = (fullName: string, badgeNumber?: string, rank?: string): string => {
+  if (!fullName) return '';
+
+  const lastName = getLastName(fullName);
+
+  // Handle cases with only one word (no last name)
+  if (!lastName || lastName === fullName) {
+    return fullName;
+  }
+
+  // Split full name into parts
+  const parts = fullName.split(/\s+/);
+  const firstNamePart = parts.slice(0, parts.length - 1).join(' ');
+
+  let result = `${lastName}, ${firstNamePart}`;
+
+  // Add badge number in parentheses if provided
+  if (badgeNumber) {
+    result += ` (${badgeNumber})`;
+  }
+
+  // Add rank if provided
+  if (rank) {
+    result += ` • ${rank}`;
+  }
+
+  return result;
+};
+
 export const isPPOByRank = (rank: string | undefined | null): boolean => {
   if (!rank) return false;
   const rankLower = rank.toLowerCase().trim();

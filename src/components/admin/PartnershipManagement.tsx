@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { Users, AlertTriangle, CheckCircle, Trash2, Search, CalendarDays, Filter, RefreshCw, UserCheck, UserX, ChevronLeft, ChevronRight, Clock, CalendarRange } from "lucide-react";
 import { format, parseISO, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isWithinInterval } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 export const PartnershipManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -951,9 +951,9 @@ export const PartnershipManagement = () => {
                         <SelectValue placeholder="Select regular officer" />
                       </SelectTrigger>
                       <SelectContent>
-                        {regularOfficers?.map((officer) => (
+                        {sortOfficersByLastName(regularOfficers || []).map((officer) => (
                           <SelectItem key={officer.id} value={officer.id}>
-                            {officer.full_name} ({officer.badge_number}) - {officer.rank}
+                            {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -967,9 +967,9 @@ export const PartnershipManagement = () => {
                         <SelectValue placeholder="Select PPO" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ppoOfficers?.map((officer) => (
+                        {sortOfficersByLastName(ppoOfficers || []).map((officer) => (
                           <SelectItem key={officer.id} value={officer.id}>
-                            {officer.full_name} ({officer.badge_number}) - {officer.rank}
+                            {formatOfficerNameForDropdown(officer.full_name, officer.badge_number, officer.rank)}
                           </SelectItem>
                         ))}
                       </SelectContent>

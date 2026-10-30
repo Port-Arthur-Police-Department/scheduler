@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Users, Shield, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { parseISO, format, isValid } from "date-fns";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 interface EmergencyPartnerReassignmentProps {
   ppoOfficer: any;
@@ -605,30 +605,14 @@ export const EmergencyPartnerReassignment = ({
                     <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                       Select a regular officer (non-PPO) for temporary assignment
                     </div>
-                    {availablePartners?.map((partner) => (
+                    {sortOfficersByLastName(availablePartners || []).map((partner) => (
                       <SelectItem key={partner.id} value={partner.id}>
                         <div className="flex flex-col py-2">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">{partner.name}</span>
+                            <span className="font-medium">{formatOfficerNameForDropdown(partner.name, partner.badge, partner.rank)}</span>
                             <Badge variant="outline" className="text-xs">
                               {partner.source === 'exception' ? 'Exception' : 'Recurring'}
                             </Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                            <div className="flex items-center gap-2">
-                              <span>Badge: {partner.badge || 'N/A'}</span>
-                              <span>•</span>
-                              <span>{partner.rank || 'Officer'}</span>
-                            </div>
-                            {partner.position && (
-                              <div className="text-blue-600">Position: {partner.position}</div>
-                            )}
-                            {partner.partnershipSuspended && (
-                              <div className="text-amber-600">
-                                <Users className="h-3 w-3 inline mr-1" />
-                                Available (Partner on PTO)
-                              </div>
-                            )}
                           </div>
                         </div>
                       </SelectItem>

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Users, AlertTriangle, Shield, Clock } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { isPPOByRank } from "@/utils/ppoUtils";
-import { PREDEFINED_POSITIONS } from "@/constants/positions";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 
 interface PartnershipManagerProps {
   officer: any;
@@ -755,21 +755,14 @@ if (hasSuspendedPartnership) {
                       <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                         Select a regular officer (non-PPO) for temporary assignment
                       </div>
-                      {emergencyPartners.map((partner) => (
+                      {sortOfficersByLastName(emergencyPartners).map((partner) => (
                         <SelectItem key={partner.id} value={partner.id}>
                           <div className="flex flex-col py-2">
                             <div className="flex items-center justify-between">
-                              <span className="font-medium">{partner.name}</span>
+                              <span className="font-medium">{formatOfficerNameForDropdown(partner.name, partner.badge, partner.rank)}</span>
                               <Badge variant="outline" className="text-xs">
                                 {partner.source}
                               </Badge>
-                            </div>
-                            <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                              <div className="flex items-center gap-2">
-                                <span>Badge: {partner.badge || 'N/A'}</span>
-                                <span>•</span>
-                                <span>{partner.rank || 'Officer'}</span>
-                              </div>
                             </div>
                           </div>
                         </SelectItem>
@@ -882,21 +875,14 @@ if (hasSuspendedPartnership) {
                   <div className="text-xs text-muted-foreground p-2 border-b sticky top-0 bg-background">
                     Select a Probationary Officer (PPO) to partner with
                   </div>
-                  {availablePartners.map((partner) => (
+                  {sortOfficersByLastName(availablePartners).map((partner) => (
                     <SelectItem key={partner.id} value={partner.id}>
                       <div className="flex flex-col py-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{partner.full_name}</span>
+                          <span className="font-medium">{formatOfficerNameForDropdown(partner.full_name, partner.badge_number, partner.rank)}</span>
                           <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
                             PPO
                           </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1 mt-1">
-                          <div className="flex items-center gap-2">
-                            <span>Badge: {partner.badge_number || 'N/A'}</span>
-                            <span>•</span>
-                            <span>{partner.rank}</span>
-                          </div>
                         </div>
                       </div>
                     </SelectItem>

@@ -14,7 +14,7 @@ import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Tr
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ConfiguredPosition {
@@ -983,9 +983,9 @@ export const ShiftBiddingAdmin = () => {
                       All officers are already in the queue.
                     </div>
                   ) : (
-                    officersNotInQueue.map(prof => (
+                    sortOfficersByLastName(officersNotInQueue).map(prof => (
                       <SelectItem key={prof.id} value={prof.id}>
-                        {prof.full_name} ({prof.rank || 'Officer'} • Badge #{prof.badge_number || 'N/A'} • Div: {prof.division || 'None'})
+                        {formatOfficerNameForDropdown(prof.full_name, prof.badge_number, prof.rank)} {prof.division ? `• Div: ${prof.division}` : ""}
                       </SelectItem>
                     ))
                   )}

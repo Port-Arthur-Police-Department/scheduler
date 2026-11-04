@@ -442,6 +442,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
               isOff: hasPTO || officer.shiftInfo?.isOff || false,
               hasPTO: hasPTO,
               ptoData: hasPTO ? (ptoData || {
+                id: officer.shiftInfo?.scheduleId || officer.scheduleId,
                 ptoType: ptoType || 'PTO',
                 isFullShift: true,
                 startTime: officer.shiftInfo?.custom_start_time,

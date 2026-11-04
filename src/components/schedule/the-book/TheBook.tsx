@@ -892,7 +892,9 @@ const TheBook = ({
   const handleRemovePTO = async (schedule: ShiftInfo, date: string, officerId: string) => {
     console.log('🔄 Removing PTO:', { schedule, date, officerId });
 
-    if (!schedule?.ptoData?.id) {
+    const ptoId = schedule?.ptoData?.id || schedule?.scheduleId;
+
+    if (!ptoId) {
       toast.error("Cannot remove PTO: Missing PTO data");
       return;
     }
@@ -912,13 +914,13 @@ const TheBook = ({
     const formattedDate = date;
 
     const ptoMutationData = {
-      id: schedule.ptoData.id,
+      id: schedule?.ptoData?.id || schedule?.scheduleId,
       officerId: officerId,
       date: formattedDate,
-      shiftTypeId: schedule.shift?.id || schedule.ptoData.shiftTypeId || selectedShiftId,
-      ptoType: schedule.ptoData.ptoType || "PTO",
-      startTime: schedule.ptoData.startTime || schedule.shift?.start_time || "00:00",
-      endTime: schedule.ptoData.endTime || schedule.shift?.end_time || "23:59"
+      shiftTypeId: schedule?.shift?.id || schedule?.ptoData?.shiftTypeId || selectedShiftId,
+      ptoType: schedule?.ptoData?.ptoType || schedule?.reason || "PTO",
+      startTime: schedule?.ptoData?.startTime || schedule?.shift?.start_time || "00:00",
+      endTime: schedule?.ptoData?.endTime || schedule?.shift?.end_time || "23:59"
     };
 
     safeRemovePTOMutation.mutate(ptoMutationData, {

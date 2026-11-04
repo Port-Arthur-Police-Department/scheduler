@@ -1,5 +1,6 @@
 // src/components/admin/ShiftBiddingAdmin.tsx
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useAllAllowedPositions, ShiftTypeAllowedPosition } from "@/hooks/useShiftBidding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

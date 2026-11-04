@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
+import { Building, MapPin, CalendarDays } from "lucide-react";
 
 interface ScheduleManagementDialogProps {
   open: boolean;

@@ -11,7 +11,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ViewProps } from "./types";
 import { PREDEFINED_POSITIONS } from "@/constants/positions";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+
 import { sortOfficersConsistently } from "@/utils/sortingUtils";
 
 import {
@@ -189,7 +189,7 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   };
 
   // Use the column date clicked by the user (date), matching Riding List behavior for night shifts.
-  const handleAssignPTO = async (
+  const handleAssignPTO = (
     schedule: any,
     date: string,
     officerId: string,
@@ -211,27 +211,11 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
       return;
     }
 
-    try {
-      toast.loading("Assigning PTO...");
-
-      await onEventHandlers.onAssignPTO(schedule, ptoDate, officerId, officerName);
-
-      if (refetchScheduleData) {
-        await refetchScheduleData();
-      }
-
-      console.log('✅ [WeeklyView] PTO assignment completed, cache refreshed');
-      toast.success("PTO assigned successfully");
-
-    } catch (error) {
-      console.error('❌ [WeeklyView] Error assigning PTO:', error);
-      toast.error("Failed to assign PTO");
-    } finally {
-      toast.dismiss();
-    }
+    // Delegate directly to TheBook's handler (mirrors Riding List behavior)
+    onEventHandlers.onAssignPTO(schedule, ptoDate, officerId, officerName);
   };
 
-  const handleRemovePTO = async (
+  const handleRemovePTO = (
     schedule: any,
     date: string,
     officerId: string,
@@ -241,21 +225,10 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
 
     if (!onEventHandlers.onRemovePTO) return;
 
-    try {
-      toast.loading("Removing PTO...");
-      await onEventHandlers.onRemovePTO(schedule, ptoDate, officerId);
-
-      if (refetchScheduleData) {
-        await refetchScheduleData();
-      }
-
-      toast.success("PTO removed successfully");
-    } catch (error) {
-      toast.error("Failed to remove PTO");
-      console.error('Error removing PTO:', error);
-    } finally {
-      toast.dismiss();
-    }
+    // Delegate directly to TheBook's handler (mirrors Riding List behavior)
+    // TheBook's handleRemovePTO uses safeRemovePTOMutation which handles
+    // success/error toasts and query invalidation internally.
+    onEventHandlers.onRemovePTO(schedule, ptoDate, officerId);
   };
 
   const detectPTOForOfficer = (officer: any, scheduleDay: any) => {

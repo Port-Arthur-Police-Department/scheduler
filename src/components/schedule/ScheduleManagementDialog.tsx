@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
+import { formatLocalDate } from "@/utils/dateUtils";
 import { Building, MapPin, CalendarDays } from "lucide-react";
 
 interface ScheduleManagementDialogProps {
@@ -113,7 +114,7 @@ export const ScheduleManagementDialog = ({ open, onOpenChange, onScheduleCreated
           position_name: selectedPosition !== "none" ? selectedPosition : null,
           unit_number: unitNumber || null,
           day_of_week: parseInt(selectedDay),
-          start_date: new Date().toISOString().split("T")[0],
+          start_date: formatLocalDate(new Date()),
           is_active: true,
           week_offset: weekOffsetValue
         });

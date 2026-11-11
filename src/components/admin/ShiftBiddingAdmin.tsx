@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus } from "lucide-react";
+import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus, ChevronUp, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
@@ -150,7 +150,29 @@ export const ShiftBiddingAdmin = () => {
     },
   });
 
-  const activeRound = rounds.find(r => r.id === (selectedRoundId || rounds[0]?.id));
+  const sortedRounds = [...rounds].sort((a, b) => {
+    const aCompleted = a.status === 'completed';
+    const bCompleted = b.status === 'completed';
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    if (b.year !== a.year) {
+      return b.year - a.year;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const activeRound = sortedRounds.find(r => r.id === (selectedRoundId || sortedRounds[0]?.id));
+
+  const [isQueueCollapsed, setIsQueueCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (activeRound?.status === 'completed') {
+      setIsQueueCollapsed(true);
+    } else {
+      setIsQueueCollapsed(false);
+    }
+  }, [activeRound?.id, activeRound?.status]);
 
   // Supervisor override dialog state
   const [overrideItem, setOverrideItem] = useState<any | null>(null);
@@ -366,16 +388,16 @@ export const ShiftBiddingAdmin = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {rounds.length > 0 && (
+          {sortedRounds.length > 0 && (
             <Select
-              value={selectedRoundId || rounds[0]?.id}
+              value={selectedRoundId || sortedRounds[0]?.id}
               onValueChange={setSelectedRoundId}
             >
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Select bidding round" />
               </SelectTrigger>
               <SelectContent>
-                {rounds.map(r => (
+                {sortedRounds.map(r => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.year} — Division {r.division} ({r.status})
                   </SelectItem>
@@ -396,57 +418,99 @@ export const ShiftBiddingAdmin = () => {
         {/* Tab 1: Rounds & Queue */}
         <TabsContent value="rounds" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Create Round Card */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Create Bidding Round</CardTitle>
-                <CardDescription>Initialize a new annual shift bidding round for a division.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateRound} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="year">Bidding Year</Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      value={newYear}
-                      onChange={(e) => setNewYear(Number(e.target.value))}
-                      required
-                    />
-                  </div>
+            {/* Left Column: Create Round & Rounds List */}
+            <div className="space-y-6 lg:col-span-1">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg">Create Bidding Round</CardTitle>
+                  <CardDescription>Initialize a new annual shift bidding round for a division.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleCreateRound} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="year">Bidding Year</Label>
+                      <Input
+                        id="year"
+                        type="number"
+                        value={newYear}
+                        onChange={(e) => setNewYear(Number(e.target.value))}
+                        required
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="start_date">Schedule Start Date</Label>
-                    <Input
-                      id="start_date"
-                      type="date"
-                      value={newStartDate}
-                      onChange={(e) => setNewStartDate(e.target.value)}
-                      required
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="start_date">Schedule Start Date</Label>
+                      <Input
+                        id="start_date"
+                        type="date"
+                        value={newStartDate}
+                        onChange={(e) => setNewStartDate(e.target.value)}
+                        required
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="division">Target Division</Label>
-                    <Select value={newDivision} onValueChange={(val: any) => setNewDivision(val)}>
-                      <SelectTrigger id="division">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FOD">FOD (Field Operations Division)</SelectItem>
-                        <SelectItem value="CID">CID (Criminal Investigation Division)</SelectItem>
-                        <SelectItem value="Admin">Admin (Administration)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="division">Target Division</Label>
+                      <Select value={newDivision} onValueChange={(val: any) => setNewDivision(val)}>
+                        <SelectTrigger id="division">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FOD">FOD (Field Operations Division)</SelectItem>
+                          <SelectItem value="CID">CID (Criminal Investigation Division)</SelectItem>
+                          <SelectItem value="Admin">Admin (Administration)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <Button type="submit" className="w-full" disabled={createRound.isPending}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Bidding Round
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                    <Button type="submit" className="w-full" disabled={createRound.isPending}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Bidding Round
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* All Bidding Rounds List */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    All Bidding Rounds ({sortedRounds.length})
+                  </CardTitle>
+                  <CardDescription>Select any round to view or manage.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {sortedRounds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No bidding rounds created yet.</p>
+                  ) : (
+                    sortedRounds.map(r => {
+                      const isSelected = r.id === activeRound?.id;
+                      return (
+                        <div
+                          key={r.id}
+                          onClick={() => setSelectedRoundId(r.id)}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
+                            isSelected ? 'border-primary bg-primary/5 font-medium' : 'hover:bg-muted/50'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-sm font-semibold">{r.year} — {r.division}</div>
+                            <div className="text-xs text-muted-foreground">Start: {r.start_date || 'N/A'}</div>
+                          </div>
+                          <Badge variant={
+                            r.status === 'active' ? 'default' :
+                            r.status === 'completed' ? 'secondary' : 'outline'
+                          }>
+                            {r.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Active Round Controls & Summary */}
             <Card className="shadow-sm lg:col-span-2">
@@ -470,107 +534,131 @@ export const ShiftBiddingAdmin = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {activeRound ? (
-                  <>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {/* --- STATUS-SPECIFIC ACTIONS --- */}
-                      {activeRound.status === 'setup' && (
-                        <>
-                          <Button onClick={handleGenerateQueue} disabled={generateQueue.isPending}>
-                            <Users className="h-4 w-4 mr-2" />
-                            Generate Seniority Queue ({activeRound.division})
-                          </Button>
-                          <Button variant="default" onClick={() => handleToggleStatus('active')}>
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Bidding
-                          </Button>
-                        </>
-                      )}
-
-                      {activeRound.status === 'active' && (
-                        <Button variant="outline" onClick={() => handleToggleStatus('paused')}>
-                          <Pause className="h-4 w-4 mr-2" />
-                          Pause Bidding
-                        </Button>
-                      )}
-
-                      {activeRound.status === 'paused' && (
-                        <Button variant="default" onClick={() => handleToggleStatus('active')}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Resume Bidding
-                        </Button>
-                      )}
-
-                      {activeRound.status === 'completed' && (
-                        <>
-                          <Button variant="default" onClick={() => handleToggleStatus('active')}>
-                            <Play className="h-4 w-4 mr-2" />
-                            Reopen / Resume Bidding
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
-                                deleteRound.mutate(activeRound.id, {
-                                  onSuccess: () => setSelectedRoundId(null)
-                                });
-                              }
-                            }}
-                            disabled={deleteRound.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Round
-                          </Button>
-                        </>
-                      )}
-
-                      {/* --- SHARED ACTIONS (Only visible when NOT completed) --- */}
-                      {activeRound.status !== 'completed' && (
-                        <>
-                          <Button
-                            variant="outline"
-                            onClick={() => setIsAddOfficerOpen(true)}
-                          >
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Add Officer to Queue
-                          </Button>
-
-                          <Button variant="secondary" onClick={() => handleToggleStatus('completed')}>
-                            <CheckCircle2 className="h-4 w-4 mr-2" />
-                            Mark Completed
-                          </Button>
-
-                          <Button
-                            variant="destructive"
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
-                                deleteRound.mutate(activeRound.id, {
-                                  onSuccess: () => setSelectedRoundId(null)
-                                });
-                              }
-                            }}
-                            disabled={deleteRound.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Round
-                          </Button>
-                        </>
-                      )}
+                  activeRound.status === 'completed' && isQueueCollapsed ? (
+                    <div className="py-6 text-center">
+                      <Button
+                        variant="secondary"
+                        className="w-full py-8 text-base font-semibold bg-muted hover:bg-muted/80 text-muted-foreground flex items-center justify-center gap-2 border border-dashed"
+                        onClick={() => setIsQueueCollapsed(false)}
+                      >
+                        <CheckCircle2 className="h-5 w-5 text-secondary-foreground" />
+                        <span>Completed (Click to open options)</span>
+                      </Button>
                     </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {activeRound.status === 'setup' && (
+                          <>
+                            <Button onClick={handleGenerateQueue} disabled={generateQueue.isPending}>
+                              <Users className="h-4 w-4 mr-2" />
+                              Generate Seniority Queue ({activeRound.division})
+                            </Button>
+                            <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                              <Play className="h-4 w-4 mr-2" />
+                              Start Bidding
+                            </Button>
+                          </>
+                        )}
 
-                    <div className={`rounded-md border mt-4 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[80px]">Turn</TableHead>
-                            <TableHead>Officer / Supervisor</TableHead>
-                            <TableHead>Rank</TableHead>
-                            <TableHead>Badge #</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Selection</TableHead>
-                            <TableHead className="text-right">Supervisor Override</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                        {activeRound.status === 'active' && (
+                          <Button variant="outline" onClick={() => handleToggleStatus('paused')}>
+                            <Pause className="h-4 w-4 mr-2" />
+                            Pause Bidding
+                          </Button>
+                        )}
+
+                        {activeRound.status === 'paused' && (
+                          <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Resume Bidding
+                          </Button>
+                        )}
+
+                        {activeRound.status === 'completed' && (
+                          <>
+                            <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                              <Play className="h-4 w-4 mr-2" />
+                              Reopen / Resume Bidding
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
+                                  deleteRound.mutate(activeRound.id, {
+                                    onSuccess: () => setSelectedRoundId(null)
+                                  });
+                                }
+                              }}
+                              disabled={deleteRound.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Round
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="text-xs text-muted-foreground ml-auto"
+                              onClick={() => setIsQueueCollapsed(true)}
+                            >
+                              Collapse Card
+                            </Button>
+                          </>
+                        )}
+
+                        {activeRound.status !== 'completed' && (
+                          <>
+                            <Button
+                              variant="outline"
+                              onClick={() => setIsAddOfficerOpen(true)}
+                            >
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Add Officer to Queue
+                            </Button>
+
+                            <Button variant="secondary" onClick={() => handleToggleStatus('completed')}>
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
+                              Mark Completed
+                            </Button>
+
+                            <Button
+                              variant="destructive"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
+                                  deleteRound.mutate(activeRound.id, {
+                                    onSuccess: () => setSelectedRoundId(null)
+                                  });
+                                }
+                              }}
+                              disabled={deleteRound.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Round
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between mt-4">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Officer Seniority Queue & Selections ({queue.length} officers)
+                        </h3>
+                      </div>
+
+                      <div className={`rounded-md border mt-2 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[80px]">Turn</TableHead>
+                              <TableHead>Officer / Supervisor</TableHead>
+                              <TableHead>Rank</TableHead>
+                              <TableHead>Badge #</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Selection</TableHead>
+                              <TableHead className="text-right">Supervisor Override</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                           {queueLoading ? (
                             <TableRow>
                               <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
@@ -649,10 +737,11 @@ export const ShiftBiddingAdmin = () => {
                               );
                             })
                           )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  )
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     Create a bidding round on the left to get started.

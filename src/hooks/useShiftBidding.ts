@@ -330,64 +330,90 @@ export const useShiftBiddingMutations = () => {
 
       if (updateQueueError) throw updateQueueError;
 
-      // 3. Fetch allowed position configuration for recurring days & rank
-      const { data: allowedPos } = await supabase
+      // 3. Update the officer's profile shift_type_id to the newly selected shift
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({ shift_type_id: shiftTypeId })
+        .eq("id", queueItem.officer_id);
+
+      if (profileUpdateError) {
+        console.error("Error updating officer profile shift_type_id:", profileUpdateError);
+      } else {
+        console.log(`✅ Updated officer ${queueItem.officer_id} profile shift_type_id to ${shiftTypeId}`);
+      }
+
+      // 4. Fetch allowed position configuration for recurring days & rank
+      const { data: allowedPos, error: allowedPosError } = await supabase
         .from("shift_type_allowed_positions")
         .select("*")
         .eq("shift_type_id", shiftTypeId)
         .eq("position_name", positionName)
         .single();
 
-      // 4. If recurring days are configured, end existing overlapping schedules and populate new recurring schedules
-      if (allowedPos && allowedPos.recurring_days && allowedPos.recurring_days.length > 0) {
-        const year = round.year;
-        const startDateStr = round.start_date || `${year}-01-01`;
-        const endDateStr = `${year}-12-31`;
+      if (allowedPosError) {
+        console.warn("No allowed position config found for", positionName, "on shift", shiftTypeId, "- will use default days. Error:", allowedPosError.message);
+      }
 
-        // End any other recurring schedules the user has so they don't have overlapping schedules
-        const prevDate = new Date(startDateStr);
-        prevDate.setDate(prevDate.getDate() - 1);
-        const dayBeforeStart = prevDate.toISOString().split('T')[0];
+      // 5. Create recurring schedules — use configured recurring_days if available, otherwise default to all 7 days
+      const recurringDays = (allowedPos && allowedPos.recurring_days && allowedPos.recurring_days.length > 0)
+        ? allowedPos.recurring_days
+        : [0, 1, 2, 3, 4, 5, 6]; // Default: all days of the week
 
-        await supabase
-          .from("recurring_schedules")
-          .update({ end_date: dayBeforeStart })
-          .eq("officer_id", queueItem.officer_id)
-          .or(`end_date.is.null,end_date.gte.${startDateStr}`);
+      const year = round.year;
+      const startDateStr = round.start_date || `${year}-01-01`;
+      const endDateStr = `${year}-12-31`;
 
-        // Check if officer has a default assignment set in their profile for this start date
-        const { data: defaultAssignments } = await supabase
-          .from("officer_default_assignments")
-          .select("*")
-          .eq("officer_id", queueItem.officer_id)
-          .lte("start_date", startDateStr)
-          .or(`end_date.is.null,end_date.gte.${startDateStr}`)
-          .order("start_date", { ascending: false })
-          .limit(1);
+      console.log(`📅 Creating recurring schedules for officer ${queueItem.officer_id}: shift=${shiftTypeId}, position=${positionName}, days=${JSON.stringify(recurringDays)}, range=${startDateStr} to ${endDateStr}`);
 
-        const activeDefaultAssignment = defaultAssignments && defaultAssignments.length > 0 ? defaultAssignments[0] : null;
-        const defaultPositionName = activeDefaultAssignment ? activeDefaultAssignment.position_name : null;
-        const defaultUnitNumber = activeDefaultAssignment ? activeDefaultAssignment.unit_number : null;
+      // End any other recurring schedules the user has so they don't have overlapping schedules
+      const prevDate = new Date(startDateStr);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const dayBeforeStart = prevDate.toISOString().split('T')[0];
 
-        const scheduleRecords = allowedPos.recurring_days.map((dayOfWeek: number) => ({
-          officer_id: queueItem.officer_id,
-          shift_type_id: shiftTypeId,
-          day_of_week: dayOfWeek,
-          start_date: startDateStr,
-          end_date: endDateStr,
-          position_name: defaultPositionName, // Blank by default unless a default assignment has been set in their profile
-          unit_number: defaultUnitNumber,
-          week_offset: null, // Every week
-        }));
+      const { error: endOldError } = await supabase
+        .from("recurring_schedules")
+        .update({ end_date: dayBeforeStart })
+        .eq("officer_id", queueItem.officer_id)
+        .or(`end_date.is.null,end_date.gte.${startDateStr}`);
 
-        const { error: scheduleInsertError } = await supabase
-          .from("recurring_schedules")
-          .insert(scheduleRecords);
+      if (endOldError) {
+        console.error("Error ending old recurring schedules:", endOldError);
+      }
 
-        if (scheduleInsertError) {
-          console.error("Error inserting recurring schedules from shift bidding:", scheduleInsertError);
-          // Non-blocking for selection, but log error
-        }
+      // Check if officer has a default assignment set in their profile for this start date
+      const { data: defaultAssignments } = await supabase
+        .from("officer_default_assignments")
+        .select("*")
+        .eq("officer_id", queueItem.officer_id)
+        .lte("start_date", startDateStr)
+        .or(`end_date.is.null,end_date.gte.${startDateStr}`)
+        .order("start_date", { ascending: false })
+        .limit(1);
+
+      const activeDefaultAssignment = defaultAssignments && defaultAssignments.length > 0 ? defaultAssignments[0] : null;
+      const defaultPositionName = activeDefaultAssignment ? activeDefaultAssignment.position_name : null;
+      const defaultUnitNumber = activeDefaultAssignment ? activeDefaultAssignment.unit_number : null;
+
+      const scheduleRecords = recurringDays.map((dayOfWeek: number) => ({
+        officer_id: queueItem.officer_id,
+        shift_type_id: shiftTypeId,
+        day_of_week: dayOfWeek,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        position_name: defaultPositionName,
+        unit_number: defaultUnitNumber,
+        week_offset: null, // Every week
+      }));
+
+      const { error: scheduleInsertError } = await supabase
+        .from("recurring_schedules")
+        .insert(scheduleRecords);
+
+      if (scheduleInsertError) {
+        console.error("❌ Error inserting recurring schedules from shift bidding:", scheduleInsertError);
+        toast.error("Selection saved but recurring schedules could not be created: " + scheduleInsertError.message);
+      } else {
+        console.log(`✅ Successfully created ${scheduleRecords.length} recurring schedule records for officer ${queueItem.officer_id}`);
       }
 
       // 5. Advance queue to next officer or complete round
@@ -424,7 +450,11 @@ export const useShiftBiddingMutations = () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
       queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
-      toast.success("Shift selection confirmed and official schedule updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ["profiles_for_bidding_admin"] });
+      queryClient.invalidateQueries({ queryKey: ["officers"] });
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-schedule"] });
+      toast.success("Shift selection confirmed and recurring schedule created successfully!");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to submit shift selection");

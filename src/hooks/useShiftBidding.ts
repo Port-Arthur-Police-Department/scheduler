@@ -365,19 +365,29 @@ export const useShiftBiddingMutations = () => {
 
       console.log(`📅 Creating recurring schedules for officer ${queueItem.officer_id}: shift=${shiftTypeId}, position=${positionName}, days=${JSON.stringify(recurringDays)}, range=${startDateStr} to ${endDateStr}`);
 
-      // End any other recurring schedules the user has so they don't have overlapping schedules
-      const prevDate = new Date(startDateStr);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const dayBeforeStart = prevDate.toISOString().split('T')[0];
-
-      const { error: endOldError } = await supabase
+      // Find all existing schedules for this officer + shift type BEFORE trying to INSERT
+      const { existingSchedules, error: fetchError } = await supabase
         .from("recurring_schedules")
-        .update({ end_date: dayBeforeStart })
+        .select("*")
         .eq("officer_id", queueItem.officer_id)
-        .or(`end_date.is.null,end_date.gte.${startDateStr}`);
+        .eq("shift_type_id", shiftTypeId);
 
-      if (endOldError) {
-        console.error("Error ending old recurring schedules:", endOldError);
+      if (fetchError) {
+        console.error("Error fetching existing schedules:", fetchError);
+      } else if (existingSchedules && existingSchedules.length > 0) {
+        console.log(`Found ${existingSchedules.length} existing schedule(s) for officer ${queueItem.officer_id} on shift ${shiftTypeId}`);
+      }
+
+      // Delete any duplicate or conflicting recurring schedules for this officer + shift type
+      // This avoids the unique constraint error when inserting new schedules
+      const { error: deleteOldError } = await supabase
+        .from("recurring_schedules")
+        .delete()
+        .eq("officer_id", queueItem.officer_id)
+        .eq("shift_type_id", shiftTypeId);
+
+      if (deleteOldError) {
+        console.error("Error deleting old recurring schedules:", deleteOldError);
       }
 
       // Check if officer has a default assignment set in their profile for this start date

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus } from "lucide-react";
+import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus, ChevronUp, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
@@ -150,7 +150,29 @@ export const ShiftBiddingAdmin = () => {
     },
   });
 
-  const activeRound = rounds.find(r => r.id === (selectedRoundId || rounds[0]?.id));
+  const sortedRounds = [...rounds].sort((a, b) => {
+    const aCompleted = a.status === 'completed';
+    const bCompleted = b.status === 'completed';
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    if (b.year !== a.year) {
+      return b.year - a.year;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const activeRound = sortedRounds.find(r => r.id === (selectedRoundId || sortedRounds[0]?.id));
+
+  const [isQueueCollapsed, setIsQueueCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (activeRound?.status === 'completed') {
+      setIsQueueCollapsed(true);
+    } else {
+      setIsQueueCollapsed(false);
+    }
+  }, [activeRound?.id, activeRound?.status]);
 
   // Supervisor override dialog state
   const [overrideItem, setOverrideItem] = useState<any | null>(null);
@@ -366,16 +388,16 @@ export const ShiftBiddingAdmin = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {rounds.length > 0 && (
+          {sortedRounds.length > 0 && (
             <Select
-              value={selectedRoundId || rounds[0]?.id}
+              value={selectedRoundId || sortedRounds[0]?.id}
               onValueChange={setSelectedRoundId}
             >
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Select bidding round" />
               </SelectTrigger>
               <SelectContent>
-                {rounds.map(r => (
+                {sortedRounds.map(r => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.year} — Division {r.division} ({r.status})
                   </SelectItem>
@@ -557,20 +579,37 @@ export const ShiftBiddingAdmin = () => {
                       )}
                     </div>
 
-                    <div className={`rounded-md border mt-4 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[80px]">Turn</TableHead>
-                            <TableHead>Officer / Supervisor</TableHead>
-                            <TableHead>Rank</TableHead>
-                            <TableHead>Badge #</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Selection</TableHead>
-                            <TableHead className="text-right">Supervisor Override</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                    <div className="flex items-center justify-between mt-4">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Officer Seniority Queue & Selections ({queue.length} officers)
+                      </h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => setIsQueueCollapsed(prev => !prev)}
+                      >
+                        {isQueueCollapsed ? "Expand List" : "Collapse List"}
+                        {isQueueCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
+
+                    {!isQueueCollapsed && (
+                      <div className={`rounded-md border mt-2 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[80px]">Turn</TableHead>
+                              <TableHead>Officer / Supervisor</TableHead>
+                              <TableHead>Rank</TableHead>
+                              <TableHead>Badge #</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Selection</TableHead>
+                              <TableHead className="text-right">Supervisor Override</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                           {queueLoading ? (
                             <TableRow>
                               <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
@@ -649,9 +688,10 @@ export const ShiftBiddingAdmin = () => {
                               );
                             })
                           )}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">

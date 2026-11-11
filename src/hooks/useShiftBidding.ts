@@ -60,11 +60,21 @@ export const useShiftBiddingRounds = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("shift_bidding_rounds")
-        .select("*")
-        .order("year", { ascending: false });
+        .select("*");
 
       if (error) throw error;
-      return data as ShiftBiddingRound[];
+      const rounds = data as ShiftBiddingRound[];
+      return rounds.sort((a, b) => {
+        const aCompleted = a.status === 'completed';
+        const bCompleted = b.status === 'completed';
+        if (aCompleted !== bCompleted) {
+          return aCompleted ? 1 : -1;
+        }
+        if (b.year !== a.year) {
+          return b.year - a.year;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
     },
   });
 };

@@ -128,12 +128,12 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       // Only separate active vs ended based on dates
       // DO NOT filter by week_offset in the management view
       const active = data.filter(s => {
-        const endDate = s.end_date ? new Date(s.end_date) : null;
+        const endDate = s.end_date ? parseLocalDate(s.end_date) : null;
         return !endDate || endDate >= today;
       });
 
       const ended = data.filter(s => {
-        const endDate = s.end_date ? new Date(s.end_date) : null;
+        const endDate = s.end_date ? parseLocalDate(s.end_date) : null;
         return endDate && endDate < today;
       });
 
@@ -164,12 +164,12 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
 
       // FIX: Include assignments that are either ongoing OR end in the future
       const active = (data || []).filter((da: any) => {
-        const endDate = da.end_date ? new Date(da.end_date) : null;
+        const endDate = da.end_date ? parseLocalDate(da.end_date) : null;
         return !endDate || endDate >= today;
       });
 
       const ended = (data || []).filter((da: any) => {
-        const endDate = da.end_date ? new Date(da.end_date) : null;
+        const endDate = da.end_date ? parseLocalDate(da.end_date) : null;
         return endDate && endDate < today;
       });
 
@@ -600,7 +600,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   };
 
   const handleEndAllSchedules = () => {
-    const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
+    const activeSchedules = schedules?.filter(s => !s.end_date || parseLocalDate(s.end_date) >= getLocalToday()) || [];
     const today = format(new Date(), "yyyy-MM-dd");
 
     activeSchedules.forEach(schedule => {
@@ -609,7 +609,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   };
 
   const handleDeleteAllSchedules = () => {
-    const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
+    const activeSchedules = schedules?.filter(s => !s.end_date || parseLocalDate(s.end_date) >= getLocalToday()) || [];
 
     if (activeSchedules.length > 0) {
       setScheduleToDelete("all");
@@ -663,8 +663,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
       setCustomPosition("");
     }
 
-    setDefaultAssignmentStartDate(new Date(assignment.start_date));
-    setDefaultAssignmentEndDate(assignment.end_date ? new Date(assignment.end_date) : undefined);
+    setDefaultAssignmentStartDate(parseLocalDate(assignment.start_date));
+    setDefaultAssignmentEndDate(assignment.end_date ? parseLocalDate(assignment.end_date) : undefined);
   };
 
   // FIXED: Handle save default assignment edit with custom position
@@ -712,7 +712,7 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
   const confirmDelete = () => {
     if (scheduleToDelete === "all") {
       // Delete all active schedules
-      const activeSchedules = schedules?.filter(s => !s.end_date || new Date(s.end_date) >= new Date()) || [];
+      const activeSchedules = schedules?.filter(s => !s.end_date || parseLocalDate(s.end_date) >= getLocalToday()) || [];
       activeSchedules.forEach(schedule => {
         deleteScheduleMutation.mutate(schedule.id);
       });
@@ -858,8 +858,8 @@ export const OfficerScheduleManager = ({ officer, open, onOpenChange }: OfficerS
                                   {schedule.shift_types?.start_time} - {schedule.shift_types?.end_time}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  {format(new Date((schedule as any).start_date), "MMM d, yyyy")}
-                                  {(schedule as any).end_date && ` - ${format(new Date((schedule as any).end_date), "MMM d, yyyy")}`}
+                                  {format(parseLocalDate((schedule as any).start_date), "MMM d, yyyy")}
+                                  {(schedule as any).end_date && ` - ${format(parseLocalDate((schedule as any).end_date), "MMM d, yyyy")}`}
                                   {!(schedule as any).end_date && " - Ongoing"}
                                 </p>
                                 <div className="flex gap-2 flex-wrap">

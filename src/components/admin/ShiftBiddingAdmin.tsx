@@ -501,10 +501,26 @@ export const ShiftBiddingAdmin = () => {
                       )}
 
                       {activeRound.status === 'completed' && (
-                        <Button variant="default" onClick={() => handleToggleStatus('active')}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Reopen / Resume Bidding
-                        </Button>
+                        <>
+                          <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Reopen / Resume Bidding
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
+                                deleteRound.mutate(activeRound.id, {
+                                  onSuccess: () => setSelectedRoundId(null)
+                                });
+                              }
+                            }}
+                            disabled={deleteRound.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Round
+                          </Button>
+                        </>
                       )}
 
                       {/* --- SHARED ACTIONS (Only visible when NOT completed) --- */}
@@ -541,7 +557,7 @@ export const ShiftBiddingAdmin = () => {
                       )}
                     </div>
 
-                    <div className="rounded-md border mt-4 overflow-hidden">
+                    <div className={`rounded-md border mt-4 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>
                       <Table>
                         <TableHeader>
                           <TableRow>

@@ -472,26 +472,18 @@ export const ShiftBiddingAdmin = () => {
                 {activeRound ? (
                   <>
                     <div className="flex flex-wrap gap-2 pt-2">
+                      {/* --- STATUS-SPECIFIC ACTIONS --- */}
                       {activeRound.status === 'setup' && (
-                        <Button onClick={handleGenerateQueue} disabled={generateQueue.isPending}>
-                          <Users className="h-4 w-4 mr-2" />
-                          Generate Seniority Queue ({activeRound.division})
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsAddOfficerOpen(true)}
-                      >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Add Officer to Queue
-                      </Button>
-
-                      {activeRound.status === 'setup' && (
-                        <Button variant="default" onClick={() => handleToggleStatus('active')}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Bidding
-                        </Button>
+                        <>
+                          <Button onClick={handleGenerateQueue} disabled={generateQueue.isPending}>
+                            <Users className="h-4 w-4 mr-2" />
+                            Generate Seniority Queue ({activeRound.division})
+                          </Button>
+                          <Button variant="default" onClick={() => handleToggleStatus('active')}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Start Bidding
+                          </Button>
+                        </>
                       )}
 
                       {activeRound.status === 'active' && (
@@ -515,27 +507,38 @@ export const ShiftBiddingAdmin = () => {
                         </Button>
                       )}
 
+                      {/* --- SHARED ACTIONS (Only visible when NOT completed) --- */}
                       {activeRound.status !== 'completed' && (
-                        <Button variant="secondary" onClick={() => handleToggleStatus('completed')}>
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Mark Completed
-                        </Button>
-                      )}
+                        <>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsAddOfficerOpen(true)}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Add Officer to Queue
+                          </Button>
 
-                      <Button
-                        variant="destructive"
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
-                            deleteRound.mutate(activeRound.id, {
-                              onSuccess: () => setSelectedRoundId(null)
-                            });
-                          }
-                        }}
-                        disabled={deleteRound.isPending}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Round
-                      </Button>
+                          <Button variant="secondary" onClick={() => handleToggleStatus('completed')}>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Mark Completed
+                          </Button>
+
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete the bidding round for ${activeRound.year} - Division ${activeRound.division}? This will remove all queue and selection records for this round.`)) {
+                                deleteRound.mutate(activeRound.id, {
+                                  onSuccess: () => setSelectedRoundId(null)
+                                });
+                              }
+                            }}
+                            disabled={deleteRound.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Round
+                          </Button>
+                        </>
+                      )}
                     </div>
 
                     <div className="rounded-md border mt-4 overflow-hidden">

@@ -740,7 +740,8 @@ export const ShiftBiddingAdmin = () => {
                           </TableBody>
                         </Table>
                       </div>
-                  </>
+                    </>
+                  )
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     Create a bidding round on the left to get started.

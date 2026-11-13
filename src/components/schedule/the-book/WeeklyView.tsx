@@ -664,57 +664,37 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
   const supervisors = sortedOriginalOfficers.filter(officer => {
     const isSupervisor = isSupervisorByRank(officer);
 
-    const isExcluded = weekDays.some(({ dateStr }) => {
+    // Only filter out if they have an overtime shift on a day
+    const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
       const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-      const shiftInfo = dayOfficer?.shiftInfo;
-
-      // Exclude if officer has PTO, is off duty, or has special assignment
-      if (shiftInfo?.hasPTO) return true;
-      if (shiftInfo?.isOff) return true;
-      if (isSpecialAssignment(shiftInfo?.position)) return true;
-
-      return false;
+      return dayOfficer?.shiftInfo?.is_extra_shift === true;
     });
 
-    return isSupervisor && !isExcluded;
+    return isSupervisor && !hasOvertimeShifts;
   });
 
   const regularOfficers = sortedOriginalOfficers.filter(officer => {
     const isNotSupervisor = !isSupervisorByRank(officer);
     const isNotPPO = officer.rank?.toLowerCase() !== 'probationary';
 
-    const isExcluded = weekDays.some(({ dateStr }) => {
+    const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
       const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-      const shiftInfo = dayOfficer?.shiftInfo;
-
-      // Exclude if officer has PTO, is off duty, or has special assignment
-      if (shiftInfo?.hasPTO) return true;
-      if (shiftInfo?.isOff) return true;
-      if (isSpecialAssignment(shiftInfo?.position)) return true;
-
-      return false;
+      return dayOfficer?.shiftInfo?.is_extra_shift === true;
     });
 
-    return isNotSupervisor && isNotPPO && !isExcluded;
+    return isNotSupervisor && isNotPPO && !hasOvertimeShifts;
   });
 
   const ppos = sortedOriginalOfficers.filter(officer => {
     const isNotSupervisor = !isSupervisorByRank(officer);
     const isPPO = officer.rank?.toLowerCase() === 'probationary';
 
-    const isExcluded = weekDays.some(({ dateStr }) => {
+    const hasOvertimeShifts = weekDays.some(({ dateStr }) => {
       const dayOfficer = safeGetWeeklySchedule(officer, dateStr);
-      const shiftInfo = dayOfficer?.shiftInfo;
-
-      // Exclude if officer has PTO, is off duty, or has special assignment
-      if (shiftInfo?.hasPTO) return true;
-      if (shiftInfo?.isOff) return true;
-      if (isSpecialAssignment(shiftInfo?.position)) return true;
-
-      return false;
+      return dayOfficer?.shiftInfo?.is_extra_shift === true;
     });
 
-    return isNotSupervisor && isPPO && !isExcluded;
+    return isNotSupervisor && isPPO && !hasOvertimeShifts;
   });
 
   const getMinimumStaffing = (dayOfWeek: number) => {

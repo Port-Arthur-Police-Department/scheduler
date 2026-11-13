@@ -138,12 +138,14 @@ const handleSave = () => {
                 <SelectValue placeholder="Select position" />
               </SelectTrigger>
               <SelectContent>
-                {PREDEFINED_POSITIONS.map((pos) => (
-                  <SelectItem key={pos} value={pos}>
-                    {pos}
-                  </SelectItem>
-                ))}
-                <SelectItem value="other-custom">Other (Custom)</SelectItem>
+                {PREDEFINED_POSITIONS.map((pos) => {
+                  const isCustom = pos === "Other (Custom)";
+                  return (
+                    <SelectItem key={pos} value={isCustom ? "other-custom" : pos}>
+                      {pos}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             

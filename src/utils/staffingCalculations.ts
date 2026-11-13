@@ -102,7 +102,8 @@ const isExcludedSpecialAssignment = (position: string): boolean => {
  * - Overtime officers (is_extra_shift = true)
  * EXCLUDES:
  * - Officers on PTO (vacation, holiday, sick, comp, other)
- * - Officers assigned to "Other (Custom)" position
+ * - Officers assigned to special assignments (not in PREDEFINED_POSITIONS)
+ * - Officers marked as off (isOff)
  */
 export const calculateTotalStaffing = (daySchedule: any) => {
   if (!daySchedule?.officers) return { supervisorCount: 0, officerCount: 0, ppoCount: 0 };
@@ -112,40 +113,27 @@ export const calculateTotalStaffing = (daySchedule: any) => {
   let ppoCount = 0;
 
   daySchedule.officers.forEach((officer: any) => {
-    // Check if officer is on duty (not off)
-    const isOff = officer.shiftInfo?.isOff === true;
-    if (isOff) return;
-
-    // Check if officer is on excluded PTO
-    if (isExcludedPTO(officer)) {
-      debugLog(`❌ Excluding ${officer.officerName} from staffing: PTO type`,
-        officer.shiftInfo?.ptoData?.ptoType || officer.shiftInfo?.reason);
-      return;
-    }
-
-    // Check if officer has "Other (Custom)" assignment
     const position = officer.shiftInfo?.position || '';
-    if (isExcludedSpecialAssignment(position)) {
-      debugLog(`❌ Excluding ${officer.officerName} from staffing: Other (Custom) assignment`, position);
-      return;
-    }
 
-    // Check if officer is actually working (not just assigned)
-    const hasFullDayPTO = officer.shiftInfo?.hasPTO === true;
-    if (hasFullDayPTO) {
-      // Double-check this isn't an excluded PTO type (should have been caught above)
-      return;
-    }
+    // Check if officer is on duty (not off)
+    if (officer.shiftInfo?.isOff === true) return;
+
+    // Skip full-day PTO
+    if (officer.shiftInfo?.hasPTO === true) return;
+
+    // Skip excluded PTO types
+    if (isExcludedPTO(officer)) return;
+
+    // Skip special assignments
+    if (isSpecialAssignment(position)) return;
 
     // Officer is working and should count toward staffing
     const isSupervisor = isSupervisorByRank({ rank: officer.rank });
     const isPPO = officer.rank?.toLowerCase() === 'probationary';
 
-    // Check if supervisor is assigned to a district position (counts as officer)
     const isDistrictAssignment = position.toLowerCase().includes('district') ||
       position.toLowerCase().includes('city-wide');
 
-    // If supervisor is assigned to a district or city-wide, count them as an officer
     if (isSupervisor && isDistrictAssignment) {
       officerCount++;
       debugLog(`✅ Counting ${officer.officerName} as OFFICER (supervisor in district/city-wide): ${position}`);
@@ -168,14 +156,14 @@ export const calculateTotalStaffing = (daySchedule: any) => {
   const workingOfficers = daySchedule.officers.filter((o: any) =>
     !o.shiftInfo?.isOff &&
     !isExcludedPTO(o) &&
-    !isExcludedSpecialAssignment(o.shiftInfo?.position || '')
+    !isSpecialAssignment(o.shiftInfo?.position || '')
   ).length;
 
   const overtimeCount = daySchedule.officers.filter((o: any) =>
     o.shiftInfo?.is_extra_shift === true &&
     !o.shiftInfo?.isOff &&
     !isExcludedPTO(o) &&
-    !isExcludedSpecialAssignment(o.shiftInfo?.position || '')
+    !isSpecialAssignment(o.shiftInfo?.position || '')
   ).length;
 
   debugLog('📊 FINAL Staffing calculation for', daySchedule.date, {
@@ -203,19 +191,21 @@ export const calculateRegularStaffing = (daySchedule: any) => {
 
   daySchedule.officers.forEach((officer: any) => {
     // EXCLUDE overtime officers for regular count only
-    const isOvertime = officer.shiftInfo?.is_extra_shift === true;
-    if (isOvertime) return;
+    if (officer.shiftInfo?.is_extra_shift === true) return;
 
     // Check if officer is on duty (not off)
-    const isOff = officer.shiftInfo?.isOff === true;
-    if (isOff) return;
+    if (officer.shiftInfo?.isOff === true) return;
+
+    // Skip full-day PTO
+    if (officer.shiftInfo?.hasPTO === true) return;
 
     // Check if officer is on excluded PTO
     if (isExcludedPTO(officer)) return;
 
-    // Check if officer has "Other (Custom)" assignment
     const position = officer.shiftInfo?.position || '';
-    if (isExcludedSpecialAssignment(position)) return;
+
+    // Skip special assignments
+    if (isSpecialAssignment(position)) return;
 
     // Officer is working and should count toward staffing
     const isSupervisor = isSupervisorByRank({ rank: officer.rank });
@@ -252,19 +242,21 @@ export const calculateOvertimeStaffing = (daySchedule: any) => {
 
   daySchedule.officers.forEach((officer: any) => {
     // INCLUDE only overtime officers
-    const isOvertime = officer.shiftInfo?.is_extra_shift === true;
-    if (!isOvertime) return;
+    if (officer.shiftInfo?.is_extra_shift !== true) return;
 
     // Check if officer is on duty (not off)
-    const isOff = officer.shiftInfo?.isOff === true;
-    if (isOff) return;
+    if (officer.shiftInfo?.isOff === true) return;
+
+    // Skip full-day PTO
+    if (officer.shiftInfo?.hasPTO === true) return;
 
     // Check if officer is on excluded PTO
     if (isExcludedPTO(officer)) return;
 
-    // Check if officer has "Other (Custom)" assignment
     const position = officer.shiftInfo?.position || '';
-    if (isExcludedSpecialAssignment(position)) return;
+
+    // Skip special assignments
+    if (isSpecialAssignment(position)) return;
 
     // Officer is working and should count toward staffing
     const isSupervisor = isSupervisorByRank({ rank: officer.rank });

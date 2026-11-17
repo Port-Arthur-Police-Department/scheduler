@@ -522,53 +522,101 @@ export const useShiftBiddingMutations = () => {
 
   const removeOfficerFromQueue = useMutation({
     mutationFn: async ({ roundId, queueItemId }: { roundId: string; queueItemId: string }) => {
-      const { error: deleteError } = await supabase
-        .from("shift_bidding_queue")
-        .delete()
-        .eq("id", queueItemId);
+      try {
+        // Fetch all current queue items with their profile details before deletion
+        const { data: allQueueItems, error: queueError } = await supabase
+          .from("shift_bidding_queue")
+          .select("*, profiles:officer_id(*)")
+          .eq("round_id", roundId);
 
-      if (deleteError) throw deleteError;
+        if (queueError) throw queueError;
+        if (!allQueueItems || allQueueItems.length === 0) {
+          throw new Error("No queue items found for this round");
+        }
 
-      const { data: remaining, error: fetchError } = await supabase
-        .from("shift_bidding_queue")
-        .select("*")
-        .eq("round_id", roundId)
-        .order("turn_index", { ascending: true });
+        // Filter out the removed item
+        const remainingItems = allQueueItems.filter((item: any) => item.id !== queueItemId);
 
-      if (fetchError) throw fetchError;
+        // Clear existing queue for this round
+        const { error: deleteError } = await supabase
+          .from("shift_bidding_queue")
+          .delete()
+          .eq("round_id", roundId);
 
-      if (remaining && remaining.length > 0) {
-        let hasActive = remaining.some(item => item.status === 'active');
+        if (deleteError) throw deleteError;
 
-        for (let i = 0; i < remaining.length; i++) {
-          const item = remaining[i];
-          const newStatus = !hasActive && i === 0 && item.status !== 'completed' ? 'active' : item.status;
-          if (!hasActive && i === 0 && item.status !== 'completed') {
+        if (remainingItems.length === 0) {
+          // Empty queue case
+          await supabase
+            .from("shift_bidding_rounds")
+            .update({ current_turn_index: 0, updated_at: new Date().toISOString() })
+            .eq("id", roundId);
+          return;
+        }
+
+        // Extract and calculate service credits for remaining officers
+        const officersToSort = remainingItems.map((item: any) => {
+          const prof = item.profiles;
+          return {
+            ...prof,
+            _queueItem: item,
+          };
+        }).filter((o: any) => o.id);
+
+        // Sort officers consistently using seniority rules
+        const sortedOfficers = sortOfficersConsistently(officersToSort as any[]);
+
+        // Check if there is already an active status among remaining items
+        let hasActive = sortedOfficers.some((o: any) => o._queueItem.status === 'active');
+
+        // Prepare new sorted queue items
+        const newQueueItems = sortedOfficers.map((officer: any, index: number) => {
+          const existingItem = officer._queueItem;
+          // If no active officer exists, make the first non-completed officer active
+          let status = existingItem.status;
+          if (!hasActive && index === 0 && status !== 'completed') {
+            status = 'active';
             hasActive = true;
           }
 
-          await supabase
-            .from("shift_bidding_queue")
-            .update({ turn_index: i, status: newStatus })
-            .eq("id", item.id);
-        }
+          return {
+            round_id: roundId,
+            officer_id: officer.id,
+            turn_index: index,
+            status: status,
+            selected_shift_type_id: existingItem.selected_shift_type_id,
+            selected_position_name: existingItem.selected_position_name,
+            selected_at: existingItem.selected_at,
+          };
+        });
 
-        const activeItem = remaining.find(item => item.status === 'active');
-        const newTurnIndex = activeItem ? activeItem.turn_index : 0;
+        // Insert new sorted queue items
+        const { error: insertError } = await supabase
+          .from("shift_bidding_queue")
+          .insert(newQueueItems);
+
+        if (insertError) throw insertError;
+
+        // Determine active turn index
+        const firstActiveIndex = newQueueItems.findIndex((i: any) => i.status === 'active' || (i.status === 'pending' && i.turn_index === 0));
+        const targetTurnIndex = firstActiveIndex !== -1 ? firstActiveIndex : 0;
+
+        // Ensure exactly one active or set the round current_turn_index correctly
         await supabase
           .from("shift_bidding_rounds")
-          .update({ current_turn_index: newTurnIndex, updated_at: new Date().toISOString() })
+          .update({ current_turn_index: targetTurnIndex, updated_at: new Date().toISOString() })
           .eq("id", roundId);
-      } else {
-        await supabase
-          .from("shift_bidding_rounds")
-          .update({ current_turn_index: 0, updated_at: new Date().toISOString() })
-          .eq("id", roundId);
+
+        console.log(`✅ Successfully removed officer and re-indexed queue with ${newQueueItems.length} items`);
+      } catch (error: any) {
+        console.error("Error in removeOfficerFromQueue:", error);
+        throw new Error(error.message || "Failed to remove officer from queue");
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
       toast.success("Officer removed from queue successfully");
     },
     onError: (error: any) => {
@@ -578,115 +626,138 @@ export const useShiftBiddingMutations = () => {
 
   const addOfficerToQueue = useMutation({
     mutationFn: async ({ roundId, officerId }: { roundId: string; officerId: string }) => {
-      const { data: existing, error: checkError } = await supabase
-        .from("shift_bidding_queue")
-        .select("id")
-        .eq("round_id", roundId)
-        .eq("officer_id", officerId)
-        .single();
+      try {
+        const { data: existing, error: checkError } = await supabase
+          .from("shift_bidding_queue")
+          .select("id")
+          .eq("round_id", roundId)
+          .eq("officer_id", officerId)
+          .maybeSingle();
 
-      if (existing) {
-        throw new Error("Officer is already in the bidding queue for this round.");
-      }
-
-      // Fetch all current queue items with their profile details
-      const { data: currentQueue, error: queueError } = await supabase
-        .from("shift_bidding_queue")
-        .select("*, profiles:officer_id(*)")
-        .eq("round_id", roundId);
-
-      if (queueError) throw queueError;
-
-      // Fetch the profile for the officer being added
-      const { data: newProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", officerId)
-        .single();
-
-      if (profileError || !newProfile) throw new Error("Officer profile not found");
-
-      // Get service credit for new profile
-      const { data: creditData } = await supabase.rpc("get_service_credit", {
-        profile_id: newProfile.id,
-      });
-      const newOfficerWithCredit = {
-        ...newProfile,
-        service_credit: creditData !== null ? Number(creditData) : 0,
-        _queueItem: null,
-      };
-
-      // Collect all profiles with service credit
-      const allQueueProfiles = await Promise.all(
-        (currentQueue || []).map(async (item) => {
-          const prof = item.profiles;
-          if (!prof) return null;
-          const { data: scData } = await supabase.rpc("get_service_credit", {
-            profile_id: prof.id,
-          });
-          return {
-            ...prof,
-            service_credit: scData !== null ? Number(scData) : 0,
-            _queueItem: item,
-          };
-        })
-      );
-
-      const validQueueProfiles = allQueueProfiles.filter(Boolean);
-      validQueueProfiles.push(newOfficerWithCredit);
-
-      // Sort all officers consistently using seniority sorting algorithm
-      const sortedOfficers = sortOfficersConsistently(validQueueProfiles as any[]);
-
-      // Prepare new queue items preserving existing selections
-      const newQueueItems = sortedOfficers.map((officer: any, index: number) => {
-        const existingItem = officer._queueItem;
-        return {
-          round_id: roundId,
-          officer_id: officer.id,
-          turn_index: index,
-          status: existingItem ? existingItem.status : 'pending',
-          selected_shift_type_id: existingItem ? existingItem.selected_shift_type_id : null,
-          selected_position_name: existingItem ? existingItem.selected_position_name : null,
-          selected_at: existingItem ? existingItem.selected_at : null,
-        };
-      });
-
-      // Clear existing queue for this round
-      await supabase
-        .from("shift_bidding_queue")
-        .delete()
-        .eq("round_id", roundId);
-
-      // Insert sorted queue items
-      const { error: insertError } = await supabase
-        .from("shift_bidding_queue")
-        .insert(newQueueItems);
-
-      if (insertError) throw insertError;
-
-      // Determine active turn index (first non-completed item)
-      const firstActiveIndex = newQueueItems.findIndex(i => i.status !== 'completed');
-      const targetTurnIndex = firstActiveIndex !== -1 ? firstActiveIndex : 0;
-
-      for (let i = 0; i < newQueueItems.length; i++) {
-        if (i === targetTurnIndex && newQueueItems[i].status === 'pending') {
-          await supabase
-            .from("shift_bidding_queue")
-            .update({ status: 'active' })
-            .eq("round_id", roundId)
-            .eq("turn_index", i);
+        if (existing) {
+          throw new Error("Officer is already in the bidding queue for this round.");
         }
-      }
 
-      await supabase
-        .from("shift_bidding_rounds")
-        .update({ current_turn_index: targetTurnIndex, updated_at: new Date().toISOString() })
-        .eq("id", roundId);
+        // Fetch all current queue items with their profile details
+        const { data: currentQueue, error: queueError } = await supabase
+          .from("shift_bidding_queue")
+          .select("*, profiles:officer_id(*)")
+          .eq("round_id", roundId);
+
+        if (queueError) throw queueError;
+
+        // Fetch the profile for the officer being added
+        const { data: newProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", officerId)
+          .single();
+
+        if (profileError || !newProfile) throw new Error("Officer profile not found");
+
+        // Get service credit for new profile
+        const { data: creditData } = await supabase.rpc("get_service_credit", {
+          profile_id: newProfile.id,
+        });
+        const newOfficerWithCredit = {
+          ...newProfile,
+          service_credit: creditData !== null ? Number(creditData) : 0,
+          _queueItem: null,
+        };
+
+        // Collect all profiles with service credit
+        const allQueueProfiles = await Promise.all(
+          (currentQueue || []).map(async (item) => {
+            const prof = item.profiles;
+            if (!prof) return null;
+            const { data: scData } = await supabase.rpc("get_service_credit", {
+              profile_id: prof.id,
+            });
+            return {
+              ...prof,
+              service_credit: scData !== null ? Number(scData) : 0,
+              _queueItem: item,
+            };
+          })
+        );
+
+        const validQueueProfiles = allQueueProfiles.filter(Boolean);
+        validQueueProfiles.push(newOfficerWithCredit);
+
+        // Sort all officers consistently using seniority sorting algorithm
+        const sortedOfficers = sortOfficersConsistently(validQueueProfiles as any[]);
+
+        // Preserve active status if one exists, or find the right active item
+        const existingActiveItem = (currentQueue || []).find((q: any) => q.status === 'active');
+        let activeOfficerIdToPreserve = existingActiveItem ? existingActiveItem.officer_id : null;
+
+        // Prepare new queue items preserving existing selections and active status
+        const newQueueItems = sortedOfficers.map((officer: any, index: number) => {
+          const existingItem = officer._queueItem;
+          let status = existingItem ? existingItem.status : 'pending';
+
+          if (activeOfficerIdToPreserve) {
+            if (officer.id === activeOfficerIdToPreserve) {
+              status = 'active';
+            } else if (status === 'active') {
+              status = 'pending'; // prevent multiple active
+            }
+          }
+
+          return {
+            round_id: roundId,
+            officer_id: officer.id,
+            turn_index: index,
+            status: status,
+            selected_shift_type_id: existingItem ? existingItem.selected_shift_type_id : null,
+            selected_position_name: existingItem ? existingItem.selected_position_name : null,
+            selected_at: existingItem ? existingItem.selected_at : null,
+          };
+        });
+
+        // If no active officer is set or preserved, make the first non-completed officer active
+        const hasActiveNow = newQueueItems.some((i: any) => i.status === 'active');
+        if (!hasActiveNow && newQueueItems.length > 0) {
+          const firstPending = newQueueItems.findIndex((i: any) => i.status !== 'completed');
+          if (firstPending !== -1) {
+            newQueueItems[firstPending].status = 'active';
+          }
+        }
+
+        // Clear existing queue for this round
+        const { error: deleteError } = await supabase
+          .from("shift_bidding_queue")
+          .delete()
+          .eq("round_id", roundId);
+
+        if (deleteError) throw deleteError;
+
+        // Insert sorted queue items
+        const { error: insertError } = await supabase
+          .from("shift_bidding_queue")
+          .insert(newQueueItems);
+
+        if (insertError) throw insertError;
+
+        // Determine active turn index (first active item, or first non-completed)
+        const activeIndex = newQueueItems.findIndex((i: any) => i.status === 'active');
+        const targetTurnIndex = activeIndex !== -1 ? activeIndex : 0;
+
+        await supabase
+          .from("shift_bidding_rounds")
+          .update({ current_turn_index: targetTurnIndex, updated_at: new Date().toISOString() })
+          .eq("id", roundId);
+
+        console.log(`✅ Successfully added officer to queue and re-sorted ${newQueueItems.length} officers`);
+      } catch (error: any) {
+        console.error("Error in addOfficerToQueue:", error);
+        throw new Error(error.message || "Failed to add officer to queue");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
       toast.success("Officer added to queue in correct seniority position successfully");
     },
     onError: (error: any) => {

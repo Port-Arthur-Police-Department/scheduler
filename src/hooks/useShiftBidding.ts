@@ -554,18 +554,6 @@ export const useShiftBiddingMutations = () => {
           return;
         }
 
-        // Extract and calculate service credits for remaining officers
-        const officersToSort = remainingItems.map((item: any) => {
-          const prof = item.profiles;
-          return {
-            ...prof,
-            _queueItem: item,
-          };
-        }).filter((o: any) => o.id);
-
-        // Sort officers consistently using seniority rules
-        const sortedOfficers = sortOfficersConsistently(officersToSort as any[]);
-
         // Check if the removed officer was the active one, or if no active status exists anymore
         const wasActiveRemoved = allQueueItems.find((item: any) => item.id === queueItemId)?.status === 'active';
         let hasActive = remainingItems.some((item: any) => item.id !== queueItemId && item.status === 'active');

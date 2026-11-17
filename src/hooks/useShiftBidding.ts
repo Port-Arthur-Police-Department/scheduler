@@ -566,17 +566,46 @@ export const useShiftBiddingMutations = () => {
         // Sort officers consistently using seniority rules
         const sortedOfficers = sortOfficersConsistently(officersToSort as any[]);
 
-        // Check if there is already an active status among remaining items
-        let hasActive = sortedOfficers.some((o: any) => o._queueItem.status === 'active');
+        // Check if the removed officer was the active one, or if no active status exists anymore
+        const wasActiveRemoved = allQueueItems.find((item: any) => item.id === queueItemId)?.status === 'active';
+        let hasActive = remainingItems.some((item: any) => item.id !== queueItemId && item.status === 'active');
 
-        // Prepare new sorted queue items
+        if (wasActiveRemoved || !hasActive) {
+          // If the active person was removed, the next person in line should become active
+          // Reset all statuses to pending/completed except make the first non-completed active
+          let activated = false;
+          remainingItems.forEach((item: any, idx: number) => {
+            if (!activated && item.status !== 'completed') {
+              item.status = 'active';
+              activated = true;
+            } else if (item.status === 'active') {
+              item.status = 'pending';
+            }
+          });
+        }
+
+        // Extract officers to sort
+        const officersToSort = remainingItems.map((item: any) => {
+          const prof = item.profiles;
+          return {
+            ...prof,
+            _queueItem: item,
+          };
+        }).filter((o: any) => o.id);
+
+        // Sort officers consistently using seniority rules
+        const sortedOfficers = sortOfficersConsistently(officersToSort as any[]);
+
+        // Re-verify active status after sort
+        let activeFound = false;
         const newQueueItems = sortedOfficers.map((officer: any, index: number) => {
           const existingItem = officer._queueItem;
-          // If no active officer exists, make the first non-completed officer active
           let status = existingItem.status;
-          if (!hasActive && index === 0 && status !== 'completed') {
-            status = 'active';
-            hasActive = true;
+
+          if (!activeFound && status === 'active') {
+            activeFound = true;
+          } else if (status === 'active') {
+            status = 'pending'; // Only 1 active allowed
           }
 
           return {
@@ -590,6 +619,14 @@ export const useShiftBiddingMutations = () => {
           };
         });
 
+        // If no active item found in the sorted list, make the first non-completed active
+        if (!activeFound && newQueueItems.length > 0) {
+          const firstPending = newQueueItems.findIndex((i: any) => i.status !== 'completed');
+          if (firstPending !== -1) {
+            newQueueItems[firstPending].status = 'active';
+          }
+        }
+
         // Insert new sorted queue items
         const { error: insertError } = await supabase
           .from("shift_bidding_queue")
@@ -598,8 +635,8 @@ export const useShiftBiddingMutations = () => {
         if (insertError) throw insertError;
 
         // Determine active turn index
-        const firstActiveIndex = newQueueItems.findIndex((i: any) => i.status === 'active' || (i.status === 'pending' && i.turn_index === 0));
-        const targetTurnIndex = firstActiveIndex !== -1 ? firstActiveIndex : 0;
+        const activeIndex = newQueueItems.findIndex((i: any) => i.status === 'active');
+        const targetTurnIndex = activeIndex !== -1 ? activeIndex : 0;
 
         // Ensure exactly one active or set the round current_turn_index correctly
         await supabase

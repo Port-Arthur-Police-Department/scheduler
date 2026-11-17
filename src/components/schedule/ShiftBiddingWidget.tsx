@@ -1,6 +1,7 @@
 // src/components/schedule/ShiftBiddingWidget.tsx
 import { useState } from "react";
 import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useShiftTypeAllowedPositions } from "@/hooks/useShiftBidding";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +19,7 @@ interface ShiftBiddingWidgetProps {
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftBiddingWidgetProps) => {
+  const { isAdminOrSupervisor, isSupervisor } = useUserRole(currentOfficerId);
   const { data: rounds = [], isLoading: roundsLoading } = useShiftBiddingRounds();
 
   // Find the active round for this officer.
@@ -145,6 +147,59 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
   const currentlyActiveQueueItem = queue.find(q => q.status === 'active');
   const activeOfficerName = currentlyActiveQueueItem?.profiles?.full_name || "Another officer";
 
+  // Supervisor override form state
+  const [overrideOfficerId, setOverrideOfficerId] = useState<string>("");
+  const [overrideShiftTypeId, setOverrideShiftTypeId] = useState<string>("");
+  const [overridePosition, setOverridePosition] = useState<string>("");
+
+  const selectedOverrideQueueItem = queue.find(q => q.officer_id === (overrideOfficerId || currentlyActiveQueueItem?.officer_id)) || currentlyActiveQueueItem;
+
+  const { data: overrideAllowedPositions = [] } = useShiftTypeAllowedPositions(overrideShiftTypeId);
+  const overrideRank = selectedOverrideQueueItem?.profiles?.rank || "";
+  const overrideRankLower = overrideRank.toLowerCase();
+
+  const filteredOverrideAllowedPositions = overrideAllowedPositions.filter(ap => {
+    const isClaimedByOther = queue.some(
+      q => q.selected_shift_type_id === overrideShiftTypeId &&
+           q.selected_position_name === ap.position_name &&
+           q.officer_id !== selectedOverrideQueueItem?.officer_id
+    );
+    if (isClaimedByOther) return false;
+    if (!ap.allowed_rank || ap.allowed_rank === 'Any' || ap.allowed_rank === '') return true;
+    return overrideRankLower.includes(ap.allowed_rank.toLowerCase());
+  });
+
+  const handleSupervisorOverrideSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRound || !selectedOverrideQueueItem) return;
+    if (!overrideShiftTypeId) {
+      toast.error("Please select a shift type");
+      return;
+    }
+    if (!overridePosition) {
+      toast.error("Please select a position");
+      return;
+    }
+
+    const isCurrentTurn = selectedOverrideQueueItem.status === 'active';
+    const nextTurnIndex = isCurrentTurn ? activeRound.current_turn_index + 1 : activeRound.current_turn_index;
+
+    submitSelection.mutate({
+      roundId: activeRound.id,
+      queueItemId: selectedOverrideQueueItem.id,
+      shiftTypeId: overrideShiftTypeId,
+      positionName: overridePosition,
+      nextTurnIndex,
+      isOverride: true,
+    }, {
+      onSuccess: () => {
+        setOverrideShiftTypeId("");
+        setOverridePosition("");
+        toast.success(`Supervisor override successful for ${selectedOverrideQueueItem.profiles?.full_name}`);
+      }
+    });
+  };
+
   return (
     <Card className={`shadow-md border-2 ${isMyTurn ? "border-primary bg-primary/5" : "border-border"}`}>
       <CardHeader className="pb-3">
@@ -170,6 +225,106 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isAdminOrSupervisor && (
+          <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400 text-sm">
+                <Shield className="h-4 w-4" />
+                Supervisor / Admin Override & Selection Panel
+              </div>
+              <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 text-xs">
+                Supervisor Mode
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Make shift selections or override turns on behalf of officers in the bidding queue directly from the home screen.
+            </p>
+
+            <form onSubmit={handleSupervisorOverrideSubmit} className="space-y-3 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Select Officer / Queue Member</label>
+                <Select
+                  value={overrideOfficerId || currentlyActiveQueueItem?.officer_id || ""}
+                  onValueChange={(val) => {
+                    setOverrideOfficerId(val);
+                    setOverrideShiftTypeId("");
+                    setOverridePosition("");
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select officer from queue..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {queue.map(q => (
+                      <SelectItem key={q.id} value={q.officer_id} className="text-xs">
+                        #{q.turn_index + 1} — {q.profiles?.full_name || "Officer"} ({q.profiles?.rank || "Officer"}) {q.status === 'active' ? '⭐ [CURRENT PICKER]' : q.status === 'completed' ? '✓ [Completed]' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Select Shift Type</label>
+                <Select
+                  value={overrideShiftTypeId}
+                  onValueChange={(val) => {
+                    setOverrideShiftTypeId(val);
+                    setOverridePosition("");
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Choose shift type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shiftTypes.map(st => (
+                      <SelectItem key={st.id} value={st.id} className="text-xs">
+                        {st.name} ({st.start_time} - {st.end_time})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {overrideShiftTypeId && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Select Position / Assignment</label>
+                  <Select
+                    value={overridePosition}
+                    onValueChange={setOverridePosition}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Choose allowed position for rank..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredOverrideAllowedPositions.length === 0 ? (
+                        <div className="p-2 text-xs text-muted-foreground text-center">
+                          No positions allowed for rank ({overrideRank || "Officer"}) in this shift.
+                        </div>
+                      ) : (
+                        filteredOverrideAllowedPositions.map(ap => (
+                          <SelectItem key={ap.id} value={ap.position_name} className="text-xs">
+                            {ap.position_name} {ap.allowed_rank && ap.allowed_rank !== 'Any' ? `(Rank: ${ap.allowed_rank})` : ''}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={submitSelection.isPending || !overrideShiftTypeId || !overridePosition || !selectedOverrideQueueItem}
+              >
+                Submit Selection on Behalf (Supervisor Override)
+              </Button>
+            </form>
+          </div>
+        )}
+
         {isCompleted ? (
           <div className="p-4 bg-muted/40 rounded-lg border space-y-2 text-center">
             <CheckCircle2 className="h-8 w-8 text-green-600 mx-auto" />

@@ -444,15 +444,15 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left border-collapse border border-border">
+                    <table className="w-full text-xs text-left border-collapse border border-border table-fixed">
                       <thead>
                         <tr className="bg-muted/50 border-b border-border text-muted-foreground">
                           <th className="p-2.5 font-semibold border-r border-border w-[140px]">Position / Assignment</th>
                           <th className="p-2.5 font-semibold border-r border-border w-[80px]">Rank Req.</th>
                           {dayNames.map(day => (
-                            <th key={day} className="p-3 text-center font-bold text-sm border-r border-border w-16">{day}</th>
+                            <th key={day} className="p-2.5 text-center font-bold text-sm border-r border-border w-[55px]">{day}</th>
                           ))}
-                          <th className="p-2.5 font-semibold text-right border-border">Status</th>
+                          <th className="p-2.5 font-semibold text-center border-l border-border w-[110px]">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -467,33 +467,33 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
 
                           return (
                             <tr key={pos.id} className="border-b border-border hover:bg-muted/20">
-                              <td className="p-2.5 font-medium border-r border-border w-[140px]">
+                              <td className="p-2.5 font-medium border-r border-border w-[140px] truncate" title={pos.position_name}>
                                 <div>{pos.position_name}</div>
                               </td>
-                              <td className="p-2.5 text-muted-foreground border-r border-border w-[80px]">
+                              <td className="p-2.5 text-muted-foreground border-r border-border w-[80px] truncate" title={pos.allowed_rank || 'Any'}>
                                 {pos.allowed_rank || 'Any'}
                               </td>
-                              {/* 7 Days of the week recurring vs off - Centered and larger */}
+                              {/* 7 Days of the week recurring vs off - Centered and evenly balanced */}
                               {[0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
                                 const isRecurring = recurringDays.includes(dayIndex);
                                 return (
-                                  <td key={dayIndex} className="p-2.5 text-center border-r border-border w-16 align-middle">
+                                  <td key={dayIndex} className="p-2 text-center border-r border-border w-[55px] align-middle">
                                     {isRecurring ? (
-                                      <span className="inline-block px-2.5 py-1 rounded bg-primary/15 text-primary font-bold text-xs shadow-sm" title="Recurring Working Day">
+                                      <span className="inline-block px-1.5 py-1 rounded bg-primary/15 text-primary font-bold text-[11px]" title="Recurring Working Day">
                                         WORK
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-2.5 py-1 rounded bg-muted text-muted-foreground font-medium text-xs" title="OFF Day">
+                                      <span className="inline-block px-1.5 py-1 rounded bg-muted text-muted-foreground font-medium text-[11px]" title="OFF Day">
                                         OFF
                                       </span>
                                     )}
                                   </td>
                                 );
                               })}
-                              <td className="p-2.5 text-right border-l border-border">
+                              <td className="p-2.5 text-center border-l border-border w-[110px]">
                                 {isClaimed ? (
-                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px]">
-                                    Taken ({claimedBy || 'Claimed'})
+                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] truncate max-w-full">
+                                    Taken
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">

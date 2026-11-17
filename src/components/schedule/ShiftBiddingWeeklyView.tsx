@@ -412,7 +412,7 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
         </CardContent>
       </Card>
 
-      {/* NEW: Available Shift Options Grouped by Shift with Recurring vs OFF Days Weekly Matrix */}
+      {/* Available Shift Options Grouped by Shift with Recurring vs OFF Days Weekly Matrix */}
       <div className="space-y-4">
         <div className="bg-card p-4 rounded-xl border shadow-sm space-y-1">
           <div className="text-base font-bold flex items-center gap-2">
@@ -444,15 +444,15 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left border-collapse">
+                    <table className="w-full text-xs text-left border-collapse border border-border">
                       <thead>
-                        <tr className="bg-muted/50 border-b text-muted-foreground">
-                          <th className="p-3 font-semibold w-1/3">Position / Assignment</th>
-                          <th className="p-3 font-semibold">Rank Req.</th>
+                        <tr className="bg-muted/50 border-b border-border text-muted-foreground">
+                          <th className="p-2.5 font-semibold border-r border-border w-[140px]">Position / Assignment</th>
+                          <th className="p-2.5 font-semibold border-r border-border w-[80px]">Rank Req.</th>
                           {dayNames.map(day => (
-                            <th key={day} className="p-2 text-center font-semibold w-12">{day}</th>
+                            <th key={day} className="p-3 text-center font-bold text-sm border-r border-border w-16">{day}</th>
                           ))}
-                          <th className="p-3 font-semibold text-right">Status</th>
+                          <th className="p-2.5 font-semibold text-right border-border">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -466,31 +466,31 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                           )?.profiles?.full_name;
 
                           return (
-                            <tr key={pos.id} className="border-b hover:bg-muted/20">
-                              <td className="p-3 font-medium">
+                            <tr key={pos.id} className="border-b border-border hover:bg-muted/20">
+                              <td className="p-2.5 font-medium border-r border-border w-[140px]">
                                 <div>{pos.position_name}</div>
                               </td>
-                              <td className="p-3 text-muted-foreground">
+                              <td className="p-2.5 text-muted-foreground border-r border-border w-[80px]">
                                 {pos.allowed_rank || 'Any'}
                               </td>
-                              {/* 7 Days of the week recurring vs off */}
+                              {/* 7 Days of the week recurring vs off - Centered and larger */}
                               {[0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
                                 const isRecurring = recurringDays.includes(dayIndex);
                                 return (
-                                  <td key={dayIndex} className="p-2 text-center">
+                                  <td key={dayIndex} className="p-2.5 text-center border-r border-border w-16 align-middle">
                                     {isRecurring ? (
-                                      <span className="inline-block px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px]" title="Recurring Working Day">
+                                      <span className="inline-block px-2.5 py-1 rounded bg-primary/15 text-primary font-bold text-xs shadow-sm" title="Recurring Working Day">
                                         WORK
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal text-[10px]" title="OFF Day">
+                                      <span className="inline-block px-2.5 py-1 rounded bg-muted text-muted-foreground font-medium text-xs" title="OFF Day">
                                         OFF
                                       </span>
                                     )}
                                   </td>
                                 );
                               })}
-                              <td className="p-3 text-right">
+                              <td className="p-2.5 text-right border-l border-border">
                                 {isClaimed ? (
                                   <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px]">
                                     Taken ({claimedBy || 'Claimed'})

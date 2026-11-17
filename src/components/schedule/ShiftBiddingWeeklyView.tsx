@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, CheckCircle2, Shield, ChevronLeft, ChevronRight, CalendarDays, User } from "lucide-react";
+import { Calendar, Clock, CheckCircle2, Shield, ChevronLeft, ChevronRight, CalendarDays, User, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfWeek, isSameDay, parseISO } from "date-fns";
@@ -411,6 +411,108 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
           )}
         </CardContent>
       </Card>
+
+      {/* NEW: Available Shift Options Grouped by Shift with Recurring vs OFF Days Weekly Matrix */}
+      <div className="space-y-4">
+        <div className="bg-card p-4 rounded-xl border shadow-sm space-y-1">
+          <div className="text-base font-bold flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" />
+            Available Shift Options & Recurring Schedule Matrix (Grouped by Shift Type)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Review available shifts, positions, and their weekly recurring (Working) vs OFF days before making your selection.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          {shiftTypes.map(st => {
+            const positions = allowedPositionsMap.get(st.id) || [];
+            if (positions.length === 0) return null;
+
+            return (
+              <Card key={st.id} className="shadow-sm border">
+                <CardHeader className="py-3 bg-muted/30 border-b">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <span className="text-primary">🕒 {st.name}</span>
+                      <span className="text-xs text-muted-foreground font-normal">({st.start_time} - {st.end_time})</span>
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {positions.length} Position{positions.length === 1 ? '' : 's'} Available
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-muted/50 border-b text-muted-foreground">
+                          <th className="p-3 font-semibold w-1/3">Position / Assignment</th>
+                          <th className="p-3 font-semibold">Rank Req.</th>
+                          {dayNames.map(day => (
+                            <th key={day} className="p-2 text-center font-semibold w-12">{day}</th>
+                          ))}
+                          <th className="p-3 font-semibold text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {positions.map((pos: any) => {
+                          const recurringDays: number[] = pos.recurring_days || [1, 2, 3, 4, 5]; // Default Mon-Fri
+                          const isClaimed = queue.some(
+                            q => q.selected_shift_type_id === st.id && q.selected_position_name === pos.position_name && q.status === 'completed'
+                          );
+                          const claimedBy = queue.find(
+                            q => q.selected_shift_type_id === st.id && q.selected_position_name === pos.position_name && q.status === 'completed'
+                          )?.profiles?.full_name;
+
+                          return (
+                            <tr key={pos.id} className="border-b hover:bg-muted/20">
+                              <td className="p-3 font-medium">
+                                <div>{pos.position_name}</div>
+                              </td>
+                              <td className="p-3 text-muted-foreground">
+                                {pos.allowed_rank || 'Any'}
+                              </td>
+                              {/* 7 Days of the week recurring vs off */}
+                              {[0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
+                                const isRecurring = recurringDays.includes(dayIndex);
+                                return (
+                                  <td key={dayIndex} className="p-2 text-center">
+                                    {isRecurring ? (
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px]" title="Recurring Working Day">
+                                        WORK
+                                      </span>
+                                    ) : (
+                                      <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal text-[10px]" title="OFF Day">
+                                        OFF
+                                      </span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              <td className="p-3 text-right">
+                                {isClaimed ? (
+                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px]">
+                                    Taken ({claimedBy || 'Claimed'})
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">
+                                    Available
+                                  </Badge>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
 
       {/* The Book - Weekly Table View of Bidding Queue & Schedule */}
       <div className="space-y-4">

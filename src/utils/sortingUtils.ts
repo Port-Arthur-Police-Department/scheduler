@@ -287,10 +287,10 @@ export const sortOfficersConsistently = (officers: OfficerForSorting[]): Officer
       return aBadge - bBadge;
     }
 
-    // Finally by last name (A-Z)
-    const aLastName = getLastName(a.full_name || a.officerName || '');
-    const bLastName = getLastName(b.full_name || b.officerName || '');
-    return aLastName.localeCompare(bLastName);
+    // Finally by ID (ASCENDING) to ensure absolute determinism
+    const aId = a.id || "";
+    const bId = b.id || "";
+    return aId.localeCompare(bId);
   };
 
   // Sort each category
@@ -349,7 +349,11 @@ export const sortForForceList = (officers: OfficerForSorting[], getForceCount: (
     // Tertiary: last name (A-Z)
     const aLastName = getLastName(a.full_name || a.officerName || '');
     const bLastName = getLastName(b.full_name || b.officerName || '');
-    return aLastName.localeCompare(bLastName);
+    const lastNameCompare = aLastName.localeCompare(bLastName);
+    if (lastNameCompare !== 0) return lastNameCompare;
+
+    // Final tiebreaker: ID
+    return a.id.localeCompare(b.id);
   };
 
   supervisors.sort(sortForceList);

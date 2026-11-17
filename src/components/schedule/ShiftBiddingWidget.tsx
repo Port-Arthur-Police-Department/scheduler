@@ -22,38 +22,40 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
 
   // Find the active round for this officer.
   // We check for a division match, but also fall back to checking if the officer is in the queue
-  // of ANY active round. This ensures the widget appears even if officerDivision is null/incorrect.
+  // of ANY active round, or simply return ANY active round if the officer is currently picking or in the queue.
   const { data: activeRound } = useQuery({
     queryKey: ["active_round_for_officer", currentOfficerId, officerDivision],
     queryFn: async () => {
       if (!currentOfficerId || rounds.length === 0) return null;
 
-      // 1. Try matching by division first
-      const matchingRound = rounds.find(r => r.division === officerDivision && r.status === 'active');
+      const activeRounds = rounds.filter(r => r.status === 'active');
+      if (activeRounds.length === 0) return null;
+
+      // 1. Check if officer has a queue entry in any active round
+      const { data: queueItems } = await supabase
+        .from("shift_bidding_queue")
+        .select("*, shift_bidding_rounds(*)")
+        .eq("officer_id", currentOfficerId)
+        .in("round_id", activeRounds.map(r => r.id));
+
+      if (queueItems && queueItems.length > 0) {
+        // Prefer an active or pending turn
+        const priorityItem = queueItems.find(q => q.status === 'active' || q.status === 'pending');
+        if (priorityItem && priorityItem.shift_bidding_rounds) return priorityItem.shift_bidding_rounds;
+
+        // Fallback to any item in an active round
+        const anyItem = queueItems.find(q => q.shift_bidding_rounds);
+        if (anyItem && anyItem.shift_bidding_rounds) return anyItem.shift_bidding_rounds;
+      }
+
+      // 2. Try matching by division
+      const matchingRound = activeRounds.find(r => r.division === officerDivision);
       if (matchingRound) return matchingRound;
 
-      // 2. If no division match, look for an active round where the officer has a queue entry
-      const activeRounds = rounds.filter(r => r.status === 'active');
-      if (activeRounds.length > 0) {
-        const { data: queueItems } = await supabase
-          .from("shift_bidding_queue")
-          .select("*, shift_bidding_rounds(*)")
-          .eq("officer_id", currentOfficerId)
-          .in("round_id", activeRounds.map(r => r.id));
-
-        if (queueItems && queueItems.length > 0) {
-          // Prefer an active or pending turn
-          const priorityItem = queueItems.find(q => q.status === 'active' || q.status === 'pending');
-          if (priorityItem && priorityItem.shift_bidding_rounds) return priorityItem.shift_bidding_rounds;
-
-          // Fallback to any item in an active round
-          const anyItem = queueItems.find(q => q.shift_bidding_rounds);
-          if (anyItem && anyItem.shift_bidding_rounds) return anyItem.shift_bidding_rounds;
-        }
-      }
-      return null;
+      // 3. Fallback: If there is an active round and the officer is an admin/supervisor or in the queue, show it
+      return activeRounds[0];
     },
-    enabled: !!currentOfficerId,
+    enabled: !!currentOfficerId && rounds.length > 0,
   });
 
   const { data: queue = [], isLoading: queueLoading } = useBiddingQueue(activeRound?.id);

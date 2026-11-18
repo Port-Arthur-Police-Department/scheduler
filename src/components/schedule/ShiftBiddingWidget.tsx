@@ -1,5 +1,5 @@
 // src/components/schedule/ShiftBiddingWidget.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useShiftTypeAllowedPositions } from "@/hooks/useShiftBidding";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +72,16 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
   // Block 2 (4 days)
   const [ptoStartDate2, setPtoStartDate2] = useState<string>("");
   const [ptoEndDate2, setPtoEndDate2] = useState<string>("");
+
+  useEffect(() => {
+    if (activeRound?.year && requestPtoDays) {
+      const year = activeRound.year;
+      if (!ptoStartDate1) setPtoStartDate1(`${year}-01-01`);
+      if (!ptoEndDate1) setPtoEndDate1(`${year}-01-05`);
+      if (!ptoStartDate2) setPtoStartDate2(`${year}-02-01`);
+      if (!ptoEndDate2) setPtoEndDate2(`${year}-02-05`);
+    }
+  }, [activeRound?.year, requestPtoDays]);
 
   // Fetch shift types
   const { data: shiftTypes = [] } = useQuery({

@@ -68,37 +68,34 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
     },
   });
 
-  // Week navigation starting from activeRound start_date or today
-  const defaultWeekStart = useMemo(() => {
-    if (activeRound?.start_date) {
-      try {
-        return startOfWeek(parseISO(activeRound.start_date), { weekStartsOn: 0 });
-      } catch (e) {
-        // fallback
-      }
-    }
-    return startOfWeek(new Date(), { weekStartsOn: 0 });
-  }, [activeRound?.start_date]);
+  const officerIds = useMemo(() => queue.map(q => q.officer_id), [queue]);
 
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(defaultWeekStart);
+  const { data: timeOffRequests = [] } = useQuery({
+    queryKey: ["bidding_queue_time_off_requests", officerIds],
+    queryFn: async () => {
+      if (officerIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("time_off_requests")
+        .select("*")
+        .in("officer_id", officerIds)
+        .order("start_date", { ascending: true });
 
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(currentWeekStart, i);
-      return {
-        date,
-        dateStr: format(date, "yyyy-MM-dd"),
-        dayName: format(date, "EEE").toUpperCase(),
-        formattedDate: format(date, "MMM d"),
-        isToday: isSameDay(date, new Date()),
-        dayOfWeek: date.getDay()
-      };
-    });
-  }, [currentWeekStart]);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: officerIds.length > 0,
+  });
 
   // Selection form state for officer
   const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<string>("");
   const [selectedPosition, setSelectedPosition] = useState<string>("");
+  const [requestPtoDays, setRequestPtoDays] = useState<boolean>(false);
+  // Block 1 (4 days)
+  const [ptoStartDate1, setPtoStartDate1] = useState<string>("");
+  const [ptoEndDate1, setPtoEndDate1] = useState<string>("");
+  // Block 2 (4 days)
+  const [ptoStartDate2, setPtoStartDate2] = useState<string>("");
+  const [ptoEndDate2, setPtoEndDate2] = useState<string>("");
 
   // Supervisor override form state
   const [overrideOfficerId, setOverrideOfficerId] = useState<string>("");
@@ -154,6 +151,10 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
       toast.error("Please select a position");
       return;
     }
+    if (requestPtoDays && ((!ptoStartDate1 || !ptoEndDate1) && (!ptoStartDate2 || !ptoEndDate2))) {
+      toast.error("Please provide at least one 4-day PTO work week block");
+      return;
+    }
 
     const nextTurnIndex = myQueueItem.turn_index + 1;
 
@@ -163,10 +164,20 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
       shiftTypeId: selectedShiftTypeId,
       positionName: selectedPosition,
       nextTurnIndex,
+      requestPtoDays,
+      ptoStartDate1,
+      ptoEndDate1,
+      ptoStartDate2,
+      ptoEndDate2,
     }, {
       onSuccess: () => {
         setSelectedShiftTypeId("");
         setSelectedPosition("");
+        setRequestPtoDays(false);
+        setPtoStartDate1("");
+        setPtoEndDate1("");
+        setPtoStartDate2("");
+        setPtoEndDate2("");
       }
     });
   };
@@ -391,6 +402,80 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                 </div>
               </div>
 
+              {/* Optional PTO Request (Two 4-day work week blocks) */}
+              <div className="pt-2 border-t space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="request-pto-checkbox-weekly"
+                    checked={requestPtoDays}
+                    onChange={(e) => setRequestPtoDays(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="request-pto-checkbox-weekly" className="text-sm font-medium text-foreground cursor-pointer">
+                    Request two 4-day work week PTO blocks (8 days total) with this shift selection
+                  </label>
+                </div>
+
+                {requestPtoDays && (
+                  <div className="p-3 bg-muted/30 rounded-lg border space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      This will submit two separate pending PTO requests (4 days / 40 hours each, 8 days / 80 hours total) to <b>The Book</b> for supervisor review and approval.
+                    </p>
+
+                    {/* Block 1 */}
+                    <div className="space-y-1.5 p-2 bg-background rounded border">
+                      <label className="text-xs font-semibold text-primary">Work Week Block 1 (4 Days)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Start Date</label>
+                          <input
+                            type="date"
+                            value={ptoStartDate1}
+                            onChange={(e) => setPtoStartDate1(e.target.value)}
+                            className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">End Date</label>
+                          <input
+                            type="date"
+                            value={ptoEndDate1}
+                            onChange={(e) => setPtoEndDate1(e.target.value)}
+                            className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Block 2 */}
+                    <div className="space-y-1.5 p-2 bg-background rounded border">
+                      <label className="text-xs font-semibold text-primary">Work Week Block 2 (4 Days)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Start Date</label>
+                          <input
+                            type="date"
+                            value={ptoStartDate2}
+                            onChange={(e) => setPtoStartDate2(e.target.value)}
+                            className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">End Date</label>
+                          <input
+                            type="date"
+                            value={ptoEndDate2}
+                            onChange={(e) => setPtoEndDate2(e.target.value)}
+                            className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <Button type="submit" className="w-full" disabled={submitSelection.isPending || !selectedShiftTypeId || !selectedPosition}>
                 Confirm & Lock Shift Selection
               </Button>
@@ -466,9 +551,9 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                           )?.profiles?.full_name;
 
                           return (
-                            <tr key={pos.id} className="border-b border-border hover:bg-muted/20">
+                            <tr key={pos.id} className={`border-b border-border transition-colors ${isClaimed ? "bg-muted/70 opacity-50 text-muted-foreground" : "hover:bg-muted/20"}`}>
                               <td className="p-2.5 font-medium border-r border-border w-[140px] truncate" title={pos.position_name}>
-                                <div>{pos.position_name}</div>
+                                <div className={isClaimed ? "line-through" : ""}>{pos.position_name}</div>
                               </td>
                               <td className="p-2.5 text-muted-foreground border-r border-border w-[80px] truncate" title={pos.allowed_rank || 'Any'}>
                                 {pos.allowed_rank || 'Any'}
@@ -479,11 +564,11 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                                 return (
                                   <td key={dayIndex} className="p-2 text-center border-r border-border w-[55px] align-middle">
                                     {isRecurring ? (
-                                      <span className="inline-block px-1.5 py-1 rounded bg-primary/15 text-primary font-bold text-[11px]" title="Recurring Working Day">
+                                      <span className={`inline-block px-1.5 py-1 rounded text-[11px] font-bold ${isClaimed ? "bg-muted text-muted-foreground/50" : "bg-primary/15 text-primary"}`} title="Recurring Working Day">
                                         WORK
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-1.5 py-1 rounded bg-muted text-muted-foreground font-medium text-[11px]" title="OFF Day">
+                                      <span className={`inline-block px-1.5 py-1 rounded text-[11px] font-medium ${isClaimed ? "bg-muted/50 text-muted-foreground/40" : "bg-muted text-muted-foreground"}`} title="OFF Day">
                                         OFF
                                       </span>
                                     )}
@@ -492,8 +577,8 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                               })}
                               <td className="p-2.5 text-center border-l border-border w-[110px]">
                                 {isClaimed ? (
-                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] truncate max-w-full">
-                                    Taken
+                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] truncate max-w-full" title={claimedBy ? `Taken by ${claimedBy}` : 'Taken'}>
+                                    Taken {claimedBy ? `(${claimedBy})` : ''}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">
@@ -514,45 +599,29 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
         </div>
       </div>
 
-      {/* The Book - Weekly Table View of Bidding Queue & Schedule */}
+      {/* Bidding Queue & Vacation Request Overview */}
       <div className="space-y-4">
-        <div className="flex justify-between items-center bg-card p-4 rounded-xl border shadow-sm">
+        <div className="bg-card p-4 rounded-xl border shadow-sm">
           <div className="text-base font-bold flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-primary" />
-            Bidding Queue & Weekly Schedule Preview ({format(currentWeekStart, "MMM d")} - {format(addDays(currentWeekStart, 6), "MMM d, yyyy")})
+            Bidding Queue & Vacation Request Overview ({activeRound.year} - {activeRound.division})
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(prev => addDays(prev, -7))}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }))}
-            >
-              This Week
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(prev => addDays(prev, 7))}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Static overview of completed shift picks, positions, and requested 4-day vacation blocks with their approval status.
+          </p>
         </div>
 
         <div className="mobile-scroll overflow-x-auto">
-          <div className="border rounded-lg overflow-hidden min-w-[950px] bg-card shadow-sm">
+          <div className="border rounded-lg overflow-hidden bg-card shadow-sm">
             {/* Table Header */}
-            <div className="grid grid-cols-9 bg-muted/50 border-b">
-              <div className="p-3 font-semibold border-r text-xs">Empl#</div>
-              <div className="p-3 font-semibold border-r text-xs">OFFICER / STATUS</div>
-              {weekDays.map(({ dateStr, dayName, formattedDate, isToday }) => (
-                <div key={dateStr} className={`p-3 text-center font-semibold border-r text-xs ${isToday ? 'bg-primary/10' : ''}`}>
-                  <div>{dayName}</div>
-                  <div className="text-[10px] text-muted-foreground font-normal">{formattedDate}</div>
-                </div>
-              ))}
+            <div className="grid grid-cols-4 bg-muted/50 border-b text-xs font-semibold">
+              <div className="p-3 border-r w-[100px]">Empl#</div>
+              <div className="p-3 border-r w-[250px]">OFFICER / STATUS</div>
+              <div className="p-3 border-r">Vacation Request Block 1</div>
+              <div className="p-3">Vacation Request Block 2</div>
             </div>
 
-            {/* Queue Rows formatted like The Book */}
+            {/* Queue Rows */}
             {queue.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 No officers in the bidding queue for this round.
@@ -565,22 +634,42 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                 const shiftType = q.selected_shift_type_id ? shiftTypeMap.get(q.selected_shift_type_id) : null;
                 const positionName = q.selected_position_name;
 
-                // Find allowed position recurring days if completed
-                const shiftPositions = q.selected_shift_type_id ? allowedPositionsMap.get(q.selected_shift_type_id) || [] : [];
-                const matchedPos = shiftPositions.find((p: any) => p.position_name === positionName);
-                const recurringDays: number[] = matchedPos?.recurring_days || [1, 2, 3, 4, 5]; // Default Mon-Fri if none
+                // Find vacation requests for this officer
+                const officerTor = timeOffRequests.filter((tr: any) => tr.officer_id === q.officer_id);
+                const tor1 = officerTor.find((tr: any) => tr.reason?.includes("Block 1")) || officerTor[0];
+                const tor2 = officerTor.find((tr: any) => tr.reason?.includes("Block 2")) || officerTor.find((tr: any) => tr !== tor1 && (tr.reason?.includes("Block 2") || tr !== officerTor[0])) || officerTor[1];
+
+                const renderTorBadge = (tor: any) => {
+                  if (!tor) return <span className="text-muted-foreground text-xs italic">None requested</span>;
+                  const statusColors =
+                    tor.status === 'approved' ? 'bg-green-500/10 text-green-700 border-green-500/20' :
+                    tor.status === 'denied' ? 'bg-red-500/10 text-red-700 border-red-500/20' :
+                    'bg-yellow-500/10 text-yellow-700 border-yellow-500/20';
+
+                  return (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">{tor.start_date} to {tor.end_date}</div>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusColors}`}>
+                          {tor.status.toUpperCase()}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground">({tor.hours_used || 40} hrs)</span>
+                      </div>
+                    </div>
+                  );
+                };
 
                 return (
                   <div
                     key={q.id}
-                    className={`grid grid-cols-9 border-b hover:bg-muted/30 items-center text-sm ${
+                    className={`grid grid-cols-4 border-b hover:bg-muted/30 items-center text-sm ${
                       isItemActive ? 'bg-primary/10 border-primary/40 font-medium' : ''
                     }`}
                   >
-                    <div className="p-3 border-r font-mono text-xs">
+                    <div className="p-3 border-r font-mono text-xs w-[100px]">
                       {profile?.badge_number || '9999'}
                     </div>
-                    <div className="p-3 border-r">
+                    <div className="p-3 border-r w-[250px]">
                       <div className="font-semibold flex items-center gap-1.5">
                         <span>{profile?.full_name || 'Officer'}</span>
                         {isItemActive && <span className="text-xs text-primary font-bold animate-pulse">⭐ [PICKING]</span>}
@@ -597,38 +686,12 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                         </div>
                       )}
                     </div>
-
-                    {/* Days of the week cells */}
-                    {weekDays.map(({ dateStr, dayOfWeek, isToday }) => {
-                      const isWorkingDay = isItemCompleted && recurringDays.includes(dayOfWeek);
-
-                      return (
-                        <div
-                          key={dateStr}
-                          className={`p-3 text-center border-r text-xs h-full flex flex-col items-center justify-center min-h-[60px] ${
-                            isToday ? 'bg-primary/5' : ''
-                          }`}
-                        >
-                          {isItemCompleted ? (
-                            isWorkingDay ? (
-                              <div className="bg-primary/10 text-primary border border-primary/20 rounded p-1 w-full text-[11px] font-semibold truncate">
-                                {positionName || shiftType?.name || 'Assigned'}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">OFF</span>
-                            )
-                          ) : isItemActive ? (
-                            <span className="text-xs text-primary font-bold italic animate-pulse">
-                              Active Turn
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground text-[10px] italic">
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <div className="p-3 border-r text-xs">
+                      {renderTorBadge(tor1)}
+                    </div>
+                    <div className="p-3 text-xs">
+                      {renderTorBadge(tor2)}
+                    </div>
                   </div>
                 );
               })

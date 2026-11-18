@@ -286,6 +286,11 @@ export const useShiftBiddingMutations = () => {
       nextTurnIndex,
       isLastTurn,
       isOverride,
+      requestPtoDays,
+      ptoStartDate1,
+      ptoEndDate1,
+      ptoStartDate2,
+      ptoEndDate2,
     }: {
       roundId: string;
       queueItemId: string;
@@ -294,6 +299,11 @@ export const useShiftBiddingMutations = () => {
       nextTurnIndex: number;
       isLastTurn?: boolean;
       isOverride?: boolean;
+      requestPtoDays?: boolean;
+      ptoStartDate1?: string;
+      ptoEndDate1?: string;
+      ptoStartDate2?: string;
+      ptoEndDate2?: string;
     }) => {
       // 1. Get queue item & round details (officer_id, round year, status)
       const { data: queueItem, error: queueItemError } = await supabase
@@ -477,11 +487,58 @@ export const useShiftBiddingMutations = () => {
         console.log(`✅ Successfully created ${scheduleRecords.length} recurring schedule records for officer ${queueItem.officer_id}`);
       }
 
-      // 5. Advance queue to next officer or complete round
+      // 5. Handle optional 8-day PTO requests (two separate 4-day work week blocks) if requested
+      if (requestPtoDays) {
+        try {
+          if (ptoStartDate1 && ptoEndDate1) {
+            const { error: ptoError1 } = await supabase
+              .from("time_off_requests")
+              .insert({
+                officer_id: queueItem.officer_id,
+                start_date: ptoStartDate1,
+                end_date: ptoEndDate1,
+                reason: "Requested during shift bidding (Work Week Block 1 - 4 days / 40 hours PTO)",
+                status: "pending",
+                pto_type: "vacation",
+                hours_used: 40, // 4 days * 10 hours
+              });
+
+            if (ptoError1) {
+              console.error("Error creating PTO request block 1 during bidding:", ptoError1);
+            } else {
+              console.log(`✅ Successfully created pending 4-day (40 hours) PTO request block 1 for officer ${queueItem.officer_id} from ${ptoStartDate1} to ${ptoEndDate1}`);
+            }
+          }
+
+          if (ptoStartDate2 && ptoEndDate2) {
+            const { error: ptoError2 } = await supabase
+              .from("time_off_requests")
+              .insert({
+                officer_id: queueItem.officer_id,
+                start_date: ptoStartDate2,
+                end_date: ptoEndDate2,
+                reason: "Requested during shift bidding (Work Week Block 2 - 4 days / 40 hours PTO)",
+                status: "pending",
+                pto_type: "vacation",
+                hours_used: 40, // 4 days * 10 hours
+              });
+
+            if (ptoError2) {
+              console.error("Error creating PTO request block 2 during bidding:", ptoError2);
+            } else {
+              console.log(`✅ Successfully created pending 4-day (40 hours) PTO request block 2 for officer ${queueItem.officer_id} from ${ptoStartDate2} to ${ptoEndDate2}`);
+            }
+          }
+        } catch (ptoEx) {
+          console.warn("Failed to create PTO requests during shift bidding:", ptoEx);
+        }
+      }
+
+      // 6. Advance queue to next officer or complete round
       // Only advance the active turn if it's a normal selection or if we are overriding the currently active person
       const isOutOfTurnOverride = isOverride && queueItem.status !== 'active';
 
-      if (!isOutOfTurnOverride) {
+      if (!isOutOfTurnOverride && !requestPtoDays) {
         const { data: nextOfficer } = await supabase
           .from("shift_bidding_queue")
           .select("id")
@@ -505,11 +562,15 @@ export const useShiftBiddingMutations = () => {
             .update({ status: 'completed', updated_at: new Date().toISOString() })
             .eq("id", roundId);
         }
+      } else if (requestPtoDays) {
+        console.log(`⏸️ Bidding queue advancement paused for officer ${queueItem.officer_id} pending supervisor review of vacation requests.`);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["bidding_queue_time_off_requests"] });
+      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
       queryClient.invalidateQueries({ queryKey: ["profiles_for_bidding_admin"] });
       queryClient.invalidateQueries({ queryKey: ["officers"] });

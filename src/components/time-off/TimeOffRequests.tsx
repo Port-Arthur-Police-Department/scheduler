@@ -50,20 +50,143 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
 
   const updateRequestMutation = useMutation({
     mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+
       const { error } = await supabase
         .from("time_off_requests")
         .update({
           status,
           review_notes: notes,
-          reviewed_by: userId,
+          reviewed_by: currentUserId || userId,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", id);
 
       if (error) throw error;
+
+      // Check shift bidding queue advancement if approved or denied
+      if (status === 'approved' || status === 'denied') {
+        const { data: tor } = await supabase
+          .from("time_off_requests")
+          .select("officer_id, pto_type, start_date, end_date")
+          .eq("id", id)
+          .single();
+
+        if (tor) {
+          // If approved, create schedule exceptions for the date range so it reflects on the calendar/schedule
+          if (status === 'approved') {
+            try {
+              const startDate = parseISO(tor.start_date);
+              const endDate = parseISO(tor.end_date);
+              const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+              for (const day of days) {
+                const dateStr = format(day, "yyyy-MM-dd");
+                const dayOfWeek = day.getDay();
+
+                const { data: recSchedule } = await supabase
+                  .from("recurring_schedules")
+                  .select("shift_type_id")
+                  .eq("officer_id", tor.officer_id)
+                  .eq("day_of_week", dayOfWeek)
+                  .maybeSingle();
+
+                // Only assign PTO on days the officer is scheduled to work (has a recurring schedule entry for that day of the week)
+                const shiftTypeId = recSchedule?.shift_type_id;
+                if (!shiftTypeId) continue;
+
+                const { data: existingEx } = await supabase
+                  .from("schedule_exceptions")
+                  .select("id")
+                  .eq("officer_id", tor.officer_id)
+                  .eq("date", dateStr)
+                  .eq("shift_type_id", shiftTypeId)
+                  .maybeSingle();
+
+                if (existingEx) {
+                  await supabase
+                    .from("schedule_exceptions")
+                    .update({
+                      is_off: true,
+                      reason: tor.pto_type || 'vacation',
+                      schedule_type: 'pto'
+                    })
+                    .eq("id", existingEx.id);
+                } else {
+                  await supabase
+                    .from("schedule_exceptions")
+                    .insert({
+                      officer_id: tor.officer_id,
+                      date: dateStr,
+                      shift_type_id: shiftTypeId,
+                      is_off: true,
+                      reason: tor.pto_type || 'vacation',
+                      schedule_type: 'pto'
+                    });
+                }
+              }
+            } catch (exErr) {
+              console.error("Error creating schedule exceptions for approved PTO in TimeOffRequests:", exErr);
+            }
+          }
+
+          const { data: queueItems } = await supabase
+            .from("shift_bidding_queue")
+            .select("*, shift_bidding_rounds(*)")
+            .eq("officer_id", tor.officer_id)
+            .eq("status", "completed");
+
+          if (queueItems && queueItems.length > 0) {
+            for (const item of queueItems) {
+              if (item.shift_bidding_rounds && item.shift_bidding_rounds.status === 'active') {
+                const { data: remainingPending } = await supabase
+                  .from("time_off_requests")
+                  .select("id")
+                  .eq("officer_id", tor.officer_id)
+                  .eq("status", "pending");
+
+                if (!remainingPending || remainingPending.length === 0) {
+                  const nextTurnIndex = item.turn_index + 1;
+                  const roundId = item.round_id;
+
+                  const { data: nextOfficer } = await supabase
+                    .from("shift_bidding_queue")
+                    .select("id")
+                    .eq("round_id", roundId)
+                    .eq("turn_index", nextTurnIndex)
+                    .single();
+
+                  if (nextOfficer) {
+                    await supabase
+                      .from("shift_bidding_queue")
+                      .update({ status: 'active' })
+                      .eq("id", nextOfficer.id);
+
+                    await supabase
+                      .from("shift_bidding_rounds")
+                      .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
+                      .eq("id", roundId);
+
+                    console.log(`✅ Bidding queue advanced to turn index ${nextTurnIndex} for round ${roundId}`);
+                  } else {
+                    await supabase
+                      .from("shift_bidding_rounds")
+                      .update({ status: 'completed', updated_at: new Date().toISOString() })
+                      .eq("id", roundId);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["schedule-data"] });
       toast.success("Request updated successfully");
 
       // Send notification based on status

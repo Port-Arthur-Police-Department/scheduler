@@ -1,5 +1,5 @@
 // src/components/schedule/ShiftBiddingWidget.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useShiftBiddingRounds, useBiddingQueue, useShiftBiddingMutations, useShiftTypeAllowedPositions } from "@/hooks/useShiftBidding";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +65,23 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
 
   const [selectedShiftTypeId, setSelectedShiftTypeId] = useState<string>("");
   const [selectedPosition, setSelectedPosition] = useState<string>("");
+  const [requestPtoDays, setRequestPtoDays] = useState<boolean>(false);
+  // Block 1 (4 days)
+  const [ptoStartDate1, setPtoStartDate1] = useState<string>("");
+  const [ptoEndDate1, setPtoEndDate1] = useState<string>("");
+  // Block 2 (4 days)
+  const [ptoStartDate2, setPtoStartDate2] = useState<string>("");
+  const [ptoEndDate2, setPtoEndDate2] = useState<string>("");
+
+  useEffect(() => {
+    if (activeRound?.year && requestPtoDays) {
+      const year = activeRound.year;
+      if (!ptoStartDate1) setPtoStartDate1(`${year}-01-01`);
+      if (!ptoEndDate1) setPtoEndDate1(`${year}-01-05`);
+      if (!ptoStartDate2) setPtoStartDate2(`${year}-02-01`);
+      if (!ptoEndDate2) setPtoEndDate2(`${year}-02-05`);
+    }
+  }, [activeRound?.year, requestPtoDays]);
 
   // Fetch shift types
   const { data: shiftTypes = [] } = useQuery({
@@ -113,6 +130,10 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
       toast.error("Please select a position");
       return;
     }
+    if (requestPtoDays && ((!ptoStartDate1 || !ptoEndDate1) && (!ptoStartDate2 || !ptoEndDate2))) {
+      toast.error("Please provide at least one 4-day PTO work week block");
+      return;
+    }
 
     const nextTurnIndex = myQueueItem.turn_index + 1;
 
@@ -122,10 +143,20 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
       shiftTypeId: selectedShiftTypeId,
       positionName: selectedPosition,
       nextTurnIndex,
+      requestPtoDays,
+      ptoStartDate1,
+      ptoEndDate1,
+      ptoStartDate2,
+      ptoEndDate2,
     }, {
       onSuccess: () => {
         setSelectedShiftTypeId("");
         setSelectedPosition("");
+        setRequestPtoDays(false);
+        setPtoStartDate1("");
+        setPtoEndDate1("");
+        setPtoStartDate2("");
+        setPtoEndDate2("");
       }
     });
   };
@@ -400,6 +431,80 @@ export const ShiftBiddingWidget = ({ currentOfficerId, officerDivision }: ShiftB
                 )}
               </div>
             )}
+
+            {/* Optional PTO Request (Two 4-day work week blocks) */}
+            <div className="pt-2 border-t space-y-3">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="request-pto-checkbox"
+                  checked={requestPtoDays}
+                  onChange={(e) => setRequestPtoDays(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="request-pto-checkbox" className="text-sm font-medium text-foreground cursor-pointer">
+                  Request two 4-day work week PTO blocks (8 days total) with this shift selection
+                </label>
+              </div>
+
+              {requestPtoDays && (
+                <div className="p-3 bg-muted/30 rounded-lg border space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    This will submit two separate pending PTO requests (4 days / 40 hours each, 8 days / 80 hours total) to <b>The Book</b> for supervisor review and approval.
+                  </p>
+
+                  {/* Block 1 */}
+                  <div className="space-y-1.5 p-2 bg-background rounded border">
+                    <label className="text-xs font-semibold text-primary">Work Week Block 1 (4 Days)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-muted-foreground">Start Date</label>
+                        <input
+                          type="date"
+                          value={ptoStartDate1}
+                          onChange={(e) => setPtoStartDate1(e.target.value)}
+                          className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-muted-foreground">End Date</label>
+                        <input
+                          type="date"
+                          value={ptoEndDate1}
+                          onChange={(e) => setPtoEndDate1(e.target.value)}
+                          className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Block 2 */}
+                  <div className="space-y-1.5 p-2 bg-background rounded border">
+                    <label className="text-xs font-semibold text-primary">Work Week Block 2 (4 Days)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-muted-foreground">Start Date</label>
+                        <input
+                          type="date"
+                          value={ptoStartDate2}
+                          onChange={(e) => setPtoStartDate2(e.target.value)}
+                          className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-muted-foreground">End Date</label>
+                        <input
+                          type="date"
+                          value={ptoEndDate2}
+                          onChange={(e) => setPtoEndDate2(e.target.value)}
+                          className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <Button type="submit" className="w-full" disabled={submitSelection.isPending || !selectedShiftTypeId || !selectedPosition}>
               Confirm & Lock Shift Selection

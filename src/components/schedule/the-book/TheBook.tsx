@@ -144,6 +144,70 @@ const TheBook = ({
 
       if (updateError) throw updateError;
 
+      // If approved, create schedule exceptions for the date range so it reflects on the calendar/schedule
+      if (status === 'approved') {
+        try {
+          const startDate = parseISO(tor.start_date);
+          const endDate = parseISO(tor.end_date);
+          const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+          const { data: officerProfile } = await supabase
+            .from("profiles")
+            .select("shift_type_id")
+            .eq("id", tor.officer_id)
+            .single();
+
+          const defaultShiftTypeId = officerProfile?.shift_type_id;
+
+          for (const day of days) {
+            const dateStr = format(day, "yyyy-MM-dd");
+            const dayOfWeek = day.getDay();
+
+            const { data: recSchedule } = await supabase
+              .from("recurring_schedules")
+              .select("shift_type_id")
+              .eq("officer_id", tor.officer_id)
+              .eq("day_of_week", dayOfWeek)
+              .maybeSingle();
+
+            const shiftTypeId = recSchedule?.shift_type_id || defaultShiftTypeId;
+            if (!shiftTypeId) continue;
+
+            const { data: existingEx } = await supabase
+              .from("schedule_exceptions")
+              .select("id")
+              .eq("officer_id", tor.officer_id)
+              .eq("date", dateStr)
+              .eq("shift_type_id", shiftTypeId)
+              .maybeSingle();
+
+            if (existingEx) {
+              await supabase
+                .from("schedule_exceptions")
+                .update({
+                  is_off: true,
+                  reason: tor.pto_type || 'vacation',
+                  schedule_type: 'pto'
+                })
+                .eq("id", existingEx.id);
+            } else {
+              await supabase
+                .from("schedule_exceptions")
+                .insert({
+                  officer_id: tor.officer_id,
+                  date: dateStr,
+                  shift_type_id: shiftTypeId,
+                  is_off: true,
+                  reason: tor.pto_type || 'vacation',
+                  schedule_type: 'pto'
+                });
+            }
+          }
+        } catch (exErr) {
+          console.error("Error creating schedule exceptions for approved PTO:", exErr);
+        }
+      }
+
       // Log to audit log
       try {
         const { data: { session } } = await supabase.auth.getSession();

@@ -35,6 +35,7 @@ interface OfficerProfileDialogProps {
     holiday_hours?: number | null;
     rank?: string | null;
     birthday?: string | null;
+    shift_type_id?: string | null;
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +48,17 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
 
   // Add website settings hook
   const { data: settings } = useWebsiteSettings();
+
+  // Fetch shift types for profile default shift selection
+  const { data: shiftTypes } = useQuery({
+    queryKey: ["shift-types-profile"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("shift_types").select("id, name").order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 60 * 60 * 1000,
+  });
 
   // Helper function to parse dates without timezone issues
   const parseDateWithoutTimezone = (dateString: string | null): Date | undefined => {
@@ -96,6 +108,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
   const [birthday, setBirthday] = useState<Date | undefined>();
   const [birthdayInput, setBirthdayInput] = useState<string>("");
   const [division, setDivision] = useState<string>(officer?.division || "FOD");
+  const [shiftTypeId, setShiftTypeId] = useState<string>(officer?.shift_type_id || "");
 
   const [serviceCreditOverride, setServiceCreditOverride] = useState<string>(
     officer?.service_credit_override?.toString() || ""
@@ -136,6 +149,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
       setBirthday(parsedBirthday);
       setBirthdayInput(parsedBirthday ? formatDateForInput(parsedBirthday) : "");
       setDivision(officer?.division || "FOD");
+      setShiftTypeId(officer?.shift_type_id || "");
 
       setServiceCreditOverride(officer?.service_credit_override?.toString() || "");
       setFormData({
@@ -191,6 +205,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         division: division || null,
         rank: data.rank as "Officer" | "Sergeant" | "Lieutenant" | "Deputy Chief" | "Chief",
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+        shift_type_id: shiftTypeId || null,
       };
 
       // Add dates using the input values to avoid timezone conversion
@@ -296,6 +311,7 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
         division: division || null,
         rank: data.rank,
         service_credit_override: serviceCreditOverride ? Number(serviceCreditOverride) : null,
+        shift_type_id: shiftTypeId || null,
       };
 
       // Add dates using input values
@@ -658,6 +674,26 @@ export const OfficerProfileDialog = ({ officer, open, onOpenChange }: OfficerPro
                     <SelectItem value="FOD">FOD</SelectItem>
                     <SelectItem value="CID">CID</SelectItem>
                     <SelectItem value="Admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shift_type">Default Shift</Label>
+                <Select
+                  value={shiftTypeId || "none"}
+                  onValueChange={(val) => setShiftTypeId(val === "none" ? "" : val)}
+                >
+                  <SelectTrigger id="shift_type">
+                    <SelectValue placeholder="Select shift type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None / Unassigned</SelectItem>
+                    {shiftTypes?.map((shift) => (
+                      <SelectItem key={shift.id} value={shift.id}>
+                        {shift.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -68,6 +68,7 @@ export type Database = {
           pto_hours_balance: number | null
           rank: Database["public"]["Enums"]["officer_rank"] | null
           service_credit_override: number | null
+          shift_type_id: string | null
           sick_hours: number | null
           updated_at: string | null
           vacation_hours: number | null
@@ -87,6 +88,7 @@ export type Database = {
           pto_hours_balance?: number | null
           rank?: Database["public"]["Enums"]["officer_rank"] | null
           service_credit_override?: number | null
+          shift_type_id?: string | null
           sick_hours?: number | null
           updated_at?: string | null
           vacation_hours?: number | null
@@ -106,6 +108,7 @@ export type Database = {
           pto_hours_balance?: number | null
           rank?: Database["public"]["Enums"]["officer_rank"] | null
           service_credit_override?: number | null
+          shift_type_id?: string | null
           sick_hours?: number | null
           updated_at?: string | null
           vacation_hours?: number | null

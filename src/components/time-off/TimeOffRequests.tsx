@@ -81,14 +81,6 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
               const endDate = parseISO(tor.end_date);
               const days = eachDayOfInterval({ start: startDate, end: endDate });
 
-              const { data: officerProfile } = await supabase
-                .from("profiles")
-                .select("shift_type_id")
-                .eq("id", tor.officer_id)
-                .single();
-
-              const defaultShiftTypeId = officerProfile?.shift_type_id;
-
               for (const day of days) {
                 const dateStr = format(day, "yyyy-MM-dd");
                 const dayOfWeek = day.getDay();
@@ -100,7 +92,8 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
                   .eq("day_of_week", dayOfWeek)
                   .maybeSingle();
 
-                const shiftTypeId = recSchedule?.shift_type_id || defaultShiftTypeId;
+                // Only assign PTO on days the officer is scheduled to work (has a recurring schedule entry for that day of the week)
+                const shiftTypeId = recSchedule?.shift_type_id;
                 if (!shiftTypeId) continue;
 
                 const { data: existingEx } = await supabase

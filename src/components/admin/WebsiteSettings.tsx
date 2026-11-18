@@ -138,6 +138,7 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
   const queryClient = useQueryClient();
   const [colorSettings, setColorSettings] = useState(DEFAULT_COLORS);
   const [ptoVisibility, setPtoVisibility] = useState(DEFAULT_PTO_VISIBILITY);
+  const [cityHolidays, setCityHolidays] = useState<any[]>([]);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [anniversaryRecipients, setAnniversaryRecipients] = useState<string[]>(["admin", "supervisor"]);
@@ -249,7 +250,28 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
     if (settings?.anniversary_alert_recipients) {
       setAnniversaryRecipients(settings.anniversary_alert_recipients);
     }
+    if (settings?.city_holidays) {
+      setCityHolidays(settings.city_holidays);
+    }
   }, [settings]);
+
+  const handleAddCityHoliday = (holiday: { date: string; title: string }) => {
+    const newHolidays = [...cityHolidays, { id: crypto.randomUUID(), ...holiday }];
+    setCityHolidays(newHolidays);
+    updateSettingsMutation.mutate({
+      id: settings?.id,
+      city_holidays: newHolidays,
+    });
+  };
+
+  const handleDeleteCityHoliday = (id: string) => {
+    const newHolidays = cityHolidays.filter(h => h.id !== id);
+    setCityHolidays(newHolidays);
+    updateSettingsMutation.mutate({
+      id: settings?.id,
+      city_holidays: newHolidays,
+    });
+  };
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
@@ -720,16 +742,19 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
             isPending={updateSettingsMutation.isPending}
           />
 
-          <PTOVisibilitySettings 
+          <PTOVisibilitySettings
             ptoVisibility={ptoVisibility}
             handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+            cityHolidays={cityHolidays}
+            onAddCityHoliday={handleAddCityHoliday}
+            onDeleteCityHoliday={handleDeleteCityHoliday}
             isPending={updateSettingsMutation.isPending}
           />
         </TabsContent>
 
         {/* PDF LAYOUT TAB */}
         <TabsContent value="pdf" className="space-y-6 mt-6">
-          <PDFLayoutSettings 
+          <PDFLayoutSettings
             settings={settings}
             onSave={handleLayoutSettingsSave}
             onPreview={generatePreviewData}
@@ -750,15 +775,18 @@ export const WebsiteSettings = ({ isAdmin = false, isSupervisor = false }: Websi
 
         {/* PTO SETTINGS TAB */}
         <TabsContent value="pto" className="space-y-6 mt-6">
-          <PTOSettings 
+          <PTOSettings
             settings={settings}
             handleToggle={handleToggle}
             isPending={updateSettingsMutation.isPending}
           />
 
-          <PTOVisibilitySettings 
+          <PTOVisibilitySettings
             ptoVisibility={ptoVisibility}
             handlePtoVisibilityToggle={handlePtoVisibilityToggle}
+            cityHolidays={cityHolidays}
+            onAddCityHoliday={handleAddCityHoliday}
+            onDeleteCityHoliday={handleDeleteCityHoliday}
             isPending={updateSettingsMutation.isPending}
           />
         </TabsContent>

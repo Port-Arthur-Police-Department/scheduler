@@ -569,6 +569,8 @@ export const useShiftBiddingMutations = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
       queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["bidding_queue_time_off_requests"] });
+      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["officer-schedules"] });
       queryClient.invalidateQueries({ queryKey: ["profiles_for_bidding_admin"] });
       queryClient.invalidateQueries({ queryKey: ["officers"] });

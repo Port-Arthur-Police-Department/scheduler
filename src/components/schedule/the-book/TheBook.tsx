@@ -121,6 +121,9 @@ const TheBook = ({
 
   const handleReviewPTOAction = async (requestId: string, status: 'approved' | 'denied', notes?: string) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+
       const { data: tor, error: torError } = await supabase
         .from("time_off_requests")
         .select("officer_id, pto_type, start_date, end_date")
@@ -134,7 +137,7 @@ const TheBook = ({
         .update({
           status,
           review_notes: notes,
-          reviewed_by: userEmail,
+          reviewed_by: currentUserId,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId);

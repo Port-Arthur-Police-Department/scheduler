@@ -636,8 +636,8 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
 
                 // Find vacation requests for this officer
                 const officerTor = timeOffRequests.filter((tr: any) => tr.officer_id === q.officer_id);
-                const tor1 = officerTor[0];
-                const tor2 = officerTor[1];
+                const tor1 = officerTor.find((tr: any) => tr.reason?.includes("Block 1")) || officerTor[0];
+                const tor2 = officerTor.find((tr: any) => tr.reason?.includes("Block 2")) || officerTor.find((tr: any) => tr !== tor1 && (tr.reason?.includes("Block 2") || tr !== officerTor[0])) || officerTor[1];
 
                 const renderTorBadge = (tor: any) => {
                   if (!tor) return <span className="text-muted-foreground text-xs italic">None requested</span>;

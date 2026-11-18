@@ -50,12 +50,15 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
 
   const updateRequestMutation = useMutation({
     mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+
       const { error } = await supabase
         .from("time_off_requests")
         .update({
           status,
           review_notes: notes,
-          reviewed_by: userId,
+          reviewed_by: currentUserId || userId,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", id);

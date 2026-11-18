@@ -551,9 +551,9 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                           )?.profiles?.full_name;
 
                           return (
-                            <tr key={pos.id} className="border-b border-border hover:bg-muted/20">
+                            <tr key={pos.id} className={`border-b border-border transition-colors ${isClaimed ? "bg-muted/70 opacity-50 text-muted-foreground" : "hover:bg-muted/20"}`}>
                               <td className="p-2.5 font-medium border-r border-border w-[140px] truncate" title={pos.position_name}>
-                                <div>{pos.position_name}</div>
+                                <div className={isClaimed ? "line-through" : ""}>{pos.position_name}</div>
                               </td>
                               <td className="p-2.5 text-muted-foreground border-r border-border w-[80px] truncate" title={pos.allowed_rank || 'Any'}>
                                 {pos.allowed_rank || 'Any'}
@@ -564,11 +564,11 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                                 return (
                                   <td key={dayIndex} className="p-2 text-center border-r border-border w-[55px] align-middle">
                                     {isRecurring ? (
-                                      <span className="inline-block px-1.5 py-1 rounded bg-primary/15 text-primary font-bold text-[11px]" title="Recurring Working Day">
+                                      <span className={`inline-block px-1.5 py-1 rounded text-[11px] font-bold ${isClaimed ? "bg-muted text-muted-foreground/50" : "bg-primary/15 text-primary"}`} title="Recurring Working Day">
                                         WORK
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-1.5 py-1 rounded bg-muted text-muted-foreground font-medium text-[11px]" title="OFF Day">
+                                      <span className={`inline-block px-1.5 py-1 rounded text-[11px] font-medium ${isClaimed ? "bg-muted/50 text-muted-foreground/40" : "bg-muted text-muted-foreground"}`} title="OFF Day">
                                         OFF
                                       </span>
                                     )}
@@ -577,8 +577,8 @@ export const ShiftBiddingWeeklyView: React.FC<ShiftBiddingWeeklyViewProps> = ({ 
                               })}
                               <td className="p-2.5 text-center border-l border-border w-[110px]">
                                 {isClaimed ? (
-                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] truncate max-w-full">
-                                    Taken
+                                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] truncate max-w-full" title={claimedBy ? `Taken by ${claimedBy}` : 'Taken'}>
+                                    Taken {claimedBy ? `(${claimedBy})` : ''}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">

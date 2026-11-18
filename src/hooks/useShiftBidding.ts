@@ -287,8 +287,10 @@ export const useShiftBiddingMutations = () => {
       isLastTurn,
       isOverride,
       requestPtoDays,
-      ptoStartDate,
-      ptoEndDate,
+      ptoStartDate1,
+      ptoEndDate1,
+      ptoStartDate2,
+      ptoEndDate2,
     }: {
       roundId: string;
       queueItemId: string;
@@ -298,8 +300,10 @@ export const useShiftBiddingMutations = () => {
       isLastTurn?: boolean;
       isOverride?: boolean;
       requestPtoDays?: boolean;
-      ptoStartDate?: string;
-      ptoEndDate?: string;
+      ptoStartDate1?: string;
+      ptoEndDate1?: string;
+      ptoStartDate2?: string;
+      ptoEndDate2?: string;
     }) => {
       // 1. Get queue item & round details (officer_id, round year, status)
       const { data: queueItem, error: queueItemError } = await supabase
@@ -483,28 +487,50 @@ export const useShiftBiddingMutations = () => {
         console.log(`✅ Successfully created ${scheduleRecords.length} recurring schedule records for officer ${queueItem.officer_id}`);
       }
 
-      // 5. Handle optional 8-day PTO request if requested
-      if (requestPtoDays && ptoStartDate && ptoEndDate) {
+      // 5. Handle optional 8-day PTO requests (two separate 4-day work week blocks) if requested
+      if (requestPtoDays) {
         try {
-          const { error: ptoError } = await supabase
-            .from("time_off_requests")
-            .insert({
-              officer_id: queueItem.officer_id,
-              start_date: ptoStartDate,
-              end_date: ptoEndDate,
-              reason: "Requested during shift bidding (8 days PTO)",
-              status: "pending",
-              pto_type: "vacation",
-              hours_used: 64, // 8 days * 8 hours
-            });
+          if (ptoStartDate1 && ptoEndDate1) {
+            const { error: ptoError1 } = await supabase
+              .from("time_off_requests")
+              .insert({
+                officer_id: queueItem.officer_id,
+                start_date: ptoStartDate1,
+                end_date: ptoEndDate1,
+                reason: "Requested during shift bidding (Work Week Block 1 - 4 days / 40 hours PTO)",
+                status: "pending",
+                pto_type: "vacation",
+                hours_used: 40, // 4 days * 10 hours
+              });
 
-          if (ptoError) {
-            console.error("Error creating PTO request during bidding:", ptoError);
-          } else {
-            console.log(`✅ Successfully created pending 8-day PTO request for officer ${queueItem.officer_id} from ${ptoStartDate} to ${ptoEndDate}`);
+            if (ptoError1) {
+              console.error("Error creating PTO request block 1 during bidding:", ptoError1);
+            } else {
+              console.log(`✅ Successfully created pending 4-day (40 hours) PTO request block 1 for officer ${queueItem.officer_id} from ${ptoStartDate1} to ${ptoEndDate1}`);
+            }
+          }
+
+          if (ptoStartDate2 && ptoEndDate2) {
+            const { error: ptoError2 } = await supabase
+              .from("time_off_requests")
+              .insert({
+                officer_id: queueItem.officer_id,
+                start_date: ptoStartDate2,
+                end_date: ptoEndDate2,
+                reason: "Requested during shift bidding (Work Week Block 2 - 4 days / 40 hours PTO)",
+                status: "pending",
+                pto_type: "vacation",
+                hours_used: 40, // 4 days * 10 hours
+              });
+
+            if (ptoError2) {
+              console.error("Error creating PTO request block 2 during bidding:", ptoError2);
+            } else {
+              console.log(`✅ Successfully created pending 4-day (40 hours) PTO request block 2 for officer ${queueItem.officer_id} from ${ptoStartDate2} to ${ptoEndDate2}`);
+            }
           }
         } catch (ptoEx) {
-          console.warn("Failed to create PTO request during shift bidding:", ptoEx);
+          console.warn("Failed to create PTO requests during shift bidding:", ptoEx);
         }
       }
 

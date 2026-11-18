@@ -13,9 +13,10 @@ import { calculateDailyStaffing, getStaffingMinimums } from "@/utils/staffingCal
 import { supabase } from "@/integrations/supabase/client";
 import { getCycleStartDateForShift, shouldIncludeScheduleForDateSync } from "@/utils/weekOffsetUtils";
 
-// Define extended interface that includes onDateChange
+// Define extended interface that includes onDateChange and websiteSettings
 interface ExtendedViewProps extends ViewProps {
   onDateChange?: (date: Date) => void;
+  websiteSettings?: any;
 }
 
 export const MonthlyView: React.FC<ExtendedViewProps> = ({
@@ -31,6 +32,7 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
   getLastName,
   getRankAbbreviation = getRankAbbreviationUtil,
   onDateChange,
+  websiteSettings,
 }) => {
   // Add state hooks here
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -283,16 +285,34 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
           const isSupervisorsUnderstaffed = isCurrentMonthDay && (supervisorCount < minimumSupervisors);
           const isUnderstaffed = isCurrentMonthDay && (isOfficersUnderstaffed || isSupervisorsUnderstaffed);
 
-          // Filter PTO officers
+          // Get PTO visibility settings
+          const ptoVisibility = websiteSettings?.pto_type_visibility || {
+            show_vacation_pto: true,
+            show_holiday_pto: true,
+            show_sick_pto: false,
+            show_comp_pto: false
+          };
+
+          // Filter PTO officers based on settings
           const ptoOfficers = daySchedule?.officers?.filter((officer: any) => {
             if (!officer.shiftInfo?.hasPTO || !officer.shiftInfo?.ptoData) {
               return false;
             }
-            
+
             const ptoType = officer.shiftInfo?.ptoData?.ptoType?.toLowerCase() || '';
-            return ptoType.includes('vacation') || ptoType.includes('holiday') || 
-                   ptoType.includes('sick') || ptoType.includes('comp');
+
+            if (ptoType.includes('vacation') && !ptoVisibility.show_vacation_pto) return false;
+            if (ptoType.includes('holiday') && !ptoVisibility.show_holiday_pto) return false;
+            if (ptoType.includes('sick') && !ptoVisibility.show_sick_pto) return false;
+            if (ptoType.includes('comp') && !ptoVisibility.show_comp_pto) return false;
+
+            return ptoType.includes('vacation') || ptoType.includes('holiday') ||
+                   ptoType.includes('sick') || ptoType.includes('comp') || ptoType.includes('pto');
           }) || [];
+
+          // Get city holidays and special events for this day
+          const cityHolidays = websiteSettings?.city_holidays || [];
+          const dayCityHolidays = cityHolidays.filter((h: any) => h.date === dateStr);
 
           return (
             <div
@@ -352,6 +372,15 @@ export const MonthlyView: React.FC<ExtendedViewProps> = ({
               </div>
               
               <div className="space-y-1 flex-1 overflow-y-auto">
+                {dayCityHolidays.map((holiday: any) => (
+                  <div
+                    key={holiday.id}
+                    className="bg-purple-100 text-purple-800 border border-purple-300 text-xs p-1 rounded font-medium flex items-center gap-1"
+                    title={holiday.title}
+                  >
+                    <span className="truncate">🎉 {holiday.title}</span>
+                  </div>
+                ))}
                 {ptoOfficers.length > 0 ? (
                   <div className="space-y-1">
                     {ptoOfficers.map((officer: any) => {

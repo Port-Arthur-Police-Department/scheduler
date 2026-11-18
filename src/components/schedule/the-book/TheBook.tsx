@@ -1271,6 +1271,7 @@ const TheBook = ({
     weeklyColors,
     currentWeekStart: currentWeekStart,
     queryKey: scheduleQueryKey,
+    websiteSettings: websiteSettings || null,
     onDateChange: (date: Date) => {
       if (activeView === "weekly") {
         setCurrentWeekStart(date);

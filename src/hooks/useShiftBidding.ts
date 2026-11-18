@@ -340,6 +340,47 @@ export const useShiftBiddingMutations = () => {
 
       if (updateQueueError) throw updateQueueError;
 
+      // Log to audit log
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: officerProfile } = await supabase
+            .from("profiles")
+            .select("full_name, badge_number")
+            .eq("id", queueItem.officer_id)
+            .single();
+
+          const { data: shiftTypeObj } = await supabase
+            .from("shift_types")
+            .select("name")
+            .eq("id", shiftTypeId)
+            .single();
+
+          const actionDesc = isOverride
+            ? `Supervisor override shift selection for ${officerProfile?.full_name || 'Officer'} (Badge: ${officerProfile?.badge_number || 'N/A'}): ${shiftTypeObj?.name || 'Shift'} - ${positionName}`
+            : `Officer ${officerProfile?.full_name || 'N/A'} selected shift: ${shiftTypeObj?.name || 'Shift'} - ${positionName}`;
+
+          await supabase.from("audit_logs").insert({
+            user_id: session.user.id,
+            user_email: session.user.email,
+            action_type: isOverride ? "SUPERVISOR_SHIFT_BIDDING_OVERRIDE" : "SHIFT_BIDDING_SELECTION",
+            table_name: "shift_bidding_queue",
+            record_id: queueItemId,
+            description: actionDesc,
+            new_values: {
+              officer_id: queueItem.officer_id,
+              officer_name: officerProfile?.full_name,
+              shift_type_id: shiftTypeId,
+              shift_type_name: shiftTypeObj?.name,
+              position_name: positionName,
+              is_override: !!isOverride
+            }
+          });
+        }
+      } catch (auditErr) {
+        console.warn("Failed to record audit log for shift bidding:", auditErr);
+      }
+
       // 3. Update the officer's profile shift_type_id to the newly selected shift
       const { error: profileUpdateError } = await supabase
         .from("profiles")

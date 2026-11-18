@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TheBookMobile from "./TheBookMobile";
 import { exportWeeklyPDF } from "@/utils/pdfExportUtils";
@@ -109,6 +111,122 @@ const TheBook = ({
     officerId?: string;
     officerName?: string;
   } | null>(null);
+
+  const [reviewingPTO, setReviewingPTO] = useState<{
+    requestId: string;
+    officerName: string;
+    dateStr: string;
+  } | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+
+  const handleReviewPTOAction = async (requestId: string, status: 'approved' | 'denied', notes?: string) => {
+    try {
+      const { data: tor, error: torError } = await supabase
+        .from("time_off_requests")
+        .select("officer_id, pto_type, start_date, end_date")
+        .eq("id", requestId)
+        .single();
+
+      if (torError || !tor) throw new Error("Time off request not found");
+
+      const { error: updateError } = await supabase
+        .from("time_off_requests")
+        .update({
+          status,
+          review_notes: notes,
+          reviewed_by: userEmail,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", requestId);
+
+      if (updateError) throw updateError;
+
+      // Log to audit log
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await supabase.from("audit_logs").insert({
+            user_id: session.user.id,
+            user_email: session.user.email,
+            action_type: status === 'approved' ? "APPROVE_TIME_OFF_REQUEST" : "DENY_TIME_OFF_REQUEST",
+            table_name: "time_off_requests",
+            record_id: requestId,
+            description: `Supervisor ${status} time off request for officer ${tor.officer_id} (${tor.start_date} to ${tor.end_date})`,
+            new_values: { request_id: requestId, status, notes }
+          });
+        }
+      } catch (logErr) {
+        console.warn("Audit log error:", logErr);
+      }
+
+      toast.success(`Time off request ${status} successfully`);
+      setReviewingPTO(null);
+      setReviewNotes("");
+
+      // Check shift bidding queue advancement
+      if (status === 'approved' || status === 'denied') {
+        const { data: queueItems } = await supabase
+          .from("shift_bidding_queue")
+          .select("*, shift_bidding_rounds(*)")
+          .eq("officer_id", tor.officer_id)
+          .eq("status", "completed");
+
+        if (queueItems && queueItems.length > 0) {
+          for (const item of queueItems) {
+            if (item.shift_bidding_rounds && item.shift_bidding_rounds.status === 'active') {
+              const { data: remainingPending } = await supabase
+                .from("time_off_requests")
+                .select("id")
+                .eq("officer_id", tor.officer_id)
+                .eq("status", "pending");
+
+              if (!remainingPending || remainingPending.length === 0) {
+                const nextTurnIndex = item.turn_index + 1;
+                const roundId = item.round_id;
+
+                const { data: nextOfficer } = await supabase
+                  .from("shift_bidding_queue")
+                  .select("id")
+                  .eq("round_id", roundId)
+                  .eq("turn_index", nextTurnIndex)
+                  .single();
+
+                if (nextOfficer) {
+                  await supabase
+                    .from("shift_bidding_queue")
+                    .update({ status: 'active' })
+                    .eq("id", nextOfficer.id);
+
+                  await supabase
+                    .from("shift_bidding_rounds")
+                    .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
+                    .eq("id", roundId);
+
+                  toast.success(`Bidding queue advanced to next officer!`);
+                  console.log(`✅ Bidding queue advanced to turn index ${nextTurnIndex} for round ${roundId}`);
+                } else {
+                  await supabase
+                    .from("shift_bidding_rounds")
+                    .update({ status: 'completed', updated_at: new Date().toISOString() })
+                    .eq("id", roundId);
+
+                  toast.success(`Shift bidding round completed!`);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["schedule-data"] });
+      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update time off request");
+    }
+  };
 
   const mutationsResult = useWeeklyScheduleMutations(currentWeekStart, currentMonth, activeView, selectedShiftId);
 
@@ -1110,6 +1228,9 @@ const TheBook = ({
       onRemovePTO: handleRemovePTO,
       onEditAssignment: handleEditAssignment,
       onRemoveOfficer: handleRemoveOfficer,
+      onReviewPTO: (timeOffRequestId: string, officerName: string, dateStr: string) => {
+        setReviewingPTO({ requestId: timeOffRequestId, officerName, dateStr });
+      },
     },
     mutations: {
       removeOfficerMutation: safeRemoveOfficerMutation,
@@ -1357,6 +1478,44 @@ const TheBook = ({
           isUpdating={false}
         />
       )}
+
+      {/* PTO Review Dialog */}
+      <Dialog open={!!reviewingPTO} onOpenChange={(open) => !open && setReviewingPTO(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review Time Off Request</DialogTitle>
+            <DialogDescription>
+              Reviewing vacation/PTO request for {reviewingPTO?.officerName} on {reviewingPTO?.dateStr}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium">Review Notes (Optional)</label>
+              <Input
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="Enter approval/denial notes..."
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:justify-between">
+            <Button
+              variant="destructive"
+              onClick={() => reviewingPTO && handleReviewPTOAction(reviewingPTO.requestId, 'denied', reviewNotes)}
+            >
+              Deny Request
+            </Button>
+            <Button
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => reviewingPTO && handleReviewPTOAction(reviewingPTO.requestId, 'approved', reviewNotes)}
+            >
+              Approve Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ScheduleExportDialog
         open={exportDialogOpen}

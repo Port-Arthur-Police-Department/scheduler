@@ -538,7 +538,7 @@ export const useShiftBiddingMutations = () => {
       // Only advance the active turn if it's a normal selection or if we are overriding the currently active person
       const isOutOfTurnOverride = isOverride && queueItem.status !== 'active';
 
-      if (!isOutOfTurnOverride) {
+      if (!isOutOfTurnOverride && !requestPtoDays) {
         const { data: nextOfficer } = await supabase
           .from("shift_bidding_queue")
           .select("id")
@@ -562,6 +562,8 @@ export const useShiftBiddingMutations = () => {
             .update({ status: 'completed', updated_at: new Date().toISOString() })
             .eq("id", roundId);
         }
+      } else if (requestPtoDays) {
+        console.log(`⏸️ Bidding queue advancement paused for officer ${queueItem.officer_id} pending supervisor review of vacation requests.`);
       }
     },
     onSuccess: () => {

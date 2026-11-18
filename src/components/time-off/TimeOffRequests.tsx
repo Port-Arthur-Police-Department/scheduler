@@ -61,9 +61,72 @@ export const TimeOffRequests = ({ userId, isAdminOrSupervisor }: TimeOffRequests
         .eq("id", id);
 
       if (error) throw error;
+
+      // Check shift bidding queue advancement if approved or denied
+      if (status === 'approved' || status === 'denied') {
+        const { data: tor } = await supabase
+          .from("time_off_requests")
+          .select("officer_id")
+          .eq("id", id)
+          .single();
+
+        if (tor) {
+          const { data: queueItems } = await supabase
+            .from("shift_bidding_queue")
+            .select("*, shift_bidding_rounds(*)")
+            .eq("officer_id", tor.officer_id)
+            .eq("status", "completed");
+
+          if (queueItems && queueItems.length > 0) {
+            for (const item of queueItems) {
+              if (item.shift_bidding_rounds && item.shift_bidding_rounds.status === 'active') {
+                const { data: remainingPending } = await supabase
+                  .from("time_off_requests")
+                  .select("id")
+                  .eq("officer_id", tor.officer_id)
+                  .eq("status", "pending");
+
+                if (!remainingPending || remainingPending.length === 0) {
+                  const nextTurnIndex = item.turn_index + 1;
+                  const roundId = item.round_id;
+
+                  const { data: nextOfficer } = await supabase
+                    .from("shift_bidding_queue")
+                    .select("id")
+                    .eq("round_id", roundId)
+                    .eq("turn_index", nextTurnIndex)
+                    .single();
+
+                  if (nextOfficer) {
+                    await supabase
+                      .from("shift_bidding_queue")
+                      .update({ status: 'active' })
+                      .eq("id", nextOfficer.id);
+
+                    await supabase
+                      .from("shift_bidding_rounds")
+                      .update({ current_turn_index: nextTurnIndex, updated_at: new Date().toISOString() })
+                      .eq("id", roundId);
+
+                    console.log(`✅ Bidding queue advanced to turn index ${nextTurnIndex} for round ${roundId}`);
+                  } else {
+                    await supabase
+                      .from("shift_bidding_rounds")
+                      .update({ status: 'completed', updated_at: new Date().toISOString() })
+                      .eq("id", roundId);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["shift_bidding_rounds"] });
+      queryClient.invalidateQueries({ queryKey: ["schedule-data"] });
       toast.success("Request updated successfully");
 
       // Send notification based on status

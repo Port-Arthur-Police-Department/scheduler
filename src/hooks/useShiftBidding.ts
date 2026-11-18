@@ -286,6 +286,9 @@ export const useShiftBiddingMutations = () => {
       nextTurnIndex,
       isLastTurn,
       isOverride,
+      requestPtoDays,
+      ptoStartDate,
+      ptoEndDate,
     }: {
       roundId: string;
       queueItemId: string;
@@ -294,6 +297,9 @@ export const useShiftBiddingMutations = () => {
       nextTurnIndex: number;
       isLastTurn?: boolean;
       isOverride?: boolean;
+      requestPtoDays?: boolean;
+      ptoStartDate?: string;
+      ptoEndDate?: string;
     }) => {
       // 1. Get queue item & round details (officer_id, round year, status)
       const { data: queueItem, error: queueItemError } = await supabase
@@ -477,7 +483,32 @@ export const useShiftBiddingMutations = () => {
         console.log(`✅ Successfully created ${scheduleRecords.length} recurring schedule records for officer ${queueItem.officer_id}`);
       }
 
-      // 5. Advance queue to next officer or complete round
+      // 5. Handle optional 8-day PTO request if requested
+      if (requestPtoDays && ptoStartDate && ptoEndDate) {
+        try {
+          const { error: ptoError } = await supabase
+            .from("time_off_requests")
+            .insert({
+              officer_id: queueItem.officer_id,
+              start_date: ptoStartDate,
+              end_date: ptoEndDate,
+              reason: "Requested during shift bidding (8 days PTO)",
+              status: "pending",
+              pto_type: "vacation",
+              hours_used: 64, // 8 days * 8 hours
+            });
+
+          if (ptoError) {
+            console.error("Error creating PTO request during bidding:", ptoError);
+          } else {
+            console.log(`✅ Successfully created pending 8-day PTO request for officer ${queueItem.officer_id} from ${ptoStartDate} to ${ptoEndDate}`);
+          }
+        } catch (ptoEx) {
+          console.warn("Failed to create PTO request during shift bidding:", ptoEx);
+        }
+      }
+
+      // 6. Advance queue to next officer or complete round
       // Only advance the active turn if it's a normal selection or if we are overriding the currently active person
       const isOutOfTurnOverride = isOverride && queueItem.status !== 'active';
 

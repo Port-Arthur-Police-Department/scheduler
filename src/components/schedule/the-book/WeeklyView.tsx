@@ -313,6 +313,26 @@ export const WeeklyView: React.FC<ExtendedViewProps> = ({
         });
       }
 
+      if (localSchedules.shiftProfiles && Array.isArray(localSchedules.shiftProfiles)) {
+        localSchedules.shiftProfiles.forEach((profile: any) => {
+          if (profile.id && !allOfficers.has(profile.id)) {
+            allOfficers.set(profile.id, {
+              officerId: profile.id,
+              officerName: profile.full_name || "Unknown",
+              badgeNumber: profile.badge_number || "9999",
+              rank: profile.rank || "Officer",
+              hire_date: profile.hire_date || null,
+              promotion_date_sergeant: profile.promotion_date_sergeant || null,
+              promotion_date_lieutenant: profile.promotion_date_lieutenant || null,
+              service_credit_override: profile.service_credit_override || 0,
+              recurringDays: recurringSchedulesByOfficer.get(profile.id) || new Set(),
+              weeklySchedule: {} as Record<string, any>,
+              service_credit: 0
+            });
+          }
+        });
+      }
+
       const sanitizedSchedules = {
         ...localSchedules,
         dailySchedules: localSchedules.dailySchedules.map(scheduleDay => ({

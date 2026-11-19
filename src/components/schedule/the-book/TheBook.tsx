@@ -505,6 +505,20 @@ const TheBook = ({
 
         if (recurringError) throw recurringError;
 
+        // Fetch profiles assigned to this shift via shift_type_id (direct profile shift determination)
+        const { data: shiftProfiles, error: shiftProfilesError } = await supabase
+          .from("profiles")
+          .select(`
+            id, full_name, badge_number, rank, hire_date,
+            promotion_date_sergeant, promotion_date_lieutenant,
+            service_credit_override
+          `)
+          .eq("shift_type_id", selectedShiftId);
+
+        if (shiftProfilesError) {
+          console.error("Error fetching shift profiles by shift_type_id:", shiftProfilesError);
+        }
+
         // Fetch pending time off requests
         const { data: pendingTorData } = await supabase
           .from("time_off_requests")
@@ -654,9 +668,26 @@ const TheBook = ({
 
         // Create a map to store all officers and their service credits
         const allOfficersMap = new Map();
-
-        // First, collect all officers from exceptions and recurring schedules
         const allOfficerIds = new Set<string>();
+
+        // Add officer IDs and profiles from shiftProfiles (profiles assigned directly to this shift via shift_type_id)
+        shiftProfiles?.forEach(profile => {
+          if (profile.id) {
+            allOfficerIds.add(profile.id);
+            allOfficersMap.set(profile.id, {
+              officerId: profile.id,
+              officerName: profile.full_name || "Unknown",
+              badgeNumber: profile.badge_number || "9999",
+              rank: profile.rank || "Officer",
+              hire_date: profile.hire_date,
+              promotion_date_sergeant: profile.promotion_date_sergeant,
+              promotion_date_lieutenant: profile.promotion_date_lieutenant,
+              service_credit_override: profile.service_credit_override || 0,
+              service_credit: 0,
+              weeklySchedule: {}
+            });
+          }
+        });
 
         // Add officer IDs from exceptions
         mutableExceptions?.forEach(exception => {
@@ -677,6 +708,11 @@ const TheBook = ({
         if (allOfficerIds.size > 0) {
           serviceCreditsMap = await fetchServiceCredits(Array.from(allOfficerIds));
         }
+
+        // Update service credits in allOfficersMap
+        allOfficersMap.forEach((officer, officerId) => {
+          officer.service_credit = serviceCreditsMap.get(officerId) || 0;
+        });
 
         // Organize data by day for WeeklyView/MonthlyView - WITH DEFAULT ASSIGNMENTS
         const dailySchedules = dates.map(dateStr => {
@@ -857,7 +893,8 @@ const TheBook = ({
           endDate: endStr,
           minimumStaffing,
           officerProfiles: allOfficersMap,
-          allOfficers: Array.from(allOfficersMap.values())
+          allOfficers: Array.from(allOfficersMap.values()),
+          shiftProfiles: shiftProfiles || []
         };
 
       } catch (error) {

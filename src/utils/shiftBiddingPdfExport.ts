@@ -1,6 +1,6 @@
 // src/utils/shiftBiddingPdfExport.ts
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { ShiftBiddingRound, ShiftBiddingQueueItem, ShiftTypeAllowedPosition } from '@/hooks/useShiftBidding';
 
 export const exportSeniorityQueueToPDF = (
@@ -44,7 +44,7 @@ export const exportSeniorityQueueToPDF = (
   });
 
   // AutoTable
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: 36,
     head: [['Turn', 'Officer / Supervisor', 'Rank', 'Badge #', 'Status', 'Selection']],
     body: tableData,
@@ -124,7 +124,7 @@ export const exportShiftAvailabilityToPDF = (
   });
 
   // AutoTable
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: 36,
     head: [['Position / Assignment', 'Allowed Rank', 'Status', 'Claimed By Officer', 'Badge #', 'Selected At']],
     body: tableData,

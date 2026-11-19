@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus, ChevronUp, ChevronDown } from "lucide-react";
+import { Calendar, Users, Shield, Play, Pause, CheckCircle2, RefreshCw, Plus, Trash2, Edit2, Settings, UserCheck, Clock, Sparkles, BookmarkPlus, UserPlus, ChevronUp, ChevronDown, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BiddingMatrixView } from "@/components/schedule/BiddingMatrixView";
 import { toast } from "sonner";
 import { sortOfficersByLastName, formatOfficerNameForDropdown } from "@/utils/sortingUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { exportSeniorityQueueToPDF } from "@/utils/shiftBiddingPdfExport";
 
 interface ConfiguredPosition {
   position_name: string;
@@ -673,6 +674,15 @@ export const ShiftBiddingAdmin = () => {
                           <Users className="h-4 w-4" />
                           Officer Seniority Queue & Selections ({queue.length} officers)
                         </h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportSeniorityQueueToPDF(activeRound, queue)}
+                          className="gap-1.5 h-8 text-xs"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          Export Queue PDF
+                        </Button>
                       </div>
 
                       <div className={`rounded-md border mt-2 overflow-hidden ${activeRound.status === 'completed' ? 'bg-muted/30 opacity-75' : ''}`}>

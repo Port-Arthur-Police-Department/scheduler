@@ -3,8 +3,10 @@ import { useState } from "react";
 import { ShiftBiddingRound, ShiftBiddingQueueItem, ShiftTypeAllowedPosition } from "@/hooks/useShiftBidding";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Clock, Shield, Filter } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Clock, Shield, Filter, FileText, Download } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { exportShiftAvailabilityToPDF } from "@/utils/shiftBiddingPdfExport";
 
 interface BiddingMatrixViewProps {
   round: ShiftBiddingRound | undefined;
@@ -84,6 +86,28 @@ export const BiddingMatrixView = ({
             {completedCount} / {totalCount} ({totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%)
           </div>
         </Card>
+      </div>
+
+      {/* Shift PDF Export Buttons Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <FileText className="h-4 w-4 text-primary" />
+          <span>Export Shift Position PDFs:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {shiftTypes.map(st => (
+            <Button
+              key={st.id}
+              variant="outline"
+              size="sm"
+              onClick={() => exportShiftAvailabilityToPDF(round, st, allAllowedPositions, queue)}
+              className="gap-1.5 h-8 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export {st.name} PDF</span>
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* Filter Controls Bar */}

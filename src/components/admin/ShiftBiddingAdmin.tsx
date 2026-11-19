@@ -326,6 +326,36 @@ export const ShiftBiddingAdmin = () => {
     }
   };
 
+  const handleMovePositionUp = (index: number) => {
+    if (index <= 0) return;
+    const updated = [...configuredPositions];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    setConfiguredPositions(updated);
+
+    if (editingIndex === index) {
+      setEditingIndex(index - 1);
+    } else if (editingIndex === index - 1) {
+      setEditingIndex(index);
+    }
+  };
+
+  const handleMovePositionDown = (index: number) => {
+    if (index >= configuredPositions.length - 1) return;
+    const updated = [...configuredPositions];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    setConfiguredPositions(updated);
+
+    if (editingIndex === index) {
+      setEditingIndex(index + 1);
+    } else if (editingIndex === index + 1) {
+      setEditingIndex(index);
+    }
+  };
+
   const handleLoadPreset = (preset: SavedPreset) => {
     setConfiguredPositions(preset.positions);
     toast.success(`Loaded preset "${preset.name}" successfully!`);
@@ -932,10 +962,33 @@ export const ShiftBiddingAdmin = () => {
                                     type="button"
                                     size="sm"
                                     variant="ghost"
+                                    onClick={() => handleMovePositionUp(idx)}
+                                    disabled={idx === 0}
+                                    title="Move position up"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary disabled:opacity-30"
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleMovePositionDown(idx)}
+                                    disabled={idx === configuredPositions.length - 1}
+                                    title="Move position down"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary disabled:opacity-30"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
                                     onClick={() => handleEditPosition(idx)}
                                     title="Edit position"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
                                   >
-                                    <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                    <Edit2 className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     type="button"
@@ -943,7 +996,7 @@ export const ShiftBiddingAdmin = () => {
                                     variant="ghost"
                                     onClick={() => handleRemovePosition(idx)}
                                     title="Delete position"
-                                    className="text-muted-foreground hover:text-destructive"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
